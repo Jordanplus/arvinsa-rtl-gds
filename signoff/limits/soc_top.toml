@@ -1,0 +1,88 @@
+# Signoff limits for `make harden-soc` (soc_top with the SRAM macro, Phase 3).
+# Checked by signoff/scripts/check_signoff.py; every row must PASS, a missing metric is a FAIL.
+# Sources: project-plan.md §7.2 (signoff metrics) and §8 Phase 3 exit criteria.
+# soc_top-specific checks that are not metrics (SRAM placement, port 1 tie-off, Magic DRC only
+# inside the SRAM outline, ...) are in pnr/soc_top/check_soc.py.
+
+[equal]
+"flow__errors__count" = 0
+"design__lint_error__count" = 0
+"synthesis__check_error__count" = 0
+"design__instance_unmapped__count" = 0
+# Exactly one macro: sram0 (check_soc.py also checks its name and placement).
+"design__instance__count__macros" = 1
+"design__power_grid_violation__count" = 0
+"design__disconnected_pin__count" = 0
+"design__critical_disconnected_pin__count" = 0
+"route__drc_errors" = 0
+# The antenna checker sees the nets on SRAM inputs because the SRAM LEF carries ANTENNAGATEAREA
+# (docs/decisions/0008-sram-antenna-lef.md; negative test P06).
+"antenna__violating__nets" = 0
+"antenna__violating__pins" = 0
+"route__antenna_violation__count" = 0
+"klayout__drc_error__count" = 0
+"magic__illegal_overlap__count" = 0
+"design__xor_difference__count" = 0
+"design__lvs_error__count" = 0
+"timing__setup_vio__count" = 0
+"timing__hold_vio__count" = 0
+"design__max_slew_violation__count" = 0
+"design__max_cap_violation__count" = 0
+"design__max_fanout_violation__count" = 0
+# Drivers without extracted parasitics (STA report_parasitic_annotation), all of them driving no
+# routed wire. 134 = 91 CTS dummy-load (clkload*) outputs + 32 unused SRAM read-port outputs
+# (sram0/dout1[31:0], connected to the RTL wires unused_sram_dout1) + 11 unused tie-cell outputs
+# (11 conb_1: 10 use LO and leave HI open, 1 uses HI and leaves LO open). Checked in
+# runs/soc_top/*-openroad-stapostpnr/*/checks.rpt (same list in every corner). Any other
+# unannotated driver changes the count and FAILs.
+"timing__unannotated_net__count" = 134
+"timing__unannotated_net_filtered__count" = 0
+
+[min]
+# §7.2: nom_tt setup worst slack >= 10 % of the 40 ns clock period
+"timing__setup__ws__corner:nom_tt_025C_1v80" = 4.0
+
+[max]
+# §7.2: IR drop <= 5 % of VDD (1.8 V). The SRAM current in the power analysis comes from the
+# analytical .lib (ADR-0007), so this covers the standard cells reliably, the SRAM only roughly.
+"ir__drop__worst" = 0.09
+
+[corners]
+names = [
+    "nom_tt_025C_1v80", "nom_ss_100C_1v60", "nom_ff_n40C_1v95",
+    "min_tt_025C_1v80", "min_ss_100C_1v60", "min_ff_n40C_1v95",
+    "max_tt_025C_1v80", "max_ss_100C_1v60", "max_ff_n40C_1v95",
+]
+setup_ws_min = 0.0
+hold_ws_min = 0.0
+# One clock period: a huge or infinite slack means no constrained path (e.g. a lost clock) -> FAIL.
+slack_max = 40.0
+
+[golden_tolerance]
+# The detailed router is not deterministic (measured in Phase 2, signoff/golden/picorv32_core/README.md;
+# measured again for soc_top in signoff/golden/soc_top/README.md). Only these metric families may
+# differ slightly from the golden run; cell counts, areas, violation counts, DRC, LVS, ... must be
+# identical.
+"timing__setup__ws*" = { abs = 0.01 }
+"timing__hold__ws*" = { abs = 0.01 }
+"timing__setup_r2r__ws*" = { abs = 0.01 }
+"timing__hold_r2r__ws*" = { abs = 0.01 }
+"clock__skew__*" = { abs = 0.01 }
+"route__wirelength" = { rel = 0.001 }
+"route__wirelength__iter:*" = { rel = 0.001 }
+"route__vias*" = { rel = 0.001 }
+"power__*" = { rel = 0.001 }
+"design_powergrid__*" = { rel = 0.001 }
+"ir__*" = { rel = 0.001 }
+
+[info]
+keys = [
+    "magic__drc_error__count",
+    "design__instance__count",
+    "design__instance__area__stdcell",
+    "design__instance__utilization",
+    "timing__setup__ws",
+    "timing__hold__ws",
+    "ir__drop__worst",
+    "power__total",
+]

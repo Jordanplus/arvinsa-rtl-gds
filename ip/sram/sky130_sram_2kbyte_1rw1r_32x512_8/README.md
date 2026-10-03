@@ -18,6 +18,9 @@ OpenRAM 產生的 sky130 2 KB SRAM macro（512 words × 32 bit，byte write mask
 | `upstream/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 上游行為模型原檔，未修改 |
 | `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 模擬用副本，由 `ip/sram/gen_sim_model.py` 從上游原檔產生，差異見 `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v.diff`；`make env-check` 會檢查它是否過期 |
 | `sky130_sram_2kbyte_1rw1r_32x512_8.bb.v` | lint 與合成用的 blackbox 宣告；**不可**放進模擬 |
+| `padded.lib` | STA 用的保守時序模型，由 `gen_padded_lib.py` 從 PDK 的 TT .lib 產生（ADR-0007）；`make harden-soc` 會檢查它沒有過期 |
+| `sky130_sram_2kbyte_1rw1r_32x512_8.lef` | flow 用的 LEF：PDK 的 LEF 加上輸入 pin 的 `ANTENNAGATEAREA`，由 `gen_antenna_lef.py` 產生（ADR-0008）；`make harden-soc` 會檢查它沒有過期 |
+| `gate_area.py` | 從 PDK 的 SPICE netlist 算每個輸入 pin 接到的閘極面積（`gen_antenna_lef.py` 使用） |
 
 模擬副本對上游做的三項修改：
 
@@ -27,7 +30,7 @@ OpenRAM 產生的 sky130 2 KB SRAM macro（512 words × 32 bit，byte write mask
 
 重新產生：`python3 ip/sram/gen_sim_model.py ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/upstream/sky130_sram_2kbyte_1rw1r_32x512_8.v ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sim/sky130_sram_2kbyte_1rw1r_32x512_8.v`
 
-GDS、LEF、.lib 在 Phase 3 由 PDK 內的版本提供，不在此 vendor。
+GDS 直接用 PDK 內的版本，不在此 vendor；.lib 與 LEF 用上表的產生檔（原檔在 PDK 的 `libs.ref/sky130_sram_macros/`）。
 
 ## 行為模型時序（模擬用，非 silicon 時序）
 

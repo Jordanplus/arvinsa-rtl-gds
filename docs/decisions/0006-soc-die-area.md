@@ -35,6 +35,12 @@
 2. **SRAM 左側留 270 µm**：port 0 的左側 pin（clk0、csb0、web0、addr0[8:2]）面向這一塊。900 寬時只剩 170 µm，CPU 與匯流排邏輯大多要擠到下方。
 3. **比 §5.4 的粗估（約 1.0 × 0.9 mm）小**：§5.4 估 SRAM 含 halo 約 0.30 mm²、logic 以 50% 密度估 0.4–0.55 mm²，合計用上限約 0.85 mm²。實測 logic 是 227000 µm² ÷ 50% ≈ 0.45 mm²，落在估計範圍中間；加上 SRAM 與保留區 0.32 mm²，約 0.77 mm²，取 1000 × 800 = 0.80 mm²。
 
+## Phase 3 定案的 SRAM 位置（2026-10-03 補充）
+
+`pnr/soc_top/config.json` 的 `MACROS.sram0.location = [301.76, 364.48]`、orientation N：SRAM 右緣在 x = 984.86 µm、上緣在 y = 781.02 µm，離 die 右邊 15.14 µm、上邊 18.98 µm。座標在 core 的 site 格點上（core 原點 5.52, 10.88；site 0.46 × 2.72 µm）。
+
+與上表「右、上各 25 µm channel」的差異：第一次試跑把 SRAM 放在離 die 右、上各約 25 µm（core 邊界內還剩 6–10 µm 的 standard cell row），PDN 在這條窄 row 上放不下電源 strap，OpenROAD 報 `PDN-0179 Unable to repair all channels` 而中止。改成讓 SRAM 的 10 µm halo 蓋過 core 的右、上邊界，這兩側就沒有 standard cell row；port 1 的 tie-off 線改在 core 外、die 內的空間繞，實測 routing DRC = 0、LVS PASS。logic 區只剩 SRAM 左側（約 276 µm 寬）與下方（約 344 µm 高）的 L 形區域，使用率仍在 50% 左右（Phase 3 exit review 有實測值）。
+
 ## 重新檢討的條件（Phase 3）
 
 - PnR 後 logic 區使用率 > 65%（上面的公式，不是 `design__instance__utilization`），或 global routing 報告 congestion overflow，就改成 1000 × 900。

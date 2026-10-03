@@ -631,8 +631,13 @@ def build_tag(sim, defines, rtl_f, trace):
     return tag
 
 
-def build(sim, defines=(), rtl_f=RTL_F, trace=False):
+def build(sim, defines=(), rtl_f=RTL_F, trace=False, extra_files=(), extra_flags=(), variant=None):
     """Compile tb_soc for one (simulator, defines) pair, reusing a cached build.
+
+    extra_files / extra_flags / variant: used by the gate-level lockstep build
+    (dv/gl_soc/run_gl_soc.py): extra source files after the RTL and SRAM model,
+    extra compiler flags (e.g. -DUNIT_DELAY=#1), and a name appended to the
+    build directory. Both are part of the cache key like every other input.
 
     The cache key is a SHA-256 over the compile command, the identity of the
     simulator and C++ compiler (tool_identity: resolved path + version line),
@@ -647,11 +652,16 @@ def build(sim, defines=(), rtl_f=RTL_F, trace=False):
         if not NAME_RE.match(d):
             raise DvError("bad define %r" % d)
     tag = build_tag(sim, defines, rtl_f, trace)
+    if variant:
+        if not NAME_RE.match(variant):
+            raise DvError("bad build variant %r" % variant)
+        tag += "-" + variant
     bdir = REPO / SIM_BUILD / sim / tag
     bdir.mkdir(parents=True, exist_ok=True)
     log = bdir / "compile.log"
     try:
         incdirs, files = _sources(rtl_f)
+        files += [Path(f).resolve() for f in extra_files]
     except (OSError, DvError) as e:
         return BuildResult(sim, False, bdir, None, log, [], False, "filelist error: %s" % e)
     missing = [f for f in files if not f.is_file()]
@@ -662,7 +672,7 @@ def build(sim, defines=(), rtl_f=RTL_F, trace=False):
 
     flist = bdir / "files.f"
     flist_text = "".join("+incdir+%s\n" % d for d in incdirs) + "".join("%s\n" % f for f in files)
-    dflags = ["-D%s" % d for d in defines]
+    dflags = ["-D%s" % d for d in defines] + list(extra_flags)
     if sim == "icarus":
         exe = bdir / "tb_soc.vvp"
         cmd = ["iverilog", "-g2012", "-Wimplicit", "-Wportbind", "-Wselect-range",

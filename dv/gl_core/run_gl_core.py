@@ -10,8 +10,9 @@ The testbench, firmware and picorv32_axi_adapter are upstream and unmodified; th
 around them are dv/gl_core/picorv32_axi_shim.v and dv/gl_core/gl_core_boot.v (see their headers).
 
 PASS needs all of:
-  - the harden run passed its own checks (<harden-run>_signoff/signoff.txt says `signoff: PASS`
-    and disconnected.txt `disconnected-pins: PASS`), so a netlist that failed signoff is not used
+  - the harden run passed all its own checks (<harden-run>_signoff/result.txt says
+    `harden-core: PASS`: signoff limits and golden, disconnected pins, CPU parameters, source
+    tracking), so a netlist that failed signoff or came from uncommitted files is not used
   - cpu_params.py PASS (config.json SYNTH_PARAMETERS == soc_top u_cpu parameters == the
     SYNTH_PARAMETERS the harden run used, from its resolved.json)
   - the firmware IRQ handler address (symbol irq_vec) == PROGADDR_IRQ of the core
@@ -167,11 +168,10 @@ def main():
     with open(resolved, encoding="utf8") as f:
         cell_models = json.load(f)["CELL_VERILOG_MODELS"]
     signoff_dir = harden_run.rstrip(os.sep) + "_signoff"
-    for name, verdict in (("signoff.txt", "signoff: PASS"), ("disconnected.txt", "disconnected-pins: PASS")):
-        path = os.path.join(signoff_dir, name)
-        lines = open(path, encoding="utf8").read().splitlines() if os.path.isfile(path) else []
-        if verdict not in lines:
-            return fail(f"{path} does not say '{verdict}': the harden run did not pass; run `make harden-core`")
+    path = os.path.join(signoff_dir, "result.txt")
+    lines = open(path, encoding="utf8").read().splitlines() if os.path.isfile(path) else []
+    if lines != ["harden-core: PASS"]:
+        return fail(f"{path} does not say 'harden-core: PASS': the harden run did not pass; run `make harden-core`")
     have = subprocess.run(["git", "-C", SUBMODULE, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     if have != pin("PICORV32_COMMIT"):
         return fail(f"third_party/picorv32 is at {have[:12]}, env/versions.mk pins {pin('PICORV32_COMMIT')[:12]}")

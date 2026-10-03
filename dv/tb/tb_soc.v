@@ -131,6 +131,43 @@ module tb_soc;
     reg [31:0] cycle = 32'd0;
     always @(posedge clk) cycle <= cycle + 32'd1;
 
+`ifdef GL_LOCKSTEP
+    // Gate-level copy of the DUT (dv/gl_soc/README.md): the final netlist, module renamed
+    // soc_top_gl, driven by the same inputs. gl_lockstep compares its outputs and SRAM port 0
+    // pins with the RTL DUT every cycle; all other checkers keep watching the RTL DUT.
+    wire        gl_uart_tx;
+    wire [7:0]  gl_gpio_out;
+    wire        gl_trap;
+    wire [31:0] gl_host_rdata;
+
+    soc_top_gl dut_gl (
+        .clk        (clk),
+        .resetn     (resetn),
+        .uart_tx    (gl_uart_tx),
+        .uart_rx    (uart_rx),
+        .gpio_out   (gl_gpio_out),
+        .boot_mode  (boot_mode),
+        .trap       (gl_trap),
+        .host_en    (host_en),
+        .host_cs    (host_cs),
+        .host_we    (host_we),
+        .host_addr  (host_addr),
+        .host_wdata (host_wdata),
+        .host_wmask (host_wmask),
+        .host_rdata (gl_host_rdata)
+    );
+
+    gl_lockstep u_gl_lockstep (
+        .clk      (clk),
+        .enable   (1'b1),
+        .cycle    (cycle),
+        .rtl_out  ({uart_tx, gpio_out, trap, host_rdata}),
+        .gl_out   ({gl_uart_tx, gl_gpio_out, gl_trap, gl_host_rdata}),
+        .rtl_sram ({dut.sram0.csb0, dut.sram0.web0, dut.sram0.wmask0, dut.sram0.addr0, dut.sram0.din0}),
+        .gl_sram  ({dut_gl.sram0.csb0, dut_gl.sram0.web0, dut_gl.sram0.wmask0, dut_gl.sram0.addr0, dut_gl.sram0.din0})
+    );
+`endif
+
     string     fw_file;
     string     load;
     string     out_dir;
@@ -558,6 +595,12 @@ module tb_soc;
                 $fdisplay(fd_result, "fail.sram_port=%0d", fail_sram_port);
                 $fdisplay(fd_result, "fail.irq_line=%0d", fail_irq_line);
                 $fdisplay(fd_result, "fail.uart_div=%0d", fail_uart_div);
+`ifdef GL_LOCKSTEP
+                if (u_gl_lockstep.fail_count > 10)
+                    $display("[CHK:gl_lockstep] FAIL %0d mismatches in total (first 10 printed)", u_gl_lockstep.fail_count);
+                $fdisplay(fd_result, "fail.gl_lockstep=%0d", u_gl_lockstep.fail_count);
+                $fdisplay(fd_result, "gl_compares=%0d", u_gl_lockstep.compare_count);
+`endif
 `ifndef VERILATOR
                 $fdisplay(fd_result, "fail.x_check=%0d", fail_x);
                 $fdisplay(fd_result, "simulator=icarus");
@@ -639,6 +682,12 @@ module tb_soc;
                 $readmemh(fw_file, dut.sram0.mem, 0, fw_words - 1);
             else
                 $readmemh(fw_file, dut.sram0.mem);
+`ifdef GL_LOCKSTEP
+            if (fw_words > 0)
+                $readmemh(fw_file, dut_gl.sram0.mem, 0, fw_words - 1);
+            else
+                $readmemh(fw_file, dut_gl.sram0.mem);
+`endif
         end else if (load == "host") begin
             if (fw_file == "" || fw_words < 1)
                 abort_sim("+load=host needs +fw=<hex> and +fw_words=<n>");

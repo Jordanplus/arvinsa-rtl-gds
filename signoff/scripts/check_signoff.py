@@ -7,6 +7,7 @@ usage: check_signoff.py <metrics.json> <limits.toml> <golden metrics.json>
 <limits.toml> (signoff/limits/<design>.toml) has these tables; every row is checked:
   [equal]   "<metric>" = value       metric must equal value (a number must be a number, not a bool)
   [min]     "<metric>" = value       metric must be a finite number >= value
+  [max]     "<metric>" = value       metric must be a finite number <= value
   [corners] names = [...]            for every corner: setup_ws_min <= timing__setup__ws__corner:<c> < slack_max
             setup_ws_min, hold_ws_min,                  hold_ws_min  <= timing__hold__ws__corner:<c>  < slack_max
             slack_max                names must be unique and equal the corners present in the metrics.
@@ -46,7 +47,7 @@ def main(metrics_path, limits_path, golden_path):
         nonlocal fail
         tag = "INFO" if kind == "info" else ("PASS" if ok else "FAIL")
         fail += tag == "FAIL"
-        if isinstance(have, str) and have != "<missing>" and kind in ("equal", "min", "corner"):
+        if isinstance(have, str) and have != "<missing>" and kind in ("equal", "min", "max", "corner"):
             have = json.dumps(have)
         print(f"  [{tag}] {kind:6} {key}: run={have} expected={want}")
 
@@ -63,6 +64,9 @@ def main(metrics_path, limits_path, golden_path):
     for key, want in limits.get("min", {}).items():
         have = run.get(key, "<missing>")
         row("min", key, have, f">= {want}", finite(have) and have >= want)
+    for key, want in limits.get("max", {}).items():
+        have = run.get(key, "<missing>")
+        row("max", key, have, f"<= {want}", finite(have) and have <= want)
     corners = limits.get("corners", {})
     names, top = corners.get("names", []), corners.get("slack_max")
     for kind in ("setup", "hold"):

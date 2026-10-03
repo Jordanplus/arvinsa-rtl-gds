@@ -7,7 +7,11 @@
 #                                        run in signoff/golden/picorv32_core/metrics.json
 #   4. pnr/picorv32_core/check_disconnected.py: the disconnected pins are exactly the unused PCPI inputs
 #   5. cpu_params.py --resolved           : the run really used config.json's SYNTH_PARAMETERS
-# Checker outputs go to runs/picorv32_core_signoff/. Requires `make flow-setup` (Nix, LibreLane, PDK).
+#   0/6. signoff/scripts/provenance.py    : before and after the run: committed working tree, pinned
+#                                           LibreLane and PDK (project-plan.md §7.2)
+# Checker outputs go to runs/picorv32_core_signoff/; the verdict line is also written to result.txt,
+# which the later steps (gl-core, eqy-core) require to be `harden-core: PASS`.
+# Requires `make flow-setup` (Nix, LibreLane, PDK).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$(pwd)"
@@ -39,6 +43,12 @@ fi
 rm -rf "$RUN_DIR" "$OUT"
 mkdir -p "$OUT"
 
+echo "harden-core: source tracking (committed working tree, pinned LibreLane and PDK)"
+python3 signoff/scripts/provenance.py --record "$OUT/provenance.json" | tee "$OUT/provenance.txt" || true
+if ! grep -q '^provenance: PASS$' "$OUT/provenance.txt"; then
+  echo "harden-core: provenance FAIL - this run cannot be a signoff run (the verdict will be FAIL); the flow and the other checks still run"
+fi
+
 echo "harden-core: CPU parameters (config.json vs rtl/soc/soc_top.v u_cpu)"
 python3 pnr/picorv32_core/cpu_params.py | tee "$OUT/cpu_params.txt"
 grep -q '^cpu-params: PASS$' "$OUT/cpu_params.txt"
@@ -64,10 +74,14 @@ python3 signoff/scripts/check_signoff.py "$OUT/metrics.json" "$LIMITS" "$GOLDEN"
 python3 pnr/picorv32_core/check_disconnected.py "$RUN_DIR" | tee "$OUT/disconnected.txt" || true
 python3 pnr/picorv32_core/cpu_params.py --resolved "$RUN_DIR/resolved.json" > "$OUT/cpu_params_resolved.txt" 2>&1 || true
 tail -1 "$OUT/cpu_params_resolved.txt"
+python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \
+  > "$OUT/provenance_end.txt" 2>&1 || true
+tail -1 "$OUT/provenance_end.txt"
 if grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^disconnected-pins: PASS$' "$OUT/disconnected.txt" \
-   && grep -q '^cpu-params: PASS$' "$OUT/cpu_params_resolved.txt"; then
-  echo "harden-core: PASS"
+   && grep -q '^cpu-params: PASS$' "$OUT/cpu_params_resolved.txt" \
+   && grep -q '^provenance: PASS$' "$OUT/provenance.txt" && grep -q '^provenance: PASS$' "$OUT/provenance_end.txt"; then
+  echo "harden-core: PASS" | tee "$OUT/result.txt"
 else
-  echo "harden-core: FAIL"
+  echo "harden-core: FAIL" | tee "$OUT/result.txt"
   exit 1
 fi

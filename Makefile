@@ -11,7 +11,8 @@ PY   ?= python3
 DRY_RUN ?= 0
 
 .PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
-        neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 clean
+        neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
+        eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-pnr neg-provenance phase3 clean
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -40,6 +41,19 @@ help:
 	@echo "  make neg-gl-core          bug injection into the hardened netlist, gl-core must FAIL on each"
 	@echo "  make soc-area             estimate soc_top stdcell area from the hardened core (DIE_AREA input)"
 	@echo "  make phase2               full Phase 2 exit check (env-check-flow harden-core gl-core neg-gl-core soc-area)"
+	@echo ""
+	@echo "Phase 3 targets (soc_top with the SRAM macro, see pnr/soc_top/README.md, signoff/eqy/README.md):"
+	@echo "  make eqy-core             formal equivalence: synthesized vs final netlist of make harden-core (EQY)"
+	@echo "  make neg-eqy-core         bug injection into the hardened core netlist, eqy-core must FAIL on each"
+	@echo "  make harden-soc           LibreLane on soc_top with the SRAM macro, check signoff limits + golden + soc checks"
+	@echo "                            (harden-core and harden-soc PASS only from a committed working tree: source tracking)"
+	@echo "  make eqy-soc              formal equivalence: synthesized vs final netlist of make harden-soc (EQY)"
+	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
+	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
+	@echo "  make neg-pnr              bug injection P01-P13 (STA, PDN, DRC, XOR, placement, ...), each must FAIL at its checker"
+	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, wrong LibreLane/PDK, ...)"
+	@echo "  make phase3               full Phase 3 exit check (env-check-flow neg-provenance harden-soc eqy-soc neg-eqy-soc gl-soc neg-pnr"
+	@echo "                            harden-core eqy-core neg-eqy-core); needs a committed working tree"
 	@echo ""
 	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
 
@@ -103,7 +117,34 @@ soc-area:
 
 phase2: env-check-flow harden-core gl-core neg-gl-core soc-area
 
-# Removes Phase 1 sim/firmware outputs only. LibreLane outputs (runs/flow_setup, runs/ci_sram_ref, runs/picorv32_core)
+eqy-core:
+	$(PY) signoff/eqy/run_eqy.py --design picorv32_core
+
+neg-eqy-core:
+	$(PY) signoff/eqy/neg_eqy.py --design picorv32_core
+
+harden-soc:
+	bash pnr/soc_top/run.sh
+
+eqy-soc:
+	$(PY) signoff/eqy/run_eqy.py --design soc_top
+
+neg-eqy-soc:
+	$(PY) signoff/eqy/neg_eqy.py --design soc_top
+
+gl-soc:
+	$(PY) dv/gl_soc/run_gl_soc.py
+
+neg-pnr:
+	$(PY) pnr/soc_top/neg_pnr.py
+
+neg-provenance:
+	$(PY) signoff/scripts/neg_provenance.py
+
+# harden-core is re-run so that eqy-core checks a run with source tracking (result.txt).
+phase3: env-check-flow neg-provenance harden-soc eqy-soc neg-eqy-soc gl-soc neg-pnr harden-core eqy-core neg-eqy-core
+
+# Removes Phase 1 sim/firmware outputs only. LibreLane outputs (runs/flow_setup, runs/ci_sram_ref, runs/picorv32_core, runs/soc_top)
 # take tens of minutes to regenerate and are kept; delete them by hand when needed.
 clean:
 	rm -rf runs/sim runs/neg runs/sim_build runs/core_stock runs/rtl sim_build fw/build obj_dir

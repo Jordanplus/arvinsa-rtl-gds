@@ -46,6 +46,7 @@
 | KLayout | DRC、GDS 輸出、XOR | 0.30.7 | LibreLane nix-shell | 已安裝 |
 | Netgen | LVS | 1.5.316 | LibreLane nix-shell | 已安裝 |
 | Verilator（flow 用） | `Verilator.Lint` step | 5.044 | LibreLane nix-shell | 已安裝 |
+| EQY、SBY（YosysHQ） | formal equivalence（`make eqy-core`／`eqy-soc`，Phase 3）；`eqy.formal_pdk_proc` 把 sky130 cell 模型轉成 formal 可用的形式 | 隨 Yosys 0.62（nix 套件 `yosys-eqy-0.62`、`yosys-sby-0.62`） | LibreLane nix-shell | 已安裝。EQY 的切分步驟要 `ulimit -s 65520`（64 MB stack），8 MB 預設會 SIGSEGV；SBY 的 PDR 反例轉換需要的 `yices` 不在 nix-shell 內（只影響失敗時的波形，不影響 PASS／FAIL 判定），見 `signoff/eqy/README.md` |
 
 注意：flow 用的 Yosys（0.62）、Verilator（5.044）比 §1 的本機版本（0.69、5.050）舊。正式流程一律用 nix-shell 內的版本；§1 的版本只用在 Phase 1 的本機模擬與 sanity check。
 

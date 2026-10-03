@@ -1,0 +1,199 @@
+{
+    "//": "Phase 3: soc_top with the prebuilt SRAM macro, project-plan.md §6 and §8. Run with `make harden-soc`; paths are relative to the repo root (run.sh passes --design-dir). Settings are explained in README.md next to this file.",
+    "meta": {
+        "version": 3,
+        "flow": "Classic"
+    },
+    "DESIGN_NAME": "soc_top",
+    "//VERILOG_FILES": "Must list exactly the source files of rtl/rtl.f (run.sh checks this). The SRAM is not here: the flow reads its blackbox from MACROS.vh.",
+    "VERILOG_FILES": [
+        "dir::rtl/soc/soc_top.v",
+        "dir::rtl/bus/soc_bus.v",
+        "dir::rtl/periph/soc_uart.v",
+        "dir::rtl/periph/soc_gpio.v",
+        "dir::rtl/periph/soc_test_ctrl.v",
+        "dir::rtl/bootrom/bootrom.v",
+        "dir::third_party/picorv32/picorv32.v",
+        "dir::third_party/picorv32/picosoc/simpleuart.v"
+    ],
+    "VERILOG_INCLUDE_DIRS": [
+        "dir::rtl/include"
+    ],
+    "CLOCK_PORT": "clk",
+    "CLOCK_PERIOD": 40,
+    "//FP_SIZING": "DIE_AREA from docs/decisions/0006-soc-die-area.md.",
+    "FP_SIZING": "absolute",
+    "DIE_AREA": [
+        0,
+        0,
+        1000,
+        800
+    ],
+    "//VDD_NETS": "Top-level power nets named like the SRAM power pins and the soc_top USE_POWER_PINS ports.",
+    "VDD_NETS": [
+        "vccd1"
+    ],
+    "GND_NETS": [
+        "vssd1"
+    ],
+    "//MACROS": "Prebuilt OpenRAM macro: GDS from the PDK; LEF = the PDK LEF plus ANTENNAGATEAREA on the 59 input pins, from the macro's SPICE netlist (ip/sram/.../gen_antenna_lef.py, docs/decisions/0008-sram-antenna-lef.md), so OpenROAD's antenna check and repair see the nets on SRAM inputs. Timing: padded.lib for all 9 corners (docs/decisions/0007-sram-padded-lib.md). Placement: top-right corner, orientation N (docs/decisions/0006-soc-die-area.md). x and y are on the core site grid (core origin 5.52, 10.88; site 0.46 x 2.72) and chosen so that the 10 um macro halo reaches past the core's right and top edges: no standard cell rows are left between the SRAM and those edges. A 6 um row strip there could not be connected to the power grid (PDN-0179 'Unable to repair all channels'). The SRAM is 15.14 um from the right die edge and 18.98 um from the top.",
+    "MACROS": {
+        "sky130_sram_2kbyte_1rw1r_32x512_8": {
+            "gds": [
+                "pdk_dir::libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds"
+            ],
+            "lef": [
+                "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef"
+            ],
+            "vh": [
+                "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
+            ],
+            "lib": {
+                "*": [
+                    "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/padded.lib"
+                ]
+            },
+            "instances": {
+                "sram0": {
+                    "location": [
+                        301.76,
+                        364.48
+                    ],
+                    "orientation": "N"
+                }
+            }
+        }
+    },
+    "//PDN_MACRO_CONNECTIONS": "Connects the SRAM vccd1/vssd1 pins to the top-level grid (project-plan.md §6.1).",
+    "PDN_MACRO_CONNECTIONS": [
+        "sram0 vccd1 vssd1 vccd1 vssd1"
+    ],
+    "//IO_PIN_ORDER_CFG": "IO pins only on the left and bottom edges, away from the SRAM (project-plan.md §5.4). clk sits in the middle of the bottom edge, near the centre of the flip-flops: at the bottom of the left edge (run soc_explore2) its 660 um wire to the first clock buffer gave a 0.92 ns slew in the ss corners.",
+    "IO_PIN_ORDER_CFG": "dir::pnr/soc_top/pin_order.cfg",
+    "ERRORS_ON_UNMATCHED_IO": "both",
+    "//CORNERS": "Fail on setup, hold, max slew and max cap in all 9 corners (LibreLane's sky130 default fails setup only in tt; project-plan.md §6.2).",
+    "SETUP_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "HOLD_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "MAX_SLEW_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "MAX_CAP_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "//STA_EXTRA_CORNER_TCL_FILE": "Derates sram0 in the ss and ff corners during STA (docs/decisions/0007-sram-padded-lib.md).",
+    "STA_EXTRA_CORNER_TCL_FILE": "dir::pnr/soc_top/sta_extra_corner.tcl",
+    "//PNR_SDC_FILE": "base.sdc with max fanout 8 for the PnR steps: antenna repair adds diodes after the resizer fixed fanout (a diode pin counts as a load; run soc_explore7: 10 loads + 1 diode). Signoff keeps 10. docs/decisions/0009-signoff-max-transition.md.",
+    "PNR_SDC_FILE": "dir::pnr/soc_top/pnr.sdc",
+    "//SIGNOFF_SDC_FILE": "LibreLane's base.sdc unchanged (0.75 ns, fanout 10). Set explicitly because without it the signoff STA falls back to PNR_SDC_FILE (fanout 8). docs/decisions/0009-signoff-max-transition.md (the 1.0 ns signoff limit recorded there was withdrawn once PL_TARGET_DENSITY_PCT fixed the slews).",
+    "SIGNOFF_SDC_FILE": "dir::pnr/soc_top/signoff.sdc",
+    "//ERROR_ON_MAGIC_DRC": "Magic DRC runs on the full GDS (LibreLane default MAGIC_DRC_USE_GDS = true). The SRAM's own GDS has about 4.67 million violations of the standard sky130 deck (its bitcells follow the SRAM rules), all inside the SRAM outline, so the flow must not stop on them. pnr/soc_top/check_soc.py replaces LibreLane's checker: 0 violations outside the SRAM outline and, inside it, the same count per rule as the SRAM checked alone (signoff/waivers/soc_top/). Abstract mode (MAGIC_DRC_USE_GDS = false) was tried: it reports 416 nwell.4 errors on every standard cell row, because the abstract cell views have no taps; the full-GDS run has none. See README.md.",
+    "ERROR_ON_MAGIC_DRC": false,
+    "//PRIMARY_GDSII_STREAMOUT_TOOL": "Final GDS from KLayout. Magic's GDS of this design has 13 top cells: it places the SRAM through renamed copies of its sub-cells (T2_*) and also writes the 160 original sub-cells unreferenced, so KLayout.Render failed with 'The layout has multiple top cells'. The KLayout GDS has one top cell (soc_top) and all 161 SRAM cells are reachable from it. Magic still streams out; KLayout.XOR compares the two. See README.md.",
+    "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout",
+    "//EXTRA_EXCLUDED_CELLS": "Same as Phase 2 (pnr/picorv32_core/README.md): the PDK exclude list does not exclude the clkdlybuf4s25/50 delay cells, and the resizer used them as general buffers.",
+    "EXTRA_EXCLUDED_CELLS": [
+        "sky130_fd_sc_hd__clkdlybuf4s25_1",
+        "sky130_fd_sc_hd__clkdlybuf4s25_2",
+        "sky130_fd_sc_hd__clkdlybuf4s50_1",
+        "sky130_fd_sc_hd__clkdlybuf4s50_2"
+    ],
+    "//CTS_SINK_CLUSTERING_SIZE": "Same as Phase 2 (pnr/picorv32_core/README.md): keeps CTS leaf fanout within MAX_FANOUT_CONSTRAINT 10.",
+    "CTS_SINK_CLUSTERING_SIZE": 8,
+    "//LAYERS_RC": "Same as Phase 2 (pnr/picorv32_core/README.md): the sky130 per-layer RC table left commented out in LibreLane 3.0.14 librelane/config/pdk_compat.py lines 262-296.",
+    "LAYERS_RC": {
+        "*tt*": {
+            "li1": {
+                "res": 0.07176,
+                "cap": 0.0001499
+            },
+            "met1": {
+                "res": 0.0008929,
+                "cap": 0.000172375
+            },
+            "met2": {
+                "res": 0.0008929,
+                "cap": 0.000136233
+            },
+            "met3": {
+                "res": 0.0001567,
+                "cap": 0.000214962
+            },
+            "met4": {
+                "res": 0.0001567,
+                "cap": 0.000154087
+            },
+            "met5": {
+                "res": 1.781e-05,
+                "cap": 0.000154087
+            }
+        },
+        "*ff*": {
+            "li1": {
+                "res": 0.050232,
+                "cap": 0.00010493
+            },
+            "met1": {
+                "res": 0.00062503,
+                "cap": 0.0001206625
+            },
+            "met2": {
+                "res": 0.00062503,
+                "cap": 9.53631e-05
+            },
+            "met3": {
+                "res": 0.00010969,
+                "cap": 0.0001504734
+            },
+            "met4": {
+                "res": 0.00010969,
+                "cap": 0.0001078609
+            },
+            "met5": {
+                "res": 1.2467e-05,
+                "cap": 0.0001078609
+            }
+        },
+        "*ss*": {
+            "li1": {
+                "res": 0.093288,
+                "cap": 0.00019487
+            },
+            "met1": {
+                "res": 0.00116077,
+                "cap": 0.0002240875
+            },
+            "met2": {
+                "res": 0.00116077,
+                "cap": 0.0001771029
+            },
+            "met3": {
+                "res": 0.00020371,
+                "cap": 0.0002794506
+            },
+            "met4": {
+                "res": 0.00020371,
+                "cap": 0.0002003131
+            },
+            "met5": {
+                "res": 2.3153e-05,
+                "cap": 0.0002003131
+            }
+        }
+    },
+    "//RUN_POST_GRT_DESIGN_REPAIR": "Same as Phase 2 (pnr/picorv32_core/README.md): repairs slew/cap again after global routing.",
+    "RUN_POST_GRT_DESIGN_REPAIR": true,
+    "//GRT_DESIGN_REPAIR_MAX_SLEW_PCT": "Slew margin of the repair after global routing (Phase 2: 30). Here 30 left 20 max-slew violations in the ss corners on 5 nets (run soc_explore4: 0.755-0.932 ns, 144-496 um long, driven by small cells), because the extracted wires after detailed routing load them more than the global-routing estimate. 50 made this repair run for more than 26 minutes on one thread without finishing (soc_explore6, stopped); 40 finishes in about a minute. See README.md.",
+    "GRT_DESIGN_REPAIR_MAX_SLEW_PCT": 40,
+    "//DESIGN_REPAIR_MAX_SLEW_PCT": "Slew margin of the repair after global placement (default 20), raised for the same reason. See README.md.",
+    "DESIGN_REPAIR_MAX_SLEW_PCT": 30,
+    "//CTS_DISTANCE_BETWEEN_BUFFERS": "Same as Phase 2 (pnr/picorv32_core/README.md): buffers inside the long H-tree segments.",
+    "CTS_DISTANCE_BETWEEN_BUFFERS": 50,
+    "//PL_TARGET_DENSITY_PCT": "Global placement target density. LibreLane's default here was 68 % while the L-shaped logic region is about half used, so cells crowd near the corner below-left of the SRAM; nets there detoured up to 3x their pin distance (soc_top run 1: 117 um apart, 353 um routed, 1.42 ns slew in ss). 55 % (soc_explore10): max slew/cap/fanout 0 in all 9 corners at 0.75 ns. See README.md.",
+    "PL_TARGET_DENSITY_PCT": 55,
+    "//DESIGN_REPAIR_MAX_WIRE_LENGTH": "Splits nets longer than 200 um with buffers in the repair before CTS. Without it (run soc_explore2): 48 nets on SRAM inputs up to 355 um long (the SRAM LEF has no antenna data, so they are not antenna-checked), 50 max-slew violations in the ss corners (up to 1.09 ns on nets of about 300-700 um), and 7 max-fanout violations from antenna repair putting 10-11 diodes on single long nets. The same limit after global routing (GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH) made OpenROAD stop with GRT-0229 'Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534' at the clk pin (run soc_explore3), so it is not set. See README.md.",
+    "DESIGN_REPAIR_MAX_WIRE_LENGTH": 200
+}
