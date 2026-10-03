@@ -135,7 +135,7 @@ def main():
                "wall_time_s": round(time.time() - t0, 1)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     status = "PASS" if errors == 0 and results else "FAIL"
-    print(f"gl-soc: {status} {len(results) - errors}/{len(results)} tests ({summary['wall_time_s']} s)")
+    print(f"gl-soc: {status} {len(results) - errors}/{len(results)} tests passed ({summary['wall_time_s']} s)")
     return 0 if status == "PASS" else 1
 
 

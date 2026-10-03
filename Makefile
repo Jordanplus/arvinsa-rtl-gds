@@ -134,10 +134,10 @@ eqy-soc:
 neg-eqy-soc:
 	$(PY) signoff/eqy/neg_eqy.py --design soc_top
 
-gl-soc:
+gl-soc: fw
 	$(PY) dv/gl_soc/run_gl_soc.py
 
-neg-gl-soc:
+neg-gl-soc: fw
 	$(PY) dv/gl_soc/neg_gl_soc.py
 
 neg-pnr:

@@ -17,6 +17,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。
 5. **coverage 缺口**：firmware 沒用到的功能 GL 模擬看不到（Phase 2：`rdcycleh`、bus-error IRQ），要靠 formal 補。
 6. **時間**：soc_top 13 支測試約 9 分鐘（memtest 87 萬 cycle 占 552 秒）。
+7. **firmware 是建置產物**：`make gl-soc`、`make neg-gl-soc` 讀 `fw/build/`（不在版控），Makefile 要宣告依賴 `fw`。gl-core 不需要，因為它在 export 出來的上游樹裡自己編 firmware（`run_gl_core.py`）。
 
 ## 待補
 
@@ -28,3 +29,4 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 | 日期 | 專案／run | 現象 | 根因（已驗證／推測） | 處理 | 證據 |
 |---|---|---|---|---|---|
 | 2026-10-03 | gl-soc bring-up | `Unable to bind wire/reg/memory 'cycle'` | 已驗證：使用早於宣告 | 區塊移到宣告之後 | `dv/tb/tb_soc.v` |
+| 2026-10-04 | 第二次 `make phase3`（乾淨 worktree） | 12/13 支測試 `firmware image ... not found` | 已驗證：`gl-soc` 沒依賴 `fw`，開發目錄有舊的 `fw/build/` 所以沒發現 | Makefile 加依賴；規則 7 | `runs/p3_phase3_clean2.log` |
