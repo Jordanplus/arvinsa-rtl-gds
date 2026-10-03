@@ -27,8 +27,12 @@ make nix-install             # 實際安裝，約 5 分鐘
 `make nix-install`（`env/install_nix.sh`）做的事：
 
 1. 已安裝 Nix 時直接結束；若 FOSSi binary cache 沒設定，會印出要加進 `/etc/nix/nix.conf` 的設定並 FAIL。
-2. 從 `https://artifacts.nixos.org/nix-installer` 下載安裝程式，執行 `install --no-confirm`，同時寫入 FOSSi binary cache 與 flakes 設定。
-3. 安裝後檢查 `nix` 執行檔與 cache 設定都存在，才印 PASS。
+2. 從 GitHub releases 直接下載釘版的 `nix-installer-aarch64-darwin`（版本與 sha256 見 `env/versions.mk`），快取在 `.tools/nix-installer/<版本>/`。下載可續傳、會自動重試，沒有速度門檻；中斷時重跑 `make nix-install` 會從斷點接續。
+3. 驗證 sha256，不符就 FAIL 並刪除壞檔。
+4. 執行 `install --no-confirm`，同時寫入 FOSSi binary cache 與 flakes 設定。安裝程式會自己用 sudo 提權，並要求輸入密碼；Nix 本體已內含在安裝程式裡，安裝時不會再下載。
+5. 安裝後檢查 `nix` 執行檔與 cache 設定都存在，才印 PASS。
+
+為什麼不用官方的一行指令：官方啟動 script 下載主程式時，若 15 秒內平均低於 250 KB/s 就會中止。2026-10-03 實測本機到 GitHub releases 約 135 KB/s，因此第一次安裝失敗（`curl: (28) Operation too slow`）。
 
 指令出處：[LibreLane macOS 安裝文件](https://librelane.readthedocs.io/en/latest/installation/nix_installation/installation_macos.html)。
 **裝完後關掉所有終端機視窗再開新的。**

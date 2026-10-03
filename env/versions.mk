@@ -2,6 +2,10 @@
 # Changing any value here requires updating golden results and an ADR (see project-plan.md §7.4).
 # Format: plain `NAME = value` lines, readable by GNU make 3.81 and by scripts (grep/sed).
 
+# ---- Nix installer (make nix-install; binary embeds the Nix tarball) ----
+NIX_INSTALLER_VERSION        = 2.35.2
+NIX_INSTALLER_SHA256_AARCH64_DARWIN = 6314b195321b3acc6826b1c5d66bb9cf9306c8231c6dbb745f51a04c3bcee235
+
 # ---- RTL-to-GDS flow (Phase 0, needs Nix; see env/setup.md) ----
 LIBRELANE_TAG        = 3.0.14
 LIBRELANE_COMMIT     = f24e0ea5db2260719e9a0c7d51d07db74a87fa23

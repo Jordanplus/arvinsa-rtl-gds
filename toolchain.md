@@ -35,7 +35,7 @@
 
 | 工具 | 用途 | 版本 | 來源 | 狀態 |
 |---|---|---|---|---|
-| Nix | 提供 LibreLane 與其內建工具 | 安裝時記錄（安裝程式：NixOS/nix-installer 2.35.2，2026-10-03 由 artifacts.nixos.org 啟動 script 指定） | `make nix-install`（`env/install_nix.sh`），含 FOSSi binary cache | 待安裝 |
+| Nix | 提供 LibreLane 與其內建工具 | 安裝時記錄（安裝程式：NixOS/nix-installer 2.35.2，`nix-installer-aarch64-darwin` sha256 `6314b195321b3acc6826b1c5d66bb9cf9306c8231c6dbb745f51a04c3bcee235`，內含 Nix 本體） | `make nix-install`（`env/install_nix.sh`）：直接從 GitHub releases 下載安裝程式（可續傳、無速度門檻），快取在 `.tools/nix-installer/`，含 FOSSi binary cache | 待安裝 |
 | LibreLane | RTL-to-GDS flow（Classic flow） | 3.0.14（commit `f24e0ea5db2260719e9a0c7d51d07db74a87fa23`） | `make flow-setup` clone 到 `.tools/librelane`（github.com/librelane/librelane） | 待安裝 |
 | ciel | 下載與管理 PDK | 隨 LibreLane | LibreLane 內建 | 待安裝 |
 | Yosys（flow 用） | 正式合成 | 隨 LibreLane nix-shell，安裝後填入 | LibreLane 內建 | 待安裝 |
@@ -77,3 +77,4 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 以下各值必須與 `env/versions.mk` 一致：
 `PDK = sky130A`、`STD_CELL_LIBRARY = sky130_fd_sc_hd`、`SRAM_MACRO = sky130_sram_2kbyte_1rw1r_32x512_8`、`RISCV_PREFIX = riscv64-elf-`、
 `VERILATOR_MIN = 5.050`、`ICARUS_MIN = 13.0`、`YOSYS_MIN = 0.69`、`RISCV_GCC_MIN = 16.1`、`PYTHON_MIN = 3.11`。
+
