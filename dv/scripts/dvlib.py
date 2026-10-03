@@ -10,6 +10,7 @@ Main entry points:
     load_bugs(path, tests)        dv/bugs.toml, validated
     crc32(data)                   IEEE 802.3 CRC32 (same as zlib.crc32)
     uart_loader_frame(image, kind) boot ROM UART loader frame (spec 6.5 step 4)
+    elf_symbols(path)             symbol table of a firmware ELF (sram_cov, reset_on_store)
     tool_identity(sim)            simulator / C++ compiler versions (build cache key)
     build(sim, defines, ...)      cached compile under runs/sim_build/
     run_test(...)                 one simulation + verdict -> result.json
@@ -22,8 +23,10 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 import zlib
@@ -37,9 +40,12 @@ LOADS = ("backdoor", "host", "uart", "none")
 CHECKERS = (
     "test_ctrl", "signature", "trap", "timeout", "uart_monitor", "uart_golden",
     "gpio_seq", "bus_assert", "x_check", "log_scan", "sim_error",
+    # Added by the Phase 1 testbench qualification fixes (dv/README.md):
+    "sram_port", "irq_line", "uart_div", "coverage",
 )
 # Checkers implemented in the testbench (they print "[CHK:<name>] FAIL ...").
-TB_CHECKERS = ("test_ctrl", "trap", "timeout", "uart_monitor", "bus_assert", "x_check")
+TB_CHECKERS = ("test_ctrl", "trap", "timeout", "uart_monitor", "bus_assert", "x_check",
+               "sram_port", "irq_line", "uart_div")
 
 # ---------------------------------------------------------------- repo files
 MEMMAP = "rtl/include/memmap.vh"
@@ -53,6 +59,7 @@ BUGS_TOML = "dv/bugs.toml"
 WHITELIST = "dv/log_whitelist.txt"
 FW_DIR = "fw/build"
 SIM_BUILD = "runs/sim_build"
+BOOTROM_V = "rtl/bootrom/bootrom.v"
 TOP = "tb_soc"
 
 # Spec 6.5 step 4: 1 <= N <= 448 words (0x700 bytes: SRAM below the stack reserve).
@@ -68,8 +75,14 @@ LOADER_MAX_WORDS = 448
 LOADER_FRAMES = ("valid", "max_words", "bad_checksum", "n_zero", "n_too_big")
 # Keys every complete tb_result.txt carries (tb_soc.v finish_sim). fail.<name>
 # for each testbench checker is checked separately (x_check: Icarus only).
-TB_RESULT_KEYS = ("end_reason", "done_count", "done", "done_cycle", "sig", "cycles",
-                  "cpu_start_cycle", "uart_bytes", "unmapped", "simulator", "finished")
+TB_RESULT_KEYS = ("end_reason", "done_count", "done", "done_cycle", "sig", "sig_at_done", "cycles",
+                  "cpu_start_cycle", "uart_bytes", "unmapped", "uart_wr", "uart_wr_stalled",
+                  "uart_wr_stall_cycles", "sram_port_accesses", "mid_resets", "simulator", "finished")
+# tests.toml sram_cov rule keys (coverage checker): from/to (byte address or ELF
+# symbol of the test image, to exclusive), exact counts rd/wr/fetch, lower
+# bounds min_rd/min_wr, and wstrb = write strobes every word must see.
+SRAM_COV_KEYS = {"from", "to", "rd", "wr", "fetch", "min_rd", "min_wr", "wstrb"}
+SRAM_COV_COUNTS = ("rd", "wr", "fetch", "min_rd", "min_wr")
 # Cycles between CPU release and the first byte on uart_rx: two UART frames, so
 # the boot ROM / firmware has written DIV and reached its receive loop.
 UART_IN_DELAY = 400
@@ -143,10 +156,11 @@ _TEST_FIELDS = {
     "name", "load", "boot_mode", "max_cycles", "expect_uart", "sig_rule",
     "expect_gpio", "uart_in", "smoke", "negative_only", "fw",
     "min_cycles", "loader_frame", "expect_unmapped",
+    "sram_cov", "min_uart_stalls", "reset_on_store",
 }
 _TEST_REQUIRED = ("name", "load", "boot_mode", "max_cycles", "sig_rule")
 _BUG_FIELDS = {"id", "define", "test", "sim", "expect_checkers", "expect_regex"}
-_BUG_OPTIONAL = {"exclusive", "expect_gpio"}
+_BUG_OPTIONAL = {"exclusive", "expect_gpio", "fw", "bootrom"}
 
 
 def _is_int(v):
@@ -166,6 +180,40 @@ def parse_sig_rule(rule):
             raise DvError("sig_rule %r: constant wider than 32 bits" % rule)
         return ("const", value)
     raise DvError("sig_rule %r: expected uart_crc32, const:0x<hex> or none" % rule)
+
+
+def _addr_or_symbol(v):
+    """tests.toml address field: a word-aligned SRAM byte address or an ELF symbol name."""
+    if isinstance(v, str):
+        return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", v))
+    return _is_int(v) and 0 <= v <= 0x800 and v % 4 == 0
+
+
+def _check_sram_cov(where, t):
+    rules = t["sram_cov"]
+    if not isinstance(rules, list) or not rules:
+        raise DvError("%s: sram_cov must be a non-empty list of rule tables" % where)
+    for i, r in enumerate(rules, 1):
+        w = "%s: sram_cov rule %d" % (where, i)
+        if not isinstance(r, dict):
+            raise DvError("%s: must be a table" % w)
+        unknown = set(r) - SRAM_COV_KEYS
+        if unknown:
+            raise DvError("%s: unknown keys %s (allowed: %s)" % (w, sorted(unknown), sorted(SRAM_COV_KEYS)))
+        for k in ("from", "to"):
+            if k not in r or not _addr_or_symbol(r[k]):
+                raise DvError("%s: %s must be a word-aligned SRAM byte address or a symbol name" % (w, k))
+            if isinstance(r[k], str) and t["load"] not in ("backdoor", "host", "uart"):
+                raise DvError("%s: a symbol in %s needs a test that loads an image" % (w, k))
+        if not any(k in r for k in SRAM_COV_COUNTS + ("wstrb",)):
+            raise DvError("%s: no count rule (one of %s, wstrb)" % (w, ", ".join(SRAM_COV_COUNTS)))
+        for k in SRAM_COV_COUNTS:
+            if k in r and (not _is_int(r[k]) or r[k] < 0):
+                raise DvError("%s: %s must be a non-negative integer" % (w, k))
+        if "wstrb" in r:
+            g = r["wstrb"]
+            if not isinstance(g, list) or not g or not all(_is_int(v) and 1 <= v <= 15 for v in g):
+                raise DvError("%s: wstrb must be a non-empty list of write strobes 1..15" % w)
 
 
 def load_tests(path=TESTS_TOML):
@@ -222,6 +270,15 @@ def load_tests(path=TESTS_TOML):
                 raise DvError("%s: loader_frame %r not in %s" % (where, t["loader_frame"], LOADER_FRAMES))
         if "expect_unmapped" in t and (not _is_int(t["expect_unmapped"]) or t["expect_unmapped"] < 1):
             raise DvError("%s: expect_unmapped must be a positive integer" % where)
+        if "sram_cov" in t:
+            _check_sram_cov(where, t)
+        if "min_uart_stalls" in t and (not _is_int(t["min_uart_stalls"]) or t["min_uart_stalls"] < 1):
+            raise DvError("%s: min_uart_stalls must be a positive integer" % where)
+        if "reset_on_store" in t:
+            if not _addr_or_symbol(t["reset_on_store"]):
+                raise DvError("%s: reset_on_store must be a word-aligned SRAM byte address or a symbol name" % where)
+            if isinstance(t["reset_on_store"], str) and t["load"] not in ("backdoor", "host", "uart"):
+                raise DvError("%s: a reset_on_store symbol needs a test that loads an image" % where)
         if not t.get("negative_only", False):
             # A positive test must compare every output (Q-F7): a run that only
             # writes DONE = PASS must not be enough.
@@ -290,6 +347,14 @@ def load_bugs(path=BUGS_TOML, tests=None):
             g = b["expect_gpio"]
             if not isinstance(g, list) or not all(_is_int(v) and 0 <= v <= 0xFF for v in g):
                 raise DvError("%s: expect_gpio must be a list of 8-bit integers" % where)
+        # Firmware / boot ROM bug variants (fw/README.md): fw names a variant
+        # image fw/build/<fw>.*, bootrom a variant ROM fw/build/bootrom__<bootrom>.v
+        # that replaces rtl/bootrom/bootrom.v for this run only.
+        for k in ("fw", "bootrom"):
+            if k in b and (not isinstance(b[k], str) or not NAME_RE.match(b[k])):
+                raise DvError("%s: bad %s %r" % (where, k, b[k]))
+        if b["define"] and ("fw" in b or "bootrom" in b):
+            raise DvError("%s: an entry injects either an RTL define or a fw/bootrom variant, not both" % where)
         bb = dict(b)
         bb.setdefault("exclusive", False)
         bugs[bid] = bb
@@ -348,6 +413,122 @@ def uart_loader_frame(image, kind="valid"):
     if kind == "bad_checksum":
         checksum = (checksum + 1) & 0xFF
     return n.to_bytes(2, "little") + img + bytes([checksum])
+
+
+def elf_symbols(path):
+    """{name: value} from the symbol table of a 32-bit little-endian ELF
+    (riscv64-elf-gcc -mabi=ilp32 output). A name defined twice with different
+    values maps to None (ambiguous)."""
+    data = Path(path).read_bytes()
+    if data[:4] != b"\x7fELF" or data[4] != 1 or data[5] != 1:
+        raise DvError("%s: not a 32-bit little-endian ELF file" % rel(path))
+    try:
+        e_shoff = struct.unpack_from("<I", data, 0x20)[0]
+        e_shentsize, e_shnum = struct.unpack_from("<HH", data, 0x2E)
+        secs = [struct.unpack_from("<10I", data, e_shoff + i * e_shentsize) for i in range(e_shnum)]
+        syms = {}
+        for sh in secs:
+            if sh[1] != 2:          # SHT_SYMTAB
+                continue
+            str_off = secs[sh[6]][4]
+            for j in range(sh[5] // 16):
+                st_name, st_value = struct.unpack_from("<II", data, sh[4] + 16 * j)
+                if not st_name:
+                    continue
+                start = str_off + st_name
+                name = data[start:data.index(b"\0", start)].decode("ascii", "replace")
+                if name in syms and syms[name] != st_value:
+                    syms[name] = None
+                else:
+                    syms[name] = st_value
+    except (struct.error, ValueError, IndexError) as e:
+        raise DvError("%s: malformed ELF file: %s" % (rel(path), e))
+    return syms
+
+
+def resolve_addr(value, elf, what):
+    """tests.toml address field -> int (symbol names are looked up in elf)."""
+    if not isinstance(value, str):
+        return value
+    if elf is None or not Path(elf).is_file():
+        raise DvError("%s: symbol %s needs the firmware ELF %s (build it with 'make fw')"
+                      % (what, value, rel(elf) if elf else "(none)"))
+    syms = elf_symbols(elf)
+    if syms.get(value) is None:
+        raise DvError("%s: symbol %s %s in %s" % (what, value,
+                      "is ambiguous" if value in syms else "not found", rel(elf)))
+    return syms[value]
+
+
+def read_sram_cov(path, words):
+    """tb_soc sram_cov.txt -> list (index = word) of (data_reads, fetches, writes, wstrb_mask)."""
+    rows = [None] * words
+    for lineno, line in enumerate(Path(path).read_text(errors="replace").splitlines(), 1):
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        f = s.split()
+        try:
+            addr, rd, fetch, wr, mask = int(f[0], 16), int(f[1]), int(f[2]), int(f[3]), int(f[4], 16)
+        except (IndexError, ValueError):
+            raise DvError("%s:%d: malformed line %r" % (rel(path), lineno, s))
+        if addr % 4 or not 0 <= addr // 4 < words or rows[addr // 4] is not None:
+            raise DvError("%s:%d: bad or repeated address 0x%x" % (rel(path), lineno, addr))
+        rows[addr // 4] = (rd, fetch, wr, mask)
+    if any(r is None for r in rows):
+        raise DvError("%s: %d of %d words missing" % (rel(path), rows.count(None), words))
+    return rows
+
+
+def check_sram_cov(rules, rows, elf):
+    """Evaluate tests.toml sram_cov rules. Returns a list of FAIL messages."""
+    fails = []
+    for i, r in enumerate(rules, 1):
+        lo = resolve_addr(r["from"], elf, "sram_cov rule %d from" % i)
+        hi = resolve_addr(r["to"], elf, "sram_cov rule %d to" % i)
+        if lo % 4 or hi % 4 or not 0 <= lo < hi <= 4 * len(rows):
+            fails.append("SRAM coverage rule %d: empty or bad range [0x%x, 0x%x)" % (i, lo, hi))
+            continue
+        bad = []
+        for w in range(lo // 4, hi // 4):
+            rd, fetch, wr, mask = rows[w]
+            why = []
+            for key, got, exact in (("rd", rd, True), ("wr", wr, True), ("fetch", fetch, True),
+                                    ("min_rd", rd, False), ("min_wr", wr, False)):
+                if key in r and ((got != r[key]) if exact else (got < r[key])):
+                    why.append("%s %d (expected %s%d)" % (
+                        {"rd": "data reads", "wr": "writes", "fetch": "fetches",
+                         "min_rd": "data reads", "min_wr": "writes"}[key],
+                        got, "" if exact else ">= ", r[key]))
+            missing = [v for v in r.get("wstrb", []) if not mask >> v & 1]
+            if missing:
+                why.append("write strobes %s never seen" % ",".join("%x" % v for v in missing))
+            if why:
+                bad.append("0x%03x: %s" % (4 * w, ", ".join(why)))
+        if bad:
+            fails.append("SRAM coverage rule %d [0x%03x, 0x%03x): %d of %d words off; %s%s"
+                         % (i, lo, hi, len(bad), (hi - lo) // 4, "; ".join(bad[:3]),
+                            "; ..." if len(bad) > 3 else ""))
+    return fails
+
+
+def variant_rtl_f(rtl_f, bootrom_v):
+    """Filelist = rtl_f with rtl/bootrom/bootrom.v replaced by bootrom_v (a boot
+    ROM bug variant from fw/build). Written under runs/sim_build/filelists/."""
+    src = repo_path(rtl_f)
+    lines = src.read_text().splitlines()
+    hits = [i for i, l in enumerate(lines) if l.strip() == BOOTROM_V]
+    if len(hits) != 1:
+        raise DvError("%s: expected exactly one %s line to replace" % (rel(src), BOOTROM_V))
+    lines[hits[0]] = rel(bootrom_v)
+    out = REPO / SIM_BUILD / "filelists" / ("rtl__%s.f" % Path(bootrom_v).stem)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(lines) + "\n"
+    if not out.exists() or out.read_text() != text:
+        tmp = out.with_name(out.name + ".%d.%d.tmp" % (os.getpid(), threading.get_ident()))
+        tmp.write_text(text)
+        tmp.replace(out)
+    return rel(out)
 
 
 def hex_word_count(path):
@@ -653,14 +834,26 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
         tests = load_tests(tests_toml)
         if test_name not in tests:
             raise DvError("unknown test %r (not in %s)" % (test_name, rel(repo_path(tests_toml))))
-        t = tests[test_name]
+        t = dict(tests[test_name])
         defines = []
         if bug_id is not None:
             bugs = load_bugs(bugs_toml, tests)
             if bug_id not in bugs:
                 raise DvError("unknown bug %r (not in %s)" % (bug_id, rel(repo_path(bugs_toml))))
-            if bugs[bug_id]["define"]:
-                defines.append(bugs[bug_id]["define"])
+            bug = bugs[bug_id]
+            if bug["define"]:
+                defines.append(bug["define"])
+            # Firmware / boot ROM bug variants (fw/README.md): another image, or
+            # another boot ROM in place of rtl/bootrom/bootrom.v, for this run only.
+            if "fw" in bug:
+                t["fw"] = bug["fw"]
+                result["fw_variant"] = bug["fw"]
+            if "bootrom" in bug:
+                rom_v = repo_path(fw_dir) / ("bootrom__%s.v" % bug["bootrom"])
+                if not rom_v.is_file():
+                    raise DvError("boot ROM variant %s not found (build it with 'make fw')" % rel(rom_v))
+                rtl_f = variant_rtl_f(rtl_f, rom_v)
+                result["bootrom_variant"] = rel(rom_v)
         memmap = parse_memmap(MEMMAP)
         for k in ("SOC_SRAM_WORDS", "SOC_TEST_PASS_MAGIC"):
             if k not in memmap:
@@ -671,7 +864,8 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
         return finish()
     result["defines"] = defines
     result["expected"] = {k: t[k] for k in ("load", "boot_mode", "sig_rule", "expect_uart", "expect_gpio", "uart_in",
-                                            "min_cycles", "loader_frame", "expect_unmapped") if k in t}
+                                            "min_cycles", "loader_frame", "expect_unmapped", "sram_cov",
+                                            "min_uart_stalls", "reset_on_store") if k in t}
     ncycles = int(max_cycles) if max_cycles else t["max_cycles"]
 
     # ---- inputs: firmware image, UART RX stream ----
@@ -679,6 +873,8 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
             "+max_cycles=%d" % ncycles]
     fwd = repo_path(fw_dir)
     uart_in = b""
+    # ELF of the loaded image: symbol lookup for sram_cov and reset_on_store.
+    elf = fwd / (t["fw"] + ".elf") if t["load"] in ("backdoor", "host", "uart") else None
     try:
         if t["load"] in ("backdoor", "host"):
             hexf = fwd / (t["fw"] + ".hex")
@@ -700,6 +896,10 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
                 uart_in += uart_loader_frame(binf.read_bytes(), t["loader_frame"])
                 result["fw_image"] = rel(binf)
         uart_in += t["uart_in"].encode("utf-8")
+        if "reset_on_store" in t:
+            addr = resolve_addr(t["reset_on_store"], elf, "reset_on_store")
+            plus.append("+reset_on_store=%08x" % addr)
+            result["reset_on_store_addr"] = "0x%08x" % addr
     except (OSError, DvError) as e:
         v.fail("sim_error", str(e))
         return finish()
@@ -786,9 +986,11 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
     done_count = _int_or_none(tbr.get("done_count"))
     done = _int_or_none(tbr.get("done")) if tbr.get("done") not in (None, "none") else None
     sig = _int_or_none(tbr.get("sig"))
+    sig_at_done = _int_or_none(tbr.get("sig_at_done"))
     result["cycles"] = _int_or_none(tbr.get("cycles"))
     result["done"] = None if done is None else "0x%08x" % done
     result["sig"] = None if sig is None else "0x%08x" % sig
+    result["sig_at_done"] = None if sig_at_done is None else "0x%08x" % sig_at_done
     result["done_count"] = done_count
     result["end_reason"] = end_reason
     pass_magic = memmap["SOC_TEST_PASS_MAGIC"]
@@ -820,6 +1022,11 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
                 v.fail("sim_error", "tb_result.txt: %s is not a number" % key)
             elif n > 0 and not v.has(name):
                 v.fail(name, "testbench counted %d failure(s) but printed no message" % n)
+        for k in ("uart_wr", "uart_wr_stalled", "uart_wr_stall_cycles", "sram_port_accesses", "mid_resets"):
+            result[k] = _int_or_none(tbr.get(k))
+        if "reset_on_store" in t and end_reason != "abort" and result["mid_resets"] != 1:
+            v.fail("coverage", "the testbench applied %s mid-run reset(s), expected 1: the CPU never presented "
+                   "a store to %s (tests.toml reset_on_store)" % (tbr.get("mid_resets"), result.get("reset_on_store_addr")))
         unmapped = _int_or_none(tbr.get("unmapped"))
         result["unmapped"] = unmapped
         if "expect_unmapped" in t and unmapped != t["expect_unmapped"]:
@@ -865,11 +1072,20 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
         kind, const = parse_sig_rule(t["sig_rule"])
         if kind != "none":
             want = crc32(uart) if kind == "uart_crc32" else const
-            if sig is None:
+            what = "CRC32 of the decoded UART bytes" if kind == "uart_crc32" else t["sig_rule"]
+            if done is not None:
+                # Spec 6.3: test_pass() writes SIG, then DONE. The value that
+                # counts is SIG in the cycle of the DONE strobe (review m4).
+                if sig_at_done is None:
+                    v.fail("signature", "SIG at the DONE write missing from tb_result.txt")
+                elif sig_at_done != want:
+                    v.fail("signature", "SIG=0x%08x at the DONE write (cycle %s), expected 0x%08x (%s); "
+                           "spec 6.3: SIG is written before DONE (SIG at the end of the run: %s)"
+                           % (sig_at_done, tbr.get("done_cycle"), want, what, result["sig"]))
+            elif sig is None:
                 v.fail("signature", "SIG value missing from tb_result.txt")
             elif sig != want:
-                v.fail("signature", "SIG=0x%08x, expected 0x%08x (%s)"
-                       % (sig, want, "CRC32 of the decoded UART bytes" if kind == "uart_crc32" else t["sig_rule"]))
+                v.fail("signature", "SIG=0x%08x, expected 0x%08x (%s)" % (sig, want, what))
         gpio_path = run_dir / "gpio.txt"
         gpio = []
         gpio_bad = []
@@ -887,6 +1103,21 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
             if gpio_bad or gpio != exp:
                 v.fail("gpio_seq", "gpio_out sequence [%s], expected [%s]"
                        % (", ".join(result["gpio"]), ", ".join("0x%02x" % g for g in exp)))
+
+        # ---- coverage: the test exercised what tests.toml says it must ----
+        if "min_uart_stalls" in t:
+            n = result.get("uart_wr_stalled")
+            if n is None or n < t["min_uart_stalls"]:
+                v.fail("coverage", "%s of %s UART DATA writes were held by the transmitter-busy stall, expected at "
+                       "least %d (tests.toml min_uart_stalls; spec 4.2: no mem_ready while reg_dat_wait=1)"
+                       % (n, result.get("uart_wr"), t["min_uart_stalls"]))
+        if "sram_cov" in t:
+            try:
+                rows = read_sram_cov(run_dir / "sram_cov.txt", memmap["SOC_SRAM_WORDS"])
+                for msg in check_sram_cov(t["sram_cov"], rows, elf):
+                    v.fail("coverage", msg)
+            except (OSError, DvError) as e:
+                v.fail("sim_error", "sram_cov: %s" % e)
 
     # ---- log_scan ----
     hits = []

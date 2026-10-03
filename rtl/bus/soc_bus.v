@@ -24,7 +24,10 @@
 //   reset has priority everywhere). The host path is not gated: the host
 //   port must also work while resetn=0 (section 4.4).
 // * Bug injections (section 5 and dv/bugs.toml): BUG_R01, BUG_R02, BUG_R03,
-//   BUG_R07, BUG_R09, BUG_R10, BUG_R13.
+//   BUG_R07, BUG_R09, BUG_R10, BUG_R13, BUG_R17 (UART DATA write stall
+//   ignored), BUG_R18 (csb0 not blocked in the response cycle: a second SRAM
+//   access per transaction), BUG_R19 (CPU-path csb0 not gated with resetn: a
+//   store presented at the edge that samples resetn=0 is written).
 // =============================================================================
 `timescale 1ns/1ps
 `default_nettype none
@@ -138,7 +141,14 @@ module soc_bus (
     // A new CPU request may only start when no response is in flight and the
     // host does not own the SRAM port.
     wire idle     = ~srd_q & ~ready_q & ~host_en;
+`ifdef BUG_R17
+    // BUG_R17: the UART DATA write stall is ignored; a write presented while
+    // the transmitter is busy is answered at once and the byte is dropped.
+    wire stall    = 1'b0;
+    wire unused_bug_r17 = uart_stall;
+`else
     wire stall    = sel_uart & uart_stall;
+`endif
 `ifdef BUG_R09
     // BUG_R09: an unmapped access is never accepted, so it never gets mem_ready.
     wire accept   = idle & mem_valid & ~stall & in_any;
@@ -203,7 +213,17 @@ module soc_bus (
     // SRAM port 0: CPU path, host mux, read data register
     // ------------------------------------------------------------------
     // Only the cycle before T0, and never at an edge where resetn=0 is sampled.
+`ifdef BUG_R18
+    // BUG_R18: csb0 is not blocked by ready_q, so the SRAM is accessed again
+    // in the response cycle (two accesses per transaction, spec 4.3).
+    wire       cpu_csb0 = ~(resetn & ~srd_q & ~host_en & sel_sram);
+`elsif BUG_R19
+    // BUG_R19: csb0 is not gated with resetn, so a store presented at the
+    // edge that samples resetn=0 is written (spec 4.9, RTL-RST-01).
+    wire       cpu_csb0 = ~(idle & sel_sram);
+`else
     wire       cpu_csb0 = ~(resetn & idle & sel_sram);
+`endif
     wire       cpu_web0 = ~is_write;
 `ifdef BUG_R01
     // BUG_R01: CPU-path wmask0[0] and wmask0[1] swapped.

@@ -3,6 +3,9 @@
 // done_strobe is high for exactly one cycle per DONE write, so it is sampled
 // once per cycle on the falling edge. FAIL when a DONE value is not the PASS
 // magic, and when DONE is written more than once.
+// first_done_sig is SIG in the cycle of the first DONE strobe: spec 6.3 has
+// test_pass() write SIG before DONE, so run_sim.py checks the signature rule
+// against this value (a SIG written after DONE is too late; Phase 1 review m4).
 `timescale 1ns/1ps
 `default_nettype none
 `include "memmap.vh"
@@ -15,10 +18,12 @@ module test_ctrl_monitor #(
     input  wire [31:0] cycle,
     input  wire        done_strobe,
     input  wire [31:0] done_value,
+    input  wire [31:0] sig_value,
     output reg         done_seen,
     output reg  [31:0] done_count,
     output reg  [31:0] first_done_value,
     output reg  [31:0] first_done_cycle,
+    output reg  [31:0] first_done_sig,
     output reg  [31:0] fail_count
 );
     localparam [31:0] PASS_MAGIC = `SOC_TEST_PASS_MAGIC;
@@ -29,6 +34,7 @@ module test_ctrl_monitor #(
         done_count       = 32'd0;
         first_done_value = 32'd0;
         first_done_cycle = 32'd0;
+        first_done_sig   = 32'd0;
         fail_count       = 32'd0;
     end
 
@@ -47,6 +53,7 @@ module test_ctrl_monitor #(
                 done_seen        = 1'b1;
                 first_done_value = done_value;
                 first_done_cycle = cycle;
+                first_done_sig   = sig_value;
             end
             if (done_value !== PASS_MAGIC) begin
                 note_fail;

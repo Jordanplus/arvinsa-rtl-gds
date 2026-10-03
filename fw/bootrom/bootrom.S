@@ -21,6 +21,14 @@
  *
  * Register use: s2 UART base, s3 GPIO base, s4 TEST_CTRL base, s0 mode,
  * s5/s6 SRAM start/end, s1 RX-empty value, s7..s11 loader state.
+ *
+ * SRAM accesses in mode 1 (dv/tests.toml bootrom_march sram_cov checks them):
+ * every word is written 6 times (M0, M1, M2, M3, M4, address-in-address) and
+ * read 6 times (M1, M2, M3, M4, M5, address-in-address), all 32-bit.
+ *
+ * BRBUG_* macros exist only for the negative-test boot ROM variants
+ * fw/build/bootrom__<variant>.v (fw/README.md); the regular build and
+ * rtl/bootrom/bootrom.v never define them.
  */
 #include "fw_layout.h"
 
@@ -31,8 +39,10 @@
     .global _start
 _start:
     li      s2, SOC_UART_BASE
+#ifndef BRBUG_NO_DIV_WRITE
     li      t0, SOC_UART_DIV
     sw      t0, SOC_UART_DIV_OFF(s2)
+#endif
     li      s3, SOC_GPIO_BASE
     lw      s0, SOC_GPIO_IN_OFF(s3)
     andi    s0, s0, 3                       /* mode = boot_mode[1:0] */
@@ -51,7 +61,11 @@ jump_sram:
 /* ---------------------------------------------------------------- mode 1 */
 boot_march:
     li      s5, SOC_SRAM_BASE
+#ifndef BRBUG_SKIP_LAST_WORD
     li      s6, SRAM_END
+#else
+    li      s6, SRAM_END - 4                /* variant: last word never tested */
+#endif
     li      a2, 0
     jal     fill_up                         /* M0 up(w0) */
     li      a0, 0
@@ -69,7 +83,9 @@ boot_march:
     jal     check_up                        /* M5 up(r0): a2 = 0 */
     li      a2, -1
     jal     fill_up                         /* address-in-address: write */
+#ifndef BRBUG_NO_AIA_READBACK
     jal     check_up                        /* address-in-address: read back */
+#endif
     li      t0, SOC_GPIO_MARCH_PASS
     sw      t0, SOC_GPIO_OUT_OFF(s3)
     li      t0, SOC_MARCH_SIG

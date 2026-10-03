@@ -7,6 +7,10 @@
 # Variants: default, -DUSE_POWER_PINS, and every RTL bug injection define.
 # Any warning or error in any variant -> FAIL (exit 1).
 # RTL-owned files (rtl/soc, rtl/bus, rtl/periph) may not carry any waiver.
+# Bug injection defines: the single list is dv/bugs.toml (define = "BUG_...").
+# Both directions are checked: every define there has an `ifdef/`ifndef/
+# `elsif in the RTL-owned files, and every BUG_* used in those files has a
+# dv/bugs.toml entry (no injected bug without a negative test).
 # Logs: runs/rtl/lint/<variant>.log
 # Compatible with bash 3.2.
 # =============================================================================
@@ -20,7 +24,11 @@ FILELIST=rtl/rtl.f
 WAIVERS=rtl/lint/waivers.vlt
 SRAM_BB=ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v
 OWN_SRC="rtl/soc rtl/bus rtl/periph"
-BUGS="BUG_R01 BUG_R02 BUG_R03 BUG_R04 BUG_R05 BUG_R07 BUG_R08 BUG_R09 BUG_R10 BUG_R11 BUG_R12 BUG_R13 BUG_R14 BUG_R15"
+BUGS_TOML=dv/bugs.toml
+BUGS=$( (grep -oE '^[[:space:]]*define[[:space:]]*=[[:space:]]*"BUG_[A-Za-z0-9_]+"' "$BUGS_TOML" || true) \
+        | grep -oE 'BUG_[A-Za-z0-9_]+' | sort -u | tr '\n' ' ' || true)
+RTL_BUGS=$( (grep -rhoE '`(ifdef|ifndef|elsif)[[:space:]]+BUG_[A-Za-z0-9_]+' $OWN_SRC || true) \
+        | grep -oE 'BUG_[A-Za-z0-9_]+' | sort -u | tr '\n' ' ' || true)
 VARIANTS="default USE_POWER_PINS $BUGS"
 
 if ! command -v verilator >/dev/null 2>&1; then
@@ -46,13 +54,25 @@ if grep -nE "$OWN_WAIVER_RE" "$WAIVERS" >/dev/null 2>&1; then
     fail=1
 fi
 
-# 2. Every bug injection define must exist in RTL-owned sources.
+# 2. Bug injection defines: dv/bugs.toml and the RTL must name the same set.
+if [ -z "$BUGS" ]; then
+    echo "  FAIL  no define = \"BUG_...\" entries found in $BUGS_TOML"
+    fail=1
+fi
 for b in $BUGS; do
-    if ! grep -rqE "\`ifn?def[[:space:]]+$b([^0-9A-Za-z_]|\$)" $OWN_SRC; then
-        echo "  FAIL  $b: no \`ifdef $b in $OWN_SRC"
+    if ! grep -rqE "\`(ifdef|ifndef|elsif)[[:space:]]+$b([^0-9A-Za-z_]|\$)" $OWN_SRC; then
+        echo "  FAIL  $b: in $BUGS_TOML but no \`ifdef/\`elsif $b in $OWN_SRC"
         fail=1
     fi
 done
+for b in $RTL_BUGS; do
+    case " $BUGS " in
+        *" $b "*) ;;
+        *)  echo "  FAIL  $b: used in $OWN_SRC but no dv/bugs.toml entry has define = \"$b\" (injected bug without a negative test)"
+            fail=1 ;;
+    esac
+done
+echo "lint: bug injection defines (dv/bugs.toml = RTL): $BUGS"
 
 # 3. Lint every variant.
 for v in $VARIANTS; do

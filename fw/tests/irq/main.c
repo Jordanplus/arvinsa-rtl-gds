@@ -14,11 +14,13 @@
  * the irq lines into the pending set every cycle. IRQ_TRIG is a level that the
  * handler clears with its first store (spec §6.3), so irq[SOC_IRQ_TEST] is
  * latched again while the handler starts, and the handler runs a second time
- * right after retirq; both entries record 1 << SOC_IRQ_TEST. The Phase 1 RTL
- * gives exactly 2 entries. Spec §6.4 says "wait for the count to become 1", so
- * 1 entry is accepted as well until the spec fixes the exact number. More
- * entries mean the IRQ line did not drop when IRQ_TRIG was cleared (or the
- * handler did not clear it); none within the window means no IRQ at all.
+ * right after retirq; both entries record 1 << SOC_IRQ_TEST. Spec §4.8 fixes
+ * this at exactly 2 entries per IRQ_TRIG write. 1 entry means the line was not
+ * a level (e.g. a one-cycle pulse); more entries mean the IRQ line did not drop
+ * when IRQ_TRIG was cleared (or the handler did not clear it); none within the
+ * window means no IRQ at all. A line released a few tens of cycles late can
+ * still give 2 entries; the testbench irq_line checker compares the line with
+ * IRQ_TRIG[0] in every cycle and catches that.
  *
  * Fail codes: 0x10 recorded pending mask is not 1 << SOC_IRQ_TEST,
  *             0x20 handler entry count outside IRQ_MIN_ENTRIES..IRQ_MAX_ENTRIES.
@@ -27,7 +29,7 @@
 
 #define FAIL_MASK        0x10
 #define FAIL_COUNT       0x20
-#define IRQ_MIN_ENTRIES  1u
+#define IRQ_MIN_ENTRIES  2u   /* spec §4.8: exactly 2 entries per IRQ_TRIG write */
 #define IRQ_MAX_ENTRIES  2u
 /* Each loop iteration is a few instructions (about 15 cycles on PicoRV32),
  * so the window is about 3000 cycles: much longer than the IRQ entry latency

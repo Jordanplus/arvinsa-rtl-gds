@@ -2,6 +2,9 @@
  * fw/common/fwlib.c - SoC firmware library (docs/spec/soc_spec.md §6.3).
  * Built with -ffunction-sections and linked with --gc-sections, so each test
  * only carries the functions it uses.
+ *
+ * FWBUG_* macros exist only for negative-test firmware variants (fw/README.md,
+ * "firmware / boot ROM bug variants"); the regular build never defines them.
  */
 #include "fwlib.h"
 
@@ -13,13 +16,31 @@ void uart_init(void)
     UART_DIV_REG = SOC_UART_DIV;
 }
 
-void uart_putc(char c)
+/* Always inlined, so uart_putc() compiles exactly as before this helper existed. */
+static inline __attribute__((always_inline)) void crc_add(char c)
 {
     uint32_t crc = ~crc_sent ^ (uint8_t)c;
     for (int i = 0; i < 8; i++)
         crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
     crc_sent = ~crc;
+}
+
+void uart_putc(char c)
+{
+    crc_add(c);
     UART_DATA_REG = (uint8_t)c;   /* the bus stalls while the transmitter is busy */
+}
+
+void uart_puts_burst(const char *s)
+{
+    /* Back-to-back DATA writes: nothing between two writes but the loop
+     * itself (a few cycles), so every write after the first finds the
+     * transmitter busy and the bus must hold it (spec §4.2). The CRC is
+     * accumulated afterwards over the same bytes. */
+    for (const char *p = s; *p; p++)
+        UART_DATA_REG = (uint8_t)*p;
+    while (*s)
+        crc_add(*s++);
 }
 
 void uart_puts(const char *s)
@@ -52,8 +73,14 @@ uint32_t uart_crc32(void)
 
 void test_pass(void)
 {
+#ifndef FWBUG_DONE_BEFORE_SIG
     TEST_SIG_REG = crc_sent;
     TEST_DONE_REG = SOC_TEST_PASS_MAGIC;
+#else
+    /* Bug variant (dv/bugs.toml S01): DONE before SIG, against spec §6.3. */
+    TEST_DONE_REG = SOC_TEST_PASS_MAGIC;
+    TEST_SIG_REG = crc_sent;
+#endif
     for (;;)
         ;
 }

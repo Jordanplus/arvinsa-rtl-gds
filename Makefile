@@ -29,7 +29,7 @@ help:
 	@echo "  make sim TEST=hello SIM=icarus|verilator"
 	@echo "  make regress-rtl          all positive tests on Icarus and Verilator (L1b)"
 	@echo "  make regress-rtl-smoke    smoke subset on Icarus"
-	@echo "  make neg-rtl              bug injection R01-R07, each must FAIL at its checker"
+	@echo "  make neg-rtl              bug injection (all dv/bugs.toml entries), each must FAIL at its checker"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"

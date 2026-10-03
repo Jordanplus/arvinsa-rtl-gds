@@ -10,7 +10,10 @@
 // done_value first shows the new value).
 // Bug injection (dv/bugs.toml): BUG_R12 (SIG and IRQ_TRIG read back 0),
 // BUG_R14 (irq_test stays high 200 cycles after IRQ_TRIG[0] is cleared),
-// BUG_R15 (DONE reads back 0).
+// BUG_R15 (DONE reads back 0), BUG_R16 (partial offset decode: an IRQ_TRIG
+// write also writes SIG), BUG_R20 (irq_test stays high 40 cycles after
+// IRQ_TRIG[0] is cleared), BUG_R22 (irq_test is a one-cycle pulse per
+// IRQ_TRIG write with bit 0 set, not the IRQ_TRIG[0] level).
 // =============================================================================
 `timescale 1ns/1ps
 `default_nettype none
@@ -36,7 +39,13 @@ module soc_test_ctrl (
     wire irq_hit  = (off == IRQ_OFF[3:0]);
 
     wire wr      = req & we;
+`ifdef BUG_R16
+    // BUG_R16: SIG write enable decodes off[2] only, so an IRQ_TRIG write
+    // (offset 8) also writes SIG.
+    wire sig_we  = wr & ~off[2];
+`else
     wire sig_we  = wr & sig_hit;
+`endif
     wire done_we = wr & done_hit;
     wire irq_we  = wr & irq_hit;
 
@@ -79,6 +88,29 @@ module soc_test_ctrl (
             irq_hold_q <= irq_hold_q - 8'd1;
     end
     assign irq_test = irq_trig_q[0] | (irq_hold_q != 8'd0);
+`elsif BUG_R20
+    // BUG_R20: like BUG_R14, but the line is released only 40 cycles late.
+    reg [5:0] irq_hold_q;
+    always @(posedge clk) begin
+        if (!resetn)
+            irq_hold_q <= 6'd0;
+        else if (irq_trig_q[0])
+            irq_hold_q <= 6'd40;
+        else if (irq_hold_q != 6'd0)
+            irq_hold_q <= irq_hold_q - 6'd1;
+    end
+    assign irq_test = irq_trig_q[0] | (irq_hold_q != 6'd0);
+`elsif BUG_R22
+    // BUG_R22: one-cycle pulse per IRQ_TRIG write with bit 0 set, instead of
+    // the IRQ_TRIG[0] level.
+    reg irq_pulse_q;
+    always @(posedge clk) begin
+        if (!resetn)
+            irq_pulse_q <= 1'b0;
+        else
+            irq_pulse_q <= irq_we & wdata[0];
+    end
+    assign irq_test = irq_pulse_q;
 `else
     assign irq_test = irq_trig_q[0];
 `endif

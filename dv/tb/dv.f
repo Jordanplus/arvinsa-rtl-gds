@@ -3,4 +3,7 @@ dv/monitors/uart_monitor.v
 dv/monitors/bus_assert.v
 dv/monitors/x_check.v
 dv/monitors/test_ctrl_monitor.v
+dv/monitors/sram_port_monitor.v
+dv/monitors/irq_line_monitor.v
+dv/monitors/uart_div_monitor.v
 dv/tb/tb_soc.v

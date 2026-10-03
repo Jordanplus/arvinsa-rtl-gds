@@ -14,6 +14,20 @@
 #                    bad_checksum | n_zero | n_too_big (dvlib.LOADER_FRAMES).
 #   expect_unmapped  exact number of unmapped data accesses the test makes on
 #                    purpose; bus_assert counts them instead of failing them.
+#   sram_cov         SRAM access counts per word at CPU bus handshakes
+#                    (coverage checker): a list of rules {from, to (byte
+#                    address or ELF symbol of the test image, to exclusive),
+#                    rd / wr / fetch (exact data reads / writes / instruction
+#                    fetches per word), min_rd / min_wr (lower bounds), wstrb
+#                    (write strobes every word must see)}. A test phase that is
+#                    removed or shortened changes the counts even when the test
+#                    still prints PASS and runs as long as before.
+#   min_uart_stalls  at least this many UART DATA writes must be held by the
+#                    transmitter-busy stall (coverage checker, spec 4.2).
+#   reset_on_store   byte address or ELF symbol: the testbench drives resetn=0
+#                    at the falling edge where the CPU first presents a store to
+#                    it (spec 4.9, +reset_on_store); exactly one such reset must
+#                    happen (coverage checker).
 # A positive test (negative_only = false) must set expect_uart and expect_gpio
 # and a sig_rule other than none (dvlib.load_tests rejects it otherwise).
 # Every test boots from the boot ROM, which writes GPIO_OUT = 0xB0 | boot_mode
@@ -21,7 +35,8 @@
 # max_cycles: at least 5x the cycles measured on the Phase 1 RTL (Icarus,
 # 2026-10-03: hello 3.5k, memtest 871k, irq 7.0k, muldiv 18k, uart_echo 6.6k,
 # bootrom_march 112k, boot_uart_hello 63k, boot_host_hello 3.9k, boot_uart_max
-# 363k, regs 11.5k, unmapped 10.7k), so a slower but still correct design does
+# 363k, regs 11.5k, unmapped 10.7k; after the qualification fixes: regs 19.1k,
+# uart_burst 44k, reset_store 8.6k), so a slower but still correct design does
 # not time out while a hang still ends in bounded time.
 # min_cycles: about 90% of the DONE cycle measured on the same RTL (memtest
 # 870728, muldiv 17333, bootrom_march 111880; identical on Icarus and
@@ -40,12 +55,19 @@ uart_in = ""
 smoke = true
 negative_only = false
 
+# sram_cov: every word of the test area [_free_start, 0x700) gets exactly
+# 88 data reads and 22 writes, with strobes 1/2/4/8/3/C (byte lane) and F
+# (derivation in fw/tests/memtest/main.c; measured 2026-10-03, identical on both
+# simulators). Removing the march C- phase gives 83/17 (review M2).
 [[test]]
 name = "memtest"
 load = "backdoor"
 boot_mode = 0
 max_cycles = 5000000
 min_cycles = 780000
+sram_cov = [
+    { from = "_free_start", to = 0x700, rd = 88, wr = 22, fetch = 0, wstrb = [0x1, 0x2, 0x4, 0x8, 0x3, 0xC, 0xF] },
+]
 expect_uart = "memtest PASS\n"
 sig_rule = "uart_crc32"
 expect_gpio = [0xB0]
@@ -90,12 +112,20 @@ uart_in = "ping\n"
 smoke = false
 negative_only = false
 
+# sram_cov: spec 6.5 step 3 / fw/bootrom/bootrom.S: every one of the 512 words
+# is written 6 times (M0..M4, address-in-address) and read 6 times (M1..M5,
+# address-in-address), 32-bit only, and nothing runs from SRAM. A march that
+# skips the last word or drops the address-in-address read-back fails here
+# (review M3; the boot ROM is mask ROM in silicon).
 [[test]]
 name = "bootrom_march"
 load = "none"
 boot_mode = 1
 max_cycles = 1000000
 min_cycles = 100000
+sram_cov = [
+    { from = 0x000, to = 0x800, rd = 6, wr = 6, fetch = 0, wstrb = [0xF] },
+]
 expect_uart = ""
 sig_rule = "const:0x4D415243"
 expect_gpio = [0xB1, 0xA5]
@@ -154,7 +184,8 @@ boot_mode = 3
 max_cycles = 200000
 expect_uart = "regs PASS\n"
 sig_rule = "uart_crc32"
-expect_gpio = [0xB3, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF, 0x00, 0xB3]
+# The last three values come from the cross-talk check (0x3C, 0xC3, restore 0xB3).
+expect_gpio = [0xB3, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF, 0x00, 0xB3, 0x3C, 0xC3, 0xB3]
 uart_in = ""
 smoke = false
 negative_only = false
@@ -171,6 +202,41 @@ expect_uart = "unmapped PASS\n"
 sig_rule = "uart_crc32"
 expect_gpio = [0xB0]
 expect_unmapped = 87
+uart_in = ""
+smoke = false
+negative_only = false
+
+# UART DATA writes back to back (fw/tests/uart_burst/main.c, review M1): the
+# bus must hold each write while the transmitter is busy (spec 4.2). The line
+# has 81 bytes; all 81 writes are stalled on the Phase 1 RTL (13558 stall
+# cycles; the first write by the idle period simpleuart adds after the DIV
+# write). min_uart_stalls = 80 does not count on that first one.
+[[test]]
+name = "uart_burst"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+min_uart_stalls = 80
+expect_uart = "uart_burst 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false
+
+# Reset in the middle of a store (fw/tests/reset_store/main.c, review m6, spec
+# 4.9 RTL-RST-01): resetn=0 is sampled together with the store to rst_victim;
+# the store must be dropped. The boot ROM runs twice, so GPIO_OUT goes
+# 0xB0 -> 0 (reset) -> 0xB0.
+[[test]]
+name = "reset_store"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+reset_on_store = "rst_victim"
+expect_uart = "reset_store PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0, 0x00, 0xB0]
 uart_in = ""
 smoke = false
 negative_only = false

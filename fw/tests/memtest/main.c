@@ -12,6 +12,14 @@
  *         with lw, lbu, lb, lhu and lh
  * Phases 0x10-0x30 use word accesses only, so a byte-lane fault (e.g. swapped
  * write-mask bits) first shows up as 0x40.
+ *
+ * Accesses per test-area word (dv/tests.toml sram_cov counts them, so a phase
+ * that is skipped or shortened fails the coverage checker; keep both in sync):
+ *   patterns 4 W + 4 R, address-in-address 1 W + 1 R, march C- 5 W + 5 R,
+ *   byte lane 6 x (1 full W + 1 sb/sh W + 13 R: lw, 4 x lbu/lb, 2 x lhu/lh)
+ *   = 22 writes (16 full, one each with strobe 1/2/4/8/3/C) and 88 reads.
+ * FWBUG_MEMTEST_NO_MARCH exists only for the negative-test variant
+ * memtest__no_march (fw/README.md); the regular build never defines it.
  */
 #include "fwlib.h"
 
@@ -111,12 +119,16 @@ int main(void)
         if (*p != (uint32_t)(uintptr_t)p)
             test_fail(FAIL_ADDR);
 
+#ifndef FWBUG_MEMTEST_NO_MARCH
     fill(0);
     march_rw(0, 0, ~0u);
     march_rw(0, ~0u, 0);
     march_rw(1, 0, ~0u);
     march_rw(1, ~0u, 0);
     expect_all(0, FAIL_MARCH);
+#else
+    (void)march_rw;     /* bug variant (dv/bugs.toml M01): march C- phase removed */
+#endif
 
     byte_lane();
 

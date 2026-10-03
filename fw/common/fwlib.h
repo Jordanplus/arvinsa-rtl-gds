@@ -27,6 +27,7 @@ extern uint32_t _sram_half[];
 void     uart_init(void);                 /* DIV = SOC_UART_DIV; call first in every test */
 void     uart_putc(char c);               /* send one byte, accumulate CRC32 */
 void     uart_puts(const char *s);        /* send a NUL-terminated string */
+void     uart_puts_burst(const char *s);  /* same, DATA writes back to back (UART stall test) */
 int      uart_getc(void);                 /* blocking receive, returns 0..255 */
 void     uart_puthex(uint32_t v);         /* send 8 upper-case hex digits */
 uint32_t uart_crc32(void);                /* zlib.crc32() of every byte sent so far */

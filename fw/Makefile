@@ -5,6 +5,7 @@
 #   make -C fw <test>         one test: build/<test>.elf .bin .hex .lst (+ size check)
 #   make -C fw bootrom        regenerate rtl/bootrom/bootrom.v from the boot ROM image
 #   make -C fw check-bootrom  regenerate into build/ and compare with rtl/bootrom/bootrom.v
+#   make -C fw variants       negative-test bug variants (FW_VARIANTS, BOOTROM_VARIANTS)
 #   make -C fw clean
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
@@ -42,12 +43,32 @@ BOOT_LDFLAGS := -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles 
 # regs and unmapped (dv/tests.toml). bootrom_march loads nothing (it runs the
 # boot ROM only), so its target builds the boot ROM image instead.
 TESTS := hello memtest irq muldiv uart_echo neg_fw_hang neg_fw_illegal \
-         boot_uart_hello boot_host_hello regs unmapped
+         boot_uart_hello boot_host_hello regs unmapped uart_burst reset_store
 # Tests that reuse another test's sources (same image, own output names).
 SRC_boot_uart_hello := hello
 SRC_boot_host_hello := hello
 # Extra size limit (linker symbol) per test; all tests are also held to _stack_limit.
 LIMIT_SYM_memtest := _sram_half
+LIMIT_SYM_memtest__no_march := _sram_half
+
+# Negative-test bug variants (fw/README.md; referenced from dv/bugs.toml fw =
+# and bootrom =). Never part of a positive test, never written to rtl/.
+#   Firmware variant <test>__<name>: the sources of VSRC_<variant> (test and
+#   fw/common) compiled with -D$(VDEF_<variant>), image build/<variant>.*
+#   Boot ROM variant <name>: bootrom.S with -D$(BRDEF_<name>), image
+#   build/bootrom__<name>.* and ROM build/bootrom__<name>.v (module bootrom),
+#   which run_sim.py compiles in place of rtl/bootrom/bootrom.v.
+FW_VARIANTS := memtest__no_march hello__done_before_sig reset_store__no_victim
+VSRC_memtest__no_march      := memtest
+VDEF_memtest__no_march      := FWBUG_MEMTEST_NO_MARCH
+VSRC_hello__done_before_sig := hello
+VDEF_hello__done_before_sig := FWBUG_DONE_BEFORE_SIG
+VSRC_reset_store__no_victim := reset_store
+VDEF_reset_store__no_victim := FWBUG_RESET_STORE_NO_VICTIM
+BOOTROM_VARIANTS := skip_last_word no_aia_readback no_div_write
+BRDEF_skip_last_word  := BRBUG_SKIP_LAST_WORD
+BRDEF_no_aia_readback := BRBUG_NO_AIA_READBACK
+BRDEF_no_div_write    := BRBUG_NO_DIV_WRITE
 
 COMMON_OBJS := $(B)/obj/common/start.o $(B)/obj/common/fwlib.o
 BOOTROM_OBJ := $(B)/obj/bootrom/bootrom.o
@@ -63,9 +84,13 @@ REBUILD_ON  := $(FLAGS_STAMP) Makefile
 
 test_dir = tests/$(if $(SRC_$(1)),$(SRC_$(1)),$(1))
 
-.PHONY: all bootrom bootrom-image check-bootrom bootrom_march clean FORCE $(TESTS)
+.PHONY: all bootrom bootrom-image check-bootrom bootrom_march variants clean FORCE $(TESTS) $(FW_VARIANTS)
 
-all: $(TESTS) $(B)/size_report.txt bootrom-image
+all: $(TESTS) $(B)/size_report.txt bootrom-image variants
+
+# Every file of a boot ROM variant is named here, so make keeps the .elf/.hex/.lst
+# (otherwise they are intermediate files of the pattern chain and get deleted).
+variants: $(FW_VARIANTS) $(foreach v,$(BOOTROM_VARIANTS),$(foreach x,elf bin hex lst v,$(B)/bootrom__$(v).$(x)))
 
 # ---------------------------------------------------------------- build-flag record
 FORCE:
@@ -117,6 +142,31 @@ $(1): $(B)/$(1).elf $(B)/$(1).bin $(B)/$(1).hex $(B)/$(1).lst $(B)/$(1).size
 endef
 $(foreach t,$(TESTS),$(eval $(call TEST_RULES,$(t))))
 
+# Firmware bug variants: own object directory, so fw/common is compiled with
+# the variant define as well.
+define VARIANT_RULES
+$(1)_VOBJS := $(B)/obj/$(1)/common/start.o $(B)/obj/$(1)/common/fwlib.o \
+              $$(patsubst tests/$$(VSRC_$(1))/%.c,$(B)/obj/$(1)/test/%.o,$$(wildcard tests/$$(VSRC_$(1))/*.c))
+
+$(B)/obj/$(1)/common/%.o: common/%.c $(B)/soc.h $(REBUILD_ON)
+	@mkdir -p $$(@D)
+	$$(CC) $$(CFLAGS) -D$$(VDEF_$(1)) -c $$< -o $$@
+
+$(B)/obj/$(1)/common/%.o: common/%.S $(B)/soc.h $(REBUILD_ON)
+	@mkdir -p $$(@D)
+	$$(CC) $$(CFLAGS) -D$$(VDEF_$(1)) -c $$< -o $$@
+
+$(B)/obj/$(1)/test/%.o: tests/$$(VSRC_$(1))/%.c $(B)/soc.h $(REBUILD_ON)
+	@mkdir -p $$(@D)
+	$$(CC) $$(CFLAGS) -D$$(VDEF_$(1)) -c $$< -o $$@
+
+$(B)/$(1).elf: $$($(1)_VOBJS) $(B)/link.ld $(REBUILD_ON)
+	$$(CC) $$(LDFLAGS) -T $(B)/link.ld -Wl,-Map=$(B)/$(1).map -o $$@ $$($(1)_VOBJS) -lgcc
+
+$(1): $(B)/$(1).elf $(B)/$(1).bin $(B)/$(1).hex $(B)/$(1).lst $(B)/$(1).size
+endef
+$(foreach v,$(FW_VARIANTS),$(eval $(call VARIANT_RULES,$(v))))
+
 # ---------------------------------------------------------------- image formats
 $(B)/%.bin: $(B)/%.elf
 	$(OBJCOPY) -O binary $< $@
@@ -146,6 +196,17 @@ bootrom_march: bootrom-image
 bootrom: bootrom-image
 	$(PY) $(GEN_BOOTROM) --hex $(B)/bootrom.hex --out $(BOOTROM_V)
 
+# Boot ROM bug variants (build/ only; rtl/bootrom/bootrom.v is never touched).
+$(B)/obj/bootrom/bootrom__%.o: bootrom/bootrom.S $(B)/soc.h $(REBUILD_ON)
+	@mkdir -p $(@D)
+	$(CC) $(BOOT_ASFLAGS) -D$(BRDEF_$*) -c $< -o $@
+
+$(B)/bootrom__%.elf: $(B)/obj/bootrom/bootrom__%.o $(B)/bootrom.ld $(REBUILD_ON)
+	$(CC) $(BOOT_LDFLAGS) -T $(B)/bootrom.ld -Wl,-Map=$(B)/bootrom__$*.map -o $@ $<
+
+$(B)/bootrom__%.v: $(B)/bootrom__%.hex $(B)/bootrom__%.lst $(GEN_BOOTROM)
+	$(PY) $(GEN_BOOTROM) --hex $< --out $@ --source "fw/bootrom/bootrom.S -D$(BRDEF_$*) (negative-test variant)"
+
 check-bootrom: bootrom-image
 	$(PY) $(GEN_BOOTROM) --hex $(B)/bootrom.hex --out $(B)/bootrom_check.v
 	@if cmp -s $(B)/bootrom_check.v $(BOOTROM_V); then \
@@ -158,4 +219,4 @@ check-bootrom: bootrom-image
 clean:
 	rm -rf $(B)
 
--include $(wildcard $(B)/obj/*/*.d)
+-include $(wildcard $(B)/obj/*/*.d $(B)/obj/*/*/*.d)

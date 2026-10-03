@@ -17,7 +17,8 @@
 // (reset to the idle level 1) before it reaches simpleuart. This adds two
 // clocks of latency to RX but does not change the bit period.
 // Bug injection: BUG_R04 (DIV value sent to simpleuart = written value + 1),
-// BUG_R12 (DIV reads back 0; dv/bugs.toml).
+// BUG_R12 (DIV reads back 0), BUG_R21 (divider reset value SOC_UART_DIV + 1;
+// dv/bugs.toml).
 // =============================================================================
 `timescale 1ns/1ps
 `default_nettype none
@@ -67,8 +68,15 @@ module soc_uart (
     wire [31:0] dat_do;
     wire        dat_wait;
 
+`ifdef BUG_R21
+    // BUG_R21: wrong divider reset value (bit = 21 clocks until DIV is written).
+    localparam integer UART_RESET_DIV = `SOC_UART_DIV + 1;
+`else
+    localparam integer UART_RESET_DIV = `SOC_UART_DIV;
+`endif
+
     simpleuart #(
-        .DEFAULT_DIV (`SOC_UART_DIV)
+        .DEFAULT_DIV (UART_RESET_DIV)
     ) u_simpleuart (
         .clk          (clk),
         .resetn       (resetn),

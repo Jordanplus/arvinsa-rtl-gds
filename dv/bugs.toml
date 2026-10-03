@@ -7,6 +7,11 @@
 # Optional fields (DV extensions, dv/README.md):
 #   exclusive = true   no checker outside expect_checkers may fail either
 #   expect_gpio = [..] the gpio_out change sequence of the bug run must equal it
+#   fw = "<image>"     run a firmware bug variant fw/build/<image>.* instead of
+#                      the test's image (define must be "")
+#   bootrom = "<name>" compile fw/build/bootrom__<name>.v in place of
+#                      rtl/bootrom/bootrom.v (boot ROM bug variant; define "")
+# Variants are built by make fw (fw/Makefile FW_VARIANTS, BOOTROM_VARIANTS).
 # R01-R07 are spec 5. The entries after them come from the testbench
 # qualification review (bugs that escaped every checker before): each one
 # keeps a test or checker from being weakened without neg-rtl noticing.
@@ -206,3 +211,154 @@ sim = "icarus"
 expect_checkers = ["test_ctrl"]
 expect_regex = "(?i)0xbad00b00"
 exclusive = true
+
+# ---- Phase 1 qualification fixes (fresh bug injection, 2026-10-03) ---------
+# Each entry below was an escape before the fixes: the bug passed every
+# checker of make regress-rtl. The F-number is the reviewer's injection id.
+
+# F15: TEST_CTRL partial offset decode, an IRQ_TRIG write also writes SIG
+# (soc_test_ctrl.v). regs cross-talk check: writing IRQ_TRIG (index 3) changed
+# SIG (index 2) -> fail code 0x0300 | 3 << 4 | 2.
+[[bug]]
+id = "R16"
+define = "BUG_R16"
+test = "regs"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00332"
+
+# F14: UART DATA write stall ignored (soc_bus.v): bytes written while the
+# transmitter is busy are dropped. uart_burst writes back to back; no write is
+# held any more (coverage), and the text is short (uart_golden, signature).
+[[bug]]
+id = "R17"
+define = "BUG_R17"
+test = "uart_burst"
+sim = "icarus"
+expect_checkers = ["coverage"]
+expect_regex = "(?i)held by the transmitter-busy stall"
+
+# F11: csb0 not blocked by ready_q (soc_bus.v): a second SRAM access in the
+# response cycle of every SRAM transaction. Functionally harmless here, so
+# only the SRAM port checker sees it (spec 4.3: csb0 once per transaction).
+[[bug]]
+id = "R18"
+define = "BUG_R18"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["sram_port"]
+expect_regex = "(?i)SRAM access #2 of one transaction"
+
+# RTL-RST-01 (spec 4.9): csb0 not gated with resetn (soc_bus.v), so the store
+# presented at the edge that samples resetn=0 is written. reset_store resets
+# on exactly that store; the firmware also reports it (fail code 0x03).
+[[bug]]
+id = "R19"
+define = "BUG_R19"
+test = "reset_store"
+sim = "icarus"
+expect_checkers = ["sram_port"]
+expect_regex = "(?i)SRAM access at a rising edge that samples resetn=0"
+
+# F19: IRQ line released 40 cycles after IRQ_TRIG[0] is cleared
+# (soc_test_ctrl.v). The handler still runs exactly 2 times, so the firmware
+# count cannot see it; the irq_line checker compares the line every cycle.
+[[bug]]
+id = "R20"
+define = "BUG_R20"
+test = "irq"
+sim = "icarus"
+expect_checkers = ["irq_line"]
+expect_regex = "(?i)irq\\[4\\]=1 but IRQ_TRIG\\[0\\]=0"
+
+# F02: UART divider reset value SOC_UART_DIV + 1 (soc_uart.v). The boot ROM
+# writes DIV = 18 before the first byte, so the UART output is right; only
+# the reset value check of uart_div sees it.
+[[bug]]
+id = "R21"
+define = "BUG_R21"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["uart_div"]
+expect_regex = "(?i)after reset release, expected the reset value"
+
+# F20: IRQ line is a one-cycle pulse per IRQ_TRIG write (soc_test_ctrl.v): the
+# handler runs once instead of 2 times (spec 4.8); irq fail code 0x20.
+[[bug]]
+id = "R22"
+define = "BUG_R22"
+test = "irq"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00020"
+
+# F16b: memtest without its march C- phase (firmware variant
+# memtest__no_march). Still prints PASS and runs longer than before (the test
+# area grows), so min_cycles cannot see it; every test-area word now gets
+# 83 reads / 17 writes instead of 88 / 22.
+[[bug]]
+id = "M01"
+define = ""
+fw = "memtest__no_march"
+test = "memtest"
+sim = "icarus"
+expect_checkers = ["coverage"]
+expect_regex = "(?i)SRAM coverage rule 1 .*data reads 83 \\(expected 88\\)"
+
+# F08: boot ROM march C- and address-in-address skip the last SRAM word (boot
+# ROM variant skip_last_word). Mask ROM in silicon.
+[[bug]]
+id = "B01"
+define = ""
+bootrom = "skip_last_word"
+test = "bootrom_march"
+sim = "icarus"
+expect_checkers = ["coverage"]
+expect_regex = "(?i)SRAM coverage rule 1 .*1 of 512 words off; 0x7fc"
+
+# F12: boot ROM address-in-address read-back removed (boot ROM variant
+# no_aia_readback): 5 reads per word instead of 6.
+[[bug]]
+id = "B02"
+define = ""
+bootrom = "no_aia_readback"
+test = "bootrom_march"
+sim = "icarus"
+expect_checkers = ["coverage"]
+expect_regex = "(?i)SRAM coverage rule 1 .*data reads 5 \\(expected 6\\)"
+
+# F21: boot ROM step 1 without the UART DIV write (boot ROM variant
+# no_div_write). Hidden by the correct reset value and by uart_init() in the
+# firmware; uart_div sees the jump to SRAM before any DIV = 18 write.
+[[bug]]
+id = "B03"
+define = ""
+bootrom = "no_div_write"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["uart_div"]
+expect_regex = "(?i)instruction fetch at 0x00000000 .*before the boot ROM wrote UART DIV"
+
+# F17: test_pass() writes DONE before SIG (firmware variant
+# hello__done_before_sig, spec 6.3). SIG is right at the end of the run, but
+# not in the cycle of the DONE write, which is what the signature rule uses.
+[[bug]]
+id = "S01"
+define = ""
+fw = "hello__done_before_sig"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["signature"]
+expect_regex = "(?i)SIG=0x00000000 at the DONE write"
+
+# Guard of reset_store: a firmware that never stores to rst_victim (variant
+# reset_store__no_victim) gets no mid-run reset; the coverage checker says so
+# (the firmware itself also writes fail code 0x01).
+[[bug]]
+id = "C01"
+define = ""
+fw = "reset_store__no_victim"
+test = "reset_store"
+sim = "icarus"
+expect_checkers = ["coverage"]
+expect_regex = "(?i)applied 0 mid-run reset"

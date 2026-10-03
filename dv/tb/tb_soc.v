@@ -10,7 +10,7 @@
 // Plusargs: +fw=<hex> +fw_words=<n> +boot_mode=<n> +load=backdoor|host|uart|none
 //           +max_cycles=<n> +uart_in=<hex, one byte per line> +uart_in_len=<n>
 //           +uart_in_delay=<cycles after CPU release> +out_dir=<dir> +trace +vcd
-//           +allow_unmapped
+//           +allow_unmapped +reset_on_store=<hex byte address>
 // (+allow_unmapped is supplied by dv/scripts/run_sim.py for a test that declares
 //  expect_unmapped in dv/tests.toml: bus_assert counts unmapped data accesses
 //  instead of failing them, and tb_result.txt reports the count.)
@@ -18,6 +18,20 @@
 //  the image. With it $readmemh reads exactly that range; the host-port loader
 //  needs it to know how many words to write and read back. Without it a
 //  backdoor load reads the whole file with no range.)
+// (+reset_on_store=<addr> is supplied by dv/scripts/run_sim.py for a test that
+//  declares reset_on_store in dv/tests.toml: at the falling edge where the CPU
+//  first presents a store to <addr>, resetn goes to 0, so the next rising edge
+//  samples resetn=0 together with that store (spec 4.9, RTL-RST-01: the store
+//  is dropped). resetn stays 0 for RESET_CYCLES, then the CPU boots again.
+//  Done once per run; tb_result.txt reports mid_resets.)
+//
+// Measurements written for run_sim.py (dv/README.md):
+//   sram_cov.txt  per SRAM word: CPU data reads, instruction fetches, writes and
+//                 the set of write strobes seen (bus handshakes), for the
+//                 tests.toml sram_cov rules (coverage checker)
+//   tb_result.txt uart_wr / uart_wr_stalled / uart_wr_stall_cycles (UART DATA
+//                 writes held by the transmitter-busy stall), sig_at_done (SIG
+//                 in the cycle of the first DONE strobe), mid_resets
 //
 // Checker messages: "[CHK:<name>] FAIL <msg>". Informational lines start with "[TB]".
 `timescale 1ns/1ps
@@ -98,6 +112,16 @@ module tb_soc;
     wire        p_done_strobe = dut.u_test_ctrl.done_strobe;
     wire [31:0] p_done_value  = dut.u_test_ctrl.done_value;
     wire [31:0] p_sig_value   = dut.u_test_ctrl.sig_value;
+    // Probes added by the Phase 1 qualification fixes (dv/README.md; spec 3.1
+    // update pending): the CPU test IRQ input, the divider simpleuart really
+    // uses, and the SRAM macro port 0 pins.
+    wire        p_irq_test    = dut.u_cpu.irq[`SOC_IRQ_TEST];
+    wire [31:0] p_uart_div    = dut.u_uart.u_simpleuart.cfg_divider;
+    wire        p_sram_csb0   = dut.sram0.csb0;
+    wire        p_sram_web0   = dut.sram0.web0;
+    wire [3:0]  p_sram_wmask0 = dut.sram0.wmask0;
+    wire [8:0]  p_sram_addr0  = dut.sram0.addr0;
+    wire [31:0] p_sram_din0   = dut.sram0.din0;
 
     // ------------------------------------------------------------------
     // Clock, cycle counter, run state
@@ -134,6 +158,10 @@ module tb_soc;
     reg [31:0] fail_timeout    = 32'd0;
     reg [31:0] fail_uart_drain = 32'd0;
     reg [31:0] fail_sim_error  = 32'd0;
+    reg [31:0] rst_store_addr  = 32'd0;
+    reg        rst_store_en    = 1'b0;
+    reg        rst_hit         = 1'b0;
+    reg [31:0] mid_resets      = 32'd0;
     reg [31:0] last_fetch_addr = 32'd0;
     reg [31:0] host_img [0:SRAM_WORDS-1];
     localparam integer HOST_MASK_WORD = SRAM_WORDS - 1;
@@ -190,6 +218,7 @@ module tb_soc;
     wire [31:0] done_count;
     wire [31:0] first_done_value;
     wire [31:0] first_done_cycle;
+    wire [31:0] first_done_sig;
     wire [31:0] fail_test_ctrl;
     test_ctrl_monitor u_test_ctrl_monitor (
         .clk              (clk),
@@ -197,12 +226,143 @@ module tb_soc;
         .cycle            (cycle),
         .done_strobe      (p_done_strobe),
         .done_value       (p_done_value),
+        .sig_value        (p_sig_value),
         .done_seen        (done_seen),
         .done_count       (done_count),
         .first_done_value (first_done_value),
         .first_done_cycle (first_done_cycle),
+        .first_done_sig   (first_done_sig),
         .fail_count       (fail_test_ctrl)
     );
+
+    wire [31:0] fail_sram_port;
+    wire [31:0] sram_port_accesses;
+    sram_port_monitor u_sram_port_monitor (
+        .clk          (clk),
+        .active       (active),
+        .cycle        (cycle),
+        .resetn       (resetn),
+        .host_en      (host_en),
+        .host_cs      (host_cs),
+        .host_we      (host_we),
+        .host_addr    (host_addr),
+        .host_wdata   (host_wdata),
+        .host_wmask   (host_wmask),
+        .mem_valid    (p_mem_valid),
+        .mem_ready    (p_mem_ready),
+        .mem_addr     (p_mem_addr),
+        .mem_wdata    (p_mem_wdata),
+        .mem_wstrb    (p_mem_wstrb),
+        .csb0         (p_sram_csb0),
+        .web0         (p_sram_web0),
+        .wmask0       (p_sram_wmask0),
+        .addr0        (p_sram_addr0),
+        .din0         (p_sram_din0),
+        .fail_count   (fail_sram_port),
+        .access_count (sram_port_accesses)
+    );
+
+    wire [31:0] fail_irq_line;
+    irq_line_monitor u_irq_line_monitor (
+        .clk        (clk),
+        .active     (active),
+        .cycle      (cycle),
+        .resetn     (resetn),
+        .mem_valid  (p_mem_valid),
+        .mem_ready  (p_mem_ready),
+        .mem_addr   (p_mem_addr),
+        .mem_wdata  (p_mem_wdata),
+        .mem_wstrb  (p_mem_wstrb),
+        .irq_line   (p_irq_test),
+        .fail_count (fail_irq_line)
+    );
+
+    wire [31:0] fail_uart_div;
+    uart_div_monitor u_uart_div_monitor (
+        .clk        (clk),
+        .active     (active),
+        .cycle      (cycle),
+        .resetn     (resetn),
+        .mem_valid  (p_mem_valid),
+        .mem_instr  (p_mem_instr),
+        .mem_ready  (p_mem_ready),
+        .mem_addr   (p_mem_addr),
+        .mem_wdata  (p_mem_wdata),
+        .mem_wstrb  (p_mem_wstrb),
+        .divider    (p_uart_div),
+        .fail_count (fail_uart_div)
+    );
+
+    // ------------------------------------------------------------------
+    // Coverage measurements (judged by run_sim.py against dv/tests.toml)
+    // ------------------------------------------------------------------
+    // SRAM access counts per word at CPU bus handshakes (spec 6.4 memtest,
+    // 6.5 step 3 boot ROM march): data reads, instruction fetches, writes, and
+    // a 16-bit mask with bit <wstrb> set for every write strobe seen.
+    localparam [31:0] TB_SRAM_BASE   = `SOC_SRAM_BASE;
+    localparam [31:0] TB_SRAM_SIZE   = `SOC_SRAM_SIZE;
+    localparam [31:0] UART_DATA_ADDR = `SOC_UART_BASE + `SOC_UART_DATA_OFF;
+    reg [31:0] cov_rd [0:SRAM_WORDS-1];
+    reg [31:0] cov_if [0:SRAM_WORDS-1];
+    reg [31:0] cov_wr [0:SRAM_WORDS-1];
+    reg [15:0] cov_ws [0:SRAM_WORDS-1];
+    reg [31:0] cov_off;
+    reg [8:0]  cov_w;
+    integer    cov_i;
+    initial begin
+        for (cov_i = 0; cov_i < SRAM_WORDS; cov_i = cov_i + 1) begin
+            cov_rd[cov_i] = 32'd0;
+            cov_if[cov_i] = 32'd0;
+            cov_wr[cov_i] = 32'd0;
+            cov_ws[cov_i] = 16'd0;
+        end
+    end
+    always @(negedge clk) begin
+        if (active && p_mem_valid === 1'b1 && p_mem_ready === 1'b1) begin
+            cov_off = p_mem_addr - TB_SRAM_BASE;
+            if (cov_off < TB_SRAM_SIZE) begin
+                cov_w = cov_off[10:2];
+                if (p_mem_wstrb != 4'd0) begin
+                    cov_wr[cov_w] = cov_wr[cov_w] + 32'd1;
+                    cov_ws[cov_w] = cov_ws[cov_w] | (16'd1 << p_mem_wstrb);
+                end else if (p_mem_instr === 1'b1) begin
+                    cov_if[cov_w] = cov_if[cov_w] + 32'd1;
+                end else begin
+                    cov_rd[cov_w] = cov_rd[cov_w] + 32'd1;
+                end
+            end
+        end
+    end
+
+    // UART DATA writes held by the transmitter-busy stall (spec 4.2: no
+    // mem_ready while reg_dat_wait=1). A peripheral write without stall is
+    // answered in the cycle after it is presented (2 cycles with mem_valid=1);
+    // every extra cycle is a stall cycle.
+    reg [31:0] uart_wr              = 32'd0;
+    reg [31:0] uart_wr_stalled      = 32'd0;
+    reg [31:0] uart_wr_stall_cycles = 32'd0;
+    reg        uw_in                = 1'b0;
+    reg [31:0] uw_start             = 32'd0;
+    always @(negedge clk) begin
+        if (active !== 1'b1) begin
+            uw_in = 1'b0;
+        end else if (p_mem_valid === 1'b1 && p_mem_wstrb != 4'd0 && p_mem_addr == UART_DATA_ADDR) begin
+            if (!uw_in) begin
+                uw_in    = 1'b1;
+                uw_start = cycle;
+            end
+            if (p_mem_ready === 1'b1) begin
+                uart_wr = uart_wr + 32'd1;
+                if (cycle - uw_start > 32'd1) begin
+                    uart_wr_stalled      = uart_wr_stalled + 32'd1;
+                    uart_wr_stall_cycles = uart_wr_stall_cycles + (cycle - uw_start - 32'd1);
+                end
+                uw_in = 1'b0;
+            end
+        end else begin
+            uw_in = 1'b0;
+        end
+    end
 
 `ifndef VERILATOR
     wire [31:0] fail_x;
@@ -343,8 +503,26 @@ module tb_soc;
     // ------------------------------------------------------------------
     // Result file and end of simulation
     // ------------------------------------------------------------------
+    task write_sram_cov;
+        integer fd_cov;
+        begin
+            fd_cov = $fopen({out_dir, "/sram_cov.txt"}, "w");
+            if (fd_cov == 0) begin
+                $display("[CHK:sim_error] FAIL cannot open %s/sram_cov.txt", out_dir);
+                fail_sim_error = fail_sim_error + 32'd1;
+            end else begin
+                $fdisplay(fd_cov, "# byte_addr data_reads fetches writes wstrb_mask (bit <wstrb> set per write strobe seen)");
+                for (cov_i = 0; cov_i < SRAM_WORDS; cov_i = cov_i + 1)
+                    $fdisplay(fd_cov, "%03x %0d %0d %0d %04x", {cov_i[8:0], 2'b00}, cov_rd[cov_i], cov_if[cov_i],
+                              cov_wr[cov_i], cov_ws[cov_i]);
+                $fclose(fd_cov);
+            end
+        end
+    endtask
+
     task finish_sim;
         begin
+            write_sram_cov;
             fd_result = $fopen({out_dir, "/tb_result.txt"}, "w");
             if (fd_result == 0) begin
                 $display("[CHK:sim_error] FAIL cannot open %s/tb_result.txt", out_dir);
@@ -357,17 +535,29 @@ module tb_soc;
                     $fdisplay(fd_result, "done=none");
                 $fdisplay(fd_result, "done_cycle=%0d", first_done_cycle);
                 $fdisplay(fd_result, "sig=0x%08x", p_sig_value);
+                if (done_seen)
+                    $fdisplay(fd_result, "sig_at_done=0x%08x", first_done_sig);
+                else
+                    $fdisplay(fd_result, "sig_at_done=none");
                 $fdisplay(fd_result, "cycles=%0d", cycle);
                 $fdisplay(fd_result, "cpu_start_cycle=%0d", cpu_start_cycle);
                 if (trap_seen)
                     $fdisplay(fd_result, "trap_cycle=%0d", trap_cycle);
                 $fdisplay(fd_result, "uart_bytes=%0d", uart_bytes);
                 $fdisplay(fd_result, "unmapped=%0d", unmapped_count);
+                $fdisplay(fd_result, "uart_wr=%0d", uart_wr);
+                $fdisplay(fd_result, "uart_wr_stalled=%0d", uart_wr_stalled);
+                $fdisplay(fd_result, "uart_wr_stall_cycles=%0d", uart_wr_stall_cycles);
+                $fdisplay(fd_result, "sram_port_accesses=%0d", sram_port_accesses);
+                $fdisplay(fd_result, "mid_resets=%0d", mid_resets);
                 $fdisplay(fd_result, "fail.test_ctrl=%0d", fail_test_ctrl);
                 $fdisplay(fd_result, "fail.trap=%0d", fail_trap);
                 $fdisplay(fd_result, "fail.timeout=%0d", fail_timeout);
                 $fdisplay(fd_result, "fail.uart_monitor=%0d", fail_uart + fail_uart_drain);
                 $fdisplay(fd_result, "fail.bus_assert=%0d", fail_bus);
+                $fdisplay(fd_result, "fail.sram_port=%0d", fail_sram_port);
+                $fdisplay(fd_result, "fail.irq_line=%0d", fail_irq_line);
+                $fdisplay(fd_result, "fail.uart_div=%0d", fail_uart_div);
 `ifndef VERILATOR
                 $fdisplay(fd_result, "fail.x_check=%0d", fail_x);
                 $fdisplay(fd_result, "simulator=icarus");
@@ -416,6 +606,7 @@ module tb_soc;
         trace_en  = $test$plusargs("trace") ? 1'b1 : 1'b0;
         vcd_en    = $test$plusargs("vcd") ? 1'b1 : 1'b0;
         allow_unmapped = $test$plusargs("allow_unmapped") ? 1'b1 : 1'b0;
+        rst_store_en   = $value$plusargs("reset_on_store=%h", rst_store_addr) ? 1'b1 : 1'b0;
         boot_mode = boot_mode_arg[1:0];
 
         fd_uart = $fopen({out_dir, "/uart.txt"}, "w");
@@ -428,13 +619,15 @@ module tb_soc;
         end
         $display("[TB] load=%s fw=%s fw_words=%0d boot_mode=%0d max_cycles=%0d uart_in_len=%0d uart_in_delay=%0d allow_unmapped=%0d out_dir=%s",
                  load, fw_file, fw_words, boot_mode_arg, max_cycles, uart_in_len, uart_in_delay, allow_unmapped, out_dir);
+        if (rst_store_en)
+            $display("[TB] reset_on_store=0x%08x", rst_store_addr);
         if (fd_uart == 0 || fd_gpio == 0 || (trace_en && fd_trace == 0))
             abort_sim("cannot open output files in +out_dir");
 
         // A malformed numeric plusarg reads back as X on Icarus: stop instead of
         // running with an undefined setting.
-        if (^{boot_mode_arg, max_cycles, fw_words, uart_in_len, uart_in_delay} === 1'bx)
-            abort_sim("malformed numeric plusarg (boot_mode, max_cycles, fw_words, uart_in_len or uart_in_delay)");
+        if (^{boot_mode_arg, max_cycles, fw_words, uart_in_len, uart_in_delay, rst_store_addr} === 1'bx)
+            abort_sim("malformed numeric plusarg (boot_mode, max_cycles, fw_words, uart_in_len, uart_in_delay or reset_on_store)");
 
         // ---- preload ----
         if (fw_words < 0 || fw_words > SRAM_WORDS)
@@ -514,6 +707,26 @@ module tb_soc;
         $display("[TB] CPU released at cycle %0d", cycle);
 
         // ---- run ----
+        if (rst_store_en) begin
+            // Mid-run reset (spec 4.9): find the falling edge where the CPU first
+            // presents a store to rst_store_addr and drive resetn=0 there, so the
+            // next rising edge samples resetn=0 together with that store.
+            while (!done_seen && !trap_seen && cycle < max_cycles && !rst_hit) begin
+                @(negedge clk);
+                rst_hit = (p_mem_valid === 1'b1 && p_mem_wstrb != 4'd0 && p_mem_addr == rst_store_addr);
+            end
+            if (rst_hit) begin
+                resetn     = 1'b0;
+                mid_resets = mid_resets + 32'd1;
+                $display("[TB] mid-run reset: resetn=0 from cycle %0d, while the CPU presents a store to 0x%08x (wdata 0x%08x, wstrb %b, old SRAM word 0x%08x)",
+                         cycle, p_mem_addr, p_mem_wdata, p_mem_wstrb, dut.sram0.mem[rst_store_addr[10:2]]);
+                repeat (RESET_CYCLES) @(posedge clk);
+                @(negedge clk);
+                resetn = 1'b1;
+                $display("[TB] mid-run reset released at cycle %0d (SRAM word 0x%08x is now 0x%08x)",
+                         cycle, rst_store_addr, dut.sram0.mem[rst_store_addr[10:2]]);
+            end
+        end
         while (!done_seen && !trap_seen && cycle < max_cycles)
             @(posedge clk);
         if (done_seen) begin
