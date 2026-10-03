@@ -8,8 +8,21 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**規劃階段（v0.3，2026-10-03），尚未開始實作。** 目前 repo 只有文件，還沒有 RTL、flow 設定或 script。
-完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-03）：Phase 0 完成，Phase 1 進行中。** 完整規劃見 [project-plan.md](project-plan.md)。
+
+- Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
+- Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 已完成並 PASS；正在補強 testbench，讓 checker 能抓到更多植入的錯誤。
+
+## 快速開始
+
+```bash
+make help          # 所有 target
+make env-check     # 檢查本機工具、釘版 IP、toolchain.md 是否最新
+make smoke         # lint + firmware + RTL 模擬 smoke（約 30 秒）
+make phase1        # Phase 1 完整檢查（約 4 分鐘）
+```
+
+第一次在新機器上建 flow 環境的步驟見 [env/setup.md](env/setup.md)。
 
 ## 技術組合
 
@@ -37,8 +50,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 | Phase | 內容 | 狀態 |
 |---|---|---|
-| 0 | 環境建置：Nix、LibreLane、sky130A PDK；重跑 LibreLane 官方 SRAM 範例當 golden 參考 | 未開始 |
-| 1 | SoC RTL 與 firmware、RTL 模擬 regression | 未開始 |
+| 0 | 環境建置：Nix、LibreLane、sky130A PDK；重跑 LibreLane 官方 SRAM 範例當 golden 參考 | 完成（2026-10-03） |
+| 1 | SoC RTL 與 firmware、RTL 模擬 regression | 進行中 |
 | 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 未開始 |
 | 3 | 整合預建 SRAM macro | 未開始 |
 | 3.5 | （可選）用 OpenRAM 做 SPICE characterization，校正 SRAM 時序模型 | 未開始 |

@@ -18,7 +18,7 @@ help:
 	@echo "  make nix-install          install Nix + FOSSi cache (asks for admin password; DRY_RUN=1 to preview)"
 	@echo "  make flow-setup           fetch LibreLane (pinned tag), nix-shell smoke test, download sky130A"
 	@echo "  make pdk-fetch            download sky130A tarballs (parallel, resumable, sha256) and install with ciel"
-	@echo "  make ci-sram-ref          re-run LibreLane CI test_sram_macro, check against upstream metrics"
+	@echo "  make ci-sram-ref          re-run LibreLane CI test_sram_macro, check signoff items + local golden"
 	@echo ""
 	@echo "Phase 1 targets (see docs/spec/soc_spec.md §8):"
 	@echo "  make env-check            check local tools and pinned IP"
