@@ -29,12 +29,14 @@
 - **bash 3.2**：不支援 associative array（`declare -A`）、`mapfile`／`readarray`、`${var,,}`、`|&`、`coproc`。
 - **riscv64-elf-gcc 無 newlib**：firmware 必須 `-ffreestanding -nostdlib`，只能連結 `libgcc`。
 
-## 2. RTL-to-GDS flow（Phase 0，**待安裝**：需要使用者以 sudo 安裝 Nix，見 `env/setup.md`）
+## 2. RTL-to-GDS flow（Phase 0，**待安裝**：使用者在自己的終端機執行 `make nix-install`，再執行 `make flow-setup`；見 `env/setup.md`）
+
+`make flow-setup` 會把 nix-shell 內各工具的實際版本寫到 `runs/flow_setup/versions.txt`，再抄進下表。
 
 | 工具 | 用途 | 版本 | 來源 | 狀態 |
 |---|---|---|---|---|
-| Nix | 提供 LibreLane 與其內建工具 | 安裝時記錄 | Determinate nix-installer + FOSSi binary cache | 待安裝 |
-| LibreLane | RTL-to-GDS flow（Classic flow） | 3.0.14（commit `f24e0ea5db2260719e9a0c7d51d07db74a87fa23`） | github.com/librelane/librelane | 待安裝 |
+| Nix | 提供 LibreLane 與其內建工具 | 安裝時記錄（安裝程式：NixOS/nix-installer 2.35.2，2026-10-03 由 artifacts.nixos.org 啟動 script 指定） | `make nix-install`（`env/install_nix.sh`），含 FOSSi binary cache | 待安裝 |
+| LibreLane | RTL-to-GDS flow（Classic flow） | 3.0.14（commit `f24e0ea5db2260719e9a0c7d51d07db74a87fa23`） | `make flow-setup` clone 到 `.tools/librelane`（github.com/librelane/librelane） | 待安裝 |
 | ciel | 下載與管理 PDK | 隨 LibreLane | LibreLane 內建 | 待安裝 |
 | Yosys（flow 用） | 正式合成 | 隨 LibreLane nix-shell，安裝後填入 | LibreLane 內建 | 待安裝 |
 | OpenROAD（含 OpenSTA） | floorplan、PDN、place、CTS、route、STA | 安裝後填入 | LibreLane 內建 | 待安裝 |

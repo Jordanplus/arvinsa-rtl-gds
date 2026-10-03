@@ -8,11 +8,16 @@ TEST ?= hello
 SIM  ?= icarus
 SIMS ?= icarus,verilator
 PY   ?= python3
+DRY_RUN ?= 0
 
-.PHONY: help env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
+.PHONY: help nix-install flow-setup env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 clean
 
 help:
+	@echo "Phase 0 environment (run in your own terminal):"
+	@echo "  make nix-install          install Nix + FOSSi cache (asks for admin password; DRY_RUN=1 to preview)"
+	@echo "  make flow-setup           fetch LibreLane (pinned tag), nix-shell smoke test, download sky130A"
+	@echo ""
 	@echo "Phase 1 targets (see docs/spec/soc_spec.md §8):"
 	@echo "  make env-check            check local tools and pinned IP"
 	@echo "  make env-check-flow       also require Nix/LibreLane/PDK (Phase 0 flow env)"
@@ -26,6 +31,12 @@ help:
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"
+
+nix-install:
+	DRY_RUN=$(DRY_RUN) bash env/install_nix.sh
+
+flow-setup:
+	bash env/setup_flow.sh
 
 env-check:
 	bash env/check_env.sh

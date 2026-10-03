@@ -1,4 +1,5 @@
 # Build and run outputs
+.tools/
 runs/
 sim_build/
 fw/build/
