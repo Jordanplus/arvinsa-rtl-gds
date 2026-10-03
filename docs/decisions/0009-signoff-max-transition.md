@@ -5,9 +5,9 @@
 
 ## 背景
 
-- **max transition（slew）**：訊號從 10% 變到 90%（或反向）所花的時間。太慢會讓延遲計算不準、短路電流變大、容易受雜訊影響，所以要設上限。
+- **max transition（slew）**：訊號在兩個門檻之間轉換所花的時間；sky130_fd_sc_hd 的 .lib 用 20% 到 80%（`sky130_fd_sc_hd__tt_025C_1v80.lib` 第 157–160 行）。太慢會讓延遲計算不準、短路電流變大、容易受雜訊影響，所以要設上限。
 - LibreLane 對 sky130 用的上限 0.75 ns 來自 PDK 附的 OpenLane 預設設定（`$PDK_ROOT/sky130A/libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 第 63 行 `MAX_TRANSITION_CONSTRAINT 0.75`），是設計上的保守值，不是 library 的限制。
-- sky130_fd_sc_hd 的 .lib（tt／ss／ff 三份）：`default_max_transition` 1.5 ns；少數 pin 自己標 `max_transition` 1.0 ns，是整份 library 最嚴的值；延遲表的輸入 slew 特性化到 5 ns。
+- sky130_fd_sc_hd 的 .lib（tt／ss／ff 三份）：`default_max_transition` 1.5 ns；少數 pin 自己標 `max_transition` 1.0 ns（例如 `conb_1` 的 HI／LO），是整份 library 最嚴的值。延遲表的輸入 slew 多數只特性化到 1.5 ns：tt.lib 的 `cell_rise` 表 1338 張到 1.5 ns，只有 3 張到 5 ns（buf_8／12／16 一類）。（2026-10-03 更正：原寫「10% 到 90%」與「特性化到 5 ns」，與 .lib 不符；見 `docs/notes/signoff_criteria_soc_top.md`。）
 
 soc_top 試了下列修復設定後，ss corner 仍有 16 個 pin、5–6 條 net 停在 0.78–0.97 ns（其他 corner 都是 0）：
 
@@ -29,7 +29,7 @@ soc_top 試了下列修復設定後，ss corner 仍有 16 個 pin、5–6 條 ne
 
 ## 決策（當時）
 
-1. **signoff 的 max transition 改成 1.0 ns**（`pnr/soc_top/signoff.sdc`，`SIGNOFF_SDC_FILE`，只有 `OpenROAD.STAPostPNR` 使用）。1.0 ns 是 library 本身最嚴的 pin 限制，仍遠在特性化範圍內，延遲計算有效。PnR 各步驟仍用 0.75 ns 當修復目標（`pnr.sdc` 不改 max transition）。
+1. **signoff 的 max transition 改成 1.0 ns**（`pnr/soc_top/signoff.sdc`，`SIGNOFF_SDC_FILE`，只有 `OpenROAD.STAPostPNR` 使用）。1.0 ns 是 library 本身最嚴的 pin 限制，仍在多數延遲表的特性化範圍（1.5 ns）內，延遲計算有效。PnR 各步驟仍用 0.75 ns 當修復目標（`pnr.sdc` 不改 max transition）。
 2. **PnR 的 max fanout 收緊成 8**（`pnr/soc_top/pnr.sdc`，`PNR_SDC_FILE`），signoff 仍是 10。原因：resizer 修完 fanout 之後，antenna repair 才在 net 上加 diode，diode 的 pin 也算一個負載（soc_explore7：一顆 buffer 帶 10 個負載再加 1 顆 diode = 11）。這是收緊實作目標，不是放寬標準。
 
 驗證：在 soc_explore9 的版圖上只重跑 `OpenROAD.STAPostPNR` 並改用 `signoff.sdc`，max slew 違規 16 → 0，setup／hold worst slack 數值不變（其他約束沒有被改到）；fanout 違規仍是 1（由第 2 點處理）。

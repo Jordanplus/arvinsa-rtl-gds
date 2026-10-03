@@ -75,7 +75,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 14 個 Claude Code skill，每個對應 RTL-to-GDS 流程中一項重大任務。skill 是一份工作說明（`SKILL.md`）：在這個 repo 裡用 Claude Code 做到相關任務時會自動載入，照裡面的步驟、PASS 條件與已知陷阱做事。
+`.claude/skills/` 放了 15 個 Claude Code skill，每個對應 RTL-to-GDS 流程中一項重大任務。skill 是一份工作說明（`SKILL.md`）：在這個 repo 裡用 Claude Code 做到相關任務時會自動載入，照裡面的步驟、PASS 條件與已知陷阱做事。
 
 **經驗怎麼累積**：每個 `SKILL.md` 的結尾都有「經驗紀錄」表。每次做完該任務，把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。同一個現象出現兩次以上，或根因已經用實驗確認，才從紀錄搬進規則本文。這顆設計的具體數字（設定理由、試跑紀錄）留在 repo 文件，skill 只放可以帶到下一顆設計的規則與指向 repo 文件的連結。規則見 [CLAUDE.md](CLAUDE.md)。Phase 0 的環境建置不做成 skill。
 
@@ -95,8 +95,9 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | [floorplan-congestion](.claude/skills/floorplan-congestion/SKILL.md) | die 尺寸、macro 位置、IO pin、placement 密度、繞線壅塞與繞路 | 2 |
 | [timing-constraints-sdc](.claude/skills/timing-constraints-sdc/SKILL.md) | SDC 時序約束、PnR 與 signoff 約束分開、未受約束路徑的檢查 | 2 |
 | [rtl-synthesis-lint](.claude/skills/rtl-synthesis-lint/SKILL.md) | Yosys 合成設定、狀態機重新編碼、lint、latch、邏輯深度 | 3 |
+| [signoff-criteria](.claude/skills/signoff-criteria/SKILL.md) | signoff 條件的數值怎麼推導：uncertainty 成分、duty cycle、derate、corner、IR／EM／SI 預算、PDK 規則，以及工具沒分析的項目怎麼補 | 1 |
 
-優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。後 3 個是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。
+優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。後 3 個是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。`signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多數沿用預設值、沒有推導，依使用者要求新增。
 
 ### librelane-run-debug：LibreLane 執行與除錯
 
@@ -171,6 +172,18 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **何時用**：寫或改 SDC（clock、IO delay、例外路徑、derate、max transition／fanout）、區分 PnR 與 signoff 的約束、檢查有沒有未受約束的路徑。
 - **內容**：LibreLane `base.sdc` 已提供的約束清單；新 SDC 先 `source` base.sdc 再改；用單步重跑 STA 驗證約束只改了想改的；macro derate 的 hook；`check_setup` 的未受約束路徑檢查與已知例外（`check_soc.py sta_setup`）。
 - **negative test**：P01–P03、P13。
+
+### signoff-criteria：signoff 條件的推導
+
+- **何時用**：決定或檢討任何 signoff 條件的數值，例如 clock uncertainty、duty cycle、OCV derate、PVT corner、IO delay、IR drop 上限、EM、SI、max transition／cap／fanout、antenna、density、latch-up；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
+- **內容**：
+  - 每個條件的四個問題：防什麼、怎麼算、預設值出處、工具有沒有分析。
+  - 推導前要先有的輸入：clock 來源的 jitter 與 duty、供電範圍、溫度、外部介面時序。
+  - 19 條已驗證的工具行為，例如：inter-clock uncertainty 會取代一般值；skew metric 含 uncertainty 與 derate；fmax 報告排除半週期路徑；instance derate 取代 global；IR 只用 nom_tt；KLayout deck 不含 latch-up。
+  - 各條件的推導公式。
+  - 每次 signoff 都要列出的「不分析項目」清單。
+- **實例**：`docs/notes/signoff_criteria_soc_top.md`（soc_top 的缺口與 Phase 4 待辦）。
+- **negative test**：每個推導出來的條件都要有植入錯誤的案例，例如 duty cycle 60% 必須 FAIL。
 
 ### rtl-synthesis-lint：合成與 lint
 

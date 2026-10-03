@@ -20,6 +20,12 @@ description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path�
    - 加了 `-clock` 之後那些路徑不再被檢查（`report_checks` 為 `No paths found`），但 `check_setup` 仍當作 port 有 output delay，不報警告。也就是說，用 unset 拿掉約束時，STA 的完整性檢查看不出來。
 7. **半週期路徑要算 duty cycle**：clock 下降緣送出、上升緣接收的路徑（soc_top 的 SRAM `dout0`）只有半個週期可用；STA 預設 50% duty，`set_clock_uncertainty` 的預設值不含 duty cycle 偏移。clock 來源確定後要把偏移算進約束，算法見 `signoff-criteria`。
 8. **放寬簽核上限要使用者決定並寫 ADR**（ADR-0009）。
+9. **LibreLane 預設哪些 corner 判 FAIL**：setup 只判 `*tt*`（`TIMING_VIOLATION_CORNERS`）；hold 判全部 corner（`checker.py` 第 683 行 `corner_override = ["*"]`）；max slew、max cap 預設都不判（661、672 行）。
+10. **約束的數值怎麼定**（uncertainty 的成分、DCD、IO delay 與 source latency、derate、corner）看 `signoff-criteria`。幾個容易用錯的指令：
+    - 指定邊緣的 `set_clock_uncertainty -fall_from ... -rise_to ...` 會取代一般的值，不是相加。
+    - 不加 `-source` 的 `set_clock_latency` 會把 clock 變回 ideal。
+    - `set_max_transition -clock_path` 在 propagated clock 下沒有作用。
+    - 同名 clock 用 `create_clock` 重新定義之後，之前設的 inter-clock uncertainty 仍然有效。要改約束時，重新產生整份 SDC，不要逐行修補。
 
 ## negative test
 
@@ -37,3 +43,4 @@ P01／P02／P03（在 run 實際用的 signoff SDC 後面追加 uncertainty 或 
 | 2026-10-03 | sdc075_10／11（單步重跑 STA） | `SIGNOFF_SDC_FILE` 設為空時 sta.log：`Reading design constraints file at .../pnr.sdc` | 已驗證：fallback 到 PNR_SDC_FILE | soc_top 的 `signoff.sdc` 明確等於 base.sdc | `runs/sdc075_10/out/max_ss_100C_1v60/sta.log` |
 | 2026-10-03 | neg-pnr P13 | `unset_output_delay` 植入後 check_setup 沒有任何新警告 | 已驗證：見規則 6（OpenSTA 單步探針） | 改成產生少一行的 SDC | `runs/neg_pnr/P13/neg.sdc` |
 | 2026-10-03 | soc_top 討論 clock 來源 | 最差 setup 路徑是 SRAM 下降緣 → 上升緣的半週期路徑（min_ss 剩 3.55 ns），0.25 ns uncertainty 不含 duty cycle | 已驗證（`max.rpt` 起點 `clock clk (fall edge)` 20 ns） | 規則 7；數字待 Phase 7 確定 clock 來源後再算 | `runs/soc_top/56-openroad-stapostpnr/min_ss_100C_1v60/max.rpt` |
+| 2026-10-03 | signoff 條件調查（核對 agent 實驗） | inter-clock uncertainty 取代一般值（設 1.0 → slack 少 0.75）；`-clock_path` 在 propagated clock 下 0 筆違規 | 已驗證（`sta` binary 單步實驗） | 規則 9、10 | `docs/notes/signoff_criteria_soc_top.md` |
