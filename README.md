@@ -23,6 +23,8 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 | Firmware | riscv64-elf-gcc（rv32） |
 | 執行環境 | Apple Silicon macOS + Nix；OpenRAM 需要 x86_64 Linux |
 
+完整的工具與版本清單見 [toolchain.md](toolchain.md)，釘版值以 `env/versions.mk` 為準。
+
 ## 為什麼不是 SkyWater 90nm
 
 原本的目標是 SkyWater 90nm FD-SOI（SKY90-FD）。查證後發現它的開源版本無法使用：

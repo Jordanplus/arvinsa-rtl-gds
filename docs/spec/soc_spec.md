@@ -13,7 +13,9 @@
 - **唯讀**：`third_party/`（git submodule）、`ip/sram/*/upstream/`、`rtl/include/memmap.vh`、`env/versions.mk`、本文件。
 - 不得 `git commit`、不得 `git push`、不得改 submodule commit。
 - GNU make 版本是 **3.81**（macOS 內建）：不可用 `.SHELLFLAGS`、`.ONESHELL`、`$(file ...)`、`undefine`。Makefile recipe 不用 pipe；需要嚴格錯誤處理的邏輯寫在 bash（`set -euo pipefail`）或 Python script 裡。
+- bash 是 macOS 內建 **3.2**：不可用 `declare -A`、`mapfile`／`readarray`、`${var,,}`、`|&`、`coproc`。
 - Python ≥ 3.11，只用標準函式庫（設定檔用 TOML，以 `tomllib` 讀）。
+- **不得安裝新工具或新套件**；只能用 `toolchain.md` 列出的工具。真的需要新工具時，停下來在回報中說明。
 - 本機工具：Verilator 5.050（支援 `--timing`、`--binary`）、Icarus Verilog 13.0、Yosys 0.69、`riscv64-elf-gcc` 16.1（multilib：rv32i、rv32im、rv32iac、rv32imac、rv32imafc，ABI ilp32；**無 newlib**）。
 - 模擬 timescale：`1ns/1ps`；clock 週期 40 ns（25 MHz，plan §5.4 的 silicon 目標）。
 - 產出目錄：`runs/`（gitignore）。firmware 產出 `fw/build/`（gitignore）。
@@ -27,7 +29,7 @@
 | Firmware | `fw/`（全部）、`rtl/bootrom/gen_bootrom.py`、`rtl/bootrom/bootrom.v`（產生物，需 commit） |
 | DV | `dv/`（全部） |
 | core-stock | `scripts/core_stock.sh`、`docs/notes/core_stock.md` |
-| 主控（不給 agent 改） | `Makefile`、`env/`、`ip/`、`rtl/include/memmap.vh`、`docs/spec/`、`docs/decisions/` |
+| 主控（不給 agent 改） | `Makefile`、`env/`、`ip/`、`rtl/include/memmap.vh`、`docs/spec/`、`docs/decisions/`、`toolchain.md` |
 
 Phase 1 的平行開發階段，每個 agent 只能寫自己擁有的檔案。整合階段才允許跨區修改，且要在回報中列出。
 

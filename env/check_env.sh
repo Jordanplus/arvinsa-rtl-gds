@@ -43,6 +43,9 @@ f="ip/sram/$(pin SRAM_MACRO)/upstream/$(pin SRAM_MACRO).v"
 sum=$(shasum -a 256 "$f" 2>/dev/null | cut -d' ' -f1 || echo none)
 if [ "$sum" = "$(pin SRAM_MODEL_SHA256)" ]; then ok "SRAM model sha256 matches"; else bad "SRAM model sha256 mismatch: $f"; fi
 
+echo "== toolchain.md =="
+if python3 env/check_toolchain_doc.py; then :; else fail=1; fi
+
 echo "== RTL-to-GDS flow (Phase 0, needs Nix) =="
 flow_missing=0
 if command -v nix >/dev/null 2>&1; then ok "nix: $(nix --version)"; else pend "nix not installed (see env/setup.md)"; flow_missing=1; fi
