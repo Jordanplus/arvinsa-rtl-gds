@@ -8,10 +8,10 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-03）：Phase 0 完成，Phase 1 進行中。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-03）：Phase 0、Phase 1 完成，下一步 Phase 2。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
-- Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 已完成並 PASS；正在補強 testbench，讓 checker 能抓到更多植入的錯誤。
+- Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
 
 ## 快速開始
 
@@ -51,7 +51,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | Phase | 內容 | 狀態 |
 |---|---|---|
 | 0 | 環境建置：Nix、LibreLane、sky130A PDK；重跑 LibreLane 官方 SRAM 範例當 golden 參考 | 完成（2026-10-03） |
-| 1 | SoC RTL 與 firmware、RTL 模擬 regression | 進行中 |
+| 1 | SoC RTL 與 firmware、RTL 模擬 regression | 完成（2026-10-03） |
 | 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 未開始 |
 | 3 | 整合預建 SRAM macro | 未開始 |
 | 3.5 | （可選）用 OpenRAM 做 SPICE characterization，校正 SRAM 時序模型 | 未開始 |
