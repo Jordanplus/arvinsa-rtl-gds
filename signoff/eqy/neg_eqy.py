@@ -118,12 +118,15 @@ def edit(name, text, fn):
         return None, f"edit matched {len(hits)} places, expected 1"
     new = rx.sub(repl, text, count=1)
     if name == "csb0_inverted":
-        # Drive the new net from the original csb0 net through an inverter, declared before endmodule.
+        # Drive the new net from the original csb0 net through an inverter. The wire is declared just
+        # before sram0, its first use (Icarus rejects declaration after use; Yosys accepts it).
         orig = re.search(r"sky130_sram_2kbyte_1rw1r_32x512_8 sram0 \(.*?\.csb0\(([^)]+)\)", text, re.S).group(1)
-        inv = f" wire neg_eqy_inv;\n sky130_fd_sc_hd__inv_2 neg_eqy_inv_cell (.A({orig}),\n    .Y(neg_eqy_inv));\nendmodule"
-        new, n = re.subn(r"endmodule\s*$", inv, new.rstrip() + "\n")
-        if n != 1:
-            return None, "could not append the inverter"
+        new, n = re.subn(r"^( *)(sky130_sram_2kbyte_1rw1r_32x512_8 sram0 \()", r"\1wire neg_eqy_inv;\n\1\2",
+                         new, count=1, flags=re.M)
+        inv = f" sky130_fd_sc_hd__inv_2 neg_eqy_inv_cell (.A({orig}),\n    .Y(neg_eqy_inv));\nendmodule"
+        new, m = re.subn(r"endmodule\s*$", inv, new.rstrip() + "\n")
+        if n != 1 or m != 1:
+            return None, "could not add the inverter"
     if new == text:
         return None, "edit did not change the netlist"
     return new, None

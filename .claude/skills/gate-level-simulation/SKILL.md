@@ -14,7 +14,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
    - 上游 testbench 加 bus trace 逐筆比對（`run_gl_core.py`）。
    - RTL 與網表放同一個 testbench lockstep（網表 module 改名），每個下降緣比輸出與 macro pin；X 規則：RTL 是 0／1 才比，網表必須完全相同（網表 X 也算不同）；RTL 是 X 不比（合成可合法替它選值）（`dv/gl_soc/README.md`）。
 3. **lockstep 要證明比對真的有跑**：`gl_compares` > 0；並用植入錯誤確認會 FAIL（網表輸出 buffer 換成反相器 → 每個 cycle 都報不一致）。
-4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。
+4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。用腳本修改網表時也一樣：新加的 `wire` 要放在第一次使用之前，Yosys 不檢查這點（`neg_eqy.edit()`）。
 5. **coverage 缺口**：firmware 沒用到的功能 GL 模擬看不到（Phase 2：`rdcycleh`、bus-error IRQ），要靠 formal 補。
 6. **時間**：soc_top 13 支測試約 9 分鐘（memtest 87 萬 cycle 占 552 秒）。
 7. **firmware 是建置產物**：`make gl-soc`、`make neg-gl-soc` 讀 `fw/build/`（不在版控），Makefile 要宣告依賴 `fw`。gl-core 不需要，因為它在 export 出來的上游樹裡自己編 firmware（`run_gl_core.py`）。
@@ -30,3 +30,4 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 |---|---|---|---|---|---|
 | 2026-10-03 | gl-soc bring-up | `Unable to bind wire/reg/memory 'cycle'` | 已驗證：使用早於宣告 | 區塊移到宣告之後 | `dv/tb/tb_soc.v` |
 | 2026-10-04 | 第二次 `make phase3`（乾淨 worktree） | 12/13 支測試 `firmware image ... not found` | 已驗證：`gl-soc` 沒依賴 `fw`，開發目錄有舊的 `fw/build/` 所以沒發現 | Makefile 加依賴；規則 7 | `runs/p3_phase3_clean2.log` |
+| 2026-10-04 | 第三次 `make phase3`，neg-gl-soc | `csb0_inverted` 編譯失敗：`Unable to bind wire ... neg_eqy_inv ... Check for declaration after use` | 已驗證：植入腳本把 `wire` 宣告加在 module 最後 | 宣告移到 `sram0` 前；修正後 11/11 支測試報 `sram0.csb0` 不一致。另外 `mux_swap` 只在 1/11 支測試被抓到，lockstep 能抓到的範圍受 firmware 用到的功能限制（規則 5） | `runs/p3_phase3_clean3.log` |
