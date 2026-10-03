@@ -31,6 +31,7 @@ help:
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"
+	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
 
 nix-install:
 	DRY_RUN=$(DRY_RUN) bash env/install_nix.sh
@@ -72,5 +73,7 @@ smoke: env-check lint fw regress-rtl-smoke
 
 phase1: env-check lint synth-check fw core-stock regress-rtl neg-rtl
 
+# Removes Phase 1 sim/firmware outputs only. LibreLane outputs (runs/flow_setup, runs/ci_sram_ref)
+# take tens of minutes to regenerate and are kept; delete them by hand when needed.
 clean:
-	rm -rf runs sim_build fw/build obj_dir
+	rm -rf runs/sim runs/neg runs/sim_build runs/core_stock runs/rtl sim_build fw/build obj_dir

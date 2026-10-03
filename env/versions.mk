@@ -13,8 +13,8 @@ LIBRELANE_COMMIT     = f24e0ea5db2260719e9a0c7d51d07db74a87fa23
 SKY130_PDK_HASH      = 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
 PDK                  = sky130A
 STD_CELL_LIBRARY     = sky130_fd_sc_hd
-# LibreLane CI reference designs (test_sram_macro golden, Phase 0)
-LIBRELANE_CI_COMMIT  = eef8e18b03c4d5fadbaa48a6a72c2b9aee7e5372
+# LibreLane CI reference designs (test_sram_macro golden, Phase 0): the test/designs submodule commit of LibreLane 3.0.14
+LIBRELANE_CI_COMMIT  = 9b3bebe834ccd972a5b4f10d82c32354f9a6a1ca
 
 # ---- IP ----
 PICORV32_COMMIT      = ef203c2b0a3fb793280f5114941416c425c5b461

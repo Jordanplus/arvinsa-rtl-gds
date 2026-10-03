@@ -19,6 +19,7 @@
 | Yosys | 本機合成 sanity check、上游 picorv32 `test_synth` | 0.69 | 0.69 | Homebrew `yosys`（git `143eb14f`） |
 | riscv64-elf-gcc | firmware 編譯（rv32 multilib：rv32i／rv32im／rv32iac／rv32imac／rv32imafc，ABI ilp32；無 newlib） | 16.1.0 | 16.1 | Homebrew `riscv64-elf-gcc` |
 | riscv64-elf-binutils | 組譯、連結、objcopy、objdump | 2.46.1 | — | Homebrew `riscv64-elf-binutils` |
+| C++ 編譯器（Apple clang） | Verilator `--binary` 把產生的 C++ 編譯成模擬執行檔（`make regress-rtl` 的 Verilator 部分需要） | 21.0.0 | — | Xcode Command Line Tools（`/usr/bin/c++`，CLTools 27.0） |
 | Python | regression script、checker（只用標準函式庫，設定檔用 `tomllib`） | 3.14.6 | 3.11 | Homebrew `python@3.14` |
 | GNU make | 統一入口 | 3.81 | — | macOS 內建 `/usr/bin/make` |
 | bash | script 執行 | 3.2.57 | — | macOS 內建 `/bin/bash` |
@@ -45,7 +46,7 @@
 | Netgen | LVS | 安裝後填入 | LibreLane 內建 | 待安裝 |
 | Verilator（flow 用） | `Verilator.Lint` step | 安裝後填入 | LibreLane 內建 | 待安裝 |
 
-LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs commit `eef8e18b03c4d5fadbaa48a6a72c2b9aee7e5372`。
+LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs commit `9b3bebe834ccd972a5b4f10d82c32354f9a6a1ca`，也就是 LibreLane 3.0.14 自己的 `test/designs` submodule 指向的 commit（官方 CI 跑的就是這份）。
 
 ## 3. PDK
 
@@ -78,3 +79,29 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 `PDK = sky130A`、`STD_CELL_LIBRARY = sky130_fd_sc_hd`、`SRAM_MACRO = sky130_sram_2kbyte_1rw1r_32x512_8`、`RISCV_PREFIX = riscv64-elf-`、
 `VERILATOR_MIN = 5.050`、`ICARUS_MIN = 13.0`、`YOSYS_MIN = 0.69`、`RISCV_GCC_MIN = 16.1`、`PYTHON_MIN = 3.11`。
 
+## 7. 各 regression 實際用到的工具子元件與 override（驗證紀錄）
+
+這一節記錄「哪一組版本下，哪支 regression test 實際 PASS」，方便升級工具後回頭比對。工具版本以 §1 為準；這裡只補 §1 沒寫出來的子元件與 make 命令列 override。
+
+### 7.1 L1a core-stock（`make core-stock`，`scripts/core_stock.sh`；2026-10-03 實測）
+
+| 子元件 | 用在哪裡 | 版本（實測） | 對應 §1 的列 |
+|---|---|---|---|
+| `iverilog` | 編譯上游 `testbench.v`、`testbench_wb.v`、`testbench_ez.v`、`testbench_synth` | 13.0 | Icarus Verilog |
+| `vvp` | 執行上述編譯結果（Icarus 的模擬執行器，隨 Icarus 安裝） | 13.0 | Icarus Verilog |
+| `yosys` | `test_synth`：用上游 `scripts/yosys/synth_sim.ys` 合成出 `synth.v` | 0.69+post（git `143eb14f`） | Yosys |
+| `riscv64-elf-gcc` | 編譯上游 firmware：`-march=rv32imc`／`rv32ic`／`rv32im`、`-mabi=ilp32`、`-ffreestanding -nostdlib`，只連結 `libgcc` | 16.1.0 | riscv64-elf-gcc |
+| `riscv64-elf-ld`、`riscv64-elf-objcopy` | 連結 firmware、轉成 `.bin` | 2.46.1 | riscv64-elf-binutils |
+| `python3`（標準函式庫） | 上游 `firmware/makehex.py`；`core_stock.sh` 內 `test_ez` 的 checker | 3.14.6 | Python |
+| `make`、`bash` | 上游 Makefile、`core_stock.sh` | 3.81、3.2.57 | GNU make、bash |
+
+make 命令列 override（上游 Makefile 一律不改）：
+
+| override | 為什麼需要 |
+|---|---|
+| `TOOLCHAIN_PREFIX=riscv64-elf-` | 上游預設指向 `/opt/riscv32i/bin/riscv32-unknown-elf-`，本機沒有；改用 §1 的 `riscv64-elf-gcc` |
+| （無其他） | GCC 16.1 下上游 `GCC_WARNS` 的 `-Werror` 沒有觸發；`-march=rv32imc` 不需要加 `_zicsr` |
+
+結果（上述組合）：`test`、`test_ez`、`test_wb`、`test_synth` 全部 PASS；`test_rvf` 為 N/A，原因是它需要 riscv-formal（YosysHQ/riscv-formal）產生的 `rvfimon.v`，該 repo 不在本專案內、也不在本清單上（依「不在清單上的工具不得成為必要依賴」的規則排除）。細節見 `docs/notes/core_stock.md`。
+
+升級 §1 的 iverilog／Yosys／riscv64-elf-gcc／binutils 任何一項後，要重跑 `make core-stock`，並回來更新本節的版本與結果。

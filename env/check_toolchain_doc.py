@@ -25,6 +25,7 @@ TOOLS = {
     "Yosys": (["yosys", "-V"], r"Yosys\s+([0-9.]+)", "YOSYS_MIN"),
     "riscv64-elf-gcc": (["riscv64-elf-gcc", "-dumpfullversion"], r"([0-9.]+)", "RISCV_GCC_MIN"),
     "riscv64-elf-binutils": (["riscv64-elf-as", "--version"], r"Binutils\)\s+([0-9.]+)", None),
+    "C++ 編譯器（Apple clang）": (["c++", "--version"], r"clang version\s+([0-9.]+)", None),
     "Python": (["python3", "--version"], r"Python\s+([0-9.]+)", "PYTHON_MIN"),
     "GNU make": (["make", "--version"], r"GNU Make\s+([0-9.]+)", None),
     "bash": (["bash", "--version"], r"version\s+([0-9.]+)", None),

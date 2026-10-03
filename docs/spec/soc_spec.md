@@ -154,11 +154,13 @@ module bootrom (
 
 - SIG、DONE、IRQ_TRIG 三個 32-bit 暫存器，reset 為 0。
 - `done_strobe`：DONE 被寫入的那個 cycle 為 1（與寫入同一個上升緣後的 cycle，一次寫入只產生一個 cycle）。
-- IRQ_TRIG bit0 → `irq[SOC_IRQ_TEST]`（PicoRV32 預設 latched IRQ）。
+- IRQ_TRIG bit0 → `irq[SOC_IRQ_TEST]`（PicoRV32 預設 latched IRQ）。因為是 latched，handler 清掉 IRQ_TRIG 之前 IRQ 已再次被鎖存，所以每寫一次 IRQ_TRIG，handler 會進入 **2 次**（Phase 1 實測，兩次記錄的 pending mask 都是 `1<<4`）。
 
 ### 4.9 Reset
 
 同步、低電位有效 `resetn`。`resetn=0` 至少 10 個 cycle。
+
+- `resetn=0` 被取樣的那個上升緣上，CPU 送出的 SRAM 寫入**丟棄**，與同一個邊緣上的周邊暫存器寫入被 reset 蓋掉的行為一致（Phase 1 review RTL-RST-01）。
 
 ---
 
@@ -176,6 +178,25 @@ module bootrom (
 | R06a | （無，firmware） | firmware 永不寫 DONE | `neg_fw_hang` | `timeout` |
 | R06b | （無，firmware） | firmware 執行非法指令 | `neg_fw_illegal` | `trap` |
 | R07 | `BUG_R07` | 位址在 UART 視窗時，`sel_gpio` 也拉高 | `hello` | `bus_assert`，`(?i)one-?hot|decode` |
+
+以下由 Phase 1 testbench qualification review 補上：植入前，這些錯誤在所有 checker 都 PASS（checker 抓不到）。每一條都用來防止某支測試或 checker 被改弱而沒人發現。
+
+| ID | define | 植入內容 | 用來執行的測試 | 預期 FAIL 的 checker 與訊息 regex |
+|---|---|---|---|---|
+| R02_memtest | `BUG_R02` | 同 R02 | `memtest` | `test_ctrl`／`trap`／`timeout`，`(?i)trap asserted|no DONE write|DONE=0xbad0`（證明 memtest 涵蓋 SRAM 上半部） |
+| R08 | `BUG_R08` | 除法改用外接 `picorv32_pcpi_div`，結果 bit 0 反相 | `muldiv` | `test_ctrl`，`(?i)0xbad00104` |
+| R09 | `BUG_R09` | unmapped 存取永遠不回 `mem_ready` | `unmapped` | `bus_assert`，`(?i)without mem_ready` |
+| R10 | `BUG_R10` | UART 只比對 `addr[31:12]`（partial decode） | `unmapped` | `bus_assert`，`(?i)decode mismatch` |
+| R11 | `BUG_R11` | `gpio_out[6]` 固定為 0（暫存器讀回正確） | `regs` | `gpio_seq`，`(?i)gpio_out sequence` |
+| R12 | `BUG_R12` | GPIO_OUT、SIG、IRQ_TRIG、UART DIV 讀回 0 | `regs` | `test_ctrl`，`(?i)0xbad0021d` |
+| R13 | `BUG_R13` | host port 忽略 `host_wmask` | `boot_host_hello` | `sim_error`，`(?i)host port partial-wmask write mismatch`（§7.2 沒有觀察 host port 的 checker，testbench 直接中止） |
+| R14 | `BUG_R14` | IRQ_TRIG bit0 清掉後，`irq[4]` 仍多拉 200 cycle（handler 進入 4 次） | `irq` | `test_ctrl`，`(?i)0xbad00020` |
+| R15 | `BUG_R15` | DONE 讀回 0 | `regs` | `test_ctrl`，`(?i)0xbad00240` |
+| L01 | （無，激勵） | Boot ROM loader 收到 checksum 錯誤的封包 | `boot_uart_badck` | 只有 `test_ctrl` FAIL（`exclusive`），`(?i)0xbad00b00`，GPIO `B2→EE` |
+| L02 | （無，激勵） | loader 收到 N = 0 | `boot_uart_n0` | 同 L01 |
+| L03 | （無，激勵） | loader 收到 N = 449 | `boot_uart_n449` | 同 L01 |
+
+L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot ROM 必須拒收。若 Boot ROM 不驗 checksum 或不檢查 N 範圍，這三條會變成「沒抓到」，`make neg-rtl` 隨之 FAIL。
 
 ---
 
@@ -210,14 +231,20 @@ module bootrom (
 |---|---|---|---|---|---|
 | `hello` | backdoor | 0 | 印字後 PASS | `hello\n` | `uart_crc32` |
 | `memtest` | backdoor | 0 | 測試區 `[_free_start, 0x700)`：固定 pattern（0/全 1/0xAAAA_AAAA/0x5555_5555）、address-in-address、march C−、byte-lane（sb/sh 後以 lb/lbu/lh/lhu/lw 驗證其他 lane 不變）。fail code：pattern `0x10`、addr-in-addr `0x20`、march `0x30`、byte-lane `0x40`、`_free_start>0x400` 為 `0x01` | `memtest PASS\n` | `uart_crc32` |
-| `irq` | backdoor | 0 | 只開放 `irq[4]`；寫 IRQ_TRIG=1；等 handler 計數變 1；檢查記錄的 pending mask 等於 `1<<4` | `irq PASS\n` | `uart_crc32` |
+| `irq` | backdoor | 0 | 只開放 `irq[4]`；寫 IRQ_TRIG=1；等 handler 計數 ≠ 0，再讓 `irq[4]` 保持開放約 3000 cycle；要求計數為 1–2 次（§4.8：實際為 2），且記錄的 pending mask 都等於 `1<<4` | `irq PASS\n` | `uart_crc32` |
 | `muldiv` | backdoor | 0 | mul/mulh/mulhsu/mulhu/div/divu/rem/remu 各數組常數比對（含除以 0、溢位情況） | `muldiv PASS\n` | `uart_crc32` |
 | `uart_echo` | backdoor | 0 | 從 UART 讀到 `\n` 為止，回送 `echo:` + 該行（含 `\n`） | `echo:ping\n`（testbench 送 `ping\n`） | `uart_crc32` |
 | `bootrom_march` | 不載入 | 1 | Boot ROM 對整個 SRAM 跑 march C− 與 address-in-address | （無） | `const:0x4D415243` |
 | `boot_uart_hello` | UART（Boot ROM loader） | 2 | Boot ROM 收 `hello` 映像後跳到 0 執行 | `hello\n` | `uart_crc32` |
-| `boot_host_hello` | host port | 0 | testbench 經 host port 寫入 `hello` 映像並讀回比對後放開 CPU | `hello\n` | `uart_crc32` |
+| `boot_host_hello` | host port | 0 | testbench 經 host port 寫入 `hello` 映像並讀回比對；再用 10 種 `host_wmask` 寫入並讀回比對；之後放開 CPU | `hello\n` | `uart_crc32` |
+| `boot_uart_max` | UART（Boot ROM loader） | 2 | 同 `boot_uart_hello`，但封包 N = 448（上限），映像補到 448 words | `hello\n` | `uart_crc32` |
+| `regs` | backdoor | 3 | 讀回 Boot ROM 寫的 GPIO_OUT=`0xB3`；GPIO_OUT 逐一寫 walking-1、`0xFF`、`0x00` 再還原；SIG、IRQ_TRIG（IRQ 全程遮蔽）、UART DIV 寫入後讀回；GPIO_IN = boot_mode；UART DATA 無資料時讀到 `0xFFFF_FFFF`；DONE 讀回 PASS magic。fail code `0x0200 | 壞掉的暫存器 bitmask`、DONE 讀回錯 `0x0240` | `regs PASS\n` | `uart_crc32` |
+| `unmapped` | backdoor | 0 | 對 29 個空洞位址（每個視窗前後的 word、partial decode 會疊到暫存器的位址）各做讀、寫、再讀，共 87 次 unmapped 存取：讀到必須是 0，且 SRAM canary、SIG、IRQ_TRIG、GPIO_OUT、UART DIV 都不得被改到 | `unmapped PASS\n` | `uart_crc32` |
 | `neg_fw_hang` | backdoor | 0 | 只做 negative test：印字後無窮迴圈、永不寫 DONE | （任意） | — |
 | `neg_fw_illegal` | backdoor | 0 | 只做 negative test：執行非法指令 | （任意） | — |
+| `boot_uart_badck`／`boot_uart_n0`／`boot_uart_n449` | UART（Boot ROM loader） | 2 | 只做 negative test（L01–L03）：送出 checksum 錯誤／N=0／N=449 的封包，正確的 Boot ROM 必須拒收 | （無） | — |
+
+`memtest`、`muldiv`、`bootrom_march` 另在 `dv/tests.toml` 設 `min_cycles`（Phase 1 實測 DONE cycle 的約 90%）：DONE=PASS 寫得比這更早，代表測試主體被跳過或縮小，由 `test_ctrl` 判 FAIL。刻意改 RTL 時序讓測試變快時，要重新量測並更新。
 
 ### 6.5 Boot ROM 程式（`fw/bootrom/`，連結位址 `0x0001_0000`，≤ 128 words，建議 `-march=rv32i`）
 
@@ -242,17 +269,20 @@ module bootrom (
 
 | 名稱 | 位置 | 判定 |
 |---|---|---|
-| `test_ctrl` | TB | DONE 值不是 PASS magic、或 DONE 被寫兩次以上 |
+| `test_ctrl` | TB＋run_sim.py | DONE 值不是 PASS magic、或 DONE 被寫兩次以上；或 DONE=PASS 寫入時 cycle 小於 tests.toml 的 `min_cycles` |
 | `signature` | run_sim.py | SIG 不符合 tests.toml 的 signature 規則 |
 | `trap` | TB | `trap` 拉高 |
 | `timeout` | TB | 到 `max_cycles` 仍未收到 DONE |
 | `uart_monitor` | TB | UART TX 波形違規：每個轉態必須落在「起始位元下降緣 + k×20 cycle ± 1 cycle」；stop bit 必須為 1 |
 | `uart_golden` | run_sim.py | 解碼出的 UART 文字與 tests.toml 不一致 |
 | `gpio_seq` | run_sim.py | `gpio_out` 變化序列與 tests.toml 不一致 |
-| `bus_assert` | TB | sel 不是 one-hot 或與 TB 自己的解碼不符；`mem_valid` 期間 addr/wdata/wstrb 變動；wstrb 非法；unmapped 存取；寫 ROM；周邊 sub-word 寫入；`mem_ready` 無 `mem_valid`；單筆交易超過 1000 cycle |
+| `bus_assert` | TB | sel 不是 one-hot 或與 TB 自己的解碼不符；`mem_valid` 期間 addr/wdata/wstrb 變動；wstrb 非法；unmapped 存取（例外見下）；unmapped 讀取 handshake 時 `mem_rdata` ≠ 0；寫 ROM；周邊 sub-word 寫入；`mem_ready` 無 `mem_valid`；單筆交易超過 1000 cycle |
 | `x_check` | TB（僅 Icarus） | reset 釋放 20 cycle 後，`trap`/`uart_tx`/`gpio_out`/`mem_valid` 出現 X；讀取 handshake 時 `mem_rdata` 含 X/Z |
 | `log_scan` | run_sim.py | log 出現 ERROR、FATAL、`Writing and reading`、模擬器 warning 等（白名單：`dv/log_whitelist.txt`） |
-| `sim_error` | run_sim.py | 編譯失敗、模擬異常結束、找不到結果 |
+| `sim_error` | run_sim.py | 編譯失敗、模擬異常結束、找不到結果、`tb_result.txt` 缺任何欄位；testbench 自行中止（例如 host port 讀回或 byte mask 檢查不符） |
+
+- **unmapped 例外**：§4.2 要求 unmapped 存取要回應、讀回 0、寫入忽略，但 `bus_assert` 對 unmapped 存取一律 FAIL，正向測試就驗證不了 §4.2。因此只有 tests.toml 設了 `expect_unmapped` 的測試（目前只有 `unmapped`，值 87），run_sim.py 才傳 `+allow_unmapped`：unmapped **資料**存取改成計數，次數必須完全相符；從 unmapped 位址取指令、decode mismatch、1000 cycle 上限照常 FAIL。
+- host port 目前沒有獨立的 checker，錯誤由 testbench 中止並以 `sim_error` 回報（R13）。之後若新增 `host_port` checker，R13 改以它為預期。
 
 - DONE 之後 testbench 繼續跑到 UART 閒置（至少 2 個 frame 時間）再結束，確保最後的 byte 被解碼。
 - Testbench 輸出：`<out_dir>/uart.txt`（解碼 bytes）、`<out_dir>/gpio.txt`（每行一個 `gpio_out` 新值，十六進位）、`<out_dir>/tb_result.txt`（DONE 值、SIG 值、cycle 數）、`+trace` 時 `<out_dir>/trace.log`（每筆 handshake：cycle、addr、wdata、wstrb、rdata）。
@@ -271,7 +301,14 @@ expect_gpio = [0xB0]      # gpio_out 變化序列（不含 reset 值 0）；省�
 uart_in = ""              # 送給 uart_rx 的文字（uart 載入時由 run_sim.py 產生 loader 封包）
 smoke = true
 negative_only = false     # true：只在 bugs.toml 引用，不列入正向 regression
+# 以下為 Phase 1 review 後新增的選填欄位
+min_cycles = 780000       # DONE=PASS 不得早於此 cycle（防止測試主體被跳過）
+fw = "boot_uart_hello"    # 映像名稱與測試名稱不同時指定
+loader_frame = "valid"    # valid | max_words | bad_checksum | n_zero | n_too_big（uart 載入的封包種類）
+expect_unmapped = 87      # 允許並計數 unmapped 資料存取，次數必須完全相符
 ```
+
+正向測試（`negative_only = false`）必須同時比對 `expect_uart`、`expect_gpio` 與 `sig_rule`（不可為 `none`），否則載入設定檔時即報錯。
 
 ```toml
 [[bug]]
@@ -281,6 +318,8 @@ test = "memtest"
 sim = "icarus"
 expect_checkers = ["test_ctrl"]
 expect_regex = "(?i)0xbad00040"
+exclusive = false         # 選填；true：expect_checkers 以外的 checker 也 FAIL 就算沒抓到
+expect_gpio = [0xB1, 0xE1] # 選填；bug run 的 gpio_out 序列必須等於此值
 ```
 
 ### 7.4 Script 介面
@@ -317,5 +356,5 @@ expect_regex = "(?i)0xbad00040"
 1. `make lint`、`make synth-check`、`make fw` PASS。
 2. `make core-stock` PASS（若某個上游 target 因外部依賴無法執行，需在 `docs/notes/core_stock.md` 說明原因與替代方式）。
 3. `make regress-rtl`：所有正向測試在 Icarus 與 Verilator 都 PASS。
-4. `make neg-rtl`：R01–R07 全部在預期的 checker FAIL。
+4. `make neg-rtl`：`dv/bugs.toml` 的全部條目（§5，目前 20 項）都在預期的 checker FAIL。
 5. `make smoke` < 5 分鐘。

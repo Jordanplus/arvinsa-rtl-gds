@@ -32,6 +32,7 @@ check_tool iverilog  "iverilog -V 2>&1 | sed -n 's/.*version \([0-9.]*\).*/\1/p'
 check_tool yosys     "yosys -V | sed -n 's/^Yosys \([0-9.]*\).*/\1/p'" "$(pin YOSYS_MIN)"
 check_tool "$(pin RISCV_PREFIX)gcc" "$(pin RISCV_PREFIX)gcc -dumpversion" "$(pin RISCV_GCC_MIN)"
 check_tool python3   "python3 -c 'import platform; print(platform.python_version())'" "$(pin PYTHON_MIN)"
+if command -v c++ >/dev/null 2>&1; then ok "c++ (for Verilator --binary): $(c++ --version 2>&1 | head -1)"; else bad "c++ not found (install Xcode Command Line Tools: xcode-select --install)"; fi
 if python3 -c 'import tomllib' 2>/dev/null; then ok "python3 tomllib"; else bad "python3 tomllib missing"; fi
 if "$(pin RISCV_PREFIX)gcc" -print-multi-lib | grep -q 'rv32im/ilp32'; then ok "riscv gcc multilib rv32im/ilp32"; else bad "riscv gcc lacks rv32im/ilp32 multilib"; fi
 
