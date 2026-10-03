@@ -42,6 +42,8 @@ if [ "$have" = "$want" ]; then ok "picorv32 submodule @ ${want:0:12}"; else bad 
 f="ip/sram/$(pin SRAM_MACRO)/upstream/$(pin SRAM_MACRO).v"
 sum=$(shasum -a 256 "$f" 2>/dev/null | cut -d' ' -f1 || echo none)
 if [ "$sum" = "$(pin SRAM_MODEL_SHA256)" ]; then ok "SRAM model sha256 matches"; else bad "SRAM model sha256 mismatch: $f"; fi
+simf="ip/sram/$(pin SRAM_MACRO)/sim/$(pin SRAM_MACRO).v"
+if python3 ip/sram/gen_sim_model.py "$f" "$simf" --check >/dev/null; then ok "SRAM sim model regenerates identically"; else bad "SRAM sim model is stale: run ip/sram/gen_sim_model.py"; fi
 
 echo "== toolchain.md =="
 if python3 env/check_toolchain_doc.py; then :; else fail=1; fi

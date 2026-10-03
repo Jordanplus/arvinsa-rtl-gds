@@ -16,8 +16,16 @@ OpenRAM 產生的 sky130 2 KB SRAM macro（512 words × 32 bit，byte write mask
 | 檔案 | 用途 |
 |---|---|
 | `upstream/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 上游行為模型原檔，未修改 |
-| `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 模擬用副本：只加 `\`timescale 1ns/1ps` 並把 `VERBOSE` 改成 0，差異見 `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v.diff` |
+| `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 模擬用副本，由 `ip/sram/gen_sim_model.py` 從上游原檔產生，差異見 `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v.diff`；`make env-check` 會檢查它是否過期 |
 | `sky130_sram_2kbyte_1rw1r_32x512_8.bb.v` | lint 與合成用的 blackbox 宣告；**不可**放進模擬 |
+
+模擬副本對上游做的三項修改：
+
+1. 加上 `` `timescale 1ns/1ps ``（上游沒有）。
+2. `VERBOSE` 改成 0，關掉每次存取都印一行的訊息。
+3. 把 `mem` 陣列的宣告移到最前面。上游在宣告 `mem` 之前就在 `$display` 裡引用它，Icarus Verilog 13 會報 `Scope index expression is not constant` 而無法編譯，Verilator 則接受。移動宣告不改變任何行為，已用小型 testbench 在兩個模擬器確認寫入、byte mask 與讀出時序一致。
+
+重新產生：`python3 ip/sram/gen_sim_model.py ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/upstream/sky130_sram_2kbyte_1rw1r_32x512_8.v ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sim/sky130_sram_2kbyte_1rw1r_32x512_8.v`
 
 GDS、LEF、.lib 在 Phase 3 由 PDK 內的版本提供，不在此 vendor。
 
@@ -27,5 +35,6 @@ GDS、LEF、.lib 在 Phase 3 由 PDK 內的版本提供，不在此 vendor。
 - 下降緣：寫入（依取樣到的 wmask0）；讀出則在下降緣後 `DELAY`=3 ns 更新 dout0。
 - 因此讀出資料只在「讀取的上升緣之後的下降緣 + 3 ns」到「下一個上升緣 + 1 ns」之間有效，**必須在下一個上升緣用 register 接住**。
 - Port 1 tie-off（clk1=0）時，port 1 的 always block 不會觸發。
+- Verilator 是 2-state 模擬器：上升緣後的 X 會變成 0，所以「讀出資料過期」這類問題只有 Icarus 看得到 X。
 
 注意：上游 .lib 是 OpenRAM 解析模型（analytical model），時序數字偏樂觀；見 project-plan.md §5.4、§6.2。
