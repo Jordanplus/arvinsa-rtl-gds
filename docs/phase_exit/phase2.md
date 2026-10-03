@@ -102,6 +102,8 @@ Exit criteria 出處：`project-plan.md` §8 Phase 2（GDS 產出；abstract DRC
 7. **GL ISA regression 沒覆蓋到的功能**：上游 firmware 從不讀 `rdcycleh`／`rdinstreth`（64-bit 計數器的高半部），也從不做非對齊存取（會觸發 bus-error IRQ）。所以網表在這些地方壞掉時 gl-core 仍會 PASS。驗證 agent 植入 `count_cycle[45]` 卡 1、`count_instr[40]` 卡 1、bus-error IRQ 卡 0 三個錯誤，都沒被抓到，並另外用定向測試確認這三個錯誤在功能上看得見。SoC 自己的 firmware 也沒有讀計數器，而且讓 bus-error IRQ 保持 masked。要補這個缺口，有兩條路：
    - 用 formal equivalence（計畫 Phase 4 的 L4 `Yosys.EQY`）證明網表與 RTL 等價。
    - 補定向測試：`rdcycleh`／`rdinstreth`，以及 IRQ unmasked 與 masked 兩種情況下的非對齊 load／store／fetch。
+
+   **決定（2026-10-03，使用者）**：採用 formal equivalence，提前到 Phase 3 先做。理由是本專案的目的是先把完整流程建立起來。
    GL 模擬本身是 functional + unit delay，只驗邏輯功能；時序以 9 corner STA 為準。
 8. **golden 只在同一環境下逐項比對**：與 `ci_sram_ref` 一樣，換平台（例如 x86_64 Linux）擺放與繞線細節會不同，需要依 golden README 的步驟重新建立。`ci_sram_ref` 的 golden 仍是全部逐項相同；在那個較小的設計上連跑 3 次都相同，但 detailed routing 的非確定性也可能出現在那裡。
 9. **checker 的範圍**：
