@@ -1,0 +1,9 @@
+[eqy] soc_top: gold ../arvinsa-rtl-gds-phase3d/runs/soc_top/06-yosys-synthesis/soc_top.nl.v
+[eqy] soc_top: gate <scratchpad>/escape_review/nand2nor/soc_top.nl.v
+[eqy] soc_top: running EQY (6 jobs; log ../../../..<scratchpad>/escape_review/nand2nor/eqy/eqy_run.log)
+  [FAIL] eqy exit code 2
+  [FAIL] EQY result ('FAIL', '2')
+  [FAIL] 1/18100 partitions not proved, e.g. soc_top._14295_.B
+  [FAIL] failed partitions: soc_top._14295_.B
+eqy: FAIL (soc_top; details in ../../../..<scratchpad>/escape_review/nand2nor/eqy/eqy_run.log)
+rc=1

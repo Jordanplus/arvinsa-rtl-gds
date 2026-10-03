@@ -1,0 +1,9 @@
+[eqy] soc_top: gold ../arvinsa-rtl-gds-phase3d/runs/soc_top/06-yosys-synthesis/soc_top.nl.v
+[eqy] soc_top: gate <scratchpad>/escape_review/dout_swap/soc_top.nl.v
+[eqy] soc_top: running EQY (4 jobs; log ../../../..<scratchpad>/escape_review/dout_swap/eqy/eqy_run.log)
+  [FAIL] eqy exit code 1
+  [FAIL] EQY result missing
+  [FAIL] no partitions (nothing was compared)
+  [FAIL] EQY partition step refused: conflicting matches for gold bit \_17030_.mux_2to10.A1: \_17030_.mux_2to10.A1 vs \_17031_.mux_2to10.A1
+eqy: FAIL (soc_top; details in ../../../..<scratchpad>/escape_review/dout_swap/eqy/eqy_run.log)
+rc=1

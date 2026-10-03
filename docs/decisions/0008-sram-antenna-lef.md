@@ -25,7 +25,7 @@
 
 這樣 OpenROAD 的 antenna 檢查（`OpenROAD.CheckAntennas`）與修復（global routing 後、detailed routing 中插 diode 或換層）就把 SRAM 輸入當成一般閘極處理，signoff 的 `antenna__violating__nets = 0` 也涵蓋了這些 net。
 
-驗證：negative test P06（`pnr/soc_top/neg_pnr.py`）把這份 LEF 的閘極面積除以 1000 後重跑 `OpenROAD.CheckAntennas`，必須出現違規；用原本的面積同一步是 0。
+驗證：negative test P06（`pnr/soc_top/neg_pnr.py`）把這份 LEF 的閘極面積除以 1000，用 OpenROAD 直接讀 LEF 與最終 DEF 跑 `check_antennas`，必須出現違規（59 個）；用原本的面積是 0。不重跑 LibreLane 的 `OpenROAD.CheckAntennas` step，因為那一步讀的是 ODB 裡已經存好的 antenna 資料，換 LEF 不會生效（Phase 3 第一版 P06 就是這樣失效的）。
 
 ## 限制
 

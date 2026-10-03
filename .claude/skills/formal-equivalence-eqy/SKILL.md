@@ -16,7 +16,7 @@ description: 用 YosysHQ EQY（或 Yosys equiv_*）證明兩份網表、或 RTL 
    - `[options] insbuf off`：OpenROAD 在 flip-flop 與輸出 port 之間插 buffer 並改名輸出線；不關 insbuf 時這些線變成獨立且對不上的狀態。
    - strategy：`sat`（depth 5）加 `pdr` 後援。
 3. **判定**：`DONE (PASS, rc=0)`；每個分區都有 `Proved equivalence`；partition log 出現 `found constant ... bit` 一律 FAIL（EQY 漏洞：輸出被植入卡 0 時，所有分區照樣證明通過）；植入後 EQY 以 `conflicting matches` 拒絕切分，也算抓到。
-4. **時間**：picorv32 約 6.5 分（15137 分區，`-j 8`）、soc_top 約 5 分（18100 分區，297 秒，`-j 10`）。PDR 找到反例時，SBY 需要 `yices` 轉波形（nix-shell 沒有），只影響除錯，不影響 FAIL 判定。
+4. **時間**：picorv32 約 4 分（15137 分區，249 秒，`-j 10`；Phase 2 用 `-j 8` 約 6.5 分）、soc_top 約 5 分（18100 分區，295 秒，`-j 10`）。negative test：soc_top 4 個 439 秒、picorv32 7 個 1090 秒（`neg_eqy.py -j 3`）。PDR 找到反例時，SBY 需要 `yices` 轉波形（nix-shell 沒有），只影響除錯，不影響 FAIL 判定。
 
 ## RTL vs 網表：尚未解決
 
@@ -31,8 +31,10 @@ description: 用 YosysHQ EQY（或 Yosys equiv_*）證明兩份網表、或 RTL 
 - picorv32_core（7 個）：輸出 buffer 輸入接 0、輸出 buffer 換成反相器、`count_cycle[45]`／`count_instr[40]` 卡 1、bus-error IRQ 卡 0（這三個是 GL 模擬漏掉的）、暫存器 bit 卡 0、mux 兩輸入對調。
 - soc_top（4 個）：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調。
 - **被抓到的機制要分開記**（看 `summary.json` 的 `proved`、`constant_matches`、`conflicting_matches`）。EQY 的 FAIL 有三種來源：(a) 分區證明失敗；(b) 常數規則（`found constant ... bit`）；(c) 切分時名稱對應互相矛盾而拒絕（`conflicting matches`），這時一個分區都沒證。
-  - 2026-10-03 實測：soc_top 的 `csb0_inverted`、`host_rdata7_inverted`、`mux_swap` 與 picorv32 的 `instr_inverted`、`mux_swap` 都是 (c)；`wdata3_stuck0` 只靠 (b)（15136/15136 分區照樣證明通過）；`din5_stuck0` 是 (a)+(b)（18099/18100）。
-  - 只有 (a) 證明「證明本身有效」。qualification 報告要寫出每個案例是哪一種，並確保 (a) 有案例。為什麼反相器、mux 對調會造成 (c)：推測與 `insbuf off` 的別名處理有關，尚未查證。
+  - 2026-10-03 實測：soc_top 的 `csb0_inverted`、`host_rdata7_inverted`、`mux_swap` 與 picorv32 的 `instr_inverted`、`mux_swap` 都是 (c)；`wdata3_stuck0` 只靠 (b)（15136/15136 分區照樣證明通過）；`din5_stuck0` 是 (a)+(b)（18099/18100）。picorv32 的 `count_cycle45_stuck1`、`count_instr40_stuck1`、`buserr_irq_stuck0`、`x8_bit24_stuck0` 是 (a)+(b)，各 1 個分區沒證明（2026-10-04 第四次 `make phase3` 重現，GL 模擬漏掉的 3 個都在其中）。
+  - 只有 (a) 證明「證明本身有效」。qualification 報告要寫出每個案例是哪一種，並確保 (a) 有案例。
+  - **(a) 的案例也要有非常數的錯誤**：目前 5 個 (a) 案例全是「卡成常數」，失敗的分區正好就是被換成常數的那個 bit；反相器、mux 對調都落在 (c)。要證明「證明步驟抓得到一般邏輯錯誤」，需要一個不改名稱對應的非常數錯誤，例如把某顆 `nand2_2` 換成 `nor2_2`、instance 與 net 名稱不動。Phase 3 獨立審查實測：soc_top 正常切分，18100 個分區中 1 個證明失敗（sat 給出反例），沒有常數也沒有名稱衝突，證明步驟有效。這個案例尚未加進 `neg_eqy.py`（Phase 4）。
+  - **抓到的位置要對**：判「抓到」時要確認失敗的分區名、衝突訊息或常數 bit 裡有被植入的 instance 或 net；否則一個無關分區逾時也會被算成抓到（`neg_eqy.py` 目前沒檢查，Phase 4）。為什麼反相器、mux 對調會造成 (c)：推測與 `insbuf off` 的別名處理有關，尚未查證。
 
 ## 用完後
 

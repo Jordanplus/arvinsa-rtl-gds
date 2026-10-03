@@ -34,5 +34,5 @@ PASS 需要全部成立：
 
 ## 限制
 
-- 只看得到 soc_top 的輸出與 SRAM port 0。內部錯誤若在這些測試中沒有傳到這些點，就不會被發現；網表的完整檢查由 formal equivalence 負責（`signoff/eqy/README.md`）。
+- 只看得到 soc_top 的輸出與 SRAM port 0。內部錯誤若在這些測試中沒有傳到這些點，就不會被發現。formal equivalence 只證明合成網表與最終網表等價（`signoff/eqy/README.md`）；RTL 到合成網表這一段只有這裡的模擬，firmware 沒用到的邏輯沒有檢查（`docs/phase_exit/phase3.md` 已知限制 11）。
 - `UNIT_DELAY` 模擬不檢查時序；時序由 9 個 corner 的 STA 負責。
