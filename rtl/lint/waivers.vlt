@@ -1,0 +1,27 @@
+`verilator_config
+// Lint waivers used by rtl/scripts/lint.sh (make lint).
+// Policy (docs/spec/soc_spec.md section 8): RTL-owned files (rtl/soc, rtl/bus,
+// rtl/periph) must be warning-free with NO waiver. Only the files below, which
+// RTL does not own and may not modify, are waived, per file and per rule.
+// Format note: a line comment whose text starts with the tool name (in any
+// letter case) is turned into a metacomment and breaks the parse of this
+// file ("syntax error, unexpected '/'"). Never start a comment that way.
+
+// PicoRV32 core (third_party, read-only submodule): unused debug signals,
+// blocking assignments in its sequential always blocks, unnamed generate
+// blocks, and extra modules (picorv32_regs, picorv32_pcpi_*) in one file.
+lint_off -rule BLKSEQ       -file "*third_party/picorv32/picorv32.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/picorv32/picorv32.v"
+lint_off -rule GENUNNAMED   -file "*third_party/picorv32/picorv32.v"
+lint_off -rule DECLFILENAME -file "*third_party/picorv32/picorv32.v"
+
+// simpleuart (third_party, read-only): implicit vector-to-bool conversions,
+// 8-bit receive data zero-extended to 32 bits, reg_dat_di[31:8] unused.
+lint_off -rule WIDTHTRUNC   -file "*third_party/picorv32/picosoc/simpleuart.v"
+lint_off -rule WIDTHEXPAND  -file "*third_party/picorv32/picosoc/simpleuart.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/picorv32/picosoc/simpleuart.v"
+
+// SRAM macro blackbox (ip/, read-only): an empty module body by design, so its
+// inputs are never read and its outputs are never driven.
+lint_off -rule UNUSEDSIGNAL -file "*ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
+lint_off -rule UNDRIVEN     -file "*ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"

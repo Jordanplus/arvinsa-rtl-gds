@@ -1,0 +1,208 @@
+# dv/bugs.toml - negative tests by bug injection (docs/spec/soc_spec.md 5, 7.3).
+# make neg-rtl (dv/scripts/neg.py) runs each entry and inverts the judgment: the
+# run must FAIL, and at least one checker in expect_checkers must have failed
+# with a message matching expect_regex. FAIL anywhere else (or a compile error)
+# counts as an escape. An empty expect_regex accepts any message of the expected
+# checkers (spec 5 gives no regex for R03, R05, R06a, R06b).
+# Optional fields (DV extensions, dv/README.md):
+#   exclusive = true   no checker outside expect_checkers may fail either
+#   expect_gpio = [..] the gpio_out change sequence of the bug run must equal it
+# R01-R07 are spec 5. The entries after them come from the testbench
+# qualification review (bugs that escaped every checker before): each one
+# keeps a test or checker from being weakened without neg-rtl noticing.
+
+[[bug]]
+id = "R01"
+define = "BUG_R01"
+test = "memtest"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00040"
+
+[[bug]]
+id = "R02"
+define = "BUG_R02"
+test = "bootrom_march"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00e10"
+# boot ROM march FAIL status on GPIO_OUT (spec 6.5 step 3)
+expect_gpio = [0xB1, 0xE1]
+
+[[bug]]
+id = "R03"
+define = "BUG_R03"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["x_check", "trap", "timeout"]
+expect_regex = ""
+
+[[bug]]
+id = "R04"
+define = "BUG_R04"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["uart_monitor"]
+expect_regex = "(?i)edge|timing|framing"
+
+[[bug]]
+id = "R05"
+define = "BUG_R05"
+test = "irq"
+sim = "icarus"
+expect_checkers = ["timeout"]
+expect_regex = ""
+
+[[bug]]
+id = "R06a"
+define = ""
+test = "neg_fw_hang"
+sim = "icarus"
+expect_checkers = ["timeout"]
+expect_regex = ""
+
+[[bug]]
+id = "R06b"
+define = ""
+test = "neg_fw_illegal"
+sim = "icarus"
+expect_checkers = ["trap"]
+expect_regex = ""
+
+[[bug]]
+id = "R07"
+define = "BUG_R07"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["bus_assert"]
+expect_regex = "(?i)one-?hot|decode"
+
+# ---- testbench qualification additions -------------------------------------
+
+# addr0[8] stuck at 0 must also break memtest (spec 6.2: memtest covers the
+# upper SRAM half to catch addr0[8] faults; project-plan.md 7.3 R02). A memtest
+# shrunk to the lower half PASSes with this bug, so this entry escapes then.
+# The upper-half writes alias onto the code, so the firmware crashes (trap),
+# hangs (timeout) or reports a fail code, depending on where the corruption
+# lands. The regex leaves out the min_cycles message of test_ctrl, so this
+# entry checks the memtest coverage on its own.
+[[bug]]
+id = "R02_memtest"
+define = "BUG_R02"
+test = "memtest"
+sim = "icarus"
+expect_checkers = ["test_ctrl", "trap", "timeout"]
+expect_regex = "(?i)trap asserted|no DONE write|DONE=0xbad0"
+
+# Divider result bit 0 inverted (external picorv32_pcpi_div, soc_top.v): muldiv
+# must report its first div case (case 0, op div: fail code 0x104). A muldiv
+# whose compare loop is skipped PASSes with this bug.
+[[bug]]
+id = "R08"
+define = "BUG_R08"
+test = "muldiv"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00104"
+
+# Unmapped access never answered (soc_bus.v): bus_assert 1000-cycle limit.
+[[bug]]
+id = "R09"
+define = "BUG_R09"
+test = "unmapped"
+sim = "icarus"
+expect_checkers = ["bus_assert"]
+expect_regex = "(?i)without mem_ready"
+
+# Partial UART decode on addr[31:12] (soc_bus.v): bus_assert decode compare.
+[[bug]]
+id = "R10"
+define = "BUG_R10"
+test = "unmapped"
+sim = "icarus"
+expect_checkers = ["bus_assert"]
+expect_regex = "(?i)decode mismatch"
+
+# gpio_out pin 6 stuck at 0, register read-back correct (soc_gpio.v): only the
+# pin sequence shows it.
+[[bug]]
+id = "R11"
+define = "BUG_R11"
+test = "regs"
+sim = "icarus"
+expect_checkers = ["gpio_seq"]
+expect_regex = "(?i)gpio_out sequence"
+
+# GPIO_OUT, SIG, IRQ_TRIG and UART DIV read back 0: regs must name all four
+# (fail code 0x0200 | 0x01 | 0x04 | 0x08 | 0x10 = 0x021D).
+[[bug]]
+id = "R12"
+define = "BUG_R12"
+test = "regs"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad0021d"
+
+# Host port ignores host_wmask (soc_bus.v): the testbench byte-mask check after
+# the host load. The testbench stops the run there (no checker in spec 7.2
+# watches the host port), so this is the only entry that expects sim_error;
+# the regex keeps a compile error or crash from counting as caught.
+[[bug]]
+id = "R13"
+define = "BUG_R13"
+test = "boot_host_hello"
+sim = "icarus"
+expect_checkers = ["sim_error"]
+expect_regex = "(?i)host port partial-wmask write mismatch"
+
+# IRQ line held 200 cycles after IRQ_TRIG[0] is cleared (soc_test_ctrl.v): the
+# handler runs 4 times instead of 2; irq reports fail code 0x20.
+[[bug]]
+id = "R14"
+define = "BUG_R14"
+test = "irq"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00020"
+
+# DONE reads back 0 (soc_test_ctrl.v): regs writes DONE a second time with fail
+# code 0x0240.
+[[bug]]
+id = "R15"
+define = "BUG_R15"
+test = "regs"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00240"
+
+# Boot ROM UART loader error handling (spec 6.5 step 4), no RTL define: the
+# stimulus is a malformed loader frame (tests.toml loader_frame). The correct
+# boot ROM rejects it: GPIO_OUT 0xB2 -> 0xEE, DONE = 0xBAD0_0B00, no UART
+# output, so only test_ctrl fails (exclusive). A boot ROM without the checksum
+# compare or the N range check PASSes or times out instead.
+[[bug]]
+id = "L01"
+define = ""
+test = "boot_uart_badck"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00b00"
+exclusive = true
+
+[[bug]]
+id = "L02"
+define = ""
+test = "boot_uart_n0"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00b00"
+exclusive = true
+
+[[bug]]
+id = "L03"
+define = ""
+test = "boot_uart_n449"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00b00"
+exclusive = true

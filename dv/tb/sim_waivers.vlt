@@ -1,0 +1,12 @@
+`verilator_config
+// Warning waivers for the Verilator simulation build of tb_soc (dv/scripts/dvlib.py).
+// Only files that DV may not modify are waived, per file and per rule. RTL-owned
+// and DV-owned files get no waiver: any warning they produce reaches the
+// compile log and fails the log_scan checker.
+// Format note: a line comment whose text starts with the tool name (in any
+// letter case) is parsed as a metacomment, so no comment here starts that way.
+
+// simpleuart (third_party, read-only): implicit vector-to-bool conversions and
+// 8-bit receive data zero-extended to 32 bits.
+lint_off -rule WIDTHTRUNC  -file "*third_party/picorv32/picosoc/simpleuart.v"
+lint_off -rule WIDTHEXPAND -file "*third_party/picorv32/picosoc/simpleuart.v"

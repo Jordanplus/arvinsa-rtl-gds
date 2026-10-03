@@ -1,0 +1,30 @@
+# =============================================================================
+# rtl/scripts/synth_check.ys -- local Yosys generic synthesis sanity check.
+# Run by rtl/scripts/synth_check.sh, which first executes a generated script
+# that reads rtl/rtl.f and the SRAM blackbox. Contract: soc_spec.md section 8.
+# =============================================================================
+hierarchy -check -top soc_top
+
+# 0. RTL-level checks before any optimization can hide a problem: the design
+#    instantiates exactly one SRAM macro, and the elaborated RTL has no
+#    multiple drivers, undriven used nets or combinational loops. (The final
+#    check below runs on the optimized netlist, where opt passes can merge
+#    away a multiple-driver conflict, so it alone is not enough.)
+select -assert-count 1 t:sky130_sram_2kbyte_1rw1r_32x512_8
+proc
+check -assert
+
+synth -top soc_top -flatten
+
+# 1. No latch of any kind (coarse or fine-grained cell types).
+select -assert-none t:$dlatch t:$adlatch t:$dlatchsr t:$sr t:$_DLATCH_* t:$_DLATCHSR_* t:$_SR_*
+
+# 2. Exactly one SRAM macro after flatten and optimization (it must not be
+#    duplicated or optimized away), and it is soc_top/sram0.
+select -assert-count 1 t:sky130_sram_2kbyte_1rw1r_32x512_8
+select -assert-count 1 soc_top/c:sram0 soc_top/t:sky130_sram_2kbyte_1rw1r_32x512_8 %i
+
+# 3. Netlist sanity: no multiple drivers, undriven used nets, or logic loops.
+check -assert
+
+tee -o runs/rtl/synth/stat.txt stat

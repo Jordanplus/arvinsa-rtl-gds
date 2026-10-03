@@ -1,0 +1,9 @@
++incdir+rtl/include
+rtl/soc/soc_top.v
+rtl/bus/soc_bus.v
+rtl/periph/soc_uart.v
+rtl/periph/soc_gpio.v
+rtl/periph/soc_test_ctrl.v
+rtl/bootrom/bootrom.v
+third_party/picorv32/picorv32.v
+third_party/picorv32/picosoc/simpleuart.v

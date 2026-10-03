@@ -1,0 +1,245 @@
+# dv/tests.toml - SoC regression test list (docs/spec/soc_spec.md 6.4, 7.3).
+# Fields (spec 7.3): name, load (backdoor|host|uart|none), boot_mode, max_cycles,
+# expect_uart (omitted = not checked; "" = no UART output allowed),
+# sig_rule (uart_crc32 | "const:0x..." | none), expect_gpio (gpio_out change
+# sequence without the reset value 0; omitted = not checked), uart_in (text sent
+# to uart_rx; for load = "uart" run_sim.py first sends the boot ROM loader frame
+# built from fw/build/<fw>.bin), smoke, negative_only, fw (image name, default =
+# test name).
+# DV extensions (dv/README.md):
+#   min_cycles       DONE = PASS magic must not be written before this cycle
+#                    (test_ctrl checker): a firmware whose test body was skipped
+#                    or shrunk prints the same PASS text, but finishes early.
+#   loader_frame     load = "uart" only: valid (default) | max_words |
+#                    bad_checksum | n_zero | n_too_big (dvlib.LOADER_FRAMES).
+#   expect_unmapped  exact number of unmapped data accesses the test makes on
+#                    purpose; bus_assert counts them instead of failing them.
+# A positive test (negative_only = false) must set expect_uart and expect_gpio
+# and a sig_rule other than none (dvlib.load_tests rejects it otherwise).
+# Every test boots from the boot ROM, which writes GPIO_OUT = 0xB0 | boot_mode
+# first (spec 6.5 step 1); boot_mode 0 then jumps to SRAM.
+# max_cycles: at least 5x the cycles measured on the Phase 1 RTL (Icarus,
+# 2026-10-03: hello 3.5k, memtest 871k, irq 7.0k, muldiv 18k, uart_echo 6.6k,
+# bootrom_march 112k, boot_uart_hello 63k, boot_host_hello 3.9k, boot_uart_max
+# 363k, regs 11.5k, unmapped 10.7k), so a slower but still correct design does
+# not time out while a hang still ends in bounded time.
+# min_cycles: about 90% of the DONE cycle measured on the same RTL (memtest
+# 870728, muldiv 17333, bootrom_march 111880; identical on Icarus and
+# Verilator). An intended RTL timing change that makes these tests faster
+# needs a new measurement here.
+
+[[test]]
+name = "hello"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "hello\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = true
+negative_only = false
+
+[[test]]
+name = "memtest"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 5000000
+min_cycles = 780000
+expect_uart = "memtest PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = true
+negative_only = false
+
+[[test]]
+name = "irq"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "irq PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false
+
+[[test]]
+name = "muldiv"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 300000
+min_cycles = 15500
+expect_uart = "muldiv PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false
+
+[[test]]
+name = "uart_echo"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "echo:ping\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = "ping\n"
+smoke = false
+negative_only = false
+
+[[test]]
+name = "bootrom_march"
+load = "none"
+boot_mode = 1
+max_cycles = 1000000
+min_cycles = 100000
+expect_uart = ""
+sig_rule = "const:0x4D415243"
+expect_gpio = [0xB1, 0xA5]
+uart_in = ""
+smoke = true
+negative_only = false
+
+[[test]]
+name = "boot_uart_hello"
+load = "uart"
+boot_mode = 2
+max_cycles = 600000
+expect_uart = "hello\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB2, 0xB8]
+uart_in = ""
+smoke = false
+negative_only = false
+
+[[test]]
+name = "boot_host_hello"
+load = "host"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "hello\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false
+
+# Directed tests beyond spec 6.4 (testbench qualification findings Q-F2..Q-F4).
+
+# UART loader with the largest legal image (spec 6.5 step 4: N = 448): the
+# hello image zero-padded to 448 words.
+[[test]]
+name = "boot_uart_max"
+fw = "boot_uart_hello"
+load = "uart"
+loader_frame = "max_words"
+boot_mode = 2
+max_cycles = 2000000
+expect_uart = "hello\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB2, 0xB8]
+uart_in = ""
+smoke = false
+negative_only = false
+
+# Register read-back and every GPIO_OUT pin (fw/tests/regs/main.c), with
+# boot_mode 3 (reserved: the boot ROM writes 0xB3 and jumps to SRAM).
+[[test]]
+name = "regs"
+load = "backdoor"
+boot_mode = 3
+max_cycles = 200000
+expect_uart = "regs PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB3, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF, 0x00, 0xB3]
+uart_in = ""
+smoke = false
+negative_only = false
+
+# Unmapped accesses and full address decode (fw/tests/unmapped/main.c, spec
+# 4.2). expect_unmapped = exact number of unmapped data accesses (29 holes x 3);
+# bus_assert counts them instead of failing them, for this test only.
+[[test]]
+name = "unmapped"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "unmapped PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+expect_unmapped = 87
+uart_in = ""
+smoke = false
+negative_only = false
+
+# Negative-test-only firmware (referenced from dv/bugs.toml R06a/R06b): these
+# must never PASS. UART output is "any" (spec 6.4), so expect_uart is omitted.
+[[test]]
+name = "neg_fw_hang"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 100000
+sig_rule = "none"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = true
+
+[[test]]
+name = "neg_fw_illegal"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 100000
+sig_rule = "none"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = true
+
+# Boot ROM UART loader error path (spec 6.5 step 4), referenced from
+# dv/bugs.toml L01-L03: a malformed frame must end with GPIO_OUT = 0xEE,
+# DONE = 0xBAD0_0B00 and no UART output. The run therefore FAILs at test_ctrl
+# only (bugs.toml exclusive = true); a boot ROM that accepts the frame (PASS) or
+# waits for more bytes (timeout) is an escape.
+[[test]]
+name = "boot_uart_badck"
+fw = "boot_uart_hello"
+load = "uart"
+loader_frame = "bad_checksum"
+boot_mode = 2
+max_cycles = 300000
+expect_uart = ""
+sig_rule = "none"
+expect_gpio = [0xB2, 0xEE]
+uart_in = ""
+smoke = false
+negative_only = true
+
+[[test]]
+name = "boot_uart_n0"
+load = "uart"
+loader_frame = "n_zero"
+boot_mode = 2
+max_cycles = 100000
+expect_uart = ""
+sig_rule = "none"
+expect_gpio = [0xB2, 0xEE]
+uart_in = ""
+smoke = false
+negative_only = true
+
+[[test]]
+name = "boot_uart_n449"
+load = "uart"
+loader_frame = "n_too_big"
+boot_mode = 2
+max_cycles = 100000
+expect_uart = ""
+sig_rule = "none"
+expect_gpio = [0xB2, 0xEE]
+uart_in = ""
+smoke = false
+negative_only = true

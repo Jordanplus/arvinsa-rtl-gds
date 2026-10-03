@@ -1,0 +1,11 @@
+# dv/log_whitelist.txt - log_scan whitelist (docs/spec/soc_spec.md 7.2, log_scan row).
+# One Python regular expression per line, matched with re.search against each
+# compile-log and simulation-log line that contains a log_scan keyword (ERROR,
+# FATAL, warning, "Writing and reading", "Unable to find"). A matching line is
+# not reported. Lines starting with '#' and blank lines are ignored.
+# Policy: keep this list minimal. Every entry must have a comment right above it
+# that says which tool prints the line and why it is benign.
+#
+# (No entries: the Phase 1 build and runs on Icarus 13.0 and Verilator 5.050
+#  print no keyword line. Third-party Verilator width warnings are waived per
+#  file and per rule in dv/tb/sim_waivers.vlt instead.)
