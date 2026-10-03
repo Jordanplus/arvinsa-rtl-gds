@@ -8,10 +8,11 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-03）：Phase 0、Phase 1 完成，下一步 Phase 2。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-03）：Phase 0、1、2 完成，下一步 Phase 3。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
+- Phase 2：PicoRV32 單獨 harden 到 GDS（40 ns）。DRC、LVS 為 0，9 個 corner 的 setup／hold 與 slew／cap／fanout 全部 PASS；上游 ISA 測試在最終網表上 PASS，RTL 與 GL 的 bus transaction 逐筆相同；soc_top 的 `DIE_AREA` 定為 1000 × 800 µm（ADR-0006）。紀錄見 [docs/phase_exit/phase2.md](docs/phase_exit/phase2.md)。
 
 ## 快速開始
 
@@ -20,6 +21,7 @@ make help          # 所有 target
 make env-check     # 檢查本機工具、釘版 IP、toolchain.md 是否最新
 make smoke         # lint + firmware + RTL 模擬 smoke（約 30 秒）
 make phase1        # Phase 1 完整檢查（約 4 分鐘）
+make phase2        # Phase 2 完整檢查：LibreLane harden + GL regression（約 24 分鐘，需要 flow 環境）
 ```
 
 第一次在新機器上建 flow 環境的步驟見 [env/setup.md](env/setup.md)。
@@ -52,7 +54,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 |---|---|---|
 | 0 | 環境建置：Nix、LibreLane、sky130A PDK；重跑 LibreLane 官方 SRAM 範例當 golden 參考 | 完成（2026-10-03） |
 | 1 | SoC RTL 與 firmware、RTL 模擬 regression | 完成（2026-10-03） |
-| 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 未開始 |
+| 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 完成（2026-10-03） |
 | 3 | 整合預建 SRAM macro | 未開始 |
 | 3.5 | （可選）用 OpenRAM 做 SPICE characterization，校正 SRAM 時序模型 | 未開始 |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 未開始 |

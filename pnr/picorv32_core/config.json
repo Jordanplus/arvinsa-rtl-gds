@@ -1,0 +1,132 @@
+{
+    "//": "Phase 2: PicoRV32 hardened alone (no SRAM), project-plan.md §8. Run with `make harden-core`; paths are relative to the repo root (run.sh passes --design-dir). Settings are explained in README.md next to this file.",
+    "meta": {
+        "version": 3,
+        "flow": "Classic"
+    },
+    "DESIGN_NAME": "picorv32",
+    "VERILOG_FILES": [
+        "dir::third_party/picorv32/picorv32.v"
+    ],
+    "//SYNTH_PARAMETERS": "Must equal the parameters of u_cpu in rtl/soc/soc_top.v; run.sh checks this before the flow (pnr/picorv32_core/cpu_params.py).",
+    "SYNTH_PARAMETERS": [
+        "COMPRESSED_ISA=1",
+        "ENABLE_MUL=1",
+        "ENABLE_DIV=1",
+        "ENABLE_PCPI=0",
+        "BARREL_SHIFTER=1",
+        "ENABLE_IRQ=1",
+        "ENABLE_IRQ_QREGS=1",
+        "ENABLE_IRQ_TIMER=1",
+        "CATCH_MISALIGN=1",
+        "CATCH_ILLINSN=1",
+        "ENABLE_TRACE=0",
+        "PROGADDR_RESET=32'h00010000",
+        "PROGADDR_IRQ=32'h00000010"
+    ],
+    "CLOCK_PORT": "clk",
+    "CLOCK_PERIOD": 40,
+    "//CORNERS": "LibreLane's sky130 default only fails setup in the tt corners; Phase 2 exit needs setup and hold clean in all 9 corners.",
+    "SETUP_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "HOLD_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "//EXTRA_EXCLUDED_CELLS": "The PDK exclude list (drc_exclude.cells) excludes only clkdlybuf4s15_1 and clkdlybuf4s18_1; without this the resizer used clkdlybuf4s25_1 as its general buffer (port, fanout buffers) and max slew failed. See README.md.",
+    "EXTRA_EXCLUDED_CELLS": [
+        "sky130_fd_sc_hd__clkdlybuf4s25_1",
+        "sky130_fd_sc_hd__clkdlybuf4s25_2",
+        "sky130_fd_sc_hd__clkdlybuf4s50_1",
+        "sky130_fd_sc_hd__clkdlybuf4s50_2"
+    ],
+    "//CTS_SINK_CLUSTERING_SIZE": "CTS chose 10 sinks per leaf buffer and then added dummy loads, giving leaf fanout 11-12 > MAX_FANOUT_CONSTRAINT 10. See README.md.",
+    "CTS_SINK_CLUSTERING_SIZE": 8,
+    "//LAYERS_RC": "Per-layer wire R (kOhm/um) and C (pF/um) for pre-route parasitic estimates. Without it OpenROAD derives C from the tech LEF (about 0.08 fF/um), half of what RCX extracts after routing (0.178 fF/um average), so the resizer under-repairs slew/cap. Values: the sky130 table left commented out in LibreLane 3.0.14 librelane/config/pdk_compat.py lines 262-296. See README.md.",
+    "LAYERS_RC": {
+        "*tt*": {
+            "li1": {
+                "res": 0.07176,
+                "cap": 0.0001499
+            },
+            "met1": {
+                "res": 0.0008929,
+                "cap": 0.000172375
+            },
+            "met2": {
+                "res": 0.0008929,
+                "cap": 0.000136233
+            },
+            "met3": {
+                "res": 0.0001567,
+                "cap": 0.000214962
+            },
+            "met4": {
+                "res": 0.0001567,
+                "cap": 0.000154087
+            },
+            "met5": {
+                "res": 1.781e-05,
+                "cap": 0.000154087
+            }
+        },
+        "*ff*": {
+            "li1": {
+                "res": 0.050232,
+                "cap": 0.00010493
+            },
+            "met1": {
+                "res": 0.00062503,
+                "cap": 0.0001206625
+            },
+            "met2": {
+                "res": 0.00062503,
+                "cap": 9.53631e-05
+            },
+            "met3": {
+                "res": 0.00010969,
+                "cap": 0.0001504734
+            },
+            "met4": {
+                "res": 0.00010969,
+                "cap": 0.0001078609
+            },
+            "met5": {
+                "res": 1.2467e-05,
+                "cap": 0.0001078609
+            }
+        },
+        "*ss*": {
+            "li1": {
+                "res": 0.093288,
+                "cap": 0.00019487
+            },
+            "met1": {
+                "res": 0.00116077,
+                "cap": 0.0002240875
+            },
+            "met2": {
+                "res": 0.00116077,
+                "cap": 0.0001771029
+            },
+            "met3": {
+                "res": 0.00020371,
+                "cap": 0.0002794506
+            },
+            "met4": {
+                "res": 0.00020371,
+                "cap": 0.0002003131
+            },
+            "met5": {
+                "res": 2.3153e-05,
+                "cap": 0.0002003131
+            }
+        }
+    },
+    "//RUN_POST_GRT_DESIGN_REPAIR": "Repairs slew/cap again after global routing. The only other repair runs after global placement, before CTS; about 2200 hold buffers and routing add load afterwards. LibreLane marks it experimental (may hang or run long); here the step takes about 25 s. See README.md.",
+    "RUN_POST_GRT_DESIGN_REPAIR": true,
+    "//GRT_DESIGN_REPAIR_MAX_SLEW_PCT": "Slew margin of that repair (default 10 %); 10 % left 2 nets above 0.75 ns in max_ss after detailed routing. See README.md.",
+    "GRT_DESIGN_REPAIR_MAX_SLEW_PCT": 30,
+    "//CTS_DISTANCE_BETWEEN_BUFFERS": "CTS buffers only the long H-tree levels; without this the 4 level-2 clock buffers each drove 16 buffers (> MAX_FANOUT_CONSTRAINT 10), two of them 0.206 and 0.203 pF (> MAX_CAPACITANCE_CONSTRAINT 0.2 pF), through an unbuffered wire tree. 50 um adds buffers inside that tree (max clock-buffer fanout 9). See README.md.",
+    "CTS_DISTANCE_BETWEEN_BUFFERS": 50
+}

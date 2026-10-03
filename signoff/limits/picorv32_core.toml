@@ -1,0 +1,95 @@
+# Signoff limits for `make harden-core` (PicoRV32 hardened alone, Phase 2).
+# Checked by signoff/scripts/check_signoff.py; every row must PASS, a missing metric is a FAIL.
+# Sources: project-plan.md §7.2 (signoff metrics) and §8 Phase 2 exit criteria
+# (abstract DRC = 0, LVS PASS, setup/hold clean in all 9 corners at 40 ns).
+
+[equal]
+"flow__errors__count" = 0
+"design__lint_error__count" = 0
+"synthesis__check_error__count" = 0
+"design__instance_unmapped__count" = 0
+"design__instance__count__macros" = 0
+"design__power_grid_violation__count" = 0
+# Exactly the 35 PCPI inputs (pcpi_rd[31:0], pcpi_wr, pcpi_wait, pcpi_ready): unused with
+# ENABLE_PCPI=0, so no cell is connected to them (verified in the run's disconnected-pin table).
+# In soc_top they are tied to 0 (soc_spec.md §4.1). Any other disconnected pin is a FAIL.
+"design__disconnected_pin__count" = 35
+"design__critical_disconnected_pin__count" = 0
+"route__drc_errors" = 0
+"antenna__violating__nets" = 0
+"antenna__violating__pins" = 0
+"route__antenna_violation__count" = 0
+"magic__drc_error__count" = 0
+"klayout__drc_error__count" = 0
+"magic__illegal_overlap__count" = 0
+"design__xor_difference__count" = 0
+"design__lvs_error__count" = 0
+"timing__setup_vio__count" = 0
+"timing__hold_vio__count" = 0
+"design__max_slew_violation__count" = 0
+"design__max_cap_violation__count" = 0
+"design__max_fanout_violation__count" = 0
+# Drivers without extracted parasitics (STA report_parasitic_annotation). The raw count is exactly
+# 114 = 35 unused PCPI input ports + 41 tie-cell (conb_1) HI outputs + 38 CTS dummy-load (clkload*)
+# outputs: none of them drives a routed wire (verified in 56-openroad-stapostpnr/*/checks.rpt).
+# Any other unannotated driver changes this count and FAILs.
+"timing__unannotated_net__count" = 114
+# LibreLane's filtered count (librelane/scripts/odbpy/filter_unannotated.py lines 70-85) matches the
+# reported names against net names, so it can only catch top-level ports that have a wire; the raw
+# row above is the real check, this one is kept as a second guard for the ports.
+"timing__unannotated_net_filtered__count" = 0
+
+[min]
+# §7.2: nom_tt setup worst slack >= 10 % of the 40 ns clock period
+"timing__setup__ws__corner:nom_tt_025C_1v80" = 4.0
+
+[corners]
+names = [
+    "nom_tt_025C_1v80", "nom_ss_100C_1v60", "nom_ff_n40C_1v95",
+    "min_tt_025C_1v80", "min_ss_100C_1v60", "min_ff_n40C_1v95",
+    "max_tt_025C_1v80", "max_ss_100C_1v60", "max_ff_n40C_1v95",
+]
+setup_ws_min = 0.0
+hold_ws_min = 0.0
+# One clock period. OpenSTA reports a huge or infinite slack when a corner has no constrained
+# path (e.g. the clock was lost); such a corner must FAIL, not pass with "infinite margin".
+slack_max = 40.0
+
+[golden_tolerance]
+# The detailed router (step OpenROAD.DetailedRouting) is not deterministic. Of 5 runs on this machine
+# (2026-10-03; 4 with the final config, 1 with an extra CTS_MAX_CAP that had no effect on CTS),
+# 4 had identical metrics and 1 differed in 71 of 325.
+# Runs 2 and 3 (identical resolved.json) have byte-identical DEFs from floorplan through post-GRT
+# repair (steps 13-41) and differ from step 45 (detailed routing) on: wirelength 708673 vs 708679
+# um, vias 134168 vs 134172, slack <= 0.0003 ns, clock skew <= 0.0002 ns, power and IR drop
+# <= 4e-5 relative. Only the metric families that differed get a tolerance, about 30-200x the
+# measured spread; every other metric (cell counts, areas, all violation counts, DRC, LVS, ...)
+# must stay identical. Signoff limits above are not affected: they use the run's own values.
+"timing__setup__ws*" = { abs = 0.01 }
+"timing__hold__ws*" = { abs = 0.01 }
+"timing__setup_r2r__ws*" = { abs = 0.01 }
+"timing__hold_r2r__ws*" = { abs = 0.01 }
+"clock__skew__*" = { abs = 0.01 }
+"route__wirelength" = { rel = 0.001 }
+"route__wirelength__iter:*" = { rel = 0.001 }
+"route__vias*" = { rel = 0.001 }
+"power__*" = { rel = 0.001 }
+"design_powergrid__*" = { rel = 0.001 }
+"ir__*" = { rel = 0.001 }
+
+[info]
+keys = [
+    "design__die__bbox",
+    "design__core__area",
+    "design__instance__count__stdcell",
+    "design__instance__area__stdcell",
+    "design__instance__utilization",
+    "design__instance__count__class:sequential_cell",
+    "route__wirelength",
+    "timing__setup__ws",
+    "timing__hold__ws",
+    "power__total",
+    "ir__drop__worst",
+    "design__lint_warning__count",
+    "timing__drv__floating__nets",
+]

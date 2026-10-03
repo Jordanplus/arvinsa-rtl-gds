@@ -11,7 +11,7 @@ PY   ?= python3
 DRY_RUN ?= 0
 
 .PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
-        neg-rtl core-stock smoke phase1 clean
+        neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 clean
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -33,6 +33,14 @@ help:
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"
+	@echo ""
+	@echo "Phase 2 targets (PicoRV32 hardened alone, see pnr/picorv32_core/README.md):"
+	@echo "  make harden-core          LibreLane on picorv32 with the SoC CPU parameters, check signoff limits + golden"
+	@echo "  make gl-core              upstream PicoRV32 tests on the hardened netlist vs RTL (GL ISA regression)"
+	@echo "  make neg-gl-core          bug injection into the hardened netlist, gl-core must FAIL on each"
+	@echo "  make soc-area             estimate soc_top stdcell area from the hardened core (DIE_AREA input)"
+	@echo "  make phase2               full Phase 2 exit check (env-check-flow harden-core gl-core neg-gl-core soc-area)"
+	@echo ""
 	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
 
 nix-install:
@@ -81,7 +89,21 @@ smoke: env-check lint fw regress-rtl-smoke
 
 phase1: env-check lint synth-check fw core-stock regress-rtl neg-rtl
 
-# Removes Phase 1 sim/firmware outputs only. LibreLane outputs (runs/flow_setup, runs/ci_sram_ref)
+harden-core:
+	bash pnr/picorv32_core/run.sh
+
+gl-core:
+	$(PY) dv/gl_core/run_gl_core.py
+
+neg-gl-core:
+	$(PY) dv/gl_core/neg_gl_core.py
+
+soc-area:
+	$(PY) scripts/soc_area_estimate.py
+
+phase2: env-check-flow harden-core gl-core neg-gl-core soc-area
+
+# Removes Phase 1 sim/firmware outputs only. LibreLane outputs (runs/flow_setup, runs/ci_sram_ref, runs/picorv32_core)
 # take tens of minutes to regenerate and are kept; delete them by hand when needed.
 clean:
 	rm -rf runs/sim runs/neg runs/sim_build runs/core_stock runs/rtl sim_build fw/build obj_dir

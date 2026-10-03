@@ -103,6 +103,7 @@ module soc_top (
 參數（未列者用預設值）：`COMPRESSED_ISA=1`、`ENABLE_MUL=1`、`ENABLE_DIV=1`、`BARREL_SHIFTER=1`、`ENABLE_IRQ=1`、`ENABLE_IRQ_QREGS=1`、`ENABLE_IRQ_TIMER=1`、`CATCH_MISALIGN=1`、`CATCH_ILLINSN=1`、`ENABLE_TRACE=0`、`PROGADDR_RESET=SOC_PROGADDR_RESET`、`PROGADDR_IRQ=SOC_PROGADDR_IRQ`。
 `resetn` 接 `resetn & ~host_en`。`irq[31:0]`：只有 `irq[SOC_IRQ_TEST]` 接 `TEST_CTRL.IRQ_TRIG[0]`，其餘為 0。
 `pcpi_*` 外部介面不用（輸入接 0）。`trace_*`、`eoi` 不接。
+Phase 2 單獨 harden 的 PicoRV32 用 `pnr/picorv32_core/config.json` 的 `SYNTH_PARAMETERS`，必須與這裡的 `u_cpu` 參數完全相同；`make harden-core`、`make gl-core` 執行前都會用 `pnr/picorv32_core/cpu_params.py` 比對，不同即 FAIL。
 
 ### 4.2 匯流排 `soc_bus u_bus`（模組名稱與檔案由 RTL 決定，instance 名稱固定 `u_bus`）
 
