@@ -1,0 +1,11 @@
+# Build and run outputs
+runs/
+sim_build/
+fw/build/
+obj_dir/
+*.vvp
+*.vcd
+*.fst
+__pycache__/
+*.pyc
+.DS_Store

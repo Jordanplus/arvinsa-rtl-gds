@@ -1,0 +1,65 @@
+# arvinsa-rtl-gds top-level entry. Compatible with GNU make 3.81 (macOS default):
+# recipes do not use pipes; strict error handling lives in the called scripts.
+# Contract for every target: docs/spec/soc_spec.md §8.
+SHELL := /bin/bash
+.DELETE_ON_ERROR:
+
+TEST ?= hello
+SIM  ?= icarus
+SIMS ?= icarus,verilator
+PY   ?= python3
+
+.PHONY: help env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
+        neg-rtl core-stock smoke phase1 clean
+
+help:
+	@echo "Phase 1 targets (see docs/spec/soc_spec.md §8):"
+	@echo "  make env-check            check local tools and pinned IP"
+	@echo "  make env-check-flow       also require Nix/LibreLane/PDK (Phase 0 flow env)"
+	@echo "  make lint                 Verilator lint (L0)"
+	@echo "  make synth-check          local Yosys sanity synthesis"
+	@echo "  make fw                   build firmware + check generated boot ROM"
+	@echo "  make sim TEST=hello SIM=icarus|verilator"
+	@echo "  make regress-rtl          all positive tests on Icarus and Verilator (L1b)"
+	@echo "  make regress-rtl-smoke    smoke subset on Icarus"
+	@echo "  make neg-rtl              bug injection R01-R07, each must FAIL at its checker"
+	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
+	@echo "  make smoke                env-check lint fw regress-rtl-smoke"
+	@echo "  make phase1               full Phase 1 exit check"
+
+env-check:
+	bash env/check_env.sh
+
+env-check-flow:
+	bash env/check_env.sh --flow
+
+lint:
+	bash rtl/scripts/lint.sh
+
+synth-check:
+	bash rtl/scripts/synth_check.sh
+
+fw:
+	$(MAKE) -C fw all check-bootrom
+
+sim: fw
+	$(PY) dv/scripts/run_sim.py --test $(TEST) --sim $(SIM)
+
+regress-rtl: fw
+	$(PY) dv/scripts/regress.py --sims $(SIMS) --suite all
+
+regress-rtl-smoke: fw
+	$(PY) dv/scripts/regress.py --sims icarus --suite smoke
+
+neg-rtl: fw
+	$(PY) dv/scripts/neg.py
+
+core-stock:
+	bash scripts/core_stock.sh
+
+smoke: env-check lint fw regress-rtl-smoke
+
+phase1: env-check lint synth-check fw core-stock regress-rtl neg-rtl
+
+clean:
+	rm -rf runs sim_build fw/build obj_dir
