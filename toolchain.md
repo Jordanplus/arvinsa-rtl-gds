@@ -30,21 +30,24 @@
 - **bash 3.2**：不支援 associative array（`declare -A`）、`mapfile`／`readarray`、`${var,,}`、`|&`、`coproc`。
 - **riscv64-elf-gcc 無 newlib**：firmware 必須 `-ffreestanding -nostdlib`，只能連結 `libgcc`。
 
-## 2. RTL-to-GDS flow（Phase 0，**待安裝**：使用者在自己的終端機執行 `make nix-install`，再執行 `make flow-setup`；見 `env/setup.md`）
+## 2. RTL-to-GDS flow（Phase 0，2026-10-03 已安裝；`librelane --smoke-test` PASS）
 
-`make flow-setup` 會把 nix-shell 內各工具的實際版本寫到 `runs/flow_setup/versions.txt`，再抄進下表。
+工具都在 LibreLane 的 nix-shell 裡（`cd .tools/librelane && nix-shell`），版本由 LibreLane 3.0.14 的 `flake.lock` 決定，不另外釘版。
+`make flow-setup` 會把實際版本寫到 `runs/flow_setup/versions.txt`；下表就是 2026-10-03 那次的結果。
 
 | 工具 | 用途 | 版本 | 來源 | 狀態 |
 |---|---|---|---|---|
-| Nix | 提供 LibreLane 與其內建工具 | 安裝時記錄（安裝程式：NixOS/nix-installer 2.35.2，`nix-installer-aarch64-darwin` sha256 `6314b195321b3acc6826b1c5d66bb9cf9306c8231c6dbb745f51a04c3bcee235`，內含 Nix 本體） | `make nix-install`（`env/install_nix.sh`）：直接從 GitHub releases 下載安裝程式（可續傳、無速度門檻），快取在 `.tools/nix-installer/`，含 FOSSi binary cache | 待安裝 |
-| LibreLane | RTL-to-GDS flow（Classic flow） | 3.0.14（commit `f24e0ea5db2260719e9a0c7d51d07db74a87fa23`） | `make flow-setup` clone 到 `.tools/librelane`（github.com/librelane/librelane） | 待安裝 |
-| ciel | 下載與管理 PDK | 隨 LibreLane | LibreLane 內建 | 待安裝 |
-| Yosys（flow 用） | 正式合成 | 隨 LibreLane nix-shell，安裝後填入 | LibreLane 內建 | 待安裝 |
-| OpenROAD（含 OpenSTA） | floorplan、PDN、place、CTS、route、STA | 安裝後填入 | LibreLane 內建 | 待安裝 |
-| Magic | DRC、GDS 輸出、SPICE extraction | 安裝後填入 | LibreLane 內建 | 待安裝 |
-| KLayout | DRC、GDS 輸出、XOR | 安裝後填入 | LibreLane 內建 | 待安裝 |
-| Netgen | LVS | 安裝後填入 | LibreLane 內建 | 待安裝 |
-| Verilator（flow 用） | `Verilator.Lint` step | 安裝後填入 | LibreLane 內建 | 待安裝 |
+| Nix | 提供 LibreLane 與其內建工具 | 2.35.2（安裝程式：NixOS/nix-installer 2.35.2，`nix-installer-aarch64-darwin` sha256 `6314b195321b3acc6826b1c5d66bb9cf9306c8231c6dbb745f51a04c3bcee235`，內含 Nix 本體） | `make nix-install`（`env/install_nix.sh`）：直接從 GitHub releases 下載安裝程式（可續傳、無速度門檻），快取在 `.tools/nix-installer/`，含 FOSSi binary cache | 已安裝 |
+| LibreLane | RTL-to-GDS flow（Classic flow） | 3.0.14（commit `f24e0ea5db2260719e9a0c7d51d07db74a87fa23`） | `make flow-setup` clone 到 `.tools/librelane`（github.com/librelane/librelane） | 已安裝，smoke test PASS |
+| ciel | 下載與管理 PDK | 2.4.0 | LibreLane nix-shell | 已安裝 |
+| Yosys（flow 用） | 正式合成 | 0.62（git `7326bb7d`） | LibreLane nix-shell | 已安裝 |
+| OpenROAD（含 OpenSTA） | floorplan、PDN、place、CTS、route、STA | nix 套件 `openroad-2026-02-17`（`openroad -version`：`dcf36133a369abc8f3c5e5738cd4d82e4903c0e0`） | LibreLane nix-shell | 已安裝 |
+| Magic | DRC、GDS 輸出、SPICE extraction | 8.3.623 | LibreLane nix-shell | 已安裝 |
+| KLayout | DRC、GDS 輸出、XOR | 0.30.7 | LibreLane nix-shell | 已安裝 |
+| Netgen | LVS | 1.5.316 | LibreLane nix-shell | 已安裝 |
+| Verilator（flow 用） | `Verilator.Lint` step | 5.044 | LibreLane nix-shell | 已安裝 |
+
+注意：flow 用的 Yosys（0.62）、Verilator（5.044）比 §1 的本機版本（0.69、5.050）舊。正式流程一律用 nix-shell 內的版本；§1 的版本只用在 Phase 1 的本機模擬與 sanity check。
 
 LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs commit `9b3bebe834ccd972a5b4f10d82c32354f9a6a1ca`，也就是 LibreLane 3.0.14 自己的 `test/designs` submodule 指向的 commit（官方 CI 跑的就是這份）。
 
@@ -52,9 +55,14 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 
 | 項目 | 值 | 狀態 |
 |---|---|---|
-| PDK | sky130A | 待下載（ciel） |
-| 標準元件庫 | sky130_fd_sc_hd | 待下載 |
-| open_pdks commit（LibreLane 3.0.14 綁定，`librelane/pdk_hashes.yaml`） | `8afc8346a57fe1ab7934ba5a6056ea8b43078e71` | 待下載 |
+| PDK | sky130A | 已安裝（2026-10-03） |
+| 標準元件庫 | sky130_fd_sc_hd | 已安裝 |
+| open_pdks commit（LibreLane 3.0.14 綁定，`librelane/pdk_hashes.yaml`） | `8afc8346a57fe1ab7934ba5a6056ea8b43078e71` | 已安裝 |
+| 安裝方式 | `make pdk-fetch`（`env/fetch_pdk.sh`）：7 個壓縮檔平行下載、可續傳，快取在 `.tools/pdk-cache/`；sha256 釘在 `env/sky130_pdk_assets.sha256`（取自 GitHub release 的 digest）；再由 ciel 從本機 mirror 安裝 | — |
+| 安裝位置與內容 | `~/.ciel`（2.1 GB）：ciel 的 sky130 預設函式庫 sky130_fd_io、sky130_fd_pr、sky130_fd_sc_hd、sky130_fd_sc_hvl、sky130_ml_xx_hd、sky130_sram_macros | — |
+| SRAM macro 檢查（`make env-check`） | PDK 內 `sky130_sram_2kbyte_1rw1r_32x512_8` 的 LEF 有 `FOREIGN`、尺寸 683.1 × 416.54 µm；Verilog 模型與 §4 釘版副本 sha256 相同 | PASS |
+
+為什麼不用 LibreLane 自己下載 PDK：ciel 只用一條連線、不能續傳。2026-10-03 本機到 GitHub 單一連線只有 45–175 KB/s，中斷就要從頭重下約 340 MB；平行下載約 360 KB/s。
 
 ## 4. IP
 

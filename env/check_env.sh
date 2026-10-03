@@ -51,10 +51,39 @@ if python3 env/check_toolchain_doc.py; then :; else fail=1; fi
 
 echo "== RTL-to-GDS flow (Phase 0, needs Nix) =="
 flow_missing=0
-if command -v nix >/dev/null 2>&1; then ok "nix: $(nix --version)"; else pend "nix not installed (see env/setup.md)"; flow_missing=1; fi
-if command -v librelane >/dev/null 2>&1; then ok "librelane: $(librelane --version 2>&1 | head -1)"; else pend "librelane not on PATH (run inside the LibreLane nix-shell)"; flow_missing=1; fi
+if command -v nix >/dev/null 2>&1; then ok "nix: $(nix --version)"
+elif [ -x /nix/var/nix/profiles/default/bin/nix ]; then ok "nix: $(/nix/var/nix/profiles/default/bin/nix --version) (not on this shell's PATH; open a new terminal)"
+else pend "nix not installed (run: make nix-install)"; flow_missing=1; fi
+ll_dir="${LIBRELANE_DIR:-.tools/librelane}"
+ll_have=$(git -C "$ll_dir" rev-parse HEAD 2>/dev/null || echo none)
+if [ "$ll_have" = "$(pin LIBRELANE_COMMIT)" ]; then
+  ok "LibreLane $(pin LIBRELANE_TAG) clone at $ll_dir (tools run inside its nix-shell)"
+  if [ "$FLOW_STRICT" = 1 ]; then
+    # Strict mode also starts the nix-shell once and asks LibreLane for its version.
+    llv=$(cd "$ll_dir" && PATH="/nix/var/nix/profiles/default/bin:$PATH" nix-shell --run 'librelane --version' 2>/dev/null | head -1 || true)
+    case "$llv" in *"$(pin LIBRELANE_TAG)"*) ok "librelane --version in nix-shell: $llv";; *) bad "librelane --version in nix-shell gave '$llv'";; esac
+  fi
+elif [ "$ll_have" = none ]; then pend "LibreLane not set up (run: make flow-setup)"; flow_missing=1
+else bad "LibreLane at $ll_dir is $ll_have, expected $(pin LIBRELANE_COMMIT)"; fi
 pdk_dir="${PDK_ROOT:-$HOME/.ciel}/$(pin PDK)"
-if [ -d "$pdk_dir" ]; then ok "PDK dir: $pdk_dir"; else pend "PDK not found at $pdk_dir"; flow_missing=1; fi
+if [ -d "$pdk_dir" ]; then
+  ok "PDK dir: $pdk_dir"
+  # The PDK must be the version pinned for LibreLane, and its SRAM macro must match our pinned copy.
+  case "$(cd "$pdk_dir" && pwd -P)" in
+    */versions/"$(pin SKY130_PDK_HASH)"/*) ok "PDK version $(pin SKY130_PDK_HASH | cut -c1-12)";;
+    *) bad "PDK at $pdk_dir is not version $(pin SKY130_PDK_HASH) (run: make pdk-fetch)";;
+  esac
+  sram_ref="$pdk_dir/libs.ref/sky130_sram_macros"
+  if grep -q "^[[:space:]]*FOREIGN $(pin SRAM_MACRO) " "$sram_ref/lef/$(pin SRAM_MACRO).lef" 2>/dev/null; then
+    ok "PDK SRAM LEF has FOREIGN"
+  else
+    bad "PDK SRAM LEF missing or without FOREIGN: $sram_ref/lef/$(pin SRAM_MACRO).lef"
+  fi
+  psum=$(shasum -a 256 "$sram_ref/verilog/$(pin SRAM_MACRO).v" 2>/dev/null | cut -d' ' -f1 || echo none)
+  if [ "$psum" = "$(pin SRAM_MODEL_SHA256)" ]; then ok "PDK SRAM model == pinned ip/sram copy"; else bad "PDK SRAM model differs from the pinned ip/sram copy"; fi
+else
+  pend "PDK not found at $pdk_dir (run: make pdk-fetch)"; flow_missing=1
+fi
 if [ "$FLOW_STRICT" = 1 ] && [ "$flow_missing" = 1 ]; then fail=1; fi
 
 echo

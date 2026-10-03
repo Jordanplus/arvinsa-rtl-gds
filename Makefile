@@ -10,13 +10,15 @@ SIMS ?= icarus,verilator
 PY   ?= python3
 DRY_RUN ?= 0
 
-.PHONY: help nix-install flow-setup env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
+.PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 clean
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
 	@echo "  make nix-install          install Nix + FOSSi cache (asks for admin password; DRY_RUN=1 to preview)"
 	@echo "  make flow-setup           fetch LibreLane (pinned tag), nix-shell smoke test, download sky130A"
+	@echo "  make pdk-fetch            download sky130A tarballs (parallel, resumable, sha256) and install with ciel"
+	@echo "  make ci-sram-ref          re-run LibreLane CI test_sram_macro, check against upstream metrics"
 	@echo ""
 	@echo "Phase 1 targets (see docs/spec/soc_spec.md §8):"
 	@echo "  make env-check            check local tools and pinned IP"
@@ -38,6 +40,12 @@ nix-install:
 
 flow-setup:
 	bash env/setup_flow.sh
+
+pdk-fetch:
+	bash env/fetch_pdk.sh
+
+ci-sram-ref:
+	bash pnr/ci_sram_ref/run.sh
 
 env-check:
 	bash env/check_env.sh
