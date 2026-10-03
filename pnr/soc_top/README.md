@@ -12,7 +12,7 @@
 | 來源追溯 | `signoff/scripts/provenance.py`（flow 開始前與結束後各一次） | 工作目錄已全部 commit（含未追蹤檔）、submodule 在記錄的 commit、LibreLane 與 PDK 是 `env/versions.mk` 釘的版本；結束時 HEAD 不變，`resolved.json` 實際用的版本也對（`project-plan.md` §7.2）。不乾淨時 flow 照跑、整體判 FAIL |
 | signoff metrics | `signoff/scripts/check_signoff.py` + `signoff/limits/soc_top.toml` | 見該檔：各種違規數 = 0、9 個 corner 的 setup／hold slack ≥ 0 且 < 40 ns、nom_tt setup ≥ 4 ns、IR drop ≤ 90 mV（5% VDD）；所有 metrics 與 golden（`signoff/golden/soc_top/`）相同，只有 detailed routing 造成微小差異的族群有明確的小誤差 |
 
-全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-pnr`（PnR negative test P01–P13，`neg_pnr.py`）。
+全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-gl-soc`（網表植入錯誤，lockstep 必須抓到）、`make neg-pnr`（PnR 與 checker 的 negative test P01–P20，`neg_pnr.py`）。
 
 ## 名詞
 
@@ -34,7 +34,7 @@
 | `ERROR_ON_MAGIC_DRC` | false | Magic 讀完整 GDS 檢查時，SRAM 自己的 GDS 有約 466 萬個標準規則違規（bitcell 用 SRAM 專用規則），全部在 SRAM 外框內；由 `check_soc.py` 的 magic_drc 列取代 LibreLane 的判定。abstract 模式（`MAGIC_DRC_USE_GDS=false`，規劃 §6.3 原案）試過：每一條 standard cell row 都報 `nwell.4`（共 416 個），因為 abstract cell 沒有 tap；完整 GDS 模式沒有 |
 | `PRIMARY_GDSII_STREAMOUT_TOOL` | klayout | Magic 寫出的 GDS 有 13 個 top cell：它用改名的 `T2_*` 子 cell 放 SRAM，又把 160 個原名子 cell 沒有引用地寫出來，KLayout.Render 因此失敗。KLayout 的 GDS 只有 `soc_top` 一個 top cell，161 個 SRAM cell 都接得到；兩份 GDS 的 XOR = 0 |
 | `DESIGN_REPAIR_MAX_WIRE_LENGTH` | 200 µm | placement 後的修復把超過 200 µm 的線切段加 buffer。沒有它時：ss corner 50 個 max slew 違規（300–700 µm 的線）、antenna 修復在單一長線上插 10–11 顆 diode 造成 7 個 max fanout 違規、SRAM 輸入線最長 355 µm |
-| （不設）`GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH` | — | global routing 後的修復也設 200 µm 時，OpenROAD 在 clk pin 所在的 GCell 報 `GRT-0229 Vertical edge usage exceeds the maximum allowed ... usage=65534` 而中止（數值像是無號整數下溢，推測是增量繞線的 bug） |
+| （不設）`GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH` | — | explore3 設 200 µm 時，OpenROAD 在 clk pin 所在的 GCell (79, 0) 報 `GRT-0229 Vertical edge usage exceeds the maximum allowed ... usage=65534` 而中止。後來查到沒設也會隨機發生（見「已知限制」第 4 點），所以這個設定與錯誤有沒有關係並不確定；設 400 µm 時結果與不設完全相同（explore9） |
 | `DESIGN_REPAIR_MAX_SLEW_PCT`、`GRT_DESIGN_REPAIR_MAX_SLEW_PCT` | 30、40 | 兩次修復預留的 slew 餘裕（預設 20 與 10，Phase 2 用 20 與 30）。GRT 後用 30 時，detailed routing 之後還有 5 條線在 ss corner 超標（0.755–0.932 ns），因為繞線後萃取的負載比 global routing 的估計大。用 50 時這次修復單執行緒跑了 26 分鐘以上還沒結束（soc_explore6，停掉）；40 約 1 分鐘 |
 | `PL_TARGET_DENSITY_PCT` | 55 | global placement 的目標密度。LibreLane 自動算出 68%，但 L 形 logic 區整體只用約一半，cell 擠在 SRAM 左下角的轉角，那裡的線大幅繞路（正式 run 1：端點相距 117 µm、繞線 353 µm，ss slew 1.42 ns）。55%（soc_explore10）時 9 個 corner 的 slew／cap／fanout 都是 0 |
 | `PNR_SDC_FILE`、`SIGNOFF_SDC_FILE` | `pnr.sdc`（max fanout 8）、`signoff.sdc`（= LibreLane `base.sdc`） | antenna repair 在 resizer 修完 fanout 之後才加 diode，diode 也算負載，所以 PnR 先修到 8（ADR-0009）。signoff 用原本的 0.75 ns 與 fanout 10；一定要明確設 `SIGNOFF_SDC_FILE`，沒設時 signoff STA 會改讀 `PNR_SDC_FILE`（實測：sta.log 讀的是 pnr.sdc）。曾經把 signoff 放寬到 1.0 ns，找到密度這個根因後撤回 |
@@ -65,3 +65,8 @@
 1. SRAM 的時序數字是工程假設（ADR-0007），不是特性化結果。
 2. Magic 的 SRAM 內部 DRC 數量無法和 SRAM 單獨檢查的數量直接比較：同一個錯誤在 soc_top 裡被切成不同的框（單獨 5,579,161 個、soc_top 內 4,665,810 個，30 種規則相同）。所以只比規則種類，數量由 golden 鎖定。
 3. LVS 中 SRAM 是 black box（`MAGIC_EXT_USE_GDS=false`），只驗 pin 的連接。
+4. **`OpenROAD.RepairDesignPostGRT` 隨機中止**：
+   - 這一步在修復之後重新做一次 global routing，有時會報 `[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200` 而中止。
+   - 已驗證是隨機的：拿 `make phase3` 第一次失敗那個 run 的同一份輸入（`state_in.json`）單獨重跑這一步 4 次，2 次中止、2 次通過。兩次通過的修復結果（resize 1273 顆、插 779 顆 buffer）與繞線總長（1,179,610 µm）完全相同；修復本身 4 次都相同，只有修復之後那次 global routing 會中止。
+   - (79, 0) 正好是 clk pin 所在的 GCell（pin 在 x = 547.63 µm、die 下緣，GCell 約 6.9 µm），這條 clk net 用 CTS 的 non-default rule。65534 像是 16-bit 無號計數減到 −2。推測是 global router 在這個 GCell 的用量計算有 bug，尚未查證。
+   - 處理：`pnr/librelane_flow.sh` 只對「`RepairDesignPostGRT` 失敗且訊息是 GRT-0229 usage=65534」這一種情況，從這一步接續重跑，最多 3 次，每次重試都記在 `runs/<tag>_signoff/retries.txt`。其他任何失敗都不重試。接續的 run 與一次就跑完的 run 結果相同（見 Phase 3 exit review 的可重現性）。

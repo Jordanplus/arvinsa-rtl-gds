@@ -9,7 +9,7 @@
 | 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`，原檔複製，沒有修改 |
 | 日期／平台 | 2026-10-03，Apple Silicon macOS（arm64） |
 | LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config.json` sha256 `abb94013cff62201db83745ec422a6896b7e78587f021c457da253a23e88008f` |
+| flow 設定 | `pnr/soc_top/config.json` sha256 `abb94013cff62201db83745ec422a6896b7e78587f021c457da253a23e88008f`（golden 建立時）。之後只改過 `//` 註解（2026-10-03，更正 GRT-0229 的說明），現在是 `827b3add2a897461791ae85f354c970818e732d44b720c722d0aac3b1f94992d`；LibreLane 不讀 `//` 開頭的 key（`librelane/config/config.py` 第 1056 行；`resolved.json` 裡沒有這些 key） |
 | 本檔 sha256 | `1c017aa38985fbc1759a5795bc23e627cfc9b9f57d21cd04b0c91bafbbbe765d` |
 
 ## 可重現性

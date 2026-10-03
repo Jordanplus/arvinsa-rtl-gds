@@ -30,7 +30,7 @@ description: 9 個 corner 的 STA 出現 setup／hold 違規，或 max slew／ma
 | 做法 | 結果 | 出處 |
 |---|---|---|
 | 排除 `buf_1`、`clkbuf_1` | resizer 改用 `dlygate4sd3_1` 當 buffer，ss setup −3.54 ns | Phase 2 試跑 #4 |
-| `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 µm | OpenROAD 在 clk pin 的 GCell 報 `GRT-0229 ... usage=65534` 中止 | soc_explore3 |
+| `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 µm | soc_explore3 在 clk pin 的 GCell 報 `GRT-0229 ... usage=65534` 中止。**原本歸因到這個設定是錯的**：之後發現不設也有一半機率出現（`librelane-run-debug` 規則 5），所以這個設定到底有沒有用，還沒有可靠的實驗 | soc_explore3；`make phase3` 第一次 |
 | `GRT_DESIGN_REPAIR_MAX_SLEW_PCT` 50 | post-GRT 修復單執行緒 26 分鐘以上不結束 | soc_explore6 |
 | `DESIGN_REPAIR_MAX_WIRE_LENGTH` 120 µm | 同上，13 分鐘以上不結束 | soc_explore8 |
 | `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH` 400 µm | 結果與不設完全相同（GRT 估計時那些線還沒那麼長） | soc_explore9 |
@@ -60,3 +60,4 @@ P01 setup uncertainty 30 ns → `Checker.SetupViolations`；P02 hold uncertainty
 | 2026-10-03 | soc_explore7 | max fanout 11（10 負載 + 1 diode） | 已驗證：antenna repair 在 resizer 之後才加 diode | `pnr.sdc` 把 PnR fanout 收到 8 | ADR-0009 |
 | 2026-10-03 | soc_top 正式 run 1（+ `pnr.sdc` fanout 8） | signoff 上限 1.0 ns 下仍有 ss slew 1.42 ns；每換一個設定，都是不同的少數幾條線變差 | 已驗證：最差兩條線大幅繞路（端點距離約 117 µm，繞線 353 µm，往東繞到 SRAM 下方；另一條 636 µm），都在 L 形 logic 區的轉角附近。推測：轉角繞線壅塞（global placement 目標密度 0.68，logic 區整體只用了約 48%） | 試降低 `PL_TARGET_DENSITY_PCT`（soc_explore10／11） | `runs/soc_top/final/def/soc_top.def` NETS `_03575_`、`net750` |
 | 2026-10-03 | soc_explore10／11 | `PL_TARGET_DENSITY_PCT` 55／50 後 9 corner 的 slew／cap／fanout 全 0，0.75 ns 下也是 0 | 已驗證（兩組都是 0） | 採用 55，撤回 1.0 ns 放寬 | `runs/sdc075_10`、ADR-0009 |
+| 2026-10-03 | `make phase3` 第一次 | `RepairDesignPostGRT` 隨機 GRT-0229（同一份輸入 2/4） | 已驗證隨機；機制推測見 `librelane-run-debug` | 更正「退回過的做法」表中 explore3 的歸因 | `pnr/soc_top/README.md` 已知限制 4 |

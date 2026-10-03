@@ -28,6 +28,10 @@ PASS 需要全部成立：
 2. `dv/tests.toml` 中所有不是 `negative_only` 的測試（13 支）在這個 build 上都 PASS（Phase 1 的全部 checker）。
 3. 每支測試的 `tb_result.txt` 有 `fail.gl_lockstep=0`，而且 `gl_compares` > 0（比對真的有執行）。
 
+## Negative test（`make neg-gl-soc`，`neg_gl_soc.py`）
+
+在最終網表的複本植入錯誤（與 `signoff/eqy/neg_eqy.py` 的 soc_top 案例相同：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調），每一個都要讓 gl-soc FAIL，而且原因必須是至少一支測試的 `fail.gl_lockstep` > 0（不是編譯錯誤或其他原因）。為了節省時間，只跑最長的兩支（memtest、boot_uart_max）以外的 11 支測試。所有案例共用同一個建置目錄，所以一次只跑一個案例。
+
 ## 限制
 
 - 只看得到 soc_top 的輸出與 SRAM port 0。內部錯誤若在這些測試中沒有傳到這些點，就不會被發現；網表的完整檢查由 formal equivalence 負責（`signoff/eqy/README.md`）。

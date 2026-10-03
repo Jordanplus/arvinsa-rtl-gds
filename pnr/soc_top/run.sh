@@ -55,9 +55,9 @@ python3 pnr/soc_top/check_inputs.py | tee "$OUT/inputs.txt"
 grep -q '^soc-inputs: PASS$' "$OUT/inputs.txt"
 
 echo "harden-soc: running LibreLane Classic flow on soc_top (about 20-30 minutes on this machine); full log: $RUN_DIR/flow.log"
-flow_rc=0
-(cd "$LL_DIR" && nix-shell --run "python3 -m librelane --run-tag '$TAG' --design-dir '$ROOT' --pdk '$PDK' --scl '$SCL' --condensed '$ROOT/pnr/soc_top/config.json'") \
-  > "$OUT/console.log" 2>&1 || flow_rc=$?
+source pnr/librelane_flow.sh
+librelane_flow harden-soc "$ROOT/pnr/soc_top/config.json"
+[ "$flow_attempts" -gt 1 ] && echo "harden-soc: LibreLane needed $flow_attempts attempts (known GRT-0229 retry, see $OUT/retries.txt)"
 (cd "$LL_DIR" && nix-shell --run "python3 -m librelane.state latest '$RUN_DIR' --extract-metrics-to '$OUT/metrics.json'") \
   > "$OUT/extract.log" 2>&1 || true
 

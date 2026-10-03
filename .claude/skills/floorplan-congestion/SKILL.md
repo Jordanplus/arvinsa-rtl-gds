@@ -36,3 +36,4 @@ description: 決定 die／core 尺寸、macro 位置與方向、IO pin 擺放、
 | 2026-10-03 | soc_explore1 | `PDN-0179 Unable to repair all channels` | 已驗證：SRAM 上方 6 µm row | halo 蓋過 core 邊界 | ADR-0006 補充 |
 | 2026-10-03 | soc_top 正式 run 1 | ss slew 1.42 ns 的線繞線 353 µm（端點距離 117 µm） | 已驗證：繞路；推測：L 形轉角壅塞 | 降低 placement 密度實驗中 | `drv-timing-closure` 經驗紀錄 |
 | 2026-10-03 | soc_explore10／11 | 目標密度 55%／50% 後轉角繞路消失，DRV 全 0 | 已驗證 | 採用 55% | `pnr/soc_top/README.md` |
+| 2026-10-03 | soc_top（clk pin 在下緣中段 x = 547.63 µm） | `RepairDesignPostGRT` 隨機報 `GRT-0229 ... (79, 0) usage=65534`，(79, 0) 正好是 clk pin 的 GCell | 推測：die 邊緣的 clk pin 加上 CTS NDR 讓 global router 的用量計算出錯；尚未用「移動 clk pin」實驗確認 | 先用有上限的重試；之後可試把 clk pin 移開一格比較 | `pnr/soc_top/README.md` 已知限制 4 |

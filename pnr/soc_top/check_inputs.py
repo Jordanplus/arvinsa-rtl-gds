@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Input checks before `make harden-soc` runs LibreLane.
 
-usage: check_inputs.py [--resolved <run>/resolved.json]
+usage: check_inputs.py [--resolved <run>/resolved.json] [--config F] [--padded F] [--lef F]
+       (--config/--padded/--lef replace the repo files; used by pnr/soc_top/neg_pnr.py)
 
 Checks:
   rtl_files   config.json VERILOG_FILES == the source files of rtl/rtl.f, and VERILOG_INCLUDE_DIRS ==
@@ -14,6 +15,7 @@ With --resolved, also checks that the run used these VERILOG_FILES, that .lib an
 (resolved.json paths are absolute).
 Prints `soc-inputs: PASS` / `soc-inputs: FAIL`; exit code 0 only on PASS. Python stdlib only.
 """
+import argparse
 import json
 import os
 import re
@@ -43,13 +45,19 @@ def dir_path(v):
 
 
 def main(argv):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--resolved")
+    ap.add_argument("--config", default=CONFIG)
+    ap.add_argument("--padded", default=PADDED)
+    ap.add_argument("--lef", default=ANT_LEF)
+    args = ap.parse_args(argv)
     rows = []
 
     def row(name, ok, msg):
         rows.append(ok)
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {msg}")
 
-    cfg = json.load(open(CONFIG, encoding="utf8"))
+    cfg = json.load(open(args.config, encoding="utf8"))
     inc, files = [], []
     for line in open(RTL_F, encoding="utf8"):
         s = line.split("//")[0].strip()
@@ -72,7 +80,7 @@ def main(argv):
     if f"/versions/{pin('SKY130_PDK_HASH')}/" not in real or not os.path.isfile(real):
         row("padded_lib", False, f"PDK .lib {pdk_lib} missing or not PDK version {pin('SKY130_PDK_HASH')[:12]}")
     else:
-        cp = subprocess.run([sys.executable, os.path.join(IP, "gen_padded_lib.py"), real, PADDED, "--check"],
+        cp = subprocess.run([sys.executable, os.path.join(IP, "gen_padded_lib.py"), real, args.padded, "--check"],
                             capture_output=True, text=True)
         row("padded_lib", cp.returncode == 0, cp.stdout.strip() or cp.stderr.strip())
 
@@ -81,7 +89,7 @@ def main(argv):
     if not (os.path.isfile(lef) and os.path.isfile(spice)):
         row("antenna_lef", False, f"PDK LEF/SPICE missing under {sram_ref}")
     else:
-        cp = subprocess.run([sys.executable, os.path.join(IP, "gen_antenna_lef.py"), lef, spice, ANT_LEF, "--check"],
+        cp = subprocess.run([sys.executable, os.path.join(IP, "gen_antenna_lef.py"), lef, spice, args.lef, "--check"],
                             capture_output=True, text=True)
         row("antenna_lef", cp.returncode == 0, cp.stdout.strip() or cp.stderr.strip())
 
@@ -91,8 +99,8 @@ def main(argv):
     row("macro_lib", mac.get("lib") == want and mac.get("lef") == want_lef,
         f"MACROS {MACRO} lib = {mac.get('lib')}, lef = {mac.get('lef')}")
 
-    if "--resolved" in argv:
-        res = json.load(open(argv[argv.index("--resolved") + 1], encoding="utf8"))
+    if args.resolved:
+        res = json.load(open(args.resolved, encoding="utf8"))
         rfiles = [os.path.normpath(p) for p in res.get("VERILOG_FILES", [])]
         rlib = res.get("MACROS", {}).get(MACRO, {}).get("lib", {})
         rlef = res.get("MACROS", {}).get(MACRO, {}).get("lef", [])

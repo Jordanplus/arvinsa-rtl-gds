@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P13-P20).
 
 usage: neg_pnr.py [--run <dir>] [--cases P01,P02,...] [-j N]
 
@@ -32,6 +32,13 @@ step re-run one step on a copy of that step's saved config and input state
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
   P13  signoff SDC without its set_output_delay line OpenROAD.STAPostPNR -> check_soc.py sta_setup
        (unconstrained endpoints, project-plan.md §7.2)
+  P14  final netlist: sram0 renamed sram9            check_soc.py macro
+  P15  disconnected-pin log: 1 critical pin          check_soc.py disconnected
+  P16  config.json: one VERILOG_FILES entry dropped  check_inputs.py rtl_files
+  P17  padded.lib: one dout0 delay table edited      check_inputs.py padded_lib
+  P18  SRAM LEF: one ANTENNAGATEAREA line dropped    check_inputs.py antenna_lef
+  P19  config.json: MACROS lib = the PDK TT .lib     check_inputs.py macro_lib
+  P20  resolved.json: MACROS lib = the PDK TT .lib   check_inputs.py --resolved
 Prints `neg-pnr: PASS n/n caught` / `neg-pnr: FAIL ...`; exit code 0 only on PASS.
 """
 import argparse
@@ -50,6 +57,11 @@ OUT = os.path.join(ROOT, "runs", "neg_pnr")
 LL_DIR = os.environ.get("LIBRELANE_DIR", os.path.join(ROOT, ".tools", "librelane"))
 CHECK_SOC = os.path.join(ROOT, "pnr", "soc_top", "check_soc.py")
 CHECK_SIGNOFF = os.path.join(ROOT, "signoff", "scripts", "check_signoff.py")
+CHECK_INPUTS = os.path.join(ROOT, "pnr", "soc_top", "check_inputs.py")
+CONFIG = os.path.join(ROOT, "pnr", "soc_top", "config.json")
+SRAM = "sky130_sram_2kbyte_1rw1r_32x512_8"
+SRAM_IP = os.path.join(ROOT, "ip", "sram", SRAM)
+PDK_TT_LIB = f"pdk_dir::libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
 LIMITS = os.path.join(ROOT, "signoff", "limits", "soc_top.toml")
 GOLDEN = os.path.join(ROOT, "signoff", "golden", "soc_top", "metrics.json")
 
@@ -398,8 +410,95 @@ def p13(run, d):
         "check_soc.py sta_setup: unexpected check_setup warnings in all 9 corners (real run: none)"
 
 
+def edit_once(text, pattern, repl, what):
+    new, n = re.subn(pattern, repl, text, count=1, flags=re.M)
+    if n != 1:
+        raise RuntimeError(f"injection point not found: {what}")
+    return new
+
+
+def p14(run, d):
+    rel = "final/nl/soc_top.nl.v"
+    nl = open(os.path.join(run, rel)).read()
+    if len(re.findall(re.escape(SRAM) + r"\s+sram0\s*\(", nl)) != 1:
+        return False, "sram0 instance not found exactly once"
+    new = edit_once(nl, re.escape(SRAM) + r"(\s+)sram0(\s*\()", SRAM + r"\1sram9\2", "sram0 instance")
+    rc, out = check_soc(fake_run(run, d, {rel: new}), d)
+    return rc != 0 and "[FAIL] macro" in out, "check_soc.py macro"
+
+
+def p15(run, d):
+    line = "Found 0 disconnected pin(s), of which 0 are critical"
+    logs = [p for p in glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "*.log")) if line in open(p).read()]
+    if len(logs) != 1 or open(logs[0]).read().count(line) != 1:
+        return False, "the 'Found 0 disconnected pin(s)' line not found exactly once"
+    new = open(logs[0]).read().replace(line, "Found 1 disconnected pin(s), of which 1 are critical")
+    rc, out = check_soc(fake_run(run, d, {os.path.relpath(logs[0], run): new}), d)
+    return rc != 0 and "[FAIL] disconnected" in out, "check_soc.py disconnected"
+
+
+def inputs_check(d, *args):
+    cp = subprocess.run([sys.executable, CHECK_INPUTS, *args], capture_output=True, text=True)
+    open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
+    return cp.returncode, cp.stdout
+
+
+def config_with(d, edit):
+    cfg = json.load(open(CONFIG))
+    edit(cfg)
+    p = os.path.join(d, "config.json")
+    json.dump(cfg, open(p, "w"), indent=1)
+    return p
+
+
+def inputs_failed(rc, out, row):
+    return rc != 0 and re.search(rf"^  \[FAIL\] {row}:", out, re.M) is not None and "soc-inputs: FAIL" in out
+
+
+def p16(run, d):
+    rc, out = inputs_check(d, "--config", config_with(d, lambda c: c["VERILOG_FILES"].pop()))
+    return inputs_failed(rc, out, "rtl_files"), "check_inputs.py rtl_files"
+
+
+def p17(run, d):
+    text = open(os.path.join(SRAM_IP, "padded.lib")).read()
+    new = edit_once(text, r'values\("10\.000, ', 'values("1.000, ', "first 10 ns dout0 delay table")
+    p = os.path.join(d, "padded.lib")
+    open(p, "w").write(new)
+    rc, out = inputs_check(d, "--padded", p)
+    return inputs_failed(rc, out, "padded_lib"), "check_inputs.py padded_lib"
+
+
+def p18(run, d):
+    text = open(os.path.join(SRAM_IP, f"{SRAM}.lef")).read()
+    new = edit_once(text, r"^[ \t]*ANTENNAGATEAREA[^\n]*\n", "", "first ANTENNAGATEAREA line")
+    p = os.path.join(d, f"{SRAM}.lef")
+    open(p, "w").write(new)
+    rc, out = inputs_check(d, "--lef", p)
+    return inputs_failed(rc, out, "antenna_lef"), "check_inputs.py antenna_lef"
+
+
+def p19(run, d):
+    cfg = config_with(d, lambda c: c["MACROS"][SRAM].update(lib={"*": [PDK_TT_LIB]}))
+    rc, out = inputs_check(d, "--config", cfg)
+    return inputs_failed(rc, out, "macro_lib"), "check_inputs.py macro_lib"
+
+
+def p20(run, d):
+    res = json.load(open(os.path.join(run, "resolved.json")))
+    lib = res["MACROS"][SRAM]["lib"]
+    if list(lib) != ["*"]:
+        return False, f"unexpected resolved MACROS lib {lib}"
+    res["MACROS"][SRAM]["lib"] = {"*": [res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"]}
+    p = os.path.join(d, "resolved.json")
+    json.dump(res, open(p, "w"), indent=1)
+    rc, out = inputs_check(d, "--resolved", p)
+    return inputs_failed(rc, out, "resolved"), "check_inputs.py --resolved"
+
+
 CASES = [("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
-         ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13)]
+         ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
+         ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20)]
 
 
 def main():

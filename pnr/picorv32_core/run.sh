@@ -54,9 +54,9 @@ python3 pnr/picorv32_core/cpu_params.py | tee "$OUT/cpu_params.txt"
 grep -q '^cpu-params: PASS$' "$OUT/cpu_params.txt"
 
 echo "harden-core: running LibreLane Classic flow on picorv32 (about 12-15 minutes on this machine); full log: $RUN_DIR/flow.log"
-flow_rc=0
-(cd "$LL_DIR" && nix-shell --run "python3 -m librelane --run-tag '$TAG' --design-dir '$ROOT' --pdk '$PDK' --scl '$SCL' --condensed '$ROOT/pnr/picorv32_core/config.json'") \
-  > "$OUT/console.log" 2>&1 || flow_rc=$?
+source pnr/librelane_flow.sh
+librelane_flow harden-core "$ROOT/pnr/picorv32_core/config.json"
+[ "$flow_attempts" -gt 1 ] && echo "harden-core: LibreLane needed $flow_attempts attempts (known GRT-0229 retry, see $OUT/retries.txt)"
 (cd "$LL_DIR" && nix-shell --run "python3 -m librelane.state latest '$RUN_DIR' --extract-metrics-to '$OUT/metrics.json'") \
   > "$OUT/extract.log" 2>&1 || true
 

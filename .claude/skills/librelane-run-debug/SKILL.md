@@ -14,9 +14,14 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗要找原因、從�
    - 路徑一律用絕對路徑變數組好再傳；不要在 `cd` 之後用 `$PWD`（soc_explore1 第一次因此找不到 config）。
    - JSON 註解用 `"//KEY"`。
    - 純量設定可用命令列 `-c KEY=VALUE` 覆寫（soc_explore7）；list 參數經 nix-shell 引號處理會變形，要寫進 config（Phase 2 試跑 #2）。
-2. **接續**：`--run-tag <同一個> --from <Step id>` 會沿用同一 run 目錄裡前一步的 state，step 編號接著往下長（soc_explore2 從 `Magic.StreamOut` 接續）。只有改動不影響前面 step 時才能用。
+2. **接續**：`--run-tag <同一個> --from <Step id>` 會沿用同一 run 目錄裡前一步的 state，step 編號接著往下長（soc_explore2 從 `Magic.StreamOut` 接續）。只有改動不影響前面 step 時才能用。失敗那一步的目錄會留著，接續的那一步用下一個編號（`41-openroad-repairdesignpostgrt` 失敗、接續後是 `42-openroad-repairdesignpostgrt`），所以之後每一步的編號都多 1；checker 不要寫死 step 編號。
 3. **單步重跑**：`python3 -m librelane.steps run --id <Step> -c <step dir>/config.json -i <step dir>/state_in.json -o <out>`。改 config／state 的**複本**，原 run 不動。多步串接：每步把前一步的 `state_out.json` 當下一步的 `-i`。範本：`pnr/soc_top/neg_pnr.py` 的 `rerun()`、`rerun_chain()`。
 4. **metrics**：`python3 -m librelane.state latest <run dir> --extract-metrics-to <json>`。DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner（max_ff），不是 nom_tt（Phase 2 exit review）。
+5. **隨機失敗要先證明是隨機的**：
+   - 某一步失敗、但同樣設定之前跑過沒事時，拿失敗那次的 `state_in.json` 單步重跑至少 3–4 次。
+   - 有的過、有的不過，才算隨機；再比較通過的幾次輸出是否完全相同。
+   - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 的 GRT-0229，同一份輸入 2/4 中止）。其他失敗一律不重試。
+   - 反過來說，**只跑一次就把錯誤歸因到某個設定，是不可靠的**：GRT-0229 原本被歸因到 `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH`（soc_explore3 只跑了一次），後來發現不設也有一半機率出現。結論是「某設定造成某錯誤」之前，同一設定至少跑兩次，或單步重跑確認。
 
 ## 已知陷阱
 
@@ -28,12 +33,14 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗要找原因、從�
 | Magic `[E] Error while reading cell ... Unknown layer/datatype` | 讀 OpenRAM SRAM GDS 的專用 layer，不會讓 flow 失敗（CI 參考設計也有） | soc_explore2 |
 | `Magic DRC errors found - deferred` | deferred = 延後到 flow 最後才報錯；看完整錯誤清單再判斷 | soc_explore2 |
 | console 輸出、OpenROAD step log 都會緩衝 | 進度看 step 目錄編號、`ps` 的 CPU 時間；不要只看 console | soc_explore6 |
+| LibreLane 的 console 輸出（rich 排版）會折行，一個錯誤訊息被拆成兩行：`[GRT-0229] Vertical edge usage exceeds the` ／ `maximum allowed. (79, 0) usage=65534` | 程式要比對訊息時，讀該 step 目錄自己的 log（一行完整），不要 grep console | `pnr/librelane_flow.sh` 第一版用 console 比對，永遠不會重試（模擬測試前讀碼發現） |
 | `pkill -f <字串>` 會誤殺命令字串含相同字的其他程序 | 用完整、唯一的字串（例如 `run-tag soc_explore8`） | 本專案 Phase 3 eqyB 被誤殺 |
+| `OpenROAD.RepairDesignPostGRT` 修復後的 global routing 隨機中止：`[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200`；位置是 clk pin 所在的 GCell | 已驗證是隨機的（同一份輸入 2/4 中止，修復結果 4 次相同）；`pnr/librelane_flow.sh` 只對這個訊息從該步接續，最多 3 次 | `make phase3` 第一次（worktree）、單步重跑 r1–r4 |
 | 實驗性選項 `RUN_POST_GRT_DESIGN_REPAIR` 搭配很大的 slew 餘裕（50%）或很短的長線限制（120 µm）時，單執行緒跑十幾分鐘以上不結束 | 先限時觀察：同一步正常約 1 分鐘；超過 10 分鐘就停掉換設定 | soc_explore6、8 |
 
 ## 時間預估（Apple Silicon，10 核）
 
-soc_top 全 flow 約 45 分鐘（detailed routing 10–15 分、Magic 完整 GDS DRC 約 4.5 分）；PicoRV32 單獨約 15 分；單一 STA step 約 1–2 分；SpiceExtraction＋LVS 約 1 分。
+soc_top 全 flow 約 20–30 分鐘（正式 run 實測 18 與 28 分；Magic 完整 GDS DRC 約 3–4.5 分）；PicoRV32 單獨約 15 分；單一 STA step 約 1–2 分；SpiceExtraction＋LVS 約 1 分。
 
 ## 用完後
 
@@ -48,3 +55,4 @@ soc_top 全 flow 約 45 分鐘（detailed routing 10–15 分、Magic 完整 GDS
 |---|---|---|---|---|---|
 | 2026-10-03 | arvinsa-rtl-gds soc_explore1 | `Path '.../.tools/librelane/pnr/soc_top/config.json' does not exist` | 已驗證：`cd` 進 LibreLane 目錄後 `$PWD` 變了 | 用絕對路徑變數 | 本 skill 規則 1 |
 | 2026-10-03 | soc_explore6、8 | `OpenROAD.RepairDesignPostGRT` 單執行緒 13–26 分鐘不結束 | 推測：修復量變大時 resizer 走到很慢的路徑 | 停掉；GRT 餘裕改 40%、不縮長線限制 | `pnr/soc_top/README.md` 試跑紀錄 |
+| 2026-10-03 | `make phase3` 第一次（乾淨 worktree，commit 654c303） | `OpenROAD.RepairDesignPostGRT failed ... [GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200` | 已驗證：隨機（第 39 步以前的 DEF 與 golden run 逐 byte 相同；同一份 `state_in.json` 單步重跑 4 次 2 次中止）。推測：global router 在 clk pin 的 GCell（pin 在 die 下緣，clk net 用 CTS NDR）用量計算有 bug | 有上限的重試（`pnr/librelane_flow.sh`）；更正 explore3 的錯誤歸因 | `runs/p3_phase3_clean.log`、scratchpad `grt0229/r1–r4` |
