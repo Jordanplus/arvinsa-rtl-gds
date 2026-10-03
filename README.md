@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**規劃階段（v0.2，2026-10-03），尚未開始實作。** 目前 repo 只有文件，還沒有 RTL、flow 設定或 script。
+**規劃階段（v0.3，2026-10-03），尚未開始實作。** 目前 repo 只有文件，還沒有 RTL、flow 設定或 script。
 完整規劃見 [project-plan.md](project-plan.md)。
 
 ## 技術組合

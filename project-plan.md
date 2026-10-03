@@ -1,7 +1,9 @@
 # Open EDA RTL-to-GDS 專案規劃
 
-版本：v0.2（2026-10-03）　狀態：規劃完成、尚未實作
-主要修訂：納入獨立審查意見（SRAM .lib 可信度、多 corner 設定、DRC／LVS 驗收寫法、firmware 容量、negative test 設計）。
+版本：v0.3（2026-10-03）　狀態：規劃完成、尚未實作
+修訂紀錄：
+- v0.3：§5.5 改寫為白話說明（Phase 7 chip-level）；更正 v0.2 中「TinyTapeout 格子太小、放不下 SRAM」的錯誤說法。
+- v0.2：納入獨立審查意見（SRAM .lib 可信度、多 corner 設定、DRC／LVS 驗收寫法、firmware 容量、negative test 設計）。
 
 ## 0. 一頁摘要
 
@@ -171,12 +173,67 @@ PicoRV32 原廠 `firmware/sections.lds` 設 `LENGTH = 0x18000`（96 KB，另留 
 - **擺放**：SRAM 放右上角、orientation N，讓 port 0 的左邊／下邊面對 logic；右邊與上邊留 ≥ 20–30 µm channel 給 port 1 tie 線與 PDN；
   以 `pin_order.cfg` 把 IO pin 限制在左邊與下邊。下邊的 met4 pin 易與 met4 PDN strap 衝突，留意 `Checker.TrDRC` 與 `DisconnectedPins`。
 
-### 5.5 交付層級
-- 本專案目標為 **macro-level hardening**（GDS + LEF + .lib + 網表），不含 padframe／seal ring。
-- Phase 7（可選）chip-level：ChipFoundry（承接原 efabless sky130 shuttle）Caravel `user_project_wrapper`。
-  **TinyTapeout 不適用**：1×2 tile 約 160 × 225 µm，放不下 683 × 417 µm 的 SRAM。
-  LibreLane 預設只把最上兩層金屬連到 macro；若 `soc_top` 做成巢狀 macro，PDN 會與 SRAM 的 met4 ring 衝突，
-  所以 Phase 7 應做 **flat wrapper、SRAM 直接放在 wrapper 層**。
+### 5.5 交付層級與 Phase 7（chip-level，可選）
+
+**主線（Phase 0–6）的產出是 macro-level hardening，還不是一顆晶片。**
+產出物是一個 hard macro，也就是一塊已經擺好元件、繞好線的電路方塊，含 GDS、LEF、.lib、網表。
+它沒有 I/O pad 和 seal ring，也沒有把程式載進去、把結果讀出來的通道，所以不能單獨下線。
+
+**Phase 7 要解決的是：做好的電路怎麼變成一顆能下線、能拿回來測的晶片。**
+這個階段是可選的，Phase 0–6 都不依賴它。做法是借用現成的載具晶片，而不是自己從頭做 padframe。
+
+#### 首選：ChipFoundry Caravel
+
+- **Caravel 是什麼**：一顆現成的載具晶片，pad、電源和一顆管理用的 RISC-V 都已經做好，中間留一塊空白的使用者區。
+  把設計放進使用者區，再和其他人的設計一起搭 MPW shuttle（很多設計共用同一套光罩一起下線）。
+- **使用者區的外框**叫 `user_project_wrapper`，大小固定為 **2920 × 3520 µm**
+  （[chipfoundry/caravel_user_project](https://github.com/chipfoundry/caravel_user_project/blob/main/openlane/user_project_wrapper/config.json) 的 `DIE_AREA`，2026-10-03 查證）。
+- **ChipFoundry** 是 Efabless 於 2025 年停止營運後，接手 sky130 共乘下線服務的公司（§9 R12）。
+- **為什麼是首選**：使用者區夠大，SRAM 與 CPU 可以寬鬆擺放；管理 CPU 可經 Wishbone 匯流排存取使用者區，
+  正好對上 §5.1 預留的 host write port，讓管理 CPU 把程式寫進我們的 SRAM，到 Phase 7 不必改 RTL。
+
+#### 設計放進使用者區的方式：扁平放法（flat wrapper）
+
+```
+巢狀放法：不採用
+user_project_wrapper
+└── soc_top：先 harden 成一個 macro
+    ├── PicoRV32 與周邊電路
+    └── SRAM macro
+
+扁平放法：計畫採用
+user_project_wrapper
+├── PicoRV32 與周邊電路：直接在這一層擺放與繞線
+└── SRAM macro：直接放在這一層
+```
+
+不用巢狀放法，是因為金屬層不夠分：
+1. sky130 除了 local interconnect（li1）之外只有 met1–met5 五層金屬，電源網路（PDN）用最上面的 met4、met5。
+2. 若 `soc_top` 先做成 macro，met5 要留給外層 wrapper，`soc_top` 自己只能用 met4 配電。
+3. SRAM 的電源環也在 met4。LibreLane 的 PDN 是用 via 連接上下兩層，同一層的兩條線預設不會接，SRAM 可能根本沒接到電。
+4. 扁平放法讓 wrapper 用 met5 從 SRAM 上方打 via，往下接到 met4 電源環，問題就不存在。
+
+#### 收件門檻與工時
+
+- **平台 precheck PASS**：ChipFoundry 收件前會自動跑一套檢查，例如 DRC、LVS，以及 wrapper 的尺寸與腳位是否和官方範本一致；沒有 PASS 就不收件。
+- **工時「另估」**：要不要真的下線、搭哪一梯次、費用多少都還沒討論，因此不估工時。
+
+#### 備選：TinyTapeout（待確認）
+
+v0.2 曾寫「TinyTapeout 格子太小、放不下 SRAM」，**這個說法是錯的**，v0.3 更正如下（2026-10-03 查證）：
+
+- sky130A 現行格子尺寸最大到 8x4 = 1378.16 × 511.36 µm；5x4（856.52 × 511.36 µm）以上就放得下 2 KB SRAM（683.1 × 416.54 µm）
+  （[tt-support-tools `tech/sky130A/tile_sizes.yaml`](https://github.com/TinyTapeout/tt-support-tools/blob/main/tech/sky130A/tile_sizes.yaml)）。
+- SKY25a 梯次已有 OpenRAM 開發者把小型 OpenRAM SRAM（約 300 × 150 µm）放進 2x2 格子做測試晶片
+  （[tt_um_openram_top](https://github.com/TinyTapeout/tinytapeout-sky-25a-sources/tree/main/tt_um_openram_top)）。
+- 但 TinyTapeout 官方 memory 規格頁對 sky130 只列出 DFF、latch、DFFRAM 與外接 SPI RAM，**沒有把 OpenRAM SRAM macro 列為正式選項**
+  （[tinytapeout.com/specs/memory](https://tinytapeout.com/specs/memory/)）。
+
+要改走 TinyTapeout，需先確認：
+1. precheck 是否接受 SRAM macro 內部的特殊 DRC 規則（§6.3）。
+2. 4 列高大格子的費用。
+3. 格子本身是嵌在 TinyTapeout 大晶片裡的一個區塊，等於上面說的巢狀情況，SRAM 的配電方式要照 TinyTapeout 的規範另外確認。
+4. 每個格子的 I/O 腳數是否夠用（程式載入、UART、signature 輸出）。
 
 ## 6. 流程設定要點（LibreLane）
 
@@ -341,7 +398,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | **4 signoff 收斂與文件** | 嘗試壓到 25 ns；L4 EQY；L5 GL sim；IR drop／antenna checker；`make regress` 一鍵；README、ADR、phase_exit | `make regress` 全 PASS；第三人可依 README 重現 | 2–3 天 |
 | **5 換 Hazard3** | submodule Hazard3；**AHB5 寫入資料在 data phase，接 1RW SRAM 需 write buffer 或 wait state**；建議用 `hazard3_cpu_2port`，SRAM port 1 負責 I-fetch（1rw1r 的自然用法）；測試以 Hazard3 的 rvcpp ISS trace 比對；加裝 xPack toolchain（newlib） | L0–L5 全 PASS；flow 設定只需改 design 層 | 4–6 天 |
 | **6 OpenRAM 自產 SRAM** | x86_64 Linux（Colab 優先，備案 Lima）：`nix develop` + `make sky130-pdk` + `make sky130-install`（需 `sky130_fd_bd_sram`，不在 ciel 預設內）；產 2 KB（或客製）macro + 多 corner .lib；對 macro 跑 DRC／LVS；GDS cell 名稱衝突 checker（open_pdks 以 `gds_import_sram.tcl` 處理 SRAM 共用 cell 名）；取代預建 macro 重跑 Phase 3–4 | 自產 macro DRC／LVS 結果 ≤ 預建 baseline；SoC 以自產 macro 完成 signoff | 4–6 天（2 KB 解析模式即約 4.4 小時，SPICE 特性化更久） |
-| **7 chip-level（可選）** | ChipFoundry Caravel user project，flat wrapper、SRAM 放 wrapper 層（§5.5） | 平台 precheck PASS | 另估 |
+| **7 chip-level（可選）** | 把 SoC 放進 ChipFoundry Caravel 的使用者區，搭 MPW shuttle 下線；採扁平放法，PicoRV32 與 SRAM 直接放在 wrapper 層（理由見 §5.5）；TinyTapeout 為待確認的備選 | ChipFoundry 收件前的自動檢查（precheck）PASS | 另估（是否下線、梯次、費用未定） |
 
 ## 9. 風險與對策
 
@@ -358,7 +415,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | R9 | Icarus SDF sim 證據力弱 | L5 無法當 signoff | signoff 以 9 corner STA 為準；SDF 僅參考；CVC 可選 |
 | R10 | 40 ns 仍不收斂 | 時序 FAIL | 放寬 clock；`SYNTH_STRATEGY` 改 delay 導向；rdata register 已內建 |
 | R11 | PicoRV32 封存；toolchain 無 newlib；GCC 16 + `-Werror` | 無人修 bug；Hazard3 benchmark 編不出；原廠 Makefile 可能失敗 | 釘 commit；Phase 5 前裝 xPack；必要時覆寫 CFLAGS |
-| R12 | Efabless 已停止營運（2025），shuttle 由 ChipFoundry 承接 | Phase 7 平台變動 | 以 ChipFoundry 現行 Caravel 文件為準；TinyTapeout 因 tile 太小不適用 |
+| R12 | Efabless 已停止營運（2025），shuttle 由 ChipFoundry 承接 | Phase 7 平台變動 | 以 ChipFoundry 現行 Caravel 文件為準；TinyTapeout 為備選，SRAM 支援、配電方式與費用待確認（§5.5） |
 | R13 | 磁碟／時間：Nix store + PDK 約 10–20 GB；full flow 數十分鐘 | 迭代慢 | 1.4 TB 可用；regression 分 smoke／nightly／weekly（§7.5） |
 
 ## 10. 驗收標準（Definition of Done）
@@ -374,6 +431,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 - （待確認）OpenRAM 在 Colab 安裝 Nix 的可行性（需 root 與 `/nix`）；備案 apt 安裝 ngspice／magic／netgen／klayout 或 Lima。
 - （待確認）LibreLane 3.0.14 中 `SETUP_VIOLATION_CORNERS` 等變數的確切名稱與 `STA_EXTRA_CORNER_TCL_FILE` 的行為（文件標 Experimental）。
 - （待確認）PicoRV32 IMC+IRQ 在 sky130hd 的實際 cell 數與面積（Phase 2 實測後定 `DIE_AREA`）。
+- （待確認，僅在 Phase 7 考慮 TinyTapeout 時需要）§5.5 列出的四項條件：precheck 對 SRAM DRC 的處理、大格子費用、配電方式、I/O 腳數。
 - （工程假設）padded.lib 的數值（clk→dout ≥ 5 ns、setup ≥ 1 ns、min_period ≥ 30 ns）；Phase 3.5/6 校正。
 - （已確認）ciel 的 sky130A 含 `libs.ref/sky130_sram_macros`；open_pdks 來源為 fossi fork。
 - （已確認）LibreLane 變數：`MAGIC_DRC_USE_GDS`（預設 True）、`ERROR_ON_MAGIC_DRC`、`ERROR_ON_KLAYOUT_DRC`、`PDN_MACRO_CONNECTIONS`、`PDN_CONNECT_MACROS_TO_GRID`（預設 True）、`MACRO_PLACEMENT_CFG`；`TIMING_VIOLATION_CORNERS = ["*tt*"]`。
@@ -385,4 +443,5 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 - LibreLane：[repo](https://github.com/librelane/librelane)、[macOS 安裝](https://librelane.readthedocs.io/en/latest/installation/nix_installation/installation_macos.html)、[Flows 參考](https://librelane.readthedocs.io/en/latest/reference/flows.html)、[Using Macros](https://librelane.readthedocs.io/en/latest/usage/using_macros.html)、[PDKs](https://librelane.readthedocs.io/en/latest/usage/about_pdks.html)、[變數參考](https://librelane.readthedocs.io/en/latest/reference/step_config_vars.html)、[pdk_compat.py](https://github.com/librelane/librelane/blob/main/librelane/config/pdk_compat.py)、[librelane-ci-designs/test_sram_macro](https://github.com/librelane/librelane-ci-designs/tree/main/test_sram_macro)
 - SRAM：[fossi-foundation/sky130_sram_macros](https://github.com/fossi-foundation/sky130_sram_macros)、[VLSIDA/OpenRAM](https://github.com/VLSIDA/OpenRAM)、[OpenRAM in SkyWater 130nm（ISCAS'23）](https://escholarship.org/content/qt9dc0v8g3/qt9dc0v8g3.pdf)、[OpenLane 1 OpenRAM 教學](https://openlane.readthedocs.io/en/2023.09.07/tutorials/openram.html)、[open_pdks](https://github.com/fossi-foundation/open-pdks)
 - Cores：[YosysHQ/picorv32](https://github.com/YosysHQ/picorv32)（[sections.lds](https://github.com/YosysHQ/picorv32/blob/main/firmware/sections.lds)）、[Wren6991/Hazard3](https://github.com/Wren6991/Hazard3)、[lowRISC/ibex](https://github.com/lowRISC/ibex)、[openhwgroup/cvw](https://github.com/openhwgroup/cvw)
-- 其他：[ORFS](https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts)、[IHP sg13g2 SRAM 整合 issue](https://github.com/2AMLogic/sg13cmos5l-protocol-emulator/issues/60)、[caravel_mgmt_soc_litex（CVC SRAM model）](https://github.com/efabless/caravel_mgmt_soc_litex)、[TinyTapeout sky130 shuttle](https://tinytapeout.com/news/sky130-confirmed/)
+- 其他：[ORFS](https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts)、[IHP sg13g2 SRAM 整合 issue](https://github.com/2AMLogic/sg13cmos5l-protocol-emulator/issues/60)、[caravel_mgmt_soc_litex（CVC SRAM model）](https://github.com/efabless/caravel_mgmt_soc_litex)、[TinyTapeout sky130 shuttle](https://tinytapeout.com/news/sky130-confirmed/)、[TinyTapeout memory 規格](https://tinytapeout.com/specs/memory/)、[TinyTapeout sky130A 格子尺寸](https://github.com/TinyTapeout/tt-support-tools/blob/main/tech/sky130A/tile_sizes.yaml)
+- Chip-level：[chipfoundry/caravel_user_project](https://github.com/chipfoundry/caravel_user_project)
