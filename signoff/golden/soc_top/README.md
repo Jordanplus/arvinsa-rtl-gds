@@ -8,7 +8,7 @@
 |---|---|
 | 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`，原檔複製，沒有修改 |
 | 日期／平台 | 2026-10-04（Phase 4），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 4 第 5 次 harden-soc，commit `e5b7a4b`（除了與舊 golden 比對以外，limits、`check_soc.py`、輸入一致、來源追溯全部 PASS） |
+| 來源 run | Phase 4 第 5 次 harden-soc，commit `e5b7a4b`。limits 有兩類 FAIL：與舊 golden 比對（預期）；沒有寄生值的 driver 133 個，當時上限寫「剛好 134」（見下方最後一點，檢視後上限改 133）。`check_soc.py`、輸入一致、來源追溯 PASS |
 | LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
 | flow 設定 | `pnr/soc_top/config.json` sha256 `3623be19eb2cfeb089690bb3abd3459652905f39516744684d4083b1b8d8b6d2` |
 | 本檔 sha256 | `5c7b95eb6ad7abf3e6d1d7b92c542629bf8d6d8680e9c931d8e7b8510f5fa351` |
@@ -19,7 +19,8 @@
 - 127 個值改變，原因都是 Phase 4 的設定變更：
   - 週期 40 → 42 ns（使用者決定，ADR-0004 補充），uncertainty 分成 setup／hold 並加 duty cycle 預算（`clock_uncertainty.sdc`），SRAM derate 1.575／0.665：最差 setup slack 3.553 → 0.313 ns（min_ss_n40C，SRAM 半週期路徑）。
   - resizer hold 餘裕 0.1 → 0.3 ns：hold buffer 2468 → 3452，最差 hold 0.032 → 0.082 ns。
-  - PnR 的 max transition 0.70 ns（signoff 仍 0.75）、clock pin 的線切段（`CTS_CLK_MAX_WIRE_LENGTH` 150）：standard cell 27,932 → 29,352 顆，面積 227,740 → 237,644 µm²，clock buffer 551 → 531。
+  - PnR 的 max transition 0.70 ns（signoff 仍 0.75）、clock pin 的線切段（`CTS_CLK_MAX_WIRE_LENGTH` 150）、resizer setup 餘裕 0.6 ns。
+  - standard cell 27,932 → 29,352 顆（+1420），面積 227,740 → 237,644 µm²：timing repair buffer 8117 → 9525（其中 hold buffer +984，來自 hold 餘裕 0.3 ns；其他 +424）、antenna diode 78 → 85、clock buffer 551 → 531、clock inverter 37 → 62。這些是上面幾項設定一起造成的，沒有逐項分開實驗。
   - IR 改一側供電模型：`ir__drop__worst` 0.306 → 4.04 mV（GND 抬升 4.03 mV）。
   - unannotated driver 134 → 133（CTS dummy load 91 → 90，組成見 `signoff/limits/soc_top.toml`）。
 - 沒變的：Magic DRC 4,665,810（全部在 SRAM 框內、位置與 SRAM 單獨檢查相同）、KLayout DRC 0、LVS 0、XOR 0、最長線 619.53 µm、SRAM 位置。

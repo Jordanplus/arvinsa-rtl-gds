@@ -26,7 +26,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 ```bash
 make help          # 所有 target
 make env-check     # 檢查本機工具、釘版 IP、toolchain.md 是否最新
-make smoke         # lint + firmware + RTL 模擬 smoke（約 30 秒）
+make smoke         # 環境檢查、Python 名稱檢查、lint、firmware、RTL 模擬 smoke（約 30 秒）
 make phase1        # Phase 1 完整檢查（約 4 分鐘）
 make phase2        # Phase 2 完整檢查：LibreLane harden + GL regression（約 24 分鐘，需要 flow 環境）
 make phase3        # Phase 3 完整檢查：SoC 與 core 的 harden、EQY、GL 模擬與全部植入錯誤（約 91 分鐘，需要 flow 環境）
@@ -80,7 +80,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 ## 驗證方式
 
 - **分層 regression test**：lint、RTL 模擬、gate-level 模擬、PnR signoff、equivalence check、post-layout 模擬。
-- **Signoff 門檻**：9 個 STA corner（tt／ss／ff 三種 library corner × 三種繞線寄生 RC）的 setup 與 hold 全部 PASS，
+- **Signoff 門檻**：多個 STA corner 的 setup 與 hold 全部 PASS：PicoRV32 單獨 harden 是 9 個（tt／ss／ff 三種 library corner × 三種繞線寄生 RC），soc_top 另加兩個溫度反轉的 PVT，共 15 個，
   另有 DRC、LVS、antenna、IR drop 等 metrics 門檻。
 - **Bug injection**：刻意植入錯誤，確認對應的 checker 確實會 FAIL，避免 checker 永遠 PASS 卻抓不到問題。
 
@@ -143,14 +143,14 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 ### drc-signoff：DRC、GDS 輸出、XOR
 
 - **何時用**：Magic／KLayout DRC、GDS 輸出、XOR；含 macro 時 DRC 不為 0、abstract DRC 大量報錯、GDS 多個 top cell。
-- **內容**：abstract DRC 的 `nwell.4` 假錯誤與改用完整 GDS；macro 內部 DRC 的判定方式（外框外為 0、只允許 macro 自己就有的規則種類、總數由 golden 鎖定）；Magic GDS 多 top cell 時改用 KLayout 輸出；報告檔大小與時間。
+- **內容**：abstract DRC 的 `nwell.4` 假錯誤與改用完整 GDS；macro 內部 DRC 的判定方式（外框外為 0；框內每個違規都要落在 macro 單獨檢查時同規則違規的位置，Phase 3 只比規則種類會漏掉新的違規）；Magic GDS 多 top cell 時改用 KLayout 輸出；報告檔大小與時間。
 - **negative test**：P10（植入 DRC 違規）、P11（XOR）。
 
 ### formal-equivalence-eqy：formal equivalence
 
 - **何時用**：用 EQY 證明網表等價、EQY 當機或分區證不出來、設計 EQY 的 negative test。
 - **內容**：目前可用的組合（合成網表 vs 最終網表）與必要設定（stack、`$scopeinfo`、`insbuf off`）；判定規則，包括 EQY 對「對應到常數的 bit」不證明的漏洞；RTL 對網表尚未解決的問題（狀態機重新編碼、上電未定值的暫存器）。
-- **negative test**：`neg_eqy.py` 7 種植入錯誤。
+- **negative test**：`neg_eqy.py` 在 picorv32_core 植入 10 種、soc_top 7 種錯誤（不重複的共 13 種），FAIL 的位置必須在植入點附近；EQY 的 `sat` 證不到 flip-flop 本身，另加 sequential cell 結構比對。
 
 ### antenna-signoff：antenna
 
@@ -166,7 +166,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 ### pdn-ir-drop：電源網路與 IR drop
 
 - **何時用**：PDN 產生失敗、macro 電源怎麼接、IR drop 分析與門檻。
-- **內容**：`PDN-0179` 窄 row 問題與 halo 對策；為什麼關掉 macro grid 設定不會斷開 SRAM 電源；PSM 只查電源網路本身；IR drop 門檻 5% VDD；待補改 PDN 後重跑 IR 的 negative test。
+- **內容**：`PDN-0179` 窄 row 問題與 halo 對策；為什麼關掉 macro grid 設定不會斷開 SRAM 電源；PSM 只查電源網路本身；IR drop 門檻是 VDD 降壓 + GND 抬升合計（soc_top 20 mV）；macro-level 的供電模型要明講假設（一側供電）；最大電流與最大電阻不在同一個 corner；待補改 PDN 後重跑 IR 的 negative test。
 
 ### lvs-signoff：LVS 與連接性
 

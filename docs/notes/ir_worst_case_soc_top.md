@@ -27,13 +27,13 @@
 
 - 電流與電阻：nom_tt 7.76 mW、max_ss 6.50 mW、max_ff 9.03 mW（SRAM 每個 corner 都是 0.708 mW，來自 padded.lib）；met5 每平方電阻 tt 0.0285、ss 0.0370、ff 0.0199 Ω。沒有一個真實的 corner 同時有最大電流（ff）與最大電阻（ss），所以「ff 電流 + ss 金屬電阻」是人為組合的上限，不是物理上存在的 corner。
 - 最壞位置：模型 C、D 在右下角（離左側供電點最遠）。
-- EM（電流密度）：模型 C 每一層都在 tech LEF 上限的 32% 以下（via4 最高）；模型 D 的單一個 via4 cut 流 3.3 mA，超過上限 2.49 mA。
+- EM（電流密度）：模型 C 每一層最高約上限的 32%（via4：vccd1 31.9%、vssd1 32.4%，以 ff 電流 + ss 電阻計）；模型 D 的單一個 via4 cut 流 3.3 mA，超過上限 2.49 mA。
 
 ## 結論與做法
 
 1. **signoff 改用模型 C**（`pnr/soc_top/config.json` 的 `VSRC_LOC_FILES`，點位在 `pnr/soc_top/vsrc/`）：比 LibreLane 預設悲觀，但仍是每條 strap 都接得到電源的合理假設。`check_soc.py ir_sources` 檢查每個點都在對應 net 的 met5 strap 上。
 2. **判定改成「VDD 降壓 + GND 抬升 ≤ 20 mV」**（`signoff/limits/soc_top.toml` 的 `[max_sum]`）：LibreLane 的 `ir__drop__worst` 只有 vccd1 的降壓（它只取 `irdrop.rpt` 的第一筆），GND 抬升在 `design_powergrid__drop__worst__net:vssd1`；20 mV 的預算是兩者合計。
-3. flow 的 IR step 用 nom_tt（8.19 mV）；最壞的組合是 11.46 mV，仍比 20 mV 低 8.5 mV。
+3. flow 的 IR step 用 nom_tt：本研究在 Phase 3 版圖上是 8.19 mV；Phase 4 改 42 ns 後的 golden run 實測 4.04 + 4.03 = 8.07 mV。最壞的組合（本研究，Phase 3 版圖）是 11.46 mV，仍比 20 mV 低 8.5 mV。
 4. **Phase 7 要確認**：Caravel 實際怎麼接這顆 macro 的電源。如果只有一個接點（模型 D），20 mV 與 EM 都不過。
 5. picorv32_core（只當流程測試用的 block）保留 LibreLane 預設模型，判定同樣改成兩個 net 合計 ≤ 20 mV。
 

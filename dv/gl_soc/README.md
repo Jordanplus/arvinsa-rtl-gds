@@ -30,7 +30,7 @@ PASS 需要全部成立：
 
 ## L5：帶電源的網表（`make gl-soc-powered`，`run_gl_soc.py --powered`，Phase 4）
 
-改用 `final/pnl/soc_top.pnl.v`（每顆 cell，包括 fill、tap、decap、diode，都有 VPWR／VGND／VPB／VNB），加 `-DUSE_POWER_PINS` 編譯，testbench 給 `vccd1` = 1、`vssd1` = 0（RTL 與網表兩份 SoC 都接）。cell model 在 `USE_POWER_PINS` 下每個輸出都經過 power-good primitive：電源腳沒接到 vccd1／vssd1 的 cell 會輸出 X，lockstep 比對就 FAIL。判定與 gl-soc 相同。不跑 SDF：Icarus 不能當時序的 signoff 證據（`project-plan.md` §7.1）。
+改用 `final/pnl/soc_top.pnl.v`（每顆 cell，包括 fill、decap、diode，都接了 VPWR／VGND／VPB／VNB；tap cell 只接 VPWR／VGND，因為它的 LEF 只有這兩個 pin，Icarus 對它的 VPB／VNB 報的懸空警告由 `dv/log_whitelist.txt` 只對這個 cell 放行），加 `-DUSE_POWER_PINS` 編譯，testbench 給 `vccd1` = 1、`vssd1` = 0（RTL 與網表兩份 SoC 都接）。cell model 在 `USE_POWER_PINS` 下每個輸出都經過 power-good primitive：電源腳沒接到 vccd1／vssd1 的 cell 會輸出 X，lockstep 比對就 FAIL。判定與 gl-soc 相同。不跑 SDF：Icarus 不能當時序的 signoff 證據（`project-plan.md` §7.1）。
 
 ## Negative test（`make neg-gl-soc`，`neg_gl_soc.py`）
 
@@ -38,7 +38,7 @@ PASS 需要全部成立：
 
 | 案例 | 植入 | 跑的測試 |
 |---|---|---|
-| `din5_stuck0`、`csb0_inverted`、`host_rdata7_inverted`、`mux_swap` | 與 `signoff/eqy/neg_eqy.py` 的 soc_top 案例相同：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調 | 最長兩支（memtest、boot_uart_max）以外的 11 支 |
+| `din5_stuck0`、`csb0_inverted`、`host_rdata7_inverted`、`mux_swap` | 與 `signoff/eqy/neg_eqy.py` 的 soc_top 案例相同：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調 | 11 支：最長的兩支（memtest、boot_uart_max）與 Phase 4 新增的 directed 測試（counters、buserr，由下面的專用案例使用）以外的全部 |
 | `count_cycle45_stuck1`、`count_instr40_stuck1` | `u_cpu.count_cycle[45]`／`count_instr[40]` 的 flip-flop D 接 1（Phase 2 GL 模擬漏掉的錯誤，`docs/phase_exit/phase2.md` 已知限制 7） | `counters` |
 | `buserr_irq_stuck0` | `u_cpu.irq_pending[2]`（bus-error IRQ）的 D 接 0（同上） | `buserr` |
 | `host_rdata7_unpowered`（L5） | 帶電源網表中推動 `host_rdata[7]` 的 cell，VPWR 改接 vssd1 | `hello`（`--powered`） |

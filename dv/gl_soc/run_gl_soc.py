@@ -21,8 +21,9 @@ PASS needs all of:
 
 --powered (`make gl-soc-powered`, project-plan.md §7.1 L5): the powered netlist
 <harden-run>/final/pnl/soc_top.pnl.v instead, compiled with -DUSE_POWER_PINS: every cell (also
-the fill, tap, decap and diode cells) has its VPWR/VGND/VPB/VNB pins and the SRAM model its
-vccd1/vssd1, driven by the testbench with 1/0. The cell models then pass every output through a
+the fill, decap and diode cells) has its VPWR/VGND/VPB/VNB pins connected (the tap cell only
+VPWR/VGND, the pins of its LEF; dv/log_whitelist.txt) and the SRAM model its vccd1/vssd1, driven
+by the testbench with 1/0. The cell models then pass every output through a
 power-good primitive, so a cell whose supply pins are not on vccd1/vssd1 drives X and the lockstep
 comparison FAILs. No SDF: Icarus is not a signoff simulator for timing (project-plan.md §7.1).
 

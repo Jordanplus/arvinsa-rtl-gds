@@ -40,7 +40,7 @@ PASS 需要全部成立：
 3. 分區清單不是空的，而且每個分區都有 `Proved equivalence of partition` 紀錄。
 4. 切分紀錄（`work/partition.log`）沒有 `found constant ... bit`。這行表示 gate 端某個 bit 是常數，EQY 會直接把 gold 端對應的 bit 換成那個常數，**之後不再證明它**。negative test `wdata3_stuck0`（把 `mem_wdata[3]` 接成 0）原本就是這樣漏掉、判 PASS 的。正向的 run 沒有出現過這一行，所以出現就 FAIL。
 5. 切分紀錄沒有 `ERROR: conflicting ... for`。這表示 EQY 在切分時遇到互相矛盾的名稱對應而中止（試做時看過 `conflicting matches for gold bit eoi[0]`），沒有做任何證明。
-6. **兩份網表的 sequential cell（flip-flop、latch、clock gate）是同樣的 instance、同樣的功能**，只允許 drive strength 不同（Phase 4）。這一項在 EQY 之外比對，因為 EQY 的 `sat` strategy 證不到 flip-flop 本身的行為：把一顆 `dfxtp_2` 換成 reset 時會清除的 `dfrtp_2`（RESET_B 接 `resetn`），EQY 仍是 18100/18100 個分區證明通過（`neg_eqy.py flop_async_reset`）。原因是含 flip-flop 的分區，初始狀態的約束本身無解，base case 什麼都沒證（agent 實驗）。flip-flop 周圍的邏輯仍由 EQY 證明。
+6. **兩份網表的 sequential cell（flip-flop、latch、clock gate）是同樣的 instance、同樣的功能**，只允許 drive strength 不同（Phase 4）。這一項在 EQY 之外比對，因為 EQY 的 `sat` strategy 證不到 flip-flop 本身的行為：把一顆 `dfxtp_2` 換成 reset 時會清除的 `dfrtp_2`（RESET_B 接 `resetn`），EQY 仍是 18100/18100 個分區證明通過（`neg_eqy.py flop_async_reset`）。原因推測是含 flip-flop 的分區，初始狀態的約束本身無解，base case 什麼都沒證（agent 實驗，紀錄沒有存進 repo）；soc_top 的 2639 個含 flip-flop 的分區每個都只有 2 顆 `$dff`。flip-flop 周圍的邏輯仍由 EQY 證明。
 
 ## Negative test（`make neg-eqy-core`、`make neg-eqy-soc`）
 

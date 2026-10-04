@@ -8,7 +8,7 @@
 ## Phase 4 補充（2026-10-04）：soc_top 改 42 ns
 
 - Phase 4 加嚴了 signoff 條件：SRAM derate 乘進 OCV（ss 1.575）、半週期路徑加 duty cycle 預算（假設 45/55%）、加溫度反轉 corner `ss_n40C_1v60`（`docs/notes/signoff_criteria_soc_top.md`）。
-- 結果：40 ns 時，`sram0` 在下降緣送出 `dout0`、`rdata_q` 在上升緣接收的半週期路徑，min_ss_n40C 差 0.42 ns；ss 100 °C 剩 +0.08 ns；其他路徑都有餘量（不含 SRAM 的路徑在 max_ss_n40C 還有 +8.9 ns）。這條路徑的 slack 每 1 ns 週期只變 0.45 ns（半週期扣掉 5% 的 duty cycle 偏差），最小週期約 41 ns。
+- 結果：40 ns 時，`sram0` 在下降緣送出 `dout0`、`rdata_q` 在上升緣接收的半週期路徑，min_ss_n40C 差 0.42 ns；ss 100 °C 剩 +0.07 ns（min_ss_100C，第 4 次 harden）；其他路徑都有餘量（不含 SRAM 的路徑在 max_ss_n40C 還有 +8.9 ns）。這條路徑的 slack 每 1 ns 週期只變 0.45 ns（半週期扣掉 5% 的 duty cycle 偏差），最小週期約 41 ns。
 - 使用者決定（2026-10-04）：soc_top 改 **42 ns**，不放寬任何假設或檢查。SRAM 的 10 ns 本身是假設值（ADR-0007），Phase 3.5／6 用 OpenRAM 特性化取代後，再回頭檢討週期。
 - 25 ns（stretch goal）：同一份版圖做 STA what-if，25 ns 時 SRAM 路徑差約 7 ns，不含 SRAM 的路徑也差 1.8 ns（ss 100 °C）到 4.7 ns（ss −40 °C）。在目前的 SRAM 假設下做不到。
 - picorv32_core（Phase 2 的單獨 harden，沒有 SRAM）維持 40 ns。

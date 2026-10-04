@@ -23,16 +23,16 @@
 | min pulse width、minimum period | 沒有檢查；SRAM padded.lib 規定 12 ns／30 ns | **缺口** | **Phase 4 已做**：`sta_extra_corner.tcl` 每個 corner 輸出 `report_check_types -min_pulse_width -min_period`，`check_soc.py pulse_width` 要求 slack ≥ DCD + 半週期 jitter（pulse width）與 period jitter（period）；negative test P22、P23 |
 | fmax | `clock.rpt` 的 `period_min` 25.4 ns | **不能用**：它排除半週期路徑；週期 32 ns 時 setup 已經 FAIL | 最小週期改從半週期路徑反推，nom_ss 約 32.8 ns（推算） |
 | OCV | flat ±5%，cell、net、clock、data 全部套用 | OK（sky130 沒有更好的資料） | SRAM 的 instance derate 取代了 ±5%：ss 是 1.5 倍，不是 1.5 × 1.05。**使用者決定（2026-10-04）：改成 1.575／0.665**。**Phase 4 已做**（`sta_extra_corner.tcl`，ADR-0007 補充） |
-| PVT corner | 9 個（tt／ss／ff × min／nom／max RC） | **缺口**：溫度反轉。1.60 V 下多數 cell 低溫反而比較慢（dfxtp_1 CLK→Q：ss_n40C 比 ss_100C 慢 11%），PDK 有 `ss_n40C_1v60`、`ff_100C_1v95` 但沒用 | **Phase 4 已做**：`config.json` 的 `STA_CORNERS` 加這兩個 PVT，共 15 個 corner，PnR 與 signoff 都用 |
-| IR drop 上限 | 90 mV（5% VDD，`project-plan.md` §7.2，沒有推導）；實測 0.306 mV | **不一致**：ss corner 是 1.60 V，Caravel 最低供電 1.62 V，只隱含 20 mV 的預算。IR 真的到 90 mV 時，STA 的 ss 結果就不保守 | **使用者決定（2026-10-04）：上限改成 20 mV**。**Phase 4 已做**（`signoff/limits/soc_top.toml`、`picorv32_core.toml`；P07 植入 25 mV 必須 FAIL）。用最大電阻的 RC corner 與真實電壓源位置重算：見 Phase 4 exit review |
+| PVT corner | 9 個（tt／ss／ff × min／nom／max RC） | **缺口**：溫度反轉。1.60 V 下多數 cell 低溫反而比較慢（dfxtp_1 CLK→Q：ss_n40C 比 ss_100C 慢 11%），PDK 有 `ss_n40C_1v60`、`ff_100C_1v95` 但沒用 | **Phase 4 已做**：`config.json` 的 `STA_CORNERS` 加這兩個 PVT，共 15 個 corner，signoff 與大部分 PnR step 都用；resizer 只看原本 9 個（`RSZ_CORNERS`，15 個全給時 `RepairDesignPostGRT` 跑不完） |
+| IR drop 上限 | 90 mV（5% VDD，`project-plan.md` §7.2，沒有推導）；實測 0.306 mV | **不一致**：ss corner 是 1.60 V，Caravel 最低供電 1.62 V，只隱含 20 mV 的預算。IR 真的到 90 mV 時，STA 的 ss 結果就不保守 | **使用者決定（2026-10-04）：上限改成 20 mV**。**Phase 4 已做**（`signoff/limits/soc_top.toml`、`picorv32_core.toml`；P07 在 VDD 降壓與 GND 抬升各植入 11 mV，合計 22 mV 必須 FAIL）。用最大電阻的 RC corner 與真實電壓源位置重算：見 Phase 4 exit review |
 | IR 數字本身 | nom_tt 的電流與 RC；電壓源是 PDN 的所有 pin 形狀 | 偏樂觀：0.3 mV 只代表「上層供電理想時，block 內 rail 的壓降」 | 報告寫明這個範圍；粗估單端供電時約 8 mV（推論） |
 | IO delay | input 與 output 都是 8 ns，min = max | **缺口**：IO 的 hold 等於沒檢查。但只把 `-min` 改 0 會出現 269 個假的 hold 違規（最差 −3.3 ns），因為外部 launch 被當成 0 latency | Phase 7 用 Caravel 給的 source latency 與 min／max IO delay（範本：caravel_user_project `signoff.sdc` 67–98 行） |
-| SI（crosstalk） | 沒有分析；coupling cap 約占繞線電容一半（SPEF：214,162 顆、39.66 pF，接地 78.90 pF） | 缺口（開源工具沒有）。setup 有 3.55 ns 餘量，風險低；hold 最差 0.032 ns，只靠 0.25 ns uncertainty 涵蓋 | 在 hold uncertainty 中明列 SI 的份額；邊界分析要把 clock 與 data 分開（全域 factor 2.0 實測 setup 反而變好 0.11 ns） |
+| SI（crosstalk） | 沒有分析；coupling cap 約占繞線電容一半（SPEF：214,162 顆、39.66 pF，接地 78.90 pF） | 缺口（開源工具沒有）。Phase 3：setup 有 3.55 ns 餘量，風險低；hold 最差 0.032 ns，只靠 0.25 ns uncertainty 涵蓋。**Phase 4（42 ns）餘量變小**：setup 最差 +0.313 ns（SRAM 半週期路徑）、hold 最差 +0.082 ns，SI 的風險不能再說低 | 在 hold uncertainty 中明列 SI 的份額；邊界分析要把 clock 與 data 分開（全域 factor 2.0 實測 setup 反而變好 0.11 ns） |
 | max transition | 0.75 ns，9 corner 違規 0 | OK | `docs/decisions/0009` 有兩處描述與 .lib 不符，已更正 |
 | clock net 的 slew | 沒有另外限制；ss 下 clk port 0.59 ns | 小缺口 | `-clock_path` 在 propagated clock 下無效，要另寫 checker（Phase 4，可選） |
 | max cap | 0.2 pF；ss 的 pin 上限比 tt 小約 37% | OK（9 corner 都判） | — |
 | SRAM pin 的限制 | `dout0` max_capacitance 0.02756 pF、min 0.0017225 pF；輸入 max_transition 0.5 ns（padded.lib 36） | 這些也是假設值（ADR-0007） | Phase 3.5／6 特性化後校正 |
-| hold 的 margin | resizer 修到 0.100 ns，signoff 剩 0.032 ns | 餘量小。router 的變動若超過 golden 誤差（±0.01 ns）就可能變負 | 考慮 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.15（推論，需實跑看面積代價） |
+| hold 的 margin | Phase 3：resizer 修到 0.100 ns，signoff 剩 0.032 ns | 餘量小。router 的變動若超過 golden 誤差（±0.01 ns）就可能變負 | 考慮 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.15（推論，需實跑看面積代價）。**Phase 4 已做**：改成 0.3 ns（hold 在新 corner 變負，見 `pnr/soc_top/README.md`），42 ns 時 signoff 剩 +0.082 ns，hold buffer 多 984 顆 |
 | nom_tt setup ≥ 4 ns（週期 10%） | `soc_top.toml` [min] | **沒有作用**：ss 的延遲是 tt 的 1.4–1.9 倍，「ss ≥ 0」一定比它嚴（推算） | **使用者決定（2026-10-04）：降為只報告、不判 FAIL**；餘量改放在 uncertainty 並列出成分。**Phase 4 已做**（兩個 limits 檔的 `[info]`） |
 | power grid EM | 沒有分析；總電流 < 5 mA | 風險低（推論），但沒有 checker | 用 `analyze_power_grid -enable_em` 輸出電流後比對 tech LEF（Phase 4，可選） |
 | signal EM | 沒有工具 | clock 實際走 met1／met2（PDK 的 `RT_CLOCK_MIN_LAYER met3` 沒有生效）；估算上界 0.39 mA，met1 最小寬度上限 0.85 mA rms，約 2.2 倍餘量 | 寫明「估算」 |
@@ -104,7 +104,7 @@ factor 2.0 也讓 capture clock 變慢，而這對 setup 有利，所以全域 f
 
 ## 建議的 Phase 4 待辦（依優先順序）
 
-標「決定」的 3 項，使用者已在 2026-10-04 決定（寫在各項後面）。第 1–7 項 Phase 4 已實作，結果與驗證在 `docs/phase_exit/phase4.md`。
+標「決定」的 3 項，使用者已在 2026-10-04 決定（寫在各項後面）。第 1–7 項 Phase 4 已實作，結果與驗證在 `docs/phase_exit/phase4.md`。其中兩項只做到一部分：第 3 項的電壓源位置仍是假設（一側供電，`docs/notes/ir_worst_case_soc_top.md`）；第 5 項的 hold 0.25 ns 只列出成分名稱，沒有拆出 SI 的數值（開源工具不分析 SI）。
 
 1. **DCD**：建立「來源 DCD + J_half」的 uncertainty 寫法（`-fall_from clk -rise_to clk -setup`），加 D = 60% 必須 FAIL 的 negative test；數值待 Phase 7 的 clock 規格。
 2. **min pulse width／minimum period checker**：加檢查與 negative test。

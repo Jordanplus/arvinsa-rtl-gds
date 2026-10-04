@@ -42,7 +42,7 @@ description: 電源網路（PDN）產生失敗、macro 電源怎麼接、或 IR 
 - **`VSRC_LOC_FILES`**（電源接入點位置）：Phase 4 已設成「每條 met5 strap 一側一點」（規則 10）；Phase 7 Caravel 時改成 wrapper 的實際接點。
 - **動態功耗**：目前 OpenSTA 用預設切換率估功耗；要準確需用模擬產生的切換活動（VCD／SAIF）。
 - **EM**（electromigration，電流密度過高造成金屬線劣化）：flow 沒有檢查。Phase 4 研究做過一次（`docs/notes/ir_worst_case_soc_top.md`）：一側供電時最高是 via4 的 32%，單點供電時單一 via4 cut 超過上限（3.3 vs 2.49 mA）。
-- **IR 的 negative test**：P07 只在 checker 層（metrics 改成 0.2 V）；改 PDN 後重跑 IR 需要整個 flow。
+- **IR 的 negative test**：P07 只在 checker 層（Phase 4：VDD 降壓與 GND 抬升各植入 11 mV，單看任一個都在 20 mV 內、合計 22 mV 必須 FAIL）；改 PDN 後重跑 IR 需要整個 flow。
 
 ## 用完後 / 經驗紀錄
 
