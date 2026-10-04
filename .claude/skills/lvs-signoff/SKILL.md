@@ -16,7 +16,7 @@ PDN 產生看 `pdn-ir-drop`。目前經驗較少，邊用邊補。
 
 ## negative test
 
-P05（電源 via）、P08（`csb1` 浮接，`check_soc.py port1_tieoff`）。
+P05（電源 via）、P08（`csb1` 浮接，`check_soc.py port1_tieoff`）、P15（斷線 pin 的 log 改成有 1 個 critical pin，`check_soc.py disconnected`）。
 
 ## 用完後 / 經驗紀錄
 

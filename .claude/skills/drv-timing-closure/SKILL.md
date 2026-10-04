@@ -1,17 +1,17 @@
 ---
 name: drv-timing-closure
-description: 9 個 corner 的 STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規，要調 resizer、長線修復、cell 排除、寄生估計等設定時使用；也用於設定時序目標、corner 判定與 signoff SDC。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
+description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補、hold 餘量，以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
 ---
 
-# 時序與 DRV 收斂（9 corner）
+# 時序與 DRV 收斂（多 corner）
 
 **DRV**（design rule violation，電性規則違規）= max slew（訊號轉換太慢）、max cap（負載電容太大）、max fanout（一條線接太多負載）。setup／hold 修復和 DRV 修復用同一組 resizer，會互相牽動，所以放在同一個 skill。clock tree 本身看 `cts-clock-tree`；antenna diode 的副作用看 `antenna-signoff`。
 
-本 repo 實例與數字：`pnr/picorv32_core/README.md`（Phase 2，9 次試跑）、`pnr/soc_top/README.md`（Phase 3）、ADR-0009。
+本 repo 實例與數字：`pnr/picorv32_core/README.md`（Phase 2，9 次試跑）、`pnr/soc_top/README.md`（Phase 3–4）、ADR-0009。
 
 ## 規則（已驗證）
 
-1. **先設判定**：`SETUP_VIOLATION_CORNERS`、`HOLD_VIOLATION_CORNERS`、`MAX_SLEW_VIOLATION_CORNERS`、`MAX_CAP_VIOLATION_CORNERS` = `["*"]`。LibreLane 對 sky130 預設只判 tt（`librelane/config/pdk_compat.py` 第 320 行），會漏掉 ss 的 setup 違規（Phase 2 試跑 #4）。
+1. **先設判定**：`SETUP_VIOLATION_CORNERS`、`HOLD_VIOLATION_CORNERS`、`MAX_SLEW_VIOLATION_CORNERS`、`MAX_CAP_VIOLATION_CORNERS` = `["*"]`。LibreLane 對 sky130 的預設：setup 只判 tt（`librelane/config/pdk_compat.py` 第 320 行），hold 判全部 corner（`librelane/steps/checker.py` 第 683 行），max slew、max cap 都不判（661、672 行）。只靠預設會漏掉 ss 的 setup 違規（Phase 2 試跑 #4）。
 2. **DRV 收斂清單（依實際有效的順序）**
    1. `EXTRA_EXCLUDED_CELLS` 排除 `clkdlybuf4s25_1/_2`、`clkdlybuf4s50_1/_2`：PDK 排除清單漏了，resizer 會拿延遲 cell 當一般 buffer。
    2. `LAYERS_RC`：沒設時繞線前的電容估計只有實際的一半（0.08 vs 0.178 fF/µm）；值取自 `pdk_compat.py` 262–296 行。
@@ -22,7 +22,7 @@ description: 9 個 corner 的 STA 出現 setup／hold 違規，或 max slew／ma
 3. **判讀違規**：讀 `*-openroad-stapostpnr/<corner>/checks.rpt` 的 max slew／fanout 段，依 driver 歸併成「幾條線」，再對照 `*-odb-reportwirelength/wire_lengths.csv` 的長度、driver cell、線上有沒有 diode 或 hold buffer。
 4. **實作與簽核分開的約束**：`PNR_SDC_FILE` 給 PnR（可比簽核更嚴），`SIGNOFF_SDC_FILE` 只給 `OpenROAD.STAPostPNR`。兩者都 `source $::env(SCRIPTS_DIR)/base.sdc` 再改一兩項。驗證方式：同一份版圖只重跑 STAPostPNR，確認只有預期的項目改變（setup／hold 數字不變）。
 5. **先找根因，再考慮放寬 signoff 上限**：殘留的少數 DRV 先查是不是繞路（`floorplan-congestion` 規則 4）。soc_top 曾經放寬到 1.0 ns（使用者決定），後來查到根因是 L 形轉角壅塞，把 `PL_TARGET_DENSITY_PCT` 從自動的 68% 降到 55% 後，0.75 ns 下全部乾淨，放寬就撤回了（ADR-0009）。真的要放寬時須由使用者決定並寫 ADR；依據可用 sky130_fd_sc_hd .lib（`default_max_transition` 1.5 ns、最嚴的 pin 1.0 ns），0.75 ns 來自 PDK 的 OpenLane 預設（`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 63 行）。
-6. **macro 時序**：padded.lib 給 9 corner 共用；derate 只在 STA 生效，PnR 用 TT 等級的數字收斂（ADR-0007）。SRAM 讀出是半週期路徑（下降緣送出、上升緣接收）。
+6. **macro 時序**：padded.lib 給全部 corner 共用；derate 只在 STA 生效，PnR 用 TT 等級的數字收斂（ADR-0007）。SRAM 讀出是半週期路徑（下降緣送出、上升緣接收）。
 7. **hold**：hold buffer 的數量由 `PL_RESIZER_HOLD_SLACK_MARGIN` 決定。預設 0.1 ns 時約 2200–2500 顆。Phase 4 soc_top 改成 0.3 ns 後變成 3452 顆（+984），最差 hold +0.082 ns；改的原因是 SRAM 輸入腳的 hold 繞線後變負（`cts-clock-tree` 規則 10）。
 8. **corner 變多時，resizer 用的 corner 要另外控制**：resizer 讀 `RSZ_CORNERS`（不是 `PNR_CORNERS`）。soc_top 加溫度反轉 corner 後，resizer 看 15 個 corner 時 post-GRT 修復停不下來，改回原本 9 個就正常（`multicorner-sta` 規則 2、3）。只給 signoff 看的 corner，要確認 signoff 在那些 corner 的 DRV 也是 0。
 9. **resizer 看不到的 corner，用 PnR 的餘量補**（接規則 8）：soc_top 的 ss_n40C 只有 signoff 看。
@@ -47,7 +47,7 @@ detailed routing 之後才出現的 slew 違規，LibreLane Classic flow 沒有�
 
 ## 待補：detailed routing 之後的修復（post-route ECO）
 
-**ECO**（engineering change order）：在已繞好線的版圖上只做局部修改（換 cell 尺寸、插 buffer、局部重繞），不整個重跑。LibreLane Classic flow 在 detailed routing 之後沒有 DRV／timing 修復步驟；OpenROAD 本身可以在繞線後做 `repair_design`／`repair_timing` 再做增量繞線（推測，尚未在本專案驗證）。Phase 4（25 ns）之前要評估：寫一個讀最終 ODB → 修復 → 增量 detailed routing → 重跑 signoff 的腳本，並用 negative test 證明它有效。SDC 的寫法與 PnR／signoff 分開的原則已移到 `timing-constraints-sdc`。
+**ECO**（engineering change order）：在已繞好線的版圖上只做局部修改（換 cell 尺寸、插 buffer、局部重繞），不整個重跑。LibreLane Classic flow 在 detailed routing 之後沒有 DRV／timing 修復步驟；OpenROAD 本身可以在繞線後做 `repair_design`／`repair_timing` 再做增量繞線（推測，尚未在本專案驗證）。要壓縮週期、或 detailed routing 之後仍有違規時再評估（Phase 4 改 42 ns，沒有做）：寫一個讀最終 ODB → 修復 → 增量 detailed routing → 重跑 signoff 的腳本，並用 negative test 證明它有效。SDC 的寫法與 PnR／signoff 分開的原則已移到 `timing-constraints-sdc`。
 
 ## negative test（單步重跑 `OpenROAD.STAPostPNR` + 對應 checker，`pnr/soc_top/neg_pnr.py`）
 

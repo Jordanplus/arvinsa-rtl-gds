@@ -1,6 +1,6 @@
 ---
 name: timing-constraints-sdc
-description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path／multicycle、derate、max transition／fanout），區分 PnR 與 signoff 的約束，或檢查 STA 有沒有未受約束的路徑（unconstrained endpoints）時使用。Use for writing/reviewing SDC constraints, PnR vs signoff SDC, and unconstrained-path checks.
+description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path／multicycle、derate、max transition／fanout），區分 PnR 與 signoff 的約束、讓兩份 SDC 共用同一組約束，或檢查 STA 有沒有未受約束的路徑（unconstrained endpoints）時使用；含 OpenSTA 容易用錯的指令（`unset_*_delay`、指定邊緣的 uncertainty）。數值怎麼定看 signoff-criteria。Use for writing/reviewing SDC constraints, PnR vs signoff SDC, and unconstrained-path checks (OpenSTA/LibreLane).
 ---
 
 # 時序約束（SDC）

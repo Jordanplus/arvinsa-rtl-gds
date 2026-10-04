@@ -1,6 +1,6 @@
 ---
 name: dv-directed-tests
-description: 找出 regression 沒用到的功能（gate-level 模擬或 formal 的植入錯誤漏掉的地方、上游測試沒碰到的指令或 IRQ），寫 directed firmware 測試補上，並用植入錯誤證明新測試抓得到時使用。Use when closing verification coverage gaps with directed firmware tests and qualifying them by bug injection.
+description: gate-level 模擬或 formal 的植入錯誤沒被抓到、或發現 regression 從沒用到某個功能（例如計數器高半部、上游測試沒碰到的指令或 IRQ）時使用：找出缺口、讀 RTL 確認實際行為、寫 directed firmware 測試補上，並用植入錯誤證明新測試抓得到。要證明的是 checker 本身會不會抓錯（不是測試沒碰到功能）時看 signoff-checker-qualification。Use when closing verification coverage gaps with directed firmware tests and qualifying them by bug injection.
 ---
 
 # 用 directed 測試補驗證缺口

@@ -1,6 +1,6 @@
 ---
 name: gate-level-simulation
-description: 在網表上跑 regression、比對 RTL 與網表行為（bus trace 或 lockstep）、處理 GL 模擬中的 X、sky130 cell 模型設定與模擬速度時使用。Use for gate-level simulation of synthesized/PnR netlists, RTL-vs-GL comparison and X handling.
+description: 在網表上跑 regression 時使用：sky130 cell 模型的 define、RTL 與網表 lockstep 或 bus trace 比對、X 的處理、帶電源的網表（`USE_POWER_PINS`）、Icarus 的宣告順序、模擬的牆鐘時限與機器負載（逾時誤判）、firmware 沒用到的功能看不到。Use for gate-level simulation of synthesized/PnR netlists (incl. powered netlists), RTL-vs-GL lockstep comparison, X handling and simulation time limits.
 ---
 
 # Gate-level 模擬
@@ -16,7 +16,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 3. **lockstep 要證明比對真的有跑**：`gl_compares` > 0；並用植入錯誤確認會 FAIL（網表輸出 buffer 換成反相器 → 每個 cycle 都報不一致）。
 4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。用腳本修改網表時也一樣：新加的 `wire` 要放在第一次使用之前，Yosys 不檢查這點（`neg_eqy.edit()`）。
 5. **coverage 缺口**：firmware 沒用到的功能 GL 模擬看不到（Phase 2：`rdcycleh`、bus-error IRQ）。formal 只證明合成網表 → 最終網表，合成這一步仍靠模擬，所以要補 directed 測試（`dv-directed-tests`；Phase 4 的 `counters`、`buserr` 在網表植入對應錯誤後都被 lockstep 抓到）。
-6. **時間與機器負載**：soc_top 13 支測試約 9 分鐘（memtest 87 萬 cycle 占 552 秒；Phase 4 的網表單獨跑 memtest 429 秒）。
+6. **時間與機器負載**：soc_top 15 支測試約 7 分鐘、帶電源約 9.5 分鐘（Phase 4 regress 4；memtest 87 萬 cycle 是最長的一支，約 430–550 秒）。
    - 每支模擬有牆鐘時限，用途是擋住不再前進的模擬器，不是速度規格；firmware 卡住由 cycle 上限與 `timeout` checker 判定。
    - **gate-level 的時限要用 gate-level 的速度算**：RTL 的 `dvlib.default_timeout`（120 秒＋cycle 上限／4000）套到 gate-level（每秒約 1200–1600 cycle）只剩約 2 倍餘裕。`run_gl_soc.py` 改用 `gl_timeout`（120 秒＋cycle 上限／400），比實測時間多 10–50 倍。
    - 機器忙時每支慢 2–6 倍：Phase 4 預跑與 neg-pnr、EQY 同時跑（hello 4→12 秒、unmapped 12→82 秒，3 支逾時）；**依序執行的 `make regress` 也會遇到**——第 3 次 regress 時 Spotlight 在索引 `runs/`（約 10 個 `mdworker`），memtest 548→952 秒，boot_uart_max 在舊時限 620 秒被停掉，整個 regress FAIL。
@@ -30,7 +30,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
    - 速度：3 支短測試約 11 秒，與不帶電源差不多；15 支約 17 分鐘（memtest 1004 秒，當時另有 EQY 在跑）。
 
 ## 待補
-- **SDF 反標的時序模擬**：LibreLane 的 STA step 會輸出各 corner 的 `.sdf`（`*-openroad-stapostpnr/<corner>/*.sdf`）。Icarus 對 `$setuphold` 的支援有限，不能當 signoff 證據；要做 timing check 需另找模擬器（規劃提到 CVC，x86_64 Linux）。signoff 仍以 9 corner STA 為準。
+- **SDF 反標的時序模擬**：LibreLane 的 STA step 會輸出各 corner 的 `.sdf`（`*-openroad-stapostpnr/<corner>/*.sdf`）。Icarus 對 `$setuphold` 的支援有限，不能當 signoff 證據；要做 timing check 需另找模擬器（規劃提到 CVC，x86_64 Linux）。signoff 仍以全部 corner（soc_top 15 個）的 STA 為準。
 
 ## 用完後 / 經驗紀錄
 

@@ -1,6 +1,6 @@
 ---
 name: signoff-checker-qualification
-description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden、處理 run 之間不可重現的差異，或要用植入錯誤（negative test／bug injection）證明 checker 抓得到錯誤時使用。Use when writing or changing a checker, maintaining golden results, or qualifying a checker with bug injection.
+description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同，或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用；附已知的 checker 漏洞類型表，新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
 ---
 
 # Checker 設計、golden 與 testbench qualification
@@ -15,14 +15,14 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 2. **型別要嚴格**：`false` 不能冒充 0；slack 是 inf 或極大值（例如 1e30，代表沒有受約束的路徑）要 FAIL → `[corners] slack_max`。
 3. **來源追溯**（`project-plan.md` §7.2）：
    - harden 的開始與結束都跑 `signoff/scripts/provenance.py`：工作目錄必須已全部 commit（含未追蹤檔）、submodule 在記錄的 commit、LibreLane 與 PDK 是 `env/versions.mk` 釘的版本；結束時 HEAD 不變，且 `resolved.json` 實際用的 LibreLane 版本與 PDK 也對。工作目錄不乾淨時 flow 照跑，但整體判 FAIL。
-   - harden 把**整體**判定寫進 `<run>_signoff/result.txt`；後續步驟（`run_gl_core.py`、`run_eqy.py`、`run_gl_soc.py`、`neg_pnr.py`）只認這個檔案是 `harden-<x>: PASS`。只查其中一份 checker 輸出（例如 `signoff.txt`）不夠：soc 專用檢查或輸入一致性 FAIL 的 run 仍會被拿去用。
+   - harden 把**整體**判定寫進 `<run>_signoff/result.txt`；後續步驟（`run_guard.py` 管的 9 個下游步驟：EQY、gate-level 模擬、它們的 negative test、`neg_pnr.py`）只認這個檔案是 `harden-<x>: PASS`。只查其中一份 checker 輸出（例如 `signoff.txt`）不夠：soc 專用檢查或輸入一致性 FAIL 的 run 仍會被拿去用。
    - 比對 run 實際用的設定（`resolved.json`：`cpu_params.py --resolved`、`check_inputs.py --resolved`）。
    - **追溯範圍要涵蓋實際執行的程式與資料**：LibreLane 在 nix-shell 裡跑的是 clone 的原始碼，signoff SDC 也 `source` clone 裡的 `base.sdc`；只比 clone 的 commit 時，clone 裡改過的檔案不會被發現（Phase 3 獨立審查實測）。Phase 4 已加：clone 的 `git status --porcelain` 為空、PDK 6 個目錄的內容摘要、`resolved.json` 的 PDK 路徑都在檢查範圍內。做法與陷阱在 `flow-regression-reproducibility`。
    - **下游也要確認 run 是這個 commit 產生的**：`provenance.json` 的 `repo_head` 必須等於目前的 `HEAD`。只看 `result.txt` 時，改了 RTL 後單獨跑 `make eqy-soc` 仍會用舊網表而 PASS。Phase 4 已加 `signoff/scripts/run_guard.py` 與 `neg_run_guard.py`。
 4. **「不是 0」的計數要寫出組成**並固定下來：Phase 2 unannotated 114 = 35 PCPI port + 41 tie HI + 38 clkload；soc_top = clkload + 32 個 `sram0/dout1` + 未用的 tie 輸出（soc_explore4：92 + 32 + 11）。
-5. **golden**：逐項比對全部 metrics（key 集合也要相同）；只對**實測會變**的族群給誤差（detailed routing 多執行緒不可重現：slack、skew、線長、via、功耗、IR），約實測差異的 30–200 倍；count／area 一律不給誤差（`check_signoff.py` 會拒絕這種設定）。至少重跑一次確認可重現性。
+5. **golden**：逐項比對全部 metrics（key 集合也要相同）。不可重現的那一步（多執行緒 detailed routing）之後算出來的數字，依下一點分類後才給誤差：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差，約實測差異的 30–200 倍；count／area 一律不給誤差（`check_signoff.py` 會拒絕這種設定）。至少重跑一次確認可重現性，但一次相同不代表可重現。
    - **族群要依「哪一步產生的」來分，不能只看「到目前有沒有變過」**：不可重現那一步（detailed routing）算出來的每個 metric 都先分類——最終 signoff 數字（`route__drc_errors`）完全相同；中間過程數字（`route__drc_errors__iter:*`，繞線器各輪剩下的 DRC 數）給誤差。Phase 4 的教訓：Phase 2 的 5 次 run 與 Phase 4 regress 1 這組都沒變，於是被列為「必須完全相同」；regress 2 才變（11 → 14），整個 regression FAIL 一次（約 30 分鐘後才 FAIL，重跑又要 2 小時）。中間過程數字給的誤差要寫明它其實等於不比（例如 ±100，高於看過的所有值），並用 negative test 證明最終數字仍被保護（`neg_pnr.py` P31）。
-6. **更新 golden**：先確認所有 limits 與自寫 checker PASS → 逐項說明與舊 golden 的差異 → 複製並記 sha256 → 再跑一次確認新 golden PASS。
+6. **更新 golden**：先確認所有 limits 與自寫 checker PASS → 逐項說明與舊 golden 的差異 → 複製並記 sha256 → 再跑一次確認新 golden PASS。golden 比對本身的 negative test：P12（instance 數 −10%）、P31（最終 DRC 數 +1、中間輪 +101 都 FAIL，+3 PASS）。
 7. **negative test 設計**：
    - 每個 checker 至少一個真錯誤，加一個正向對照（沒植入時 PASS）。
    - 植入點必須只命中一處；命中 0 或多處時，negative test 本身 FAIL（`edit()` 的寫法見 `neg_eqy.py`）。
@@ -40,7 +40,7 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - **新的測試（firmware、directed test）也要被植入錯誤證明有效**：在網表植入它要補的錯誤，只跑新測試（`dv-directed-tests` 規則 6）。
    - **自寫 checker 取代了工具原本的判定時**（例如 `ERROR_ON_MAGIC_DRC=false` 改由 `check_soc.py magic_drc` 判），這支自寫 checker 必須有自己的植入錯誤。
    - **借用另一個工具的植入方式時，先確認新工具讀得進植入後的檔案**：同一份植入錯誤的網表，Yosys（EQY）接受、Icarus（GL 模擬）因為 wire 先使用後宣告而編譯失敗（`neg_gl_soc.py csb0_inverted` 第一版）。編譯失敗不算抓到，所以 checker 正確判 FAIL，但這個案例等於沒測。
-   - checker 自己也包括「來源追溯」這類流程檢查：`neg_provenance.py` 在本機 clone 上植入未提交檔案、版本不符等 9 種狀況（另有 2 個 positive test）。
+   - checker 自己也包括「來源追溯」這類流程檢查：`neg_provenance.py` 在本機 clone 上植入未提交檔案、版本或內容不符、經 symlink 讀範圍外的檔等 16 種狀況（另有 3 個 positive test）。
 8. **獨立審查**：讓沒寫 checker 的 agent 另外想植入錯誤；修正後把舊案例全部重跑（Phase 1 兩輪、Phase 2 一輪）。
 9. **上一階段留下的項目要列入本階段的檢查清單**：exit review 的「留到下一階段」與「已知限制」逐條帶進下一階段的 exit 表（Phase 2 延到 Phase 3 的來源追溯，到 Phase 3 收尾才發現還沒做）。
 10. **端到端 target（`make phase<N>`）要在乾淨 checkout 從頭跑到底才算驗證過**：

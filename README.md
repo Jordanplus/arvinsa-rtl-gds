@@ -95,149 +95,338 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 19 個 Claude Code skill，每個對應 RTL-to-GDS 流程中一項重大任務。skill 是一份工作說明（`SKILL.md`）：在這個 repo 裡用 Claude Code 做到相關任務時會自動載入，照裡面的步驟、PASS 條件與已知陷阱做事。
+`.claude/skills/` 放了 19 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
 
-**經驗怎麼累積**：每個 `SKILL.md` 的結尾都有「經驗紀錄」表。每次做完該任務，把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。同一個現象出現兩次以上，或根因已經用實驗確認，才從紀錄搬進規則本文。這顆設計的具體數字（設定理由、試跑紀錄）留在 repo 文件，skill 只放可以帶到下一顆設計的規則與指向 repo 文件的連結。規則見 [CLAUDE.md](CLAUDE.md)。Phase 0 的環境建置不做成 skill。
+**Claude 怎麼挑 skill**：每次對話開始時，Claude 只看得到每個 skill 開頭的 `description`，也就是一段「什麼情況用」的說明。判斷和手上的任務相關，才讀整份 `SKILL.md`。所以 `description` 要寫出會遇到的情況與錯誤訊息。這一節是給人看的索引：先用「依情況找 skill」查，再看每個 skill 的說明。
 
-| skill | 一句用途 | 優先 |
+**只在本 repo 生效**：這些 skill 放在專案層，只有在這個 repo 裡用 Claude Code 才看得到。在其他專案使用的方法見本節最後「在其他專案使用」。
+
+**經驗怎麼累積**：
+- 每個 `SKILL.md` 結尾有「經驗紀錄」表。每次做完該任務，就把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。
+- 同一個現象出現兩次以上，或根因已經用實驗確認，才從紀錄搬進規則本文。
+- 這顆設計的具體數字（設定理由、試跑紀錄）留在 repo 文件；skill 只放可以帶到下一顆設計的規則，和指向 repo 文件的連結。
+- skill 的規則、陷阱或適用範圍有改，同一個 commit 就要更新本節該 skill 的說明，以及該 `SKILL.md` 的 `description`。`make skill-check` 會檢查格式與索引是否齊全，但內容是否一致仍要人檢查。
+
+規則見 [CLAUDE.md](CLAUDE.md)。Phase 0 的環境建置不做成 skill。
+
+### 依情況找 skill
+
+| 遇到的情況 | 先看 | 再看 |
 |---|---|---|
-| [librelane-run-debug](.claude/skills/librelane-run-debug/SKILL.md) | 跑、接續、單步重跑 LibreLane，讀 step 目錄、log 與 metrics | 1 |
-| [signoff-checker-qualification](.claude/skills/signoff-checker-qualification/SKILL.md) | checker 與 golden 的設計，用植入錯誤證明 checker 抓得到 | 1 |
-| [drv-timing-closure](.claude/skills/drv-timing-closure/SKILL.md) | 9 個 corner 的 setup／hold 與 slew／cap／fanout 收斂 | 1 |
-| [hard-macro-integration](.claude/skills/hard-macro-integration/SKILL.md) | SRAM 等 hard macro 的整合清單 | 2 |
-| [drc-signoff](.claude/skills/drc-signoff/SKILL.md) | DRC、GDS 輸出、XOR，macro 內部 DRC 的對照基準 | 2 |
-| [formal-equivalence-eqy](.claude/skills/formal-equivalence-eqy/SKILL.md) | EQY 等價證明與已知漏洞 | 2 |
-| [antenna-signoff](.claude/skills/antenna-signoff/SKILL.md) | antenna 檢查與修復，macro 沒有 antenna 資料時的處理 | 2 |
-| [cts-clock-tree](.claude/skills/cts-clock-tree/SKILL.md) | clock tree 與 clock pin | 3 |
-| [pdn-ir-drop](.claude/skills/pdn-ir-drop/SKILL.md) | 電源網路與 IR drop | 3 |
-| [lvs-signoff](.claude/skills/lvs-signoff/SKILL.md) | LVS、macro black box、實體連接、斷線 pin | 3 |
-| [gate-level-simulation](.claude/skills/gate-level-simulation/SKILL.md) | 網表模擬、RTL 與網表 lockstep、X 處理 | 3 |
-| [floorplan-congestion](.claude/skills/floorplan-congestion/SKILL.md) | die 尺寸、macro 位置、IO pin、placement 密度、繞線壅塞與繞路 | 2 |
-| [timing-constraints-sdc](.claude/skills/timing-constraints-sdc/SKILL.md) | SDC 時序約束、PnR 與 signoff 約束分開、未受約束路徑的檢查 | 2 |
-| [rtl-synthesis-lint](.claude/skills/rtl-synthesis-lint/SKILL.md) | Yosys 合成設定、狀態機重新編碼、lint、latch、邏輯深度 | 3 |
-| [signoff-criteria](.claude/skills/signoff-criteria/SKILL.md) | signoff 條件的數值怎麼推導：uncertainty 成分、duty cycle、derate、corner、IR／EM／SI 預算、PDK 規則，以及工具沒分析的項目怎麼補 | 1 |
-| [flow-regression-reproducibility](.claude/skills/flow-regression-reproducibility/SKILL.md) | 一鍵 regression、乾淨 checkout 驗證、來源追溯（commit、LibreLane、PDK 內容）、下游拒絕過期的 run、長 run 期間怎麼開發 | 1 |
-| [multicorner-sta](.claude/skills/multicorner-sta/SKILL.md) | 增減 STA corner、每個 corner 的 hook 與報告、只重跑 STA 的 what-if、從路徑推最小週期、corner 變多時 PnR 變慢 | 2 |
-| [dv-directed-tests](.claude/skills/dv-directed-tests/SKILL.md) | 從漏掉的植入錯誤找出沒被測到的功能，寫 directed firmware 測試補上，再用植入錯誤證明抓得到 | 2 |
-| [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：exit criteria 與證據、與計畫不同的地方、已知限制、獨立審查、使用者決定 | 1 |
+| 要跑 LibreLane、從中間 step 接續、只重跑一個 step | librelane-run-debug | — |
+| run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束 | librelane-run-debug | multicorner-sta（corner 太多）、drv-timing-closure（post-GRT 修復的設定） |
+| STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
+| max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
+| 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
+| 要定 clock uncertainty、derate、corner、IR 上限、max transition 這類數值 | signoff-criteria | timing-constraints-sdc（寫進 SDC）、pdn-ir-drop（IR） |
+| 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
+| 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
+| 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
+| 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta |
+| PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM | pdn-ir-drop | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
+| DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
+| antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
+| LVS 失敗、斷線 pin、電源 pin 有沒有真的接上 | lvs-signoff | pdn-ir-drop |
+| 合成設定、lint 警告、狀態機被重新編碼（formal 因此對不上） | rtl-synthesis-lint | formal-equivalence-eqy |
+| 證明兩份網表等價、EQY 當機或證不出來 | formal-equivalence-eqy | — |
+| 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
+| gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
+| signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
+| 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同 | signoff-checker-qualification | flow-regression-reproducibility |
+| 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發 | flow-regression-reproducibility | signoff-checker-qualification |
+| 一個 Phase 收尾 | phase-exit-review | — |
 
-優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。`floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。`signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多數沿用預設值、沒有推導，依使用者要求新增。最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review；Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件、CTS 與 resizer 餘量）寫回既有的 skill。
+### 在流程中的位置
 
-### librelane-run-debug：LibreLane 執行與除錯
+```
+RTL：合成、lint ........................ rtl-synthesis-lint
+ └ floorplan、macro、IO pin ............ floorplan-congestion、hard-macro-integration
+    └ PDN .............................. pdn-ir-drop
+       └ placement、resizer ............ drv-timing-closure、floorplan-congestion（密度）
+          └ CTS ........................ cts-clock-tree
+             └ routing、antenna ........ drv-timing-closure、antenna-signoff、floorplan-congestion（繞路）
+                └ signoff
+                   ├ STA ............... multicorner-sta、timing-constraints-sdc、drv-timing-closure
+                   ├ DRC、XOR、密度 .... drc-signoff
+                   ├ LVS、連接性 ....... lvs-signoff
+                   └ IR、EM ............ pdn-ir-drop
 
-- **何時用**：跑 LibreLane、run 失敗找原因、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）。
-- **內容**：nix-shell 呼叫方式與路徑規則；`--from` 接續；`python3 -m librelane.steps run` 單步重跑與串接；step 目錄的 `-1` 字尾、ODB 會快取 LEF、STA hook 只在 STA 生效、log 緩衝、`pkill` 誤殺、post-GRT 修復跑不完等陷阱；各步驟時間。
-- **不含**：設定值該設多少、怎麼判 PASS（看各主題的 skill）。
+驗證（網表出來之後）
+ ├ 等價證明 ............................ formal-equivalence-eqy
+ └ 網表模擬 ............................ gate-level-simulation、dv-directed-tests
 
-### signoff-checker-qualification：checker、golden 與植入錯誤
+PnR 各步驟用的 SDC 與 corner .......... timing-constraints-sdc、multicorner-sta
 
-- **何時用**：寫或改任何 PASS／FAIL checker、建立或更新 golden、處理 run 之間不可重現的差異、用 negative test（植入錯誤）證明 checker 有效。
-- **內容**：只認明確 PASS、型別嚴格、來源追溯；golden 的誤差只給 detailed routing 會變的族群；植入點必須只命中一處、必須在預期的 checker 以預期原因 FAIL；已知的 checker 漏洞類型（工具靜默略過、檢查範圍比名稱小、植入沒生效、工具快取）。
-- **實例**：`signoff/scripts/check_signoff.py`、`signoff/golden/*/README.md`、各 `neg_*.py`。
+signoff 條件的數值從哪來 ............... signoff-criteria
+貫穿全程 ............................... librelane-run-debug（執行與除錯）
+                                         signoff-checker-qualification（checker、golden、植入錯誤）
+                                         flow-regression-reproducibility（regression、來源追溯）
+                                         phase-exit-review（階段收尾）
+```
 
-### drv-timing-closure：時序與 DRV 收斂
+### 索引
 
-- **何時用**：9 corner STA 有 setup／hold 違規，或 max slew／cap／fanout 違規；訂時序目標、corner 判定、PnR 與 signoff 的 SDC。
-- **內容**：corner 判定設定；DRV 收斂清單（排除延遲 cell、`LAYERS_RC`、post-GRT 修復與餘裕、長線切段）；退回過的做法與原因；違規的判讀方法；實作與簽核分開的 SDC；先找根因（例如繞路）再考慮放寬上限，放寬需使用者決定（ADR-0009：曾放寬到 1.0 ns，找到根因後撤回）。
-- **negative test**：P01–P04（單步重跑 STA）。
+「適用範圍」說明換到別的設計時哪些內容可以直接用：「通用」是不限工具的方法；「LibreLane／OpenROAD」是同一套開源流程都適用；「sky130」是這個 PDK 的數值、規則名稱或 cell 名稱。經驗多寡看各 `SKILL.md` 的經驗紀錄表。
 
-### hard-macro-integration：hard macro 整合
+| skill | 一句話 | 適用範圍 |
+|---|---|---|
+| [librelane-run-debug](.claude/skills/librelane-run-debug/SKILL.md) | 跑、接續、單步重跑 LibreLane，查失敗與卡住 | LibreLane 3 |
+| [signoff-checker-qualification](.claude/skills/signoff-checker-qualification/SKILL.md) | checker 與 golden 的設計，用植入錯誤證明 checker 抓得到 | 通用 |
+| [drv-timing-closure](.claude/skills/drv-timing-closure/SKILL.md) | 多 corner 的 setup／hold 與 slew／cap／fanout 收斂 | LibreLane／OpenROAD；cell 名稱是 sky130 |
+| [hard-macro-integration](.claude/skills/hard-macro-integration/SKILL.md) | SRAM 等 hard macro 的整合清單 | LibreLane；SRAM 細節是 sky130 |
+| [drc-signoff](.claude/skills/drc-signoff/SKILL.md) | DRC、GDS 輸出、XOR、macro 內部 DRC、金屬密度 | 多為 sky130；位置比對方法通用 |
+| [formal-equivalence-eqy](.claude/skills/formal-equivalence-eqy/SKILL.md) | EQY 等價證明、它會靜默略過的情況與補法 | Yosys／EQY |
+| [antenna-signoff](.claude/skills/antenna-signoff/SKILL.md) | antenna 檢查與修復，macro 沒有 antenna 資料時的處理 | OpenROAD；數值是 sky130 |
+| [cts-clock-tree](.claude/skills/cts-clock-tree/SKILL.md) | clock tree、clock pin、macro 的 clock latency | OpenROAD／LibreLane |
+| [pdn-ir-drop](.claude/skills/pdn-ir-drop/SKILL.md) | 電源網路、IR drop、供電點模型、EM | OpenROAD／LibreLane |
+| [lvs-signoff](.claude/skills/lvs-signoff/SKILL.md) | LVS、macro black box、實體連接、斷線 pin | LibreLane（Magic、Netgen） |
+| [gate-level-simulation](.claude/skills/gate-level-simulation/SKILL.md) | 網表模擬、RTL 與網表 lockstep、X、帶電源網表、時限 | Icarus＋sky130 模型；lockstep 方法通用 |
+| [floorplan-congestion](.claude/skills/floorplan-congestion/SKILL.md) | die 尺寸、macro 位置、IO pin、placement 密度、壅塞與繞路 | OpenROAD；格點是 sky130 |
+| [timing-constraints-sdc](.claude/skills/timing-constraints-sdc/SKILL.md) | SDC 時序約束、PnR 與 signoff 約束分開、未受約束路徑 | OpenSTA／LibreLane |
+| [signoff-criteria](.claude/skills/signoff-criteria/SKILL.md) | signoff 條件的數值怎麼推導，工具沒分析的項目怎麼補 | 推導方法通用；預設值是 sky130＋LibreLane |
+| [rtl-synthesis-lint](.claude/skills/rtl-synthesis-lint/SKILL.md) | Yosys 合成設定、狀態機重新編碼、lint、latch | Yosys／LibreLane |
+| [flow-regression-reproducibility](.claude/skills/flow-regression-reproducibility/SKILL.md) | 一鍵 regression、乾淨 checkout、來源追溯、長 run 期間怎麼開發 | 方法通用；實作是 LibreLane／Nix |
+| [multicorner-sta](.claude/skills/multicorner-sta/SKILL.md) | 增減 corner、每個 corner 的 hook、只重跑 STA 的 what-if、最小週期 | LibreLane／OpenSTA |
+| [dv-directed-tests](.claude/skills/dv-directed-tests/SKILL.md) | 從漏掉的植入錯誤找缺口，寫 directed 測試補上並證明有效 | 通用；例子是 RISC-V firmware |
+| [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：證據、限制、獨立審查、使用者決定、skill 回寫 | 通用 |
 
-- **何時用**：把 SRAM／IP macro 放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）。
-- **內容**：各 view 的來源與產生（GDS、antenna LEF、padded .lib、blackbox、模擬模型，每個產生檔都要能檢查是否過期）；擺放與 halo；未用 port 的 tie-off；整合清單逐項連到其他 skill。
-- **實例**：`pnr/soc_top/`、`ip/sram/`、ADR-0006／0007／0008。
+### 各 skill 說明
 
-### drc-signoff：DRC、GDS 輸出、XOR
+#### librelane-run-debug：LibreLane 執行與除錯
 
-- **何時用**：Magic／KLayout DRC、GDS 輸出、XOR；含 macro 時 DRC 不為 0、abstract DRC 大量報錯、GDS 多個 top cell。
-- **內容**：abstract DRC 的 `nwell.4` 假錯誤與改用完整 GDS；macro 內部 DRC 的判定方式（外框外為 0；框內每個違規都要落在 macro 單獨檢查時同規則違規的位置，Phase 3 只比規則種類會漏掉新的違規）；Magic GDS 多 top cell 時改用 KLayout 輸出；報告檔大小與時間。
-- **negative test**：P10（植入 DRC 違規）、P11（XOR）。
+- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無。
+- **重點**：
+  - 單步重跑用 `python3 -m librelane.steps run`，改的是 config 與 state 的複本，原 run 不動。
+  - 錯誤要先證明是隨機的（同一份輸入重跑 3–4 次，有過有不過），才能加重試；重試只針對那一個訊息，而且有次數上限。只跑一次就把錯誤歸因到某個設定不可靠：`GRT-0229` 原本被誤認為是某個設定造成的。
+  - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。
+  - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
+  - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。
+- **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
+- **本 repo 實例**：`pnr/*/run.sh`、`pnr/librelane_flow.sh`（GRT-0229 重試，negative test `make test-flow-retry`）、`pnr/soc_top/neg_pnr.py` 的 `rerun()`。
 
-### formal-equivalence-eqy：formal equivalence
+#### signoff-checker-qualification：checker、golden 與植入錯誤
 
-- **何時用**：用 EQY 證明網表等價、EQY 當機或分區證不出來、設計 EQY 的 negative test。
-- **內容**：目前可用的組合（合成網表 vs 最終網表）與必要設定（stack、`$scopeinfo`、`insbuf off`）；判定規則，包括 EQY 對「對應到常數的 bit」不證明的漏洞；RTL 對網表尚未解決的問題（狀態機重新編碼、上電未定值的暫存器）。
-- **negative test**：`neg_eqy.py` 在 picorv32_core 植入 10 種、soc_top 7 種錯誤（不重複的共 13 種），FAIL 的位置必須在植入點附近；EQY 的 `sat` 證不到 flip-flop 本身，另加 sequential cell 結構比對。
+- **名詞**：checker 是判 PASS／FAIL 的程式或規則；golden 是確認過正確的一次 run 的完整 metrics，之後每次逐項比對；negative test（bug injection）是故意植入錯誤，確認 checker 真的 FAIL。
+- **何時用**：新寫或修改任何 checker（signoff metrics、DV、EQY、自寫腳本）；建立或更新 golden；決定 golden 比對哪些 metric 可以有誤差；同樣設定重跑結果不同；設計植入錯誤的案例。
+- **重點**：
+  - 只認明確 PASS：缺一個 metric、表格被截斷、工具沒跑完都是 FAIL。型別要嚴格：`false` 不是 0；slack 是 1e30 代表沒有受約束的路徑。
+  - golden 的誤差依「這個數字是哪一步產生的」分類，不要等出過差異才給。不可重現那一步（多執行緒 detailed routing）之後算出來的數字分三類：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差；繞線器中間各輪的 DRC 數這類中間過程數字給大誤差（等於不比數值）；計數、面積、最終 DRC、LVS 一律完全相同。
+  - 每個 checker 至少要有一個植入錯誤，加一個沒植入時必須 PASS 的對照。斷言寫成「FAIL 的列剛好是這幾列」，而且要看全部問題，不能只看第一個。
+  - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
+  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置。新 checker 要逐條對照。
+- **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
-### antenna-signoff：antenna
+#### drv-timing-closure：時序與 DRV 收斂
 
-- **何時用**：antenna 違規、diode 插入、macro 的 LEF 沒有 antenna 資料、diode 造成 fanout／slew 副作用。
-- **內容**：從 macro 的 SPICE 算閘極面積補進 LEF；用 tech LEF 的比例估允許長度；不要用 heuristic diode insertion 的原因；diode 算進 fanout 的對策；要用不同 LEF 驗證時直接用 openroad 讀 LEF＋DEF。
-- **negative test**：P06。
+- **名詞**：DRV（design rule violation，電性規則違規）指 max slew（訊號轉換太慢）、max cap（負載電容太大）、max fanout（一條線接太多負載）。
+- **何時用**：多 corner STA 有 setup／hold 違規或 DRV 違規；要調 resizer、長線修復、cell 排除、繞線前的寄生估計。
+- **重點**：
+  - LibreLane 對 sky130 預設只在 tt 判 setup FAIL，slew／cap 不判；先把四個 `*_VIOLATION_CORNERS` 都設 `["*"]`。
+  - DRV 收斂清單，依實際有效的順序：排除延遲 cell、設 `LAYERS_RC`、開 post-GRT 修復、長線切段；剩下少數違規先查是不是繞路。
+  - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。
+  - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
+  - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
+  - 附「退回過的做法」表，避免再試沒用的設定。
+- **不在這裡**：SDC 寫法看 timing-constraints-sdc；corner 設定看 multicorner-sta；clock tree 看 cts-clock-tree；數值怎麼定看 signoff-criteria。
+- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009。negative test：P01–P04。
 
-### cts-clock-tree：clock tree
+#### hard-macro-integration：hard macro 整合
 
-- **何時用**：clock buffer 的 fanout／cap 違規、skew、clock 輸入 port 的 slew、clock pin 擺放。
-- **內容**：`CTS_SINK_CLUSTERING_SIZE`、`CTS_DISTANCE_BETWEEN_BUFFERS` 的作用與試過無效的設定；clock pin 到第一級 buffer 的線不在 resizer 修復範圍內；待補 macro clock pin 的平衡。
+- **何時用**：把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
+- **重點**：
+  - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、保守的 padded .lib、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
+  - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以只有 TT 時，產生一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
+  - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
+  - 未用的 port 要 tie-off，checker 要檢查實際接的值。
+  - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008。negative test：P08、P09、P14、P16–P20。
 
-### pdn-ir-drop：電源網路與 IR drop
+#### drc-signoff：DRC、GDS 輸出、XOR
 
-- **何時用**：PDN 產生失敗、macro 電源怎麼接、IR drop 分析與門檻。
-- **內容**：`PDN-0179` 窄 row 問題與 halo 對策；為什麼關掉 macro grid 設定不會斷開 SRAM 電源；PSM 只查電源網路本身；IR drop 門檻是 VDD 降壓 + GND 抬升合計（soc_top 20 mV）；macro-level 的供電模型要明講假設（一側供電）；最大電流與最大電阻不在同一個 corner；待補改 PDN 後重跑 IR 的 negative test。
+- **何時用**：Magic／KLayout DRC、GDS 輸出、XOR（兩個工具寫出的 GDS 逐點比對）；設計含 macro 時 DRC 不為 0、abstract DRC 報大量 `nwell.4`、GDS 有多個 top cell、金屬密度。
+- **重點**：
+  - abstract DRC 會在每條 standard cell row 報假的 `nwell.4`，所以改用完整 GDS 的 DRC。
+  - SRAM 內部本來就有大量標準規則違規：外框外必須是 0；外框內每個違規都要落在 macro 單獨檢查時、同規則違規的位置上。只比規則種類會漏掉新的錯誤。
+  - Magic 與 KLayout 的 sky130 deck 涵蓋範圍不同：KLayout 沒有 latch-up 與 implant 規則，浮接金屬檢查也開不起來。所以「KLayout DRC = 0」不代表全部合格。
+  - 設了 `ERROR_ON_MAGIC_DRC=false` 之後 LibreLane 不再替 Magic DRC 判 FAIL，取代它的自寫 checker 必須有自己的植入錯誤。
+  - Classic flow 不插 metal fill，也不查密度；soc_top 實測遠低於下限，chip-level 要補。
+- **本 repo 實例**：`pnr/soc_top/check_soc.py`（magic_drc）、`pnr/soc_top/sram_drc_alone.py`、`signoff/waivers/`。negative test：P10、P11、P21。
 
-### lvs-signoff：LVS 與連接性
+#### formal-equivalence-eqy：formal equivalence
+
+- **名詞**：formal equivalence 是用數學證明兩份電路在所有輸入與狀態下行為相同。
+- **何時用**：用 EQY 證明兩份網表（或 RTL 與網表）等價；EQY 當機（SIGSEGV）或分區證不出來；設計 EQY 的 negative test。
+- **重點**：
+  - 目前可用的組合是合成網表 vs 最終網表。必要設定：加大 stack（`ulimit -s`）、`insbuf off`、刪掉 `$scopeinfo`。
+  - EQY 會靜默略過三種情況，都要另外補：被換成常數的 bit（看 log 的 `found constant`）、flip-flop 本身的種類、clock 接線（`sat` 先把所有 flip-flop 改成同一個隱含 clock）。後兩項用 EQY 以外的結構比對。
+  - negative test 要分清楚錯誤是被哪一種機制抓到的：分區證明失敗、常數規則、或名稱對應矛盾。而且要有一個非常數的錯誤，證明「證明步驟」本身有效。FAIL 的位置要在植入點附近，並在案例之間做交叉檢查。
+  - RTL 對合成網表：LibreLane 一定會重新編碼狀態機，目前沒有可用的做法，靠 gate-level 模擬與 directed 測試補。
+- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 9 種、picorv32 11 種）。
+
+#### antenna-signoff：antenna
+
+- **名詞**：antenna 效應是製造時，只接到閘極的長金屬線收集電荷、擊穿閘極氧化層。
+- **何時用**：antenna 違規、diode 插入與它造成的 fanout／slew 副作用、macro 的 LEF 沒有閘極面積資料（`ANTENNAGATEAREA`）。
+- **重點**：
+  - macro 沒有閘極面積資料時，checker 看不到接到 macro 的線。要從 macro 的 SPICE 算出閘極面積，補進 LEF。
+  - 不要用 heuristic diode insertion：soc_top 被插了上萬顆 diode，之後繞線不收斂。
+  - ODB 會快取 LEF，換 LEF 驗證時要直接用 openroad 讀。
+  - OpenROAD 與 Magic 的 antenna 參數不同。Classic flow 沒有 antenna 的 checker，要自己判。
+  - OpenROAD 不讀 `ANTENNAPARTIALMETAL*AREA`，macro 階層之間的 antenna 只能靠 port 上的 diode。
+- **本 repo 實例**：ADR-0008、`ip/sram/.../gen_antenna_lef.py`。negative test：P06。
+
+#### cts-clock-tree：clock tree
+
+- **何時用**：clock buffer 的 fanout／cap 違規、skew、clock 輸入 pin 到第一級 buffer 的長線 slew、clock pin 擺放、CTS 把 macro 的 clock 延後而讓 macro 輸入的 hold 變差。
+- **重點**：
+  - clock pin 到 clock tree 根部的線不在 resizer 的修復範圍內。對策是把 pin 擺在 flip-flop 重心附近，或用 `CTS_CLK_MAX_WIRE_LENGTH` 讓 CTS 把這段線切開加 buffer（soc_top 這樣做之後通過，但同一次 run 也改了別的設定，這一項的效果沒有單獨實驗）。
+  - clock buffer 的 fanout／cap 違規：`CTS_SINK_CLUSTERING_SIZE`、`CTS_DISTANCE_BETWEEN_BUFFERS`。PDK 的 `RT_CLOCK_MIN_LAYER` 在 LibreLane 3 沒有生效，clock 實際走 met1／met2。
+  - skew 的 metric 含 clock uncertainty 與 derate，不是 skew 的真值。
+  - CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚（插 delay buffer），`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步；目前用 resizer 的 hold 餘量補。
+  - 有記錄試過但沒有作用的設定，例如 `CTS_MAX_CAP`。
+- **本 repo 實例**：`pnr/soc_top/README.md` 的設定表、`pnr/soc_top/pin_order.cfg`。
+
+#### pdn-ir-drop：電源網路與 IR drop
+
+- **名詞**：IR drop 是電流流過供電線造成的電壓降；EM（electromigration）是電流密度太大，金屬長期使用後斷線。
+- **何時用**：PDN 產生失敗（例如 `PDN-0179` 窄 row）、macro 電源怎麼接、IR drop 分析與門檻、IR drop 結果小得不合理、EM、decap。
+- **重點**：
+  - 電源連接由四個範圍不同的檢查負責。macro 電源 pin 有沒有真的接上，證據是 IR 分析的連接檢查（PSM）與 LVS。設 `PDN_CONNECT_MACROS_TO_GRID=false` 產生的電源網路與原本完全相同，不能拿來證明 macro 電源有接。
+  - IR 要判 VDD 降壓加 GND 抬升的合計；LibreLane 的 `ir__drop__worst` 只有 VDD。
+  - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
+  - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
+  - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
+- **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29。
+
+#### lvs-signoff：LVS 與連接性
 
 - **何時用**：LVS 失敗、macro 在 LVS 中是 black box、驗證電源或訊號 pin 的實體連接、斷線 pin。
-- **內容**：black box 的驗證範圍；斷線 pin 表格只在有斷線時才產生；未用輸出接具名 wire；刪 via 重跑萃取與 LVS 的驗證方法。
-- **negative test**：P05、P08。
+- **重點**：
+  - macro 用 LEF 萃取時，LVS 只驗 macro pin 的連接，不驗內部。
+  - 斷線 pin 的表格只在有斷線時才產生。要讀 log 裡的那一行，有表格時還要確認表格完整。
+  - macro 未用的輸出接 RTL 具名 wire，就不算斷線；並確認 `IGNORE_DISCONNECTED_MODULES` 仍是 PDK 預設。
+  - 驗證方法：刪掉電源環上的 via，單步重跑萃取與 LVS，必須 FAIL。
+- **negative test**：P05、P08、P15。
 
-### gate-level-simulation：gate-level 模擬
+#### gate-level-simulation：gate-level 模擬
 
-- **何時用**：網表 regression、RTL 與網表比對、GL 模擬的 X 處理、cell 模型設定與速度。
-- **內容**：sky130 模型的 define；bus trace 比對與 lockstep 兩種做法及 X 規則；證明比對真的有跑；GL 模擬看不到 firmware 沒用到的功能，要靠 formal 補；各測試時間。
+- **何時用**：在網表上跑 regression、RTL 與網表比對、X 的處理、帶電源的網表、cell 模型設定、模擬逾時。
+- **重點**：
+  - sky130 cell 模型用 `-DFUNCTIONAL -DUNIT_DELAY=#1`。
+  - RTL 與網表放在同一個 testbench 做 lockstep，每個 cycle 比輸出，而且要證明比對真的有跑（`gl_compares` > 0，並植入錯誤確認會 FAIL）。X 的規則：RTL 是 0／1 才比，這時網表是 X 也算不一致；RTL 是 X 不比（合成可以合法替它選值）。
+  - 帶電源的網表：電源腳沒接好的 cell 輸出 X，lockstep 就 FAIL；Icarus 對 tap cell 多出的 VPB／VNB 報的警告，只對那一個 cell 放行。
+  - Icarus 要求先宣告再使用；用腳本改網表時也要注意。
+  - 牆鐘時限要依 gate-level 的速度算：照 RTL 速度算只剩約 2 倍餘裕，機器一忙就會誤判逾時。
+  - firmware 沒用到的功能，gate-level 模擬看不到（見 dv-directed-tests）。
+- **本 repo 實例**：`dv/gl_soc/`、`dv/gl_core/`、`dv/monitors/gl_lockstep.v`。negative test：`neg_gl_soc.py`、`neg_gl_core.py`。
 
-### floorplan-congestion：floorplan 與繞線壅塞
+#### floorplan-congestion：floorplan 與繞線壅塞
 
-- **何時用**：決定 die／core 尺寸、macro 位置與方向、IO pin 擺放、placement 密度；遇到繞線壅塞、大幅繞路、窄 row、GCell 溢位。
-- **內容**：die 尺寸的估算與使用率定義（ADR-0006）；macro 座標對齊格點、halo 與窄 row 的 PDN 問題；clock pin 的位置；用 DEF 判讀繞路（繞線長度 ÷ 端點距離）；全域 congestion 報告看不到局部繞路；placement 目標密度的設定（soc_top 從自動的 68% 降到 55% 解決了轉角繞路）。
+- **何時用**：決定 die／core 尺寸與使用率（utilization，cell 面積佔可擺放面積的比例）、macro 位置與方向、IO pin、placement 目標密度；遇到繞線壅塞、某條線大幅繞路、窄 row、GCell 溢位。
+- **重點**：
+  - die 尺寸用前一階段實測的面積估，並寫清楚「使用率」的分母。IO pin 用 `IO_PIN_ORDER_CFG`，並設 `ERRORS_ON_UNMATCHED_IO = "both"`，pin 名稱對不上就報錯。
+  - macro 座標要對齊 site 格點。halo 要嘛留出夠寬的 row，要嘛蓋過 core 邊界，否則會出現 PDN 接不到的窄 row。
+  - 繞路用「繞線長度 ÷ 端點直線距離」判讀；全域的 congestion 報告看不到局部繞路。
+  - logic 區是 L 形時要手動設 placement 目標密度（soc_top：自動的 68% 改 55%，轉角繞路消失）。
+- **本 repo 實例**：ADR-0006、`pnr/soc_top/config.json`、`pnr/soc_top/pin_order.cfg`。
 
-### timing-constraints-sdc：時序約束
+#### timing-constraints-sdc：時序約束
 
-- **何時用**：寫或改 SDC（clock、IO delay、例外路徑、derate、max transition／fanout）、區分 PnR 與 signoff 的約束、檢查有沒有未受約束的路徑。
-- **內容**：LibreLane `base.sdc` 已提供的約束清單；新 SDC 先 `source` base.sdc 再改；用單步重跑 STA 驗證約束只改了想改的；macro derate 的 hook；`check_setup` 的未受約束路徑檢查與已知例外（`check_soc.py sta_setup`）。
-- **negative test**：P01–P03、P13。
+- **何時用**：寫或改 SDC（clock、IO delay、例外路徑、derate、max transition）；區分 PnR 與 signoff 的約束；STA 報未受約束的路徑。
+- **重點**：
+  - 新 SDC 先 `source` LibreLane 的 `base.sdc`，再改需要的一兩項。
+  - 設了 `PNR_SDC_FILE` 就一定要同時設 `SIGNOFF_SDC_FILE`，否則 signoff STA 會改用 PnR 的約束。
+  - LibreLane 每個 corner 都會檢查未受約束的路徑，但結果沒有變成 metric，也沒有 checker 判 FAIL，要自己寫。
+  - 改完約束，用同一份版圖只重跑 STA，確認只改了想改的。
+  - 用 `unset_*_delay` 拿掉約束時，STA 的完整性檢查看不出來；要模擬「漏寫」，就產生一份真的少一行的 SDC。
+  - 半週期路徑（一個 clock edge 送出、相反 edge 接收）要算 duty cycle。PnR 與 signoff 共用的約束放在同一個檔。
+- **本 repo 實例**：`pnr/soc_top/pnr.sdc`、`signoff.sdc`、`clock_uncertainty.sdc`。negative test：P01–P03、P13、P22–P25。
 
-### signoff-criteria：signoff 條件的推導
+#### signoff-criteria：signoff 條件的推導
 
-- **何時用**：決定或檢討任何 signoff 條件的數值，例如 clock uncertainty、duty cycle、OCV derate、PVT corner、IO delay、IR drop 上限、EM、SI、max transition／cap／fanout、antenna、density、latch-up；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
-- **內容**：
-  - 每個條件的四個問題：防什麼、怎麼算、預設值出處、工具有沒有分析。
-  - 推導前要先有的輸入：clock 來源的 jitter 與 duty、供電範圍、溫度、外部介面時序。
-  - 19 條已驗證的工具行為，例如：inter-clock uncertainty 會取代一般值；skew metric 含 uncertainty 與 derate；fmax 報告排除半週期路徑；instance derate 取代 global；IR 只用 nom_tt；KLayout deck 不含 latch-up。
-  - 各條件的推導公式。
-  - 每次 signoff 都要列出的「不分析項目」清單。
-- **實例**：`docs/notes/signoff_criteria_soc_top.md`（soc_top 的缺口與 Phase 4 待辦）。
-- **negative test**：每個推導出來的條件都要有植入錯誤的案例，例如 duty cycle 60% 必須 FAIL。
+- **何時用**：決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
+- **重點**：
+  - 每個條件都要回答四件事：防什麼、數值怎麼算、預設值出自哪裡、工具有沒有分析。LibreLane 的預設值多半是沿用的常數，沒有成分說明。
+  - 推導前要先有的輸入：clock 來源、供電範圍、溫度、外部介面時序。沒有就寫「假設」。
+  - IO delay 的 `-min` 不能直接設 0，要和上層的 clock latency 一起建模，否則會出現大量假的 hold 違規。
+  - 推導出來的條件要寫進 flow 變成 checker，每個都要有植入錯誤的案例（附 soc_top 的實作範本）。
+  - 一組已驗證的工具行為，例如：指定邊緣的 uncertainty 會取代一般值、instance derate 會取代 global、fmax 報告排除半週期路徑、OpenSTA 沒有 SI 分析。
+  - 每次 signoff 都要列出「不分析的項目」，寫出各用哪一筆 margin 涵蓋。
+- **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`。
 
-### rtl-synthesis-lint：合成與 lint
+#### rtl-synthesis-lint：合成與 lint
 
-- **何時用**：Yosys 合成設定、狀態機重新編碼、被常數化的暫存器、lint 警告、latch、為時序目標調整合成。
-- **內容**：harden 參數與 SoC instance 一致的檢查；LibreLane 合成固定跑 `fsm` 重新編碼（影響 RTL 對網表的 formal）；X 語意下的常數化；LibreLane lint 警告的來源與鎖定方式；待補 25 ns 的合成策略。
+- **何時用**：Yosys 合成設定、harden 的參數是否與 SoC 裡的 instance 一致、狀態機被重新編碼、暫存器被常數化、lint 警告、latch、為時序目標調整合成。
+- **重點**：
+  - 參數一致要用 Yosys 讀 RTL 取值比對，不比字串；Yosys 會忽略 `defparam`。
+  - LibreLane 的合成一定會跑 `fsm` 重新編碼狀態機，沒有開關，所以 RTL 對網表的 formal 比對會失敗。
+  - 上電時值未定、寫入後恆為常數的暫存器，可能被合法地換成常數。
+  - LibreLane 的 lint 警告只計數、不判 FAIL，數量由 golden 鎖定。
+  - 經驗較少：Phase 4 沒有調整過合成。
+- **本 repo 實例**：`pnr/picorv32_core/cpu_params.py`、`rtl/lint/`。
 
+#### flow-regression-reproducibility：一鍵 regression、可重現性與來源追溯
 
-### flow-regression-reproducibility：一鍵 regression、可重現性與來源追溯
+- **名詞**：乾淨 checkout 是從某個 commit 重新取出、沒有任何建置產物的目錄；來源追溯（provenance）是記錄並檢查一個 run 用了哪個 commit、哪版工具與 PDK。
+- **何時用**：建立或執行 `make regress`；在乾淨 checkout 驗證；查一個 run 是怎麼產生的；讓下游步驟拒絕過期或沒 PASS 的 run；長時間 run 期間繼續開發；長 regression 中途因機器負載 FAIL。同樣設定重跑結果不同、golden 該給多少誤差，看 signoff-checker-qualification。
+- **重點**：
+  - regression 依相依順序一次跑一個 target，第一個 FAIL 就停。開始前工作目錄要乾淨，並拒絕 `make -i`／`-n`；結束時 HEAD 必須和開始時相同。
+  - 只有在乾淨 checkout 從頭跑到底才算驗證。開發目錄裡忽略版控的建置產物，會藏住漏宣告的依賴。
+  - 來源追溯要比內容，不只比版本字串：LibreLane clone 不能有改過的檔、PDK 要比內容 sha256、路徑要先解開 symlink。
+  - 下游步驟要確認 run 是 PASS，而且來自目前的 commit。
+  - golden 與 commit 的先後：更新 golden 的那次 run 永遠過不了下游檢查；要先 commit 新 golden，再用乾淨 checkout 跑完整 regression 證明它可重現。Makefile 要加 `.NOTPARALLEL:`，否則 `make -j` 時各 target 會互刪 `runs/`。
+  - 長 run 期間另開 worktree 開發。用舊 run 測新 checker 時建 dev fixture，結果不能當證據。
+  - 長 regression 之前，先用 `make py-check` 和 dev fixture 預跑，提早抓到會在中途才出錯的問題。Spotlight 之類的背景負載會拖慢有牆鐘時限的步驟。
+- **本 repo 實例**：`scripts/regress.py`、`signoff/scripts/provenance.py`、`run_guard.py`。negative test：`neg_regress.py`、`neg_provenance.py`、`neg_run_guard.py`。
 
-- **何時用**：建立或執行 `make regress`／`make phase<N>`、在乾淨 checkout 驗證、檢查一個 run 是哪個 commit 與哪版工具產生的、讓下游步驟拒絕過期或沒 PASS 的 run、長時間 run 期間繼續開發。
-- **內容**：regression 的結構（依序、第一個 FAIL 就停、log／摘要／JUnit、最後再確認 commit 沒變）；來源追溯要涵蓋 LibreLane clone 的內容與 PDK 檔案內容（參考值從下載的壓縮檔算）；下游的 run 檢查與它的 negative test；用另一個 worktree 開發；拿舊 run 測新 checker 的方法與限制；golden 與 commit 的先後。
-- **實例**：`scripts/regress.py`、`signoff/scripts/provenance.py`、`run_guard.py`、`neg_provenance.py`、`neg_run_guard.py`。
+#### multicorner-sta：多 corner STA
 
-### multicorner-sta：多 corner STA
+- **名詞**：PVT corner 是製程、電壓、溫度的組合（例如 `ss_n40C_1v60`）；RC corner 是繞線寄生的 min／nom／max。
+- **何時用**：增減 corner、設定每個 corner 都會執行的 hook、只重跑 STA 做 what-if（改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期、corner 變多後 PnR 變慢。
+- **重點**：
+  - 在 config 設 `LIB` 會取代 LibreLane 的整組 corner 預設，相關的三個變數要一起設；新 corner 的名稱要符合寄生與萃取規則的萬用字元，先跑只做 lint 的 run 看 `resolved.json` 確認。
+  - resizer、CTS、其他 step 與 signoff STA，各自讀不同的 corner 變數。
+  - 15 個 corner 會讓 post-GRT 修復停不下來，所以 resizer 維持原本的 9 個，新加的 corner 只在 signoff 判定。
+  - what-if 的正式證據要用 LibreLane 單步重跑全部 corner；單一 corner 的 `sta` 腳本只能當探索。
+  - 最小週期要從關鍵路徑推，不能用 `report_clock_min_period`（它排除半週期路徑）。
+  - PnR 中途的 STA 報上千個違規，不代表 signoff 有問題。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`sta_extra_corner.tcl`。negative test：P01–P04、P22–P25、P30。
 
-- **何時用**：增減 PVT／RC corner、在 LibreLane 設 corner 與每個 corner 的 hook、只重跑 STA 做 what-if（週期、duty cycle、uncertainty、derate）、推最小週期、corner 變多後 PnR 變慢。
-- **內容**：設 `LIB` 會取代 LibreLane 的整組預設；resizer／CTS／其他 step 各自讀哪個 corner 變數；15 個 corner 讓 post-GRT 修復停不下來的實例與處理；hook 裡加 derate 與輸出報告；兩種 what-if 的做法；半週期路徑的最小週期算法。
-- **實例**：`pnr/soc_top/config.json`、`sta_extra_corner.tcl`、`neg_pnr.py`（P01–P04、P22–P25）。
+#### dv-directed-tests：directed 測試補驗證缺口
 
-### dv-directed-tests：directed 測試補驗證缺口
+- **名詞**：directed 測試是針對一個特定功能、明確檢查結果的測試。
+- **何時用**：植入的錯誤在 gate-level 模擬或 formal 沒被抓到，或發現某個功能 regression 從沒用到。要證明的是 checker 本身會不會抓錯，看 signoff-checker-qualification。
+- **重點**：
+  - 缺口從「漏掉的植入錯誤」找。
+  - 先讀 RTL 確認實際行為，再寫期望值。
+  - 編譯器會改寫非對齊存取，要測特定指令時用 inline assembly，並看反組譯確認。
+  - 寫明測不到的部分。新測試要登記在 Makefile、測試清單與 spec；UART 輸出要固定，不要印每次可能不同的數字。加完要重跑完整的 RTL regression 與植入錯誤。
+  - 在網表植入對應的錯誤，證明新測試抓得到。
+- **本 repo 實例**：`fw/tests/counters/`、`fw/tests/buserr/`、`dv/gl_soc/neg_gl_soc.py`。
 
-- **何時用**：植入錯誤沒被抓到、或 formal 範圍沒涵蓋某段時，找出沒被用到的功能並補 directed firmware 測試。
-- **內容**：缺口從漏掉的植入錯誤找；先讀 RTL 確認實際行為；編譯器會改寫非對齊存取（要用 inline assembly 並看反組譯）；寫明測不到的部分；新測試要登記的地方；在網表植入對應錯誤證明新測試抓得到。
-- **實例**：`fw/tests/counters/`、`fw/tests/buserr/`、`dv/gl_soc/neg_gl_soc.py`。
-
-### phase-exit-review：Phase exit review 與獨立審查
+#### phase-exit-review：Phase exit review 與獨立審查
 
 - **何時用**：一個 Phase 收尾。
-- **內容**：exit criteria 加上一階段帶過來的項目；證據只用乾淨 checkout 的 run；數字逐一對證據、注意容易誤讀的彙總 metric；章節結構；兩個獨立審查 agent（文件核對、找 checker 漏洞）；使用者決定的記錄；收尾的 README、記憶、skill 回寫與推送規則。
-- **實例**：`docs/phase_exit/phase*.md`。
+- **重點**：
+  - exit criteria 照抄規劃，再加上前一階段帶過來的項目。
+  - 證據只用乾淨 checkout 的最後一次 run；前幾次為什麼不算要寫明。每個數字都對回證據檔。
+  - 請兩個沒參與實作的 agent 獨立審查：一個核對文件，一個找 checker 漏洞。審查找到的問題沒有重跑驗證，就不能寫「已修正」。
+  - 要放寬門檻或改比對規則時先問使用者，並記錄決定。
+  - 收尾時分析本階段的重大任務是否需要新 skill，並逐一對照每個 skill、README 與 `description` 有沒有寫回。
+- **本 repo 實例**：`docs/phase_exit/phase0.md`–`phase4.md`。
+
+### skill 的由來
+
+- 最初 11 個依使用者要求，對應重大流程任務（CTS、LVS、DRC、IR、timing、EQY……）。
+- `floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的。同一次審查建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7），會在進入那個 Phase 時建立。
+- `signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多半沿用預設值、沒有推導，依使用者要求新增。
+- 最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增的：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review。Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件、CTS 與 resizer 餘量）寫回既有的 skill。
+
+### 在其他專案使用
+
+- 這些 skill 目前只在本 repo 生效。其他專案要用，需要放到使用者層（`~/.claude/skills/`），或用 symlink 指回這裡，維持單一來源，不要複製多份。目前還沒有這樣做。
+- 可以帶走的是規則本文。「本 repo 實例」的檔案、soc_top 的數字、P01 這類案例編號屬於這個 repo，新專案要換成自己的。各 skill 的「適用範圍」寫了哪些內容是通用的、哪些是 sky130 或 LibreLane 專屬。
+
 ## 授權
 
 本 repo 的內容以 [Apache License 2.0](LICENSE) 授權。

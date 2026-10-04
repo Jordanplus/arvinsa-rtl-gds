@@ -1,11 +1,11 @@
 ---
 name: multicorner-sta
-description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與每個 corner 都會執行的 hook、做時序 what-if（只重跑 STA：改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期，或 corner 增加後 PnR 時間暴增時使用。Use when configuring multi-corner STA in LibreLane (adding PVT corners, per-corner hooks and reports), running STA what-if experiments, deriving the minimum clock period, or when more corners slow down PnR.
+description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與每個 corner 都會執行的 hook、做時序 what-if（只重跑 STA：改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期，或 corner 增加後 PnR 時間暴增時使用。PnR 不納入的 corner 怎麼用餘量補看 drv-timing-closure；corner 清單怎麼定看 signoff-criteria。Use when configuring multi-corner STA in LibreLane (adding PVT corners, per-corner hooks and reports), running STA what-if experiments, deriving the minimum clock period, or when more corners slow down PnR.
 ---
 
 # 多 corner STA：設定、hook、what-if 與最小週期
 
-條件設多少看 `signoff-criteria`；SDC 怎麼寫看 `timing-constraints-sdc`；違規怎麼修看 `drv-timing-closure`。本 repo 實例：`pnr/soc_top/config.json`（`STA_CORNERS`、`LIB`、`RSZ_CORNERS`）、`pnr/soc_top/sta_extra_corner.tcl`、`pnr/soc_top/neg_pnr.py`（P01–P04、P22–P25）。
+條件設多少看 `signoff-criteria`；SDC 怎麼寫看 `timing-constraints-sdc`；違規怎麼修看 `drv-timing-closure`。本 repo 實例：`pnr/soc_top/config.json`（`STA_CORNERS`、`LIB`、`RSZ_CORNERS`）、`pnr/soc_top/sta_extra_corner.tcl`、`pnr/soc_top/neg_pnr.py`（P01–P04、P22–P25、P30：拿掉 nom_ff 的 SRAM derate，`check_soc.py sram_derate` 必須 FAIL）。
 
 名詞：
 - **PVT corner**：製程（tt／ss／ff）、溫度、電壓的組合，對應一份 .lib，例如 `ss_n40C_1v60`。
@@ -18,7 +18,7 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與
 2. **哪個 step 用哪組 corner**（`librelane/steps/openroad.py`）：resizer 類 step 用 `RSZ_CORNERS`（沒設就用 `STA_CORNERS`），CTS 用 `CTS_CORNERS`，其他 OpenROAD step 用 `PNR_CORNERS`，signoff STA 用 `STA_CORNERS`。只設 `PNR_CORNERS` 管不到 resizer。
 3. **corner 變多，PnR 會變慢，post-GRT 修復可能停不下來**：
    - 9 → 15 個 corner 時，多數 step 慢 1.6–2 倍。
-   - `OpenROAD.RepairDesignPostGRT` 卻從 31 秒變成 35 分鐘以上沒結束。同一份輸入 state 只把 resizer 改回 9 個 corner 單步重跑，58 秒完成。
+   - `OpenROAD.RepairDesignPostGRT` 卻從 31 秒變成 35 分鐘以上沒結束。同一份輸入 state 只把 resizer 改回 9 個 corner 單步重跑，58 秒完成；9 個再加 1 個 `max_ss_n40C` 也是 4 分鐘以上不結束（`docs/phase_exit/phase4.md` 收斂過程第 1 次）。
    - 做法：resizer 用原本的 corner，新加的 corner 只在 signoff STA 判定；signoff 若在新 corner 出現 slew／cap 違規，再另外處理。
 4. **每個 corner 的 hook**（`STA_EXTRA_CORNER_TCL_FILE`）：
    - LibreLane 的 STA step 在每個 corner 讀完 SDC 之後 source 它（`scripts/openroad/sta/corner.tcl` 59–61 行），變數 `$corner_name` 是 corner 名稱；resizer、CTS 看不到。

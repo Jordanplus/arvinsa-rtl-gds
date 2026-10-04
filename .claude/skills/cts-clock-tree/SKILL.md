@@ -1,6 +1,6 @@
 ---
 name: cts-clock-tree
-description: Clock tree synthesis（CTS）相關問題：clock buffer 的 fanout／cap 違規、skew、clock 輸入 port 的 slew、clock pin 擺放、macro clock pin 的平衡時使用。Use for CTS, clock buffer fanout/cap, skew, clock port slew and clock pin placement.
+description: Clock tree（CTS）問題時使用：clock buffer 的 fanout／cap 違規、skew（metric 含 uncertainty 與 derate）、clock 輸入 pin 到第一級 clock buffer 的長線 slew（`CTS_CLK_MAX_WIRE_LENGTH`）、clock pin 擺放、CTS 把 macro 的 clock 延到與 flip-flop 對齊（插 delay buffer）造成 macro 輸入 hold 變差。資料路徑的 DRV 看 drv-timing-closure。Use for CTS problems (clock buffer fanout/cap, skew, clock-pin wire slew, clock pin placement, macro clock latency balancing) in OpenROAD/LibreLane.
 ---
 
 # Clock tree（CTS）

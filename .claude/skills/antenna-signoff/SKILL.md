@@ -1,6 +1,6 @@
 ---
 name: antenna-signoff
-description: 處理 antenna 違規或 diode 插入、macro 的 LEF 沒有 antenna 資料（ANTENNAGATEAREA）、或 diode 造成 fanout／slew 副作用時使用。Use for antenna checking/repair, macros without antenna data, and diode side effects.
+description: antenna 違規（OpenROAD `check_antennas`）、diode 插入與它造成的 fanout／slew 副作用，或 macro 的 LEF 沒有 antenna 資料（`ANTENNAGATEAREA`，`Odb.CheckMacroAntennaProperties` 警告）時使用：從 macro 的 SPICE 算閘極面積補進 LEF、允許長度估算、不要用 heuristic diode insertion、OpenROAD 與 Magic 的差異、Classic flow 沒有 antenna checker。長線修復的設定值看 drv-timing-closure。Use for antenna violations and repair, diode side effects, and macros whose LEF lacks antenna data (OpenROAD/LibreLane; sky130 numbers).
 ---
 
 # Antenna signoff

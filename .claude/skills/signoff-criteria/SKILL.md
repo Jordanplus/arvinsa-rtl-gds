@@ -153,7 +153,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | min pulse width、min period | `sta_extra_corner.tcl` 每個 corner 輸出報告，必要的 slack 從 SDC 的變數算 | `check_soc.py pulse_width` | P22、P23 |
 | macro derate 乘進 OCV | `sta_extra_corner.tcl` | STA 本身 | P04 |
 | 溫度反轉 corner | `config.json` 的 `STA_CORNERS`、`LIB`（resizer 用 `RSZ_CORNERS` 另外控制，`multicorner-sta`） | `[corners]` | — |
-| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES` | `check_signoff.py`、`check_soc.py ir_sources` | P07、P26 |
+| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES` | `check_signoff.py`、`check_soc.py ir_sources` | P07、P26–P29 |
 | 「typical corner slack ≥ 週期 X%」 | 降為只報告（`[info]`） | — | — |
 
 假設值（jitter、duty cycle 範圍、供電位置）集中寫在檔案開頭並標「假設」，確定來源後只改那幾個值。

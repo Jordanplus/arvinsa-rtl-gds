@@ -1,6 +1,6 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生、擺放與 halo、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，產生保守的 padded .lib 給全部 corner；LEF 缺 antenna 資料）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
 ---
 
 # Hard macro 整合
@@ -26,7 +26,7 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
 
 ## negative test
 
-P08 tie-off 斷開 → `check_soc.py port1_tieoff`；P09 擺放漂移 → `check_soc.py placement`；P04／P05／P06 見對應 skill。
+P08 tie-off 斷開 → `check_soc.py port1_tieoff`；P09 擺放漂移 → `check_soc.py placement`；P14 `sram0` 改名 → `check_soc.py macro`；P16–P20 產生檔與來源不一致（少一個 RTL 檔、padded.lib 的表被改、antenna LEF 少一行、MACROS 的 lib 指回 PDK 的 TT .lib，config 與 `resolved.json` 各一次）→ `check_inputs.py` 對應的列；P04／P05／P06 見對應 skill。
 
 ## 用完後
 

@@ -1,6 +1,6 @@
 ---
 name: floorplan-congestion
-description: 決定 die／core 尺寸、macro 位置與方向、IO pin 擺放、placement 密度，或遇到繞線壅塞（congestion）、繞線大幅繞路、窄 row、GCell 溢位時使用。Use for floorplanning (die size, macro placement, IO pins, placement density) and routing congestion/detour problems.
+description: 決定 die／core 尺寸與使用率（utilization）、macro 位置與方向、IO pin 擺放、placement 目標密度，或遇到繞線壅塞（congestion）、某條線大幅繞路、macro 旁的窄 row（PDN 接不到）、GCell 溢位時使用。macro 的 view 看 hard-macro-integration，電源網路看 pdn-ir-drop。Use for floorplanning (die size and utilization, macro placement, IO pins, placement density) and routing congestion/detour problems in OpenROAD.
 ---
 
 # Floorplan、IO pin 與繞線壅塞

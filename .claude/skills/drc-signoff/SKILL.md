@@ -1,6 +1,6 @@
 ---
 name: drc-signoff
-description: 處理 Magic／KLayout DRC、GDS 輸出（streamout）與 XOR，或設計含 macro 而 DRC 數量不為 0、abstract DRC 出現大量錯誤、GDS 有多個 top cell 時使用。Use for DRC, GDS streamout and XOR signoff, especially with hard macros.
+description: Magic／KLayout DRC、GDS 輸出（streamout）、XOR 時使用，尤其設計含 SRAM 等 macro：DRC 數不為 0、abstract DRC 報大量 `nwell.4`、macro 內部 DRC 怎麼判（與 macro 單獨檢查比違規位置）、GDS 有多個 top cell（`KLayout.Render` 失敗）、兩套 deck 涵蓋的規則不同（latch-up、implant、浮接金屬）、metal density 與 fill。antenna、LVS 另有 skill。Use for DRC (Magic/KLayout), GDS streamout and XOR signoff with hard macros, macro-internal DRC baselines and metal density (sky130).
 ---
 
 # DRC、GDS 輸出與 XOR signoff

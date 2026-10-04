@@ -1,11 +1,11 @@
 ---
 name: rtl-synthesis-lint
-description: 處理 Yosys 合成（策略、參數、狀態機重新編碼、常數化的暫存器）、LibreLane／Verilator lint 警告、latch、邏輯深度，或為了時序目標（例如 40 → 25 ns）調整合成時使用。Use for Yosys synthesis settings, lint, latches, FSM recoding and logic depth in the LibreLane flow.
+description: 處理 Yosys 合成（策略、參數、狀態機重新編碼、常數化的暫存器）、LibreLane／Verilator lint 警告、latch、邏輯深度，或為了縮短週期調整合成時使用；對 formal 比對的影響看 formal-equivalence-eqy。Use for Yosys synthesis settings, lint, latches, FSM recoding and logic depth in the LibreLane flow.
 ---
 
 # RTL 合成與 lint
 
-PnR 階段的時序修復看 `drv-timing-closure`；合成對 formal equivalence 的影響看 `formal-equivalence-eqy`。目前經驗較少，Phase 4（25 ns）會補齊。本 repo 實例：`rtl/scripts/`、`pnr/picorv32_core/cpu_params.py`、LibreLane `librelane/scripts/pyosys/synthesize.py`。
+PnR 階段的時序修復看 `drv-timing-closure`；合成對 formal equivalence 的影響看 `formal-equivalence-eqy`。目前經驗較少。Phase 4 判定 25 ns 做不到（SRAM 半週期路徑差約 7 ns，其他路徑在 ss 也差 1.8–4.7 ns），改 42 ns，沒有調整合成；下方待補在要壓週期時再做。本 repo 實例：`rtl/scripts/`、`pnr/picorv32_core/cpu_params.py`、LibreLane `librelane/scripts/pyosys/synthesize.py`。
 
 ## 規則（已驗證）
 
@@ -16,7 +16,7 @@ PnR 階段的時序修復看 `drv-timing-closure`；合成對 formal equivalence
 
 ## 待補
 
-`SYNTH_STRATEGY`（AREA／DELAY）對 25 ns 的影響；邏輯深度與關鍵路徑分析；latch 偵測（`Checker.YosysSynthChecks`）的 negative test；Hazard3（SystemVerilog）的讀入方式。
+`SYNTH_STRATEGY`（AREA／DELAY）對縮短週期的影響；邏輯深度與關鍵路徑分析；latch 偵測（`Checker.YosysSynthChecks`）的 negative test；Hazard3（SystemVerilog）的讀入方式。
 
 ## 用完後 / 經驗紀錄
 

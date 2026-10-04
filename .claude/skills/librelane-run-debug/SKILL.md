@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗要找原因、從中間 step 接續、或只重跑單一 step（驗證設定、做 negative test）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法、常見錯誤訊息與陷阱。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住，或錯誤時有時無（例如 `GRT-0229`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -20,7 +20,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗要找原因、從�
 5. **隨機失敗要先證明是隨機的**：
    - 某一步失敗、但同樣設定之前跑過沒事時，拿失敗那次的 `state_in.json` 單步重跑至少 3–4 次。
    - 有的過、有的不過，才算隨機；再比較通過的幾次輸出是否完全相同。
-   - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 的 GRT-0229，同一份輸入 2/4 中止）。其他失敗一律不重試。
+   - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 的 GRT-0229，同一份輸入 2/4 中止）。其他失敗一律不重試。重試的判斷本身也要測：`make test-flow-retry` 用模擬的 nix-shell 跑 7 種情境（只有 GRT-0229 才重試、最多 2 次、其他錯誤不重試）。
    - 反過來說，**只跑一次就把錯誤歸因到某個設定，是不可靠的**：GRT-0229 原本被歸因到 `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH`（soc_explore3 只跑了一次），後來發現不設也有一半機率出現。結論是「某設定造成某錯誤」之前，同一設定至少跑兩次，或單步重跑確認。
 
 ## 已知陷阱

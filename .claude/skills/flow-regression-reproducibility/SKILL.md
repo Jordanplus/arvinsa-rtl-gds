@@ -1,6 +1,6 @@
 ---
 name: flow-regression-reproducibility
-description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run）、讓下游步驟拒絕過期或沒 PASS 的 run、或在長時間 run 期間繼續開發時使用。Use when building or running the end-to-end regression, verifying it in a clean checkout, tracking the sources of a run (provenance), guarding downstream steps against stale runs, or developing while a long run is in progress.
+description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發、用舊 run 測新 checker（dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
 ---
 
 # 一鍵 regression、可重現性與來源追溯
@@ -34,7 +34,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - `<run>_signoff/result.txt` 是 harden 的**整體**判定 PASS。
    - `provenance.json` 的 `repo_head` 等於現在的 HEAD。只看 `result.txt` 時，commit 新的 RTL 後單獨跑 `make eqy-soc` 仍會拿舊網表 PASS。
    - 檢查之前先刪掉自己的輸出目錄：被拒絕時不能留下上一次的 PASS 結果讓人誤讀。
-   - negative test：每個下游步驟 × 3 種壞 run（不是 PASS、別的 commit、沒有紀錄）＋ positive control（PASS 且是 HEAD 的 run 要通過檢查、再因為缺檔而 FAIL，證明檢查不是永遠拒絕）。`neg_run_guard.py` 共 33 個案例，3 秒。
+   - negative test：每個下游步驟 × 3 種壞 run（不是 PASS、別的 commit、沒有紀錄）＋ positive control（PASS 且是 HEAD 的 run 要通過檢查、再因為缺檔而 FAIL，證明檢查不是永遠拒絕）。`neg_run_guard.py` 共 37 個案例（9 個下游步驟），3 秒。
 5. **長時間 run 期間不要改主工作目錄**：harden 結束時的來源追溯會因為未提交的修改判 FAIL。要邊跑邊開發，就另開 worktree 與分支（`git worktree add -b dev ../<repo>-dev HEAD`），commit 在分支上，run 結束後在主目錄 `git merge --ff-only dev`。
 6. **拿舊 run 測試新寫的 checker**（dev fixture）：
    - 下游檢查會拒絕舊 commit 的 run，所以開發測試要另建一個假的 run 目錄：真目錄，裡面每個檔案 symlink 到舊 run，`<run>_signoff/` 寫 PASS 與現在的 HEAD。
@@ -44,7 +44,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 8. **`make -n` 不是完全不執行**：recipe 裡有 `$(MAKE)` 的那一行在 `-n` 下仍會執行（子 make 繼承 `-n`，只印出指令）。測 dispatch 用的 target 時要確認子 make 確實只有印。
 9. **長 regression 之前，先把會在中途才出錯的東西提前抓**：
    - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。
-   - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 3 小時的重跑。
+   - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 2 小時的重跑。
    - 預跑時多個步驟同時跑會互相拖慢，有牆鐘時限的步驟（GL 模擬）可能逾時；逾時的要單獨重跑確認（`gate-level-simulation` 規則 6）。
 
 ## 已知陷阱
