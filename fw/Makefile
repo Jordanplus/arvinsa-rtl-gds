@@ -43,7 +43,7 @@ BOOT_LDFLAGS := -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles 
 # regs and unmapped (dv/tests.toml). bootrom_march loads nothing (it runs the
 # boot ROM only), so its target builds the boot ROM image instead.
 TESTS := hello memtest irq muldiv uart_echo neg_fw_hang neg_fw_illegal \
-         boot_uart_hello boot_host_hello regs unmapped uart_burst reset_store
+         boot_uart_hello boot_host_hello regs unmapped uart_burst reset_store counters buserr
 # Tests that reuse another test's sources (same image, own output names).
 SRC_boot_uart_hello := hello
 SRC_boot_host_hello := hello

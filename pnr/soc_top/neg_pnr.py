@@ -45,7 +45,8 @@ step re-run one step on a copy of that step's saved config and input state
        report and signoff STA directory; the edited file replaces its link)
   P06  SRAM LEF with ANTENNAGATEAREA / 1000         OpenROAD check_antennas on the final DEF: > 0 violations
        (with the flow's LEF: 0; shows the antenna checker sees the nets on SRAM inputs)
-  P07  metrics: ir__drop__worst 0.2 V                check_signoff.py [max] row
+  P07  metrics: ir__drop__worst 0.025 V              check_signoff.py [max] row (above the 20 mV
+       limit, below the 90 mV of Phase 3: proves the new limit is the one applied)
   P08  final netlist: sram0 csb1 on a floating net   check_soc.py port1_tieoff
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
@@ -533,7 +534,7 @@ def signoff_with(run, d, edit):
 
 
 def p07(run, d):
-    rc, out = signoff_with(run, d, lambda m: m.update({"ir__drop__worst": 0.2}))
+    rc, out = signoff_with(run, d, lambda m: m.update({"ir__drop__worst": 0.025}))
     return rc != 0 and re.search(r"\[FAIL\] max\s+ir__drop__worst", out) is not None, "check_signoff.py [max] ir__drop__worst"
 
 

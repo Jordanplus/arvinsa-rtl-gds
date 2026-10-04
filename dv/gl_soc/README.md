@@ -24,15 +24,29 @@ Phase 1 的其他 checker（測試結束協定、trap、timeout、UART、bus ass
 ## 判定（`run_gl_soc.py`）
 
 PASS 需要全部成立：
-1. harden run 自己的所有檢查都 PASS：`runs/soc_top_signoff/result.txt` 是 `harden-soc: PASS`（signoff 門檻與 golden、soc 專用檢查、輸入一致、來源追溯）。
-2. `dv/tests.toml` 中所有不是 `negative_only` 的測試（13 支）在這個 build 上都 PASS（Phase 1 的全部 checker）。
+1. harden run 自己的所有檢查都 PASS：`runs/soc_top_signoff/result.txt` 是 `harden-soc: PASS`（signoff 門檻與 golden、soc 專用檢查、輸入一致、來源追溯），而且這個 run 是從目前的 commit 產生的（`provenance.json` 的 `repo_head` 等於 HEAD；`signoff/scripts/run_guard.py`，Phase 4）。
+2. `dv/tests.toml` 中所有不是 `negative_only` 的測試（15 支；Phase 4 加了 `counters`、`buserr`）在這個 build 上都 PASS（Phase 1 的全部 checker）。
 3. 每支測試的 `tb_result.txt` 有 `fail.gl_lockstep=0`，而且 `gl_compares` > 0（比對真的有執行）。
+
+## L5：帶電源的網表（`make gl-soc-powered`，`run_gl_soc.py --powered`，Phase 4）
+
+改用 `final/pnl/soc_top.pnl.v`（每顆 cell，包括 fill、tap、decap、diode，都有 VPWR／VGND／VPB／VNB），加 `-DUSE_POWER_PINS` 編譯，testbench 給 `vccd1` = 1、`vssd1` = 0（RTL 與網表兩份 SoC 都接）。cell model 在 `USE_POWER_PINS` 下每個輸出都經過 power-good primitive：電源腳沒接到 vccd1／vssd1 的 cell 會輸出 X，lockstep 比對就 FAIL。判定與 gl-soc 相同。不跑 SDF：Icarus 不能當時序的 signoff 證據（`project-plan.md` §7.1）。
 
 ## Negative test（`make neg-gl-soc`，`neg_gl_soc.py`）
 
-在最終網表的複本植入錯誤（與 `signoff/eqy/neg_eqy.py` 的 soc_top 案例相同：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調），每一個都要讓 gl-soc FAIL，而且原因必須是至少一支測試的 `fail.gl_lockstep` > 0（不是編譯錯誤或其他原因）。為了節省時間，只跑最長的兩支（memtest、boot_uart_max）以外的 11 支測試。所有案例共用同一個建置目錄，所以一次只跑一個案例。
+在網表的複本植入錯誤，每一個都要讓 gl-soc（或 gl-soc-powered）FAIL，而且原因必須是至少一支測試的 `fail.gl_lockstep` > 0（不是編譯錯誤或其他原因）。所有案例共用建置目錄，所以一次只跑一個案例。
+
+| 案例 | 植入 | 跑的測試 |
+|---|---|---|
+| `din5_stuck0`、`csb0_inverted`、`host_rdata7_inverted`、`mux_swap` | 與 `signoff/eqy/neg_eqy.py` 的 soc_top 案例相同：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調 | 最長兩支（memtest、boot_uart_max）以外的 11 支 |
+| `count_cycle45_stuck1`、`count_instr40_stuck1` | `u_cpu.count_cycle[45]`／`count_instr[40]` 的 flip-flop D 接 1（Phase 2 GL 模擬漏掉的錯誤，`docs/phase_exit/phase2.md` 已知限制 7） | `counters` |
+| `buserr_irq_stuck0` | `u_cpu.irq_pending[2]`（bus-error IRQ）的 D 接 0（同上） | `buserr` |
+| `host_rdata7_unpowered`（L5） | 帶電源網表中推動 `host_rdata[7]` 的 cell，VPWR 改接 vssd1 | `hello`（`--powered`） |
+
+`nand2_to_nor2`（`neg_eqy.py`）不放在這裡：模擬看不看得到它，取決於 firmware 有沒有用到那顆 gate，這類錯誤交給 EQY。
 
 ## 限制
 
 - 只看得到 soc_top 的輸出與 SRAM port 0。內部錯誤若在這些測試中沒有傳到這些點，就不會被發現。formal equivalence 只證明合成網表與最終網表等價（`signoff/eqy/README.md`）；RTL 到合成網表這一段只有這裡的模擬，firmware 沒用到的邏輯沒有檢查（`docs/phase_exit/phase3.md` 已知限制 11）。
-- `UNIT_DELAY` 模擬不檢查時序；時序由 9 個 corner 的 STA 負責。
+- `UNIT_DELAY` 模擬不檢查時序；時序由 15 個 corner 的 STA 負責。
+- `counters` 只抓得到 64-bit 計數器高半部「卡 1」的錯誤；「卡 0」要跑 2^32 個 cycle 才看得到。

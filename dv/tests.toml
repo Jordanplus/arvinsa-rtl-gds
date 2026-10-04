@@ -309,3 +309,31 @@ expect_gpio = [0xB2, 0xEE]
 uart_in = ""
 smoke = false
 negative_only = true
+
+# Phase 4 (docs/phase_exit/phase2.md known limitation 7, phase3.md known limitation 11): the
+# upper halves of the 64-bit counters and the bus-error IRQ, which no other test used, so the
+# gate-level simulation of a netlist broken there still passed. max_cycles as above (>= 5x the
+# measured RTL cycles, see fw/tests/<name>/main.c for what each checks).
+[[test]]
+name = "counters"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "counters PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false
+
+[[test]]
+name = "buserr"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "buserr PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false

@@ -9,3 +9,9 @@
 # (No entries: the Phase 1 build and runs on Icarus 13.0 and Verilator 5.050
 #  print no keyword line. Third-party Verilator width warnings are waived per
 #  file and per rule in dv/tb/sim_waivers.vlt instead.)
+
+# Icarus, L5 build only (make gl-soc-powered, -DUSE_POWER_PINS): the tap cell has only VPWR and
+# VGND pins in the PDK LEF (sky130_fd_sc_hd.lef, MACRO sky130_fd_sc_hd__tapvpwrvgnd_1), so the
+# powered netlist connects only those two; its Verilog model also declares VPB/VNB, which then
+# dangle. Phase 4 measurement: exactly 2 lines per tap cell (6635 taps), no other cell type.
+warning: Instantiating module sky130_fd_sc_hd__tapvpwrvgnd_1 with dangling input port [34] \((VPB|VNB)\) floating\.$

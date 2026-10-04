@@ -1,4 +1,4 @@
-# soc_top 的 signoff 條件：依據、缺口與建議（2026-10-03）
+# soc_top 的 signoff 條件：依據、缺口與建議（2026-10-03；Phase 4 實作狀態 2026-10-04）
 
 推導方法與工具行為在 skill `signoff-criteria`。本文只放 soc_top 的數字。
 
@@ -18,13 +18,13 @@
 
 | 條件 | 現在的值與出處 | 判斷 | 建議（階段） |
 |---|---|---|---|
-| setup／hold uncertainty | 0.25 ns，setup 與 hold 同值，PnR 與 signoff 同值（LibreLane 預設，`base.sdc` 65–66） | 缺口：沒有成分說明。clock 來源還沒定義，jitter 未知 | 分開寫 `-setup`、`-hold`，每個數字附成分（Phase 7 確定 clock 來源後） |
-| 半週期路徑的 duty cycle | STA 假設 50% | **缺口**：最緊的路徑就是半週期路徑（見下方第 1 點） | 加 DCD 預算與 D = 60% 的 negative test（Phase 4 建立機制，數值待 Phase 7） |
-| min pulse width、minimum period | 沒有檢查；SRAM padded.lib 規定 12 ns／30 ns | **缺口** | 加 `report_check_types -min_pulse_width -min_period` 與 checker（Phase 4） |
+| setup／hold uncertainty | 0.25 ns，setup 與 hold 同值，PnR 與 signoff 同值（LibreLane 預設，`base.sdc` 65–66） | 缺口：沒有成分說明。clock 來源還沒定義，jitter 未知 | **Phase 4 已做**：`pnr/soc_top/clock_uncertainty.sdc` 分開寫 setup、hold，逐項列成分（見下方「clock uncertainty 的成分」）。jitter 仍是假設值，Phase 7 確定 clock 來源後替換 |
+| 半週期路徑的 duty cycle | STA 假設 50% | **缺口**：最緊的路徑就是半週期路徑（見下方第 1 點） | **Phase 4 已做**：半週期路徑用下降緣→上升緣的 uncertainty 加上 DCD 預算（假設 45/55%）；negative test P24（D = 60%）、P25（預算改 60%）都必須 FAIL。數值待 Phase 7 |
+| min pulse width、minimum period | 沒有檢查；SRAM padded.lib 規定 12 ns／30 ns | **缺口** | **Phase 4 已做**：`sta_extra_corner.tcl` 每個 corner 輸出 `report_check_types -min_pulse_width -min_period`，`check_soc.py pulse_width` 要求 slack ≥ DCD + 半週期 jitter（pulse width）與 period jitter（period）；negative test P22、P23 |
 | fmax | `clock.rpt` 的 `period_min` 25.4 ns | **不能用**：它排除半週期路徑；週期 32 ns 時 setup 已經 FAIL | 最小週期改從半週期路徑反推，nom_ss 約 32.8 ns（推算） |
-| OCV | flat ±5%，cell、net、clock、data 全部套用 | OK（sky130 沒有更好的資料） | SRAM 的 instance derate 取代了 ±5%：ss 是 1.5 倍，不是 1.5 × 1.05。**使用者決定（2026-10-04）：改成 1.575／0.665**（Phase 4） |
-| PVT corner | 9 個（tt／ss／ff × min／nom／max RC） | **缺口**：溫度反轉。1.60 V 下多數 cell 低溫反而比較慢（dfxtp_1 CLK→Q：ss_n40C 比 ss_100C 慢 11%），PDK 有 `ss_n40C_1v60`、`ff_100C_1v95` 但沒用 | 加這兩個 cell corner（Phase 4） |
-| IR drop 上限 | 90 mV（5% VDD，`project-plan.md` §7.2，沒有推導）；實測 0.306 mV | **不一致**：ss corner 是 1.60 V，Caravel 最低供電 1.62 V，只隱含 20 mV 的預算。IR 真的到 90 mV 時，STA 的 ss 結果就不保守 | **使用者決定（2026-10-04）：上限改成 20 mV**。另外用最大電阻的 RC corner 與真實的電壓源位置再算一次（Phase 4） |
+| OCV | flat ±5%，cell、net、clock、data 全部套用 | OK（sky130 沒有更好的資料） | SRAM 的 instance derate 取代了 ±5%：ss 是 1.5 倍，不是 1.5 × 1.05。**使用者決定（2026-10-04）：改成 1.575／0.665**。**Phase 4 已做**（`sta_extra_corner.tcl`，ADR-0007 補充） |
+| PVT corner | 9 個（tt／ss／ff × min／nom／max RC） | **缺口**：溫度反轉。1.60 V 下多數 cell 低溫反而比較慢（dfxtp_1 CLK→Q：ss_n40C 比 ss_100C 慢 11%），PDK 有 `ss_n40C_1v60`、`ff_100C_1v95` 但沒用 | **Phase 4 已做**：`config.json` 的 `STA_CORNERS` 加這兩個 PVT，共 15 個 corner，PnR 與 signoff 都用 |
+| IR drop 上限 | 90 mV（5% VDD，`project-plan.md` §7.2，沒有推導）；實測 0.306 mV | **不一致**：ss corner 是 1.60 V，Caravel 最低供電 1.62 V，只隱含 20 mV 的預算。IR 真的到 90 mV 時，STA 的 ss 結果就不保守 | **使用者決定（2026-10-04）：上限改成 20 mV**。**Phase 4 已做**（`signoff/limits/soc_top.toml`、`picorv32_core.toml`；P07 植入 25 mV 必須 FAIL）。用最大電阻的 RC corner 與真實電壓源位置重算：見 Phase 4 exit review |
 | IR 數字本身 | nom_tt 的電流與 RC；電壓源是 PDN 的所有 pin 形狀 | 偏樂觀：0.3 mV 只代表「上層供電理想時，block 內 rail 的壓降」 | 報告寫明這個範圍；粗估單端供電時約 8 mV（推論） |
 | IO delay | input 與 output 都是 8 ns，min = max | **缺口**：IO 的 hold 等於沒檢查。但只把 `-min` 改 0 會出現 269 個假的 hold 違規（最差 −3.3 ns），因為外部 launch 被當成 0 latency | Phase 7 用 Caravel 給的 source latency 與 min／max IO delay（範本：caravel_user_project `signoff.sdc` 67–98 行） |
 | SI（crosstalk） | 沒有分析；coupling cap 約占繞線電容一半（SPEF：214,162 顆、39.66 pF，接地 78.90 pF） | 缺口（開源工具沒有）。setup 有 3.55 ns 餘量，風險低；hold 最差 0.032 ns，只靠 0.25 ns uncertainty 涵蓋 | 在 hold uncertainty 中明列 SI 的份額；邊界分析要把 clock 與 data 分開（全域 factor 2.0 實測 setup 反而變好 0.11 ns） |
@@ -33,7 +33,7 @@
 | max cap | 0.2 pF；ss 的 pin 上限比 tt 小約 37% | OK（9 corner 都判） | — |
 | SRAM pin 的限制 | `dout0` max_capacitance 0.02756 pF、min 0.0017225 pF；輸入 max_transition 0.5 ns（padded.lib 36） | 這些也是假設值（ADR-0007） | Phase 3.5／6 特性化後校正 |
 | hold 的 margin | resizer 修到 0.100 ns，signoff 剩 0.032 ns | 餘量小。router 的變動若超過 golden 誤差（±0.01 ns）就可能變負 | 考慮 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.15（推論，需實跑看面積代價） |
-| nom_tt setup ≥ 4 ns（週期 10%） | `soc_top.toml` [min] | **沒有作用**：ss 的延遲是 tt 的 1.4–1.9 倍，「ss ≥ 0」一定比它嚴（推算） | **使用者決定（2026-10-04）：降為只報告、不判 FAIL**；餘量改放在最慢 corner 的 uncertainty 並列出成分（Phase 4） |
+| nom_tt setup ≥ 4 ns（週期 10%） | `soc_top.toml` [min] | **沒有作用**：ss 的延遲是 tt 的 1.4–1.9 倍，「ss ≥ 0」一定比它嚴（推算） | **使用者決定（2026-10-04）：降為只報告、不判 FAIL**；餘量改放在 uncertainty 並列出成分。**Phase 4 已做**（兩個 limits 檔的 `[info]`） |
 | power grid EM | 沒有分析；總電流 < 5 mA | 風險低（推論），但沒有 checker | 用 `analyze_power_grid -enable_em` 輸出電流後比對 tech LEF（Phase 4，可選） |
 | signal EM | 沒有工具 | clock 實際走 met1／met2（PDK 的 `RT_CLOCK_MIN_LAYER met3` 沒有生效）；估算上界 0.39 mA，met1 最小寬度上限 0.85 mA rms，約 2.2 倍餘量 | 寫明「估算」 |
 | dynamic IR、aging | 沒有工具 | 缺口 | 列入 margin 的成分 |
@@ -42,6 +42,22 @@
 | metal density | 沒有檢查。實測全域密度：li1 42.4%、met1 25.8%、met2 14.3%、met3 7.8%、met4 3.5%、met5 2.6% | macro-level 不判；met1–met5 遠低於 35% 下限，chip-level 一定要補 fill | Phase 7 交給平台的 fill。注意 cf-precheck 只檢查上限 |
 | KLayout DRC 的涵蓋範圍 | 0 違規 | 不含 latch-up、density、antenna、浮接金屬、nsdm／psdm | 這些由 Magic 完整 GDS DRC 涵蓋（latch-up、implant），其餘見上 |
 | LVS | SRAM 是 black box | 已知限制 | Phase 7 的 precheck 有 device-level LVS 與 ERC |
+
+## clock uncertainty 的成分（Phase 4，`pnr/soc_top/clock_uncertainty.sdc`）
+
+PnR（`pnr.sdc`）與 signoff（`signoff.sdc`）都 source 同一個檔案。clock 是 propagated，skew 由 STA 算，不放進 uncertainty（skill `signoff-criteria` 時序表）。
+
+| 項目 | 值（ns） | 成分 | 依據 |
+|---|---|---|---|
+| setup（整週期路徑） | 0.25 | period jitter 0.15（**假設**）＋ 工具沒分析的效應 0.10（SI 的延遲變化、dynamic IR、aging） | jitter 待 Phase 7 的 clock 規格；總數與 LibreLane 原本的 0.25 相同 |
+| hold | 0.25 | 0.25：SI 造成的加速、capture clock 的 dynamic IR、寄生萃取誤差。同一個 edge 送出又接收，period jitter 互相抵銷，所以不含 jitter | hold 最緊的是 ff corner |
+| 半週期路徑的 setup（下降緣送、上升緣收，以及反方向） | 2.25 | 半週期 jitter 0.15（**假設**，取整週期 jitter）＋ DCD 2.0 ＋ 0.10。DCD =（55% − 50%）× 40 ns，duty cycle 範圍 45/55% 是**假設** | 指定邊緣的 uncertainty 會**取代**一般值，不是相加（skill 規則 3），所以要含完整的 jitter 與 margin。`write_sdc` 會保留這兩行，PnR 後段讀的 SDC 也有 |
+| min pulse width 需要的 slack | 2.15 | DCD 2.0 ＋ 半週期 jitter 0.15 | STA 用理想的 50% 波形量脈寬，看不到 DCD |
+| min period 需要的 slack | 0.15 | period jitter | 同上 |
+
+「最慢 corner 的餘量」的意思：setup uncertainty 對每個 corner 都一樣，但 setup 只會在 ss corner 被用到（tt、ff 的 slack 大很多），所以這筆餘量實際上只作用在最慢的 corner。
+
+假設值（jitter 0.15 ns、duty cycle 45/55%）在 Phase 7 確定 Caravel 的 clock 來源（`wb_clk_i` 或 `user_clock2`）後，改 `clock_uncertainty.sdc` 開頭的變數即可，其他公式不動。
 
 ## 細節
 
@@ -86,7 +102,7 @@ factor 2.0 也讓 capture clock 變慢，而這對 setup 有利，所以全域 f
 
 ## 建議的 Phase 4 待辦（依優先順序）
 
-標「決定」的 3 項，使用者已在 2026-10-04 決定（寫在各項後面）。
+標「決定」的 3 項，使用者已在 2026-10-04 決定（寫在各項後面）。第 1–7 項 Phase 4 已實作，結果與驗證在 `docs/phase_exit/phase4.md`。
 
 1. **DCD**：建立「來源 DCD + J_half」的 uncertainty 寫法（`-fall_from clk -rise_to clk -setup`），加 D = 60% 必須 FAIL 的 negative test；數值待 Phase 7 的 clock 規格。
 2. **min pulse width／minimum period checker**：加檢查與 negative test。

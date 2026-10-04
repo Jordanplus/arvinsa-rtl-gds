@@ -72,7 +72,7 @@ def main():
     ap.add_argument("--powered", action="store_true")
     args = ap.parse_args()
     harden_run = Path(args.harden_run).resolve()
-    name = "gl-soc-powered" if args.powered else "gl-soc"
+    label = "gl-soc-powered" if args.powered else "gl-soc"
     default_nl = harden_run / "final" / ("pnl/soc_top.pnl.v" if args.powered else "nl/soc_top.nl.v")
     netlist = Path(args.netlist).resolve() if args.netlist else default_nl
     out = Path(args.out or ROOT / "runs" / ("gl_soc_powered" if args.powered else "gl_soc")).resolve()
@@ -80,7 +80,7 @@ def main():
     t0 = time.time()
 
     def fail(msg):
-        print(f"{name}: FAIL ({msg})")
+        print(f"{label}: FAIL ({msg})")
         return 1
 
     # Only the output directory is removed, first, so that a refused run leaves no old result behind.
@@ -113,14 +113,14 @@ def main():
     except ValueError as e:
         return fail(str(e))
 
-    print(f"[{name}] netlist {netlist}")
-    print(f"[{name}] compile tb_soc with the RTL and gate-level SoC (Icarus, {' '.join(flags)})")
+    print(f"[{label}] netlist {netlist}")
+    print(f"[{label}] compile tb_soc with the RTL and gate-level SoC (Icarus, {' '.join(flags)})")
     b = dvlib.build("icarus", extra_files=[LOCKSTEP_V] + [Path(m) for m in cell_models] + [gl_v],
                     extra_flags=flags, variant="glp" if args.powered else "gl")
     if not b.ok:
         return fail(f"compile: {b.message}")
 
-    print(f"[{name}] run {len(names)} tests, {args.j} in parallel")
+    print(f"[{label}] run {len(names)} tests, {args.j} in parallel")
 
     def one(name):
         r = dvlib.run_test(name, "icarus", out_root=str(out), build_result=b, quiet=True)
@@ -151,7 +151,7 @@ def main():
                "wall_time_s": round(time.time() - t0, 1)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     status = "PASS" if errors == 0 and results else "FAIL"
-    print(f"{name}: {status} {len(results) - errors}/{len(results)} tests passed ({summary['wall_time_s']} s)")
+    print(f"{label}: {status} {len(results) - errors}/{len(results)} tests passed ({summary['wall_time_s']} s)")
     return 0 if status == "PASS" else 1
 
 

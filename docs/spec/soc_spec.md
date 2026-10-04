@@ -249,7 +249,7 @@ L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot RO
 - `uart_puts_burst(s)`：連續寫入 UART DATA（中間不做其他事，讓 transmitter 忙碌造成 stall），全部寫完才累計 CRC。
 - `test_pass()`：**先**寫 SIG = 已送出 byte 的 CRC32，**再**寫 DONE = PASS magic，之後無窮迴圈（`signature` checker 比對 DONE 寫入那個 cycle 的 SIG）。
 - `test_fail(code)`：寫 DONE = `0xBAD0_0000 | code`，之後無窮迴圈。
-- IRQ handler：用 PicoRV32 custom 指令（可 `#include` `third_party/picorv32/firmware/custom_ops.S` 的巨集）；handler 只清 `IRQ_TRIG`、記錄 `q1`（pending mask）、累加計數，然後 `retirq`。`irq[1]`（非法指令／ebreak）與 `irq[2]` 必須保持遮蔽。
+- IRQ handler：用 PicoRV32 custom 指令（可 `#include` `third_party/picorv32/firmware/custom_ops.S` 的巨集）；handler 只清 `IRQ_TRIG`、記錄 `q1`（pending mask）、累加計數，然後 `retirq`。`irq[1]`（非法指令／ebreak）與 `irq[2]`（bus error）預設保持遮蔽；只有 `buserr` 測試會暫時打開 `irq[2]`（Phase 4）。
 
 ### 6.4 測試清單（名稱、行為、UART 輸出必須完全一致）
 
@@ -268,6 +268,8 @@ L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot RO
 | `unmapped` | backdoor | 0 | 對 29 個空洞位址（每個視窗前後的 word、partial decode 會疊到暫存器的位址）各做讀、寫、再讀，共 87 次 unmapped 存取：讀到必須是 0，且 SRAM canary、SIG、IRQ_TRIG、GPIO_OUT、UART DIV 都不得被改到 | `unmapped PASS\n` | `uart_crc32` |
 | `uart_burst` | backdoor | 0 | 用 `uart_puts_burst()` 連續送 81 個 byte；tests.toml `min_uart_stalls = 80`：至少 80 筆 DATA 寫入被 transmitter 忙碌擋住（§4.2 的 stall 路徑） | `uart_burst 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz PASS\n` | `uart_crc32` |
 | `reset_store` | backdoor | 0 | testbench 在 CPU 第一次 store 到 `rst_victim` 時拉 reset 16 cycle（`+reset_on_store`）；第二次開機檢查該 word 沒被改（§4.9）。GPIO `B0→00→B0`；fail code `0x01`／`0x02`／`0x03` | `reset_store PASS\n` | `uart_crc32` |
+| `counters` | backdoor | 0 | 讀 64-bit 計數器：`rdcycleh`、`rdinstreth` 在一段 100 次的迴圈前後都必須是 0（測試遠少於 2^32 cycle）；`rdcycle`、`rdinstret` 要遞增，instret 至少增加 100，且 instret ≤ cycle。fail code `0x10` cycleh、`0x20` instreth、`0x30` cycle 沒增加、`0x40` instret 增加不足、`0x50` instret > cycle（Phase 4，補 Phase 2 已知限制 7） | `counters PASS\n` | `uart_crc32` |
+| `buserr` | backdoor | 0 | 打開 `irq[2]`，各做一次非對齊 `lw`、`sw`（inline assembly）。PicoRV32 只把 `irq[2]` 設成 pending，存取照樣以清掉 bit 1:0 的 word 位址送上 bus（`picorv32.v` 382、403–406、1922–1935）：每次必須恰好多一次 IRQ、pending mask 為 `1<<2`；`lw` 讀到對齊的 word，`sw` 寫入對齊的 word 且不動到下一個 word。fail code `0x10`–`0x12`（lw）、`0x20`–`0x22`（sw）（Phase 4，補 Phase 2 已知限制 7） | `buserr PASS\n` | `uart_crc32` |
 | `neg_fw_hang` | backdoor | 0 | 只做 negative test：印字後無窮迴圈、永不寫 DONE | （任意） | — |
 | `neg_fw_illegal` | backdoor | 0 | 只做 negative test：執行非法指令 | （任意） | — |
 | `boot_uart_badck`／`boot_uart_n0`／`boot_uart_n449` | UART（Boot ROM loader） | 2 | 只做 negative test（L01–L03）：送出 checksum 錯誤／N=0／N=449 的封包，正確的 Boot ROM 必須拒收 | （無） | — |

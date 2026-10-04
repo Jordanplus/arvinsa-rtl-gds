@@ -16,7 +16,7 @@ DRY_RUN ?= 0
 .PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
-        neg-run-guard clean
+        neg-run-guard gl-soc-powered provenance-final harden regress clean
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -61,6 +61,14 @@ help:
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
 	@echo "  make phase3               full Phase 3 exit check (env-check-flow neg-provenance test-flow-retry harden-soc eqy-soc neg-eqy-soc"
 	@echo "                            gl-soc neg-gl-soc neg-pnr harden-core eqy-core neg-eqy-core); needs a committed working tree"
+	@echo ""
+	@echo "Phase 4 targets (signoff closure, see docs/phase_exit/phase4.md):"
+	@echo "  make regress              EVERYTHING in one command, in order, stops at the first FAIL (about 2.5 hours):"
+	@echo "                            Phase 1 RTL checks, flow checkers, soc_top (harden, EQY, GL, L5, negative tests),"
+	@echo "                            PicoRV32 alone, provenance-final; logs, summary.md and junit.xml in runs/regress/"
+	@echo "  make gl-soc-powered       L5: the powered netlist (final/pnl) in lockstep with the RTL, cells powered by VPWR/VGND"
+	@echo "  make provenance-final     HEAD and working tree unchanged since harden-soc and harden-core started"
+	@echo "  make harden D=soc_top|picorv32_core   same as harden-soc / harden-core"
 	@echo ""
 	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
 
@@ -153,6 +161,23 @@ neg-provenance:
 
 neg-run-guard:
 	$(PY) signoff/scripts/neg_run_guard.py
+
+gl-soc-powered: fw
+	$(PY) dv/gl_soc/run_gl_soc.py --powered
+
+provenance-final:
+	$(PY) signoff/scripts/provenance.py --final runs/soc_top_signoff/provenance.json runs/picorv32_core_signoff/provenance.json
+
+# project-plan.md §7.5 `make harden D=<design>`; the run tag stays the design name (runs/<design>), and
+# the commit of a run is in runs/<design>_signoff/provenance.json, which every later step compares
+# with HEAD (signoff/scripts/run_guard.py), instead of a tag per git sha.
+harden:
+	@case "$(D)" in soc_top) $(MAKE) harden-soc ;; picorv32_core) $(MAKE) harden-core ;; \
+	  *) echo "harden: FAIL - D must be soc_top or picorv32_core (got '$(D)')"; exit 1 ;; esac
+
+# The whole regression (scripts/regress.py lists the targets and their order).
+regress:
+	$(PY) scripts/regress.py
 
 test-flow-retry:
 	bash pnr/test_librelane_flow.sh
