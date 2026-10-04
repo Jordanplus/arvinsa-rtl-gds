@@ -11,3 +11,4 @@
 5. 新增、合併、改名 skill，或 skill 的規則、陷阱、適用範圍有改動時，同一個 commit 同步更新：README 的 skill 一節（「依情況找 skill」表、索引、該 skill 的說明），以及該 `SKILL.md` 開頭的 `description`（Claude 只靠這段決定要不要讀這個 skill，要寫出會遇到的情況與錯誤訊息；不能有「英文冒號＋空格」，否則不是合法的 YAML）。改完跑 `make skill-check`（格式與索引齊全；內容是否一致仍要自己核對）。
 6. Phase 0 的環境建置不做成 skill。
 7. 進入 Phase 3.5／6（OpenRAM 自產 SRAM 與特性化）、Phase 5（換 Hazard3）、Phase 7（Caravel 下線預檢）時，先建立對應的 skill（`openram-macro-characterization`、`core-migration-hazard3`、`tapeout-precheck-caravel`），再開始工作。
+8. 這個 repo 也是使用者其他 IC 專案沿用的流程來源（使用者 2026-10-04：開新專案時請 Claude Code 或 Codex「使用 arvinsa-rtl-gds 這個 repo 的流程」）。在別的專案用到這裡的 skill，通用的新經驗寫回這裡的 `SKILL.md` 與 README（規則 5），不要把 skill 複製到新專案；只屬於新設計的數字留在新專案。Codex 從 `AGENTS.md` 進來，它只指回本檔與 README，不另寫規則。

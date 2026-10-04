@@ -424,8 +424,26 @@ signoff 條件的數值從哪來 ............... signoff-criteria
 
 ### 在其他專案使用
 
-- 這些 skill 目前只在本 repo 生效。其他專案要用，需要放到使用者層（`~/.claude/skills/`），或用 symlink 指回這裡，維持單一來源，不要複製多份。目前還沒有這樣做。
-- 可以帶走的是規則本文。「本 repo 實例」的檔案、soc_top 的數字、P01 這類案例編號屬於這個 repo，新專案要換成自己的。各 skill 的「適用範圍」寫了哪些內容是通用的、哪些是 sky130 或 LibreLane 專屬。
+使用者的做法（2026-10-04）：開新專案時，請 Claude Code 或 Codex「使用 arvinsa-rtl-gds 這個 repo 的流程」。skill 不搬到使用者層，也不複製到新專案；新專案的 agent 直接讀這個 repo（本機 clone 或 GitHub）。所以這個 repo 要讓沒參與過的 agent 自己讀得懂：
+
+- **入口**：本節的「依情況找 skill」表，再讀對應的 `.claude/skills/<name>/SKILL.md`。SKILL.md 是一般的 Markdown，任何 agent 都能讀；只有在本 repo 裡開 Claude Code 時才會自動載入，在新專案裡要明確叫 agent 來讀。
+- **Codex**：讀的是 repo 根目錄的 `AGENTS.md`；本 repo 的 `AGENTS.md` 指回 CLAUDE.md 與本節，不另寫一份。
+- **可以直接沿用的流程骨架**：
+  - `scripts/regress.py`：一鍵 regression。
+  - `signoff/scripts/provenance.py`、`run_guard.py`：來源追溯，與下游拒絕過期的 run。
+  - `signoff/scripts/check_signoff.py` 加 `signoff/limits/*.toml` 的格式：signoff 門檻與 golden 比對。
+  - `pnr/librelane_flow.sh`：LibreLane 呼叫與有上限的重試。
+  - `dv/scripts/dvlib.py`：模擬的 checker。
+  - `dv/monitors/gl_lockstep.v`：RTL 與網表 lockstep。
+  - `signoff/eqy/`：EQY 與它的植入錯誤。
+  - `env/versions.mk`、`env/check_env.sh`、`toolchain.md`：釘版與環境檢查。
+  - `scripts/check_py_names.py`、`scripts/check_skills.py`：開跑前的快速檢查。
+- **要依新設計重做的**：
+  - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，並用 `signoff-criteria` 重新推導。
+  - golden。
+  - 和設計綁在一起的植入錯誤案例，例如 `neg_pnr.py` 的 P01–P31。
+  - ADR、exit review 的內容。
+- **經驗寫回這裡**：新專案用到某個 skill 時發現的通用經驗，寫回本 repo 的 `SKILL.md`，並同步本節，維持單一來源；只屬於新設計的數字留在新專案的文件。
 
 ## 授權
 
