@@ -32,7 +32,7 @@ step re-run one step on a copy of that step's saved config and input state
        high phase, the SRAM clk0 needs 12 ns          (min pulse width)
   P23  signoff SDC clock period 29 ns, {0 14.5}:   OpenROAD.STAPostPNR -> check_soc.py pulse_width
        the SRAM clk0 needs 30 ns                      (min period)
-  P24  signoff SDC clock waveform {0 24}: duty     OpenROAD.STAPostPNR -> Checker.SetupViolations,
+  P24  signoff SDC clock waveform {0 0.6*T}: duty  OpenROAD.STAPostPNR -> Checker.SetupViolations,
        cycle 60 %, beyond the 55 % budget             worst ss path launched by the sram0 falling edge
   P25  clock_uncertainty.sdc unc_duty_max 0.60     OpenROAD.STAPostPNR -> Checker.SetupViolations,
        (the duty cycle budget reaches the              worst ss path launched by the sram0 falling edge
@@ -299,7 +299,7 @@ def pulse_case(run, d, waveform, kind):
 
 
 def p22(run, d):
-    return pulse_case(run, d, "40 -waveform {0 10}", "min_pulse_width")
+    return pulse_case(run, d, "$::env(CLOCK_PERIOD) -waveform {0 10}", "min_pulse_width")
 
 
 def p23(run, d):
@@ -316,7 +316,7 @@ def worst_ss_from_sram_fall(step):
 def p24(run, d):
     rc, text = rerun(run, d, "OpenROAD.STAPostPNR", "Checker.SetupViolations",
                      edit_config=lambda c: c.update(SIGNOFF_SDC_FILE=sdc_edit(
-                         d, c, CREATE_CLOCK, r"\g<1>$::env(CLOCK_PERIOD) -waveform {0 24}", "duty cycle 60 %")))
+                         d, c, CREATE_CLOCK, r"\g<1>$::env(CLOCK_PERIOD) -waveform [list 0 [expr {0.6 * $::env(CLOCK_PERIOD)}]]", "duty cycle 60 %")))
     ok = rc not in (0, None) and "Setup violations found" in text and worst_ss_from_sram_fall(os.path.join(d, "step"))
     return ok, "Checker.SetupViolations, worst nom_ss path launched by the sram0 falling edge"
 

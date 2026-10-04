@@ -20,7 +20,8 @@
         "dir::rtl/include"
     ],
     "CLOCK_PORT": "clk",
-    "CLOCK_PERIOD": 40,
+    "//CLOCK_PERIOD": "42 ns (user decision 2026-10-04; was 40 ns, ADR-0004 Phase 4 addendum). With the Phase 4 signoff conditions (SRAM derate 1.575, 45/55 % duty cycle budget, temperature-inversion corners) the sram0 dout0 half-cycle path missed by 0.42 ns at min_ss_n40C at 40 ns (minimum period about 41 ns).",
+    "CLOCK_PERIOD": 42,
     "//FP_SIZING": "DIE_AREA from docs/decisions/0006-soc-die-area.md.",
     "FP_SIZING": "absolute",
     "DIE_AREA": [
@@ -141,6 +142,8 @@
     "PL_RESIZER_HOLD_SLACK_MARGIN": 0.3,
     "//PL_RESIZER_SETUP_SLACK_MARGIN": "0.6 ns (default 0.05): the resizer sees only the 9 corners of RSZ_CORNERS, where the sram0 dout0 half-cycle path had +0.09..+0.17 ns at ss_100C and needed no repair, while signoff at ss_n40C found -0.24..-0.41 ns. Asking for 0.6 ns at ss_100C makes the resizer work on that path (other paths have several ns).",
     "PL_RESIZER_SETUP_SLACK_MARGIN": 0.6,
+    "//CTS_CLK_MAX_WIRE_LENGTH": "150 um: CTS buffers the wire from the clk pin to the clock tree roots (repair_clock_nets in LibreLane's cts.tcl). With the default (0, i.e. the slew-based length of about 3.5 mm) the pin at (547.6, 0.1) drove about 360 um of wire to clkbuf_regs_0_clk at (475.2, 291.0); its slew was 0.767 ns at max_ss_n40C (limit 0.75 ns; Phase 4 harden-soc 4). The pin's driver is LibreLane's assumed inv_2 (SYNTH_CLK_DRIVING_CELL default).",
+    "CTS_CLK_MAX_WIRE_LENGTH": 150,
     "//STA_EXTRA_CORNER_TCL_FILE": "Derates sram0 in the ss and ff corners during STA (docs/decisions/0007-sram-padded-lib.md).",
     "STA_EXTRA_CORNER_TCL_FILE": "dir::pnr/soc_top/sta_extra_corner.tcl",
     "//PNR_SDC_FILE": "base.sdc with max fanout 8 for the PnR steps: antenna repair adds diodes after the resizer fixed fanout (a diode pin counts as a load; run soc_explore7: 10 loads + 1 diode). Signoff keeps 10. docs/decisions/0009-signoff-max-transition.md.",
