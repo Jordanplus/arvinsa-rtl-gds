@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """make neg-gl-core: bug injection into the hardened netlist; `make gl-core` must FAIL on each.
 
-usage: neg_gl_core.py [--harden-run <dir>]   (default runs/picorv32_core)
+usage: neg_gl_core.py [--harden-run <dir>] [--out <dir>]   (defaults runs/picorv32_core, runs/neg_gl_core)
+The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now).
 
 Each case edits a copy of <harden-run>/final/nl/picorv32.nl.v and runs
 dv/gl_core/run_gl_core.py on it (outputs in runs/neg_gl_core/<case>/). The edit must match
@@ -27,8 +28,9 @@ import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "runs", "neg_gl_core")
 RUNNER = os.path.join(ROOT, "dv", "gl_core", "run_gl_core.py")
+sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
 
 
 def port_buffer(port):
@@ -56,12 +58,18 @@ CASES = [
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--harden-run", default=os.path.join(ROOT, "runs", "picorv32_core"))
-    harden_run = os.path.abspath(ap.parse_args().harden_run)
+    ap.add_argument("--out", default=os.path.join(ROOT, "runs", "neg_gl_core"))
+    args = ap.parse_args()
+    harden_run, OUT = os.path.abspath(args.harden_run), os.path.abspath(args.out)
     netlist = os.path.join(harden_run, "final", "nl", "picorv32.nl.v")
+    shutil.rmtree(OUT, ignore_errors=True)  # only the output directory is removed, before any check
+    errs = guard(harden_run, "harden-core: PASS")
+    if errs:
+        print(f"neg-gl-core: FAIL ({'; '.join(errs)}; run `make harden-core`)")
+        return 1
     if not os.path.isfile(netlist):
         print(f"neg-gl-core: FAIL (netlist not found: {netlist}; run `make harden-core` first)")
         return 1
-    shutil.rmtree(OUT, ignore_errors=True)  # only runs/neg_gl_core is removed
     os.makedirs(OUT)
     text = open(netlist, encoding="utf8").read()
     procs, errors = {}, []

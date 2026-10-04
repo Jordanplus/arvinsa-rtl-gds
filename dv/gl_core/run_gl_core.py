@@ -10,9 +10,11 @@ The testbench, firmware and picorv32_axi_adapter are upstream and unmodified; th
 around them are dv/gl_core/picorv32_axi_shim.v and dv/gl_core/gl_core_boot.v (see their headers).
 
 PASS needs all of:
-  - the harden run passed all its own checks (<harden-run>_signoff/result.txt says
-    `harden-core: PASS`: signoff limits and golden, disconnected pins, CPU parameters, source
-    tracking), so a netlist that failed signoff or came from uncommitted files is not used
+  - the harden run passed all its own checks and was made from the commit checked out now
+    (signoff/scripts/run_guard.py: <harden-run>_signoff/result.txt says `harden-core: PASS`, which
+    includes signoff limits and golden, disconnected pins, CPU parameters, source tracking;
+    provenance.json records HEAD), so a netlist that failed signoff, came from uncommitted files
+    or from another commit is not used
   - cpu_params.py PASS (config.json SYNTH_PARAMETERS == soc_top u_cpu parameters == the
     SYNTH_PARAMETERS the harden run used, from its resolved.json)
   - the firmware IRQ handler address (symbol irq_vec) == PROGADDR_IRQ of the core
@@ -45,6 +47,8 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "pnr", "picorv32_core"))
 from cpu_params import parse_verilog_int  # noqa: E402  (same literal parser as the parameter check)
+sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
 HERE = os.path.join(ROOT, "dv", "gl_core")
 SUBMODULE = os.path.join(ROOT, "third_party", "picorv32")
 TOOLCHAIN_PREFIX = "riscv64-elf-"
@@ -157,6 +161,12 @@ def main():
         print(f"gl-core: FAIL ({msg})")
         return 1
 
+    # Only paths below the output directory are removed, first, so that a refused run leaves no old
+    # result behind.
+    shutil.rmtree(out, ignore_errors=True)
+    errs = guard(harden_run, "harden-core: PASS")
+    if errs:
+        return fail("; ".join(errs) + "; run `make harden-core`")
     for tool in ("git", "make", "yosys", "iverilog", "vvp", f"{TOOLCHAIN_PREFIX}gcc", f"{TOOLCHAIN_PREFIX}nm"):
         if shutil.which(tool) is None:
             return fail(f"tool not found: {tool}")
@@ -167,17 +177,10 @@ def main():
         return fail(f"{resolved} not found; run `make harden-core` first")
     with open(resolved, encoding="utf8") as f:
         cell_models = json.load(f)["CELL_VERILOG_MODELS"]
-    signoff_dir = harden_run.rstrip(os.sep) + "_signoff"
-    path = os.path.join(signoff_dir, "result.txt")
-    lines = open(path, encoding="utf8").read().splitlines() if os.path.isfile(path) else []
-    if lines != ["harden-core: PASS"]:
-        return fail(f"{path} does not say 'harden-core: PASS': the harden run did not pass; run `make harden-core`")
     have = subprocess.run(["git", "-C", SUBMODULE, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     if have != pin("PICORV32_COMMIT"):
         return fail(f"third_party/picorv32 is at {have[:12]}, env/versions.mk pins {pin('PICORV32_COMMIT')[:12]}")
 
-    # Only paths below the output directory are removed.
-    shutil.rmtree(out, ignore_errors=True)
     inc, src = os.path.join(out, "inc"), os.path.join(out, "src")
     os.makedirs(inc)
     os.makedirs(src)

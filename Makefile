@@ -3,6 +3,9 @@
 # Contract for every target: docs/spec/soc_spec.md §8.
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
+# The targets share run directories (runs/soc_top, runs/picorv32_core, ...) and remove them at the
+# start; `make -j` would let one target delete what another is using. Always run in order.
+.NOTPARALLEL:
 
 TEST ?= hello
 SIM  ?= icarus
@@ -12,7 +15,8 @@ DRY_RUN ?= 0
 
 .PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
-        eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 clean
+        eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
+        neg-run-guard clean
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -52,7 +56,8 @@ help:
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
 	@echo "  make neg-pnr              bug injection P01-P20 (STA, PDN, DRC, XOR, placement, inputs, ...), each must FAIL at its checker"
-	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, wrong LibreLane/PDK, ...)"
+	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
+	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
 	@echo "  make phase3               full Phase 3 exit check (env-check-flow neg-provenance test-flow-retry harden-soc eqy-soc neg-eqy-soc"
 	@echo "                            gl-soc neg-gl-soc neg-pnr harden-core eqy-core neg-eqy-core); needs a committed working tree"
@@ -145,6 +150,9 @@ neg-pnr:
 
 neg-provenance:
 	$(PY) signoff/scripts/neg_provenance.py
+
+neg-run-guard:
+	$(PY) signoff/scripts/neg_run_guard.py
 
 test-flow-retry:
 	bash pnr/test_librelane_flow.sh

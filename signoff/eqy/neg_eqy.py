@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Bug injection into a final netlist; signoff/eqy/run_eqy.py must FAIL on each case.
 
-usage: neg_eqy.py --design picorv32_core|soc_top [--run <dir>] [-j N]
+usage: neg_eqy.py --design picorv32_core|soc_top [--run <dir>] [--out <dir>] [-j N]
+The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now);
+run_eqy.py checks it again for every case.
 
 Each case edits a copy of <run>/final/nl/<DESIGN_NAME>.nl.v and runs run_eqy.py on it
 (outputs in runs/neg_eqy_<design>/<case>/). An edit must match exactly one place in the
@@ -38,6 +40,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RUNNER = os.path.join(ROOT, "signoff", "eqy", "run_eqy.py")
+sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
 CELL = r"(sky130_fd_sc_hd__\w+)"
 
 
@@ -138,15 +142,23 @@ def main():
     ap.add_argument("--run")
     ap.add_argument("-j", type=int, default=3, help="cases run in parallel (each EQY run uses -j 3)")
     ap.add_argument("--cases", help="comma-separated subset of cases")
+    ap.add_argument("--out", help="output directory (default runs/neg_eqy_<design>)")
     args = ap.parse_args()
     run = os.path.abspath(args.run or os.path.join(ROOT, "runs", args.design))
+    out = os.path.abspath(args.out or os.path.join(ROOT, "runs", f"neg_eqy_{args.design}"))
+    shutil.rmtree(out, ignore_errors=True)  # only the output directory is removed, before any check
+    errs = guard(run, {"picorv32_core": "harden-core: PASS", "soc_top": "harden-soc: PASS"}[args.design])
+    if errs:
+        print(f"neg-eqy: FAIL ({'; '.join(errs)})")
+        return 1
+    if not os.path.isfile(os.path.join(run, "resolved.json")):
+        print(f"neg-eqy: FAIL ({run}/resolved.json not found)")
+        return 1
     top = json.load(open(os.path.join(run, "resolved.json")))["DESIGN_NAME"]
     netlist = os.path.join(run, "final", "nl", f"{top}.nl.v")
-    out = os.path.join(ROOT, "runs", f"neg_eqy_{args.design}")
     if not os.path.isfile(netlist):
         print(f"neg-eqy: FAIL (netlist not found: {netlist})")
         return 1
-    shutil.rmtree(out, ignore_errors=True)  # only runs/neg_eqy_<design> is removed
     os.makedirs(out)
     text = open(netlist, encoding="utf8").read()
     t0 = time.time()

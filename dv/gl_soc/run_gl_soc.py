@@ -12,8 +12,10 @@ port 0 pins of the two copies at every falling clock edge (rules in its header).
 checkers watch the RTL copy, exactly as in the RTL regression.
 
 PASS needs all of:
-  - the harden run passed all its own checks (<harden-run>_signoff/result.txt says
-    `harden-soc: PASS`: signoff limits and golden, soc checks, inputs, source tracking)
+  - the harden run passed all its own checks and was made from the commit checked out now
+    (signoff/scripts/run_guard.py: <harden-run>_signoff/result.txt says `harden-soc: PASS`, which
+    includes signoff limits and golden, soc checks, inputs, source tracking; provenance.json
+    records HEAD)
   - every selected test PASS (all Phase 1 checkers, dv/scripts/dvlib.py run_test)
   - every test: tb_result.txt fail.gl_lockstep=0 and gl_compares > 0 (the comparison ran)
 
@@ -37,6 +39,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dv" / "scripts"))
 import dvlib  # noqa: E402
+sys.path.insert(0, str(ROOT / "signoff" / "scripts"))
+from run_guard import guard  # noqa: E402
 
 LOCKSTEP_V = ROOT / "dv" / "monitors" / "gl_lockstep.v"
 GL_FLAGS = ["-DGL_LOCKSTEP", "-DFUNCTIONAL", "-DUNIT_DELAY=#1"]
@@ -67,15 +71,17 @@ def main():
         print(f"gl-soc: FAIL ({msg})")
         return 1
 
+    # Only the output directory is removed, first, so that a refused run leaves no old result behind.
+    shutil.rmtree(out, ignore_errors=True)
+    errs = guard(harden_run, "harden-soc: PASS")
+    if errs:
+        return fail("; ".join(errs) + "; run `make harden-soc`")
     if not netlist.is_file():
         return fail(f"netlist not found: {netlist}; run `make harden-soc` first")
     resolved = harden_run / "resolved.json"
     if not resolved.is_file():
         return fail(f"{resolved} not found; run `make harden-soc` first")
     cell_models = json.loads(resolved.read_text())["CELL_VERILOG_MODELS"]
-    result = Path(str(harden_run) + "_signoff") / "result.txt"
-    if (result.read_text().splitlines() if result.is_file() else []) != ["harden-soc: PASS"]:
-        return fail(f"{result} does not say 'harden-soc: PASS': the harden run did not pass; run `make harden-soc`")
     try:
         tests = dvlib.load_tests()
     except (OSError, dvlib.DvError) as e:
@@ -88,8 +94,6 @@ def main():
             return fail(f"unknown or negative-only test(s): {', '.join(unknown)}")
         names = want
 
-    # Only the output directory is removed.
-    shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     gl_v = out / "soc_top_gl.v"
     try:

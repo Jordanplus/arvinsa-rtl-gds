@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P13-P20).
 
-usage: neg_pnr.py [--run <dir>] [--cases P01,P02,...] [-j N]
+usage: neg_pnr.py [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
+The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
+cases compare against it ("real run: none", golden, metrics).
 
 Each case changes one thing and must FAIL at the expected checker, with the expected message.
 A case that FAILs elsewhere, or does not FAIL, makes neg-pnr FAIL. Cases that need a LibreLane
@@ -53,7 +55,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "runs", "neg_pnr")
+OUT = os.path.join(ROOT, "runs", "neg_pnr")   # --out replaces it
 LL_DIR = os.environ.get("LIBRELANE_DIR", os.path.join(ROOT, ".tools", "librelane"))
 CHECK_SOC = os.path.join(ROOT, "pnr", "soc_top", "check_soc.py")
 CHECK_SIGNOFF = os.path.join(ROOT, "signoff", "scripts", "check_signoff.py")
@@ -64,6 +66,8 @@ SRAM_IP = os.path.join(ROOT, "ip", "sram", SRAM)
 PDK_TT_LIB = f"pdk_dir::libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
 LIMITS = os.path.join(ROOT, "signoff", "limits", "soc_top.toml")
 GOLDEN = os.path.join(ROOT, "signoff", "golden", "soc_top", "metrics.json")
+sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
 
 
 def nix(cmd, log):
@@ -504,10 +508,13 @@ CASES = [("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), (
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run", default=os.path.join(ROOT, "runs", "soc_top"))
+    ap.add_argument("--out", default=OUT)
     ap.add_argument("--cases")
     ap.add_argument("-j", type=int, default=4)
     args = ap.parse_args()
     run = os.path.abspath(args.run)
+    out = os.path.abspath(args.out)
+    shutil.rmtree(out, ignore_errors=True)  # only the output directory is removed, before any check
     cases = CASES
     if args.cases:
         want = args.cases.split(",")
@@ -515,20 +522,18 @@ def main():
         if len(cases) != len(want):
             print(f"neg-pnr: FAIL (unknown case in {want})")
             return 1
+    errs = guard(run, "harden-soc: PASS")
+    if errs:
+        print(f"neg-pnr: FAIL ({'; '.join(errs)}; run `make harden-soc`)")
+        return 1
     if not os.path.isdir(os.path.join(run, "final")):
         print(f"neg-pnr: FAIL ({run} has no final/; run `make harden-soc` first)")
         return 1
-    # The cases compare against the real run ("real run: none", golden, metrics), so it must have passed.
-    result = run.rstrip(os.sep) + "_signoff/result.txt"
-    if (open(result).read().splitlines() if os.path.isfile(result) else []) != ["harden-soc: PASS"]:
-        print(f"neg-pnr: FAIL ({result} does not say 'harden-soc: PASS'; run `make harden-soc` first)")
-        return 1
-    shutil.rmtree(OUT, ignore_errors=True)  # only runs/neg_pnr is removed
     t0 = time.time()
 
     def one(case):
         name, fn = case
-        d = os.path.join(OUT, name)
+        d = os.path.join(out, name)
         os.makedirs(d)
         try:
             ok, expect = fn(run, d)
@@ -542,7 +547,7 @@ def main():
     for name, ok, expect in results:
         caught += ok
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {'FAIL at ' if ok else 'expected FAIL at '}{expect}"
-              + ("" if ok else f" (see {os.path.relpath(os.path.join(OUT, name), ROOT)}/run.log)"))
+              + ("" if ok else f" (see {os.path.relpath(os.path.join(out, name), ROOT)}/run.log)"))
     status = "PASS" if caught == len(cases) else "FAIL"
     print(f"neg-pnr: {status} {caught}/{len(cases)} caught ({round(time.time() - t0)} s)")
     return 0 if status == "PASS" else 1

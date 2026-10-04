@@ -25,8 +25,9 @@ Settings found necessary (see README.md for the evidence):
     and renames the flip-flop output net; without insbuf the buffered nets are aliases of the
     matched port bit instead of separate unmatched state
 
-PASS needs: the harden run passed all its checks (<run>_signoff/result.txt says `harden-core: PASS`
-or `harden-soc: PASS`, which includes signoff limits, golden and source tracking),
+PASS needs: the harden run passed all its checks and was made from the commit checked out now
+(signoff/scripts/run_guard.py: <run>_signoff/result.txt says `harden-core: PASS` or `harden-soc: PASS`,
+which includes signoff limits, golden and source tracking; provenance.json records HEAD),
 EQY ends with `DONE (PASS, rc=0)`, the partition list is not empty, every partition is in a
 `Proved equivalence of partition` line, and the partition log has no `found constant ... bit`
 line (EQY maps such a bit to the constant without proving it; see README.md). Prints `eqy: PASS` / `eqy: FAIL`; exit code 0 only on PASS.
@@ -42,6 +43,8 @@ import sys
 import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
 STACK_KB = 65520  # macOS hard limit for the main thread stack
 
 
@@ -106,16 +109,17 @@ def main():
         print(f"eqy: FAIL ({msg})")
         return 1
 
+    # Only the output directory is removed, first, so that a refused run leaves no old result behind.
+    shutil.rmtree(out, ignore_errors=True)
+    verdict = {"picorv32_core": "harden-core: PASS", "soc_top": "harden-soc: PASS"}[args.design]
+    errs = guard(run, verdict)
+    if errs:
+        return fail("; ".join(errs))
     resolved = os.path.join(run, "resolved.json")
     if not os.path.isfile(resolved):
         return fail(f"{resolved} not found; run the harden step first")
     cfg = json.load(open(resolved, encoding="utf8"))
     top = cfg["DESIGN_NAME"]
-    # The make target that produced <run> writes its overall verdict to <run>_signoff/result.txt.
-    verdict = {"picorv32_core": "harden-core: PASS", "soc_top": "harden-soc: PASS"}[args.design]
-    result = run.rstrip(os.sep) + "_signoff/result.txt"
-    if (open(result).read().splitlines() if os.path.isfile(result) else []) != [verdict]:
-        return fail(f"{result} does not say '{verdict}': the harden run did not pass")
     golds = glob.glob(os.path.join(run, "*-yosys-synthesis", f"{top}.nl.v"))
     if len(golds) != 1:
         return fail(f"expected one synthesized netlist {run}/*-yosys-synthesis/{top}.nl.v, found {len(golds)}")
@@ -128,8 +132,6 @@ def main():
         if " " in p:
             return fail(f"path contains a space, not supported by the EQY script: {p}")
 
-    # Only the output directory is removed.
-    shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
     log = os.path.join(out, "eqy_run.log")
     cells = os.path.join(out, "formal_pdk.v")

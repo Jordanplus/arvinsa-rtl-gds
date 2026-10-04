@@ -2,7 +2,8 @@
 """make neg-gl-soc: bug injection into the soc_top final netlist; `make gl-soc` must FAIL on each,
 because the RTL/GL lockstep comparison (dv/monitors/gl_lockstep.v) sees a difference.
 
-usage: neg_gl_soc.py [--harden-run <dir>]   (default runs/soc_top)
+usage: neg_gl_soc.py [--harden-run <dir>] [--out <dir>]   (defaults runs/soc_top, runs/neg_gl_soc)
+The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now).
 
 Uses the same netlist edits as signoff/eqy/neg_eqy.py (soc_top cases; each edit must match
 exactly one place). Each edited netlist runs dv/gl_soc/run_gl_soc.py on the positive tests except
@@ -24,10 +25,11 @@ import sys
 import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "runs", "neg_gl_soc")
 RUNNER = os.path.join(ROOT, "dv", "gl_soc", "run_gl_soc.py")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "eqy"))
 import neg_eqy  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
 
 TESTS = ["hello", "irq", "muldiv", "uart_echo", "bootrom_march", "boot_uart_hello", "boot_host_hello",
          "regs", "unmapped", "uart_burst", "reset_store"]
@@ -36,13 +38,19 @@ TESTS = ["hello", "irq", "muldiv", "uart_echo", "bootrom_march", "boot_uart_hell
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--harden-run", default=os.path.join(ROOT, "runs", "soc_top"))
-    harden_run = os.path.abspath(ap.parse_args().harden_run)
+    ap.add_argument("--out", default=os.path.join(ROOT, "runs", "neg_gl_soc"))
+    args = ap.parse_args()
+    harden_run, OUT = os.path.abspath(args.harden_run), os.path.abspath(args.out)
     netlist = os.path.join(harden_run, "final", "nl", "soc_top.nl.v")
+    shutil.rmtree(OUT, ignore_errors=True)  # only the output directory is removed, before any check
+    errs = guard(harden_run, "harden-soc: PASS")
+    if errs:
+        print(f"neg-gl-soc: FAIL ({'; '.join(errs)}; run `make harden-soc`)")
+        return 1
     if not os.path.isfile(netlist):
         print(f"neg-gl-soc: FAIL (netlist not found: {netlist}; run `make harden-soc` first)")
         return 1
     text = open(netlist, encoding="utf8").read()
-    shutil.rmtree(OUT, ignore_errors=True)  # only runs/neg_gl_soc is removed
     t0 = time.time()
 
     def one(case):

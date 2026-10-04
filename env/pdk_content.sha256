@@ -1,0 +1,9 @@
+# Content of the PDK directories the flow reads: signoff/scripts/provenance.py pdk_content.
+# Made with --make-pdk-content from the tarballs pinned in env/sky130_pdk_assets.sha256
+# (SKY130_PDK_HASH 8afc8346a57fe1ab7934ba5a6056ea8b43078e71). Columns: digest, directory, number of files.
+b9263d8b38f2772df5bc7eff87cb0102c1293fe4f27ca3d205bf6b32c401b5bf  sky130A/libs.tech/klayout  410
+f8e25387d8945113e957b3240dd0d37ef6b1b7219abeb297d274e2a7ea5fac6f  sky130A/libs.tech/magic  43
+5762d4c20bed1e8ce57fdd9087f6ec5a42f4e337f796b25e45f48a3c90c3c2af  sky130A/libs.tech/netgen  2
+fc2134d12121d1cbd4946294831ebd82c21fb288f54eedb39fa088b182c4085e  sky130A/libs.tech/openlane  83
+9dbc3a199a1c6d4c01737f4a45ec6da5cce44f4b7287448c8564a950304c61cb  sky130A/libs.ref/sky130_fd_sc_hd  933
+52c4988b1a56fb80f7fa15f73f52a68e1505096fd09fb5cbe8ed7e3328a48931  sky130A/libs.ref/sky130_sram_macros  638
