@@ -121,7 +121,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | [dv-directed-tests](.claude/skills/dv-directed-tests/SKILL.md) | 從漏掉的植入錯誤找出沒被測到的功能，寫 directed firmware 測試補上，再用植入錯誤證明抓得到 | 2 |
 | [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：exit criteria 與證據、與計畫不同的地方、已知限制、獨立審查、使用者決定 | 1 |
 
-優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。`floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。`signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多數沿用預設值、沒有推導，依使用者要求新增。最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review；Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件）寫回既有的 skill。
+優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。`floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。`signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多數沿用預設值、沒有推導，依使用者要求新增。最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review；Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件、CTS 與 resizer 餘量）寫回既有的 skill。
 
 ### librelane-run-debug：LibreLane 執行與除錯
 

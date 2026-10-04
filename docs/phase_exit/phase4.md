@@ -156,7 +156,7 @@ Exit criteria 出處：`project-plan.md` §8 Phase 4。原文：「嘗試壓到 
 4. **`make harden D=<design>`**：run 的目錄名稱仍是設計名稱，不用 git sha；run 的 commit 由 `provenance.json` 記錄，下游步驟逐一比對 HEAD。
 5. **resizer 只看 9 個 corner**：溫度反轉的 2 個 PVT 只在 signoff STA 判定（15 個全給 resizer 時跑不完）。
 6. **IR 的判定改成 VDD＋GND 合計**，供電模型改一側供電；picorv32_core 保留 LibreLane 的預設模型。
-7. **新增 4 個 skill**（使用者要求）：`flow-regression-reproducibility`、`multicorner-sta`、`dv-directed-tests`、`phase-exit-review`；其他 9 個 skill 寫回本階段的經驗。
+7. **新增 4 個 skill**（使用者要求）：`flow-regression-reproducibility`、`multicorner-sta`、`dv-directed-tests`、`phase-exit-review`；其他 10 個 skill 寫回本階段的經驗。`cts-clock-tree` 與 `drv-timing-closure` 的 Phase 4 經驗（SRAM clock 的 latency 對齊、clock pin 的線切段、resizer 看不到的 corner 用 PnR 餘量補）是使用者在結案後再問時才補上的。沒有更新的 5 個（`antenna-signoff`、`floorplan-congestion`、`hard-macro-integration`、`lvs-signoff`、`rtl-synthesis-lint`）在 Phase 4 沒有新的做法或發現。
 
 ## 已知限制（帶到後續階段）
 
