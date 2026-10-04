@@ -25,9 +25,13 @@ usage: provenance.py --record <out.json> [--repo <dir>]
                env/sky130_pdk_assets.sha256, so an edited PDK file FAILs here.
 --verify (after the run) checks the same again against the record (HEAD unchanged and the tree
 still clean, so files read late in the flow, such as the limits and the golden, are the
-committed ones), that the run's resolved.json used the pinned LibreLane version and PDK, and
-that every PDK path in resolved.json lies in PDK_CONTENT_DIRS (resolved_pdk_paths), so a file
-outside the checked directories cannot be read unnoticed.
+committed ones), that the run's resolved.json used the pinned LibreLane version and the PDK
+install whose content was checked (resolved_pdk: its PDK_ROOT, symlinks resolved, is the
+directory of pdk_content; a copy elsewhere with the same version name FAILs), and that every PDK
+path in resolved.json lies in PDK_CONTENT_DIRS (resolved_pdk_paths), so a file outside the
+checked directories cannot be read unnoticed. A PDK path is any path string that, symlinks
+resolved, lies below that PDK_ROOT or the PDK home ($PDK_ROOT or ~/.ciel), or contains
+"/<PDK>/libs." (Phase 4 review: ~/.ciel/sky130A/... is a symlink into the version directory).
 --final (end of `make regress`/`make phase3`) checks that HEAD still equals the repo_head of
 every given record and the working tree is still clean: the later steps (EQY, simulation,
 negative tests) ran on the same commit.
@@ -164,18 +168,26 @@ def check(rec, rows, repo):
             + ", ".join(f"{d} ({have.get(d, (None, 0))[1]} files, pinned {pinned.get(d, (None, 0))[1]})" for d in bad[:4]))
 
 
-def pdk_paths(value, root, out):
-    """All strings in resolved.json (nested) that are paths below root."""
+def path_strings(value, out):
+    """All strings in resolved.json (nested) that are absolute paths."""
     if isinstance(value, str):
-        if value.startswith(root.rstrip("/") + "/"):
+        if value.startswith("/"):
             out.append(value)
     elif isinstance(value, dict):
         for v in value.values():
-            pdk_paths(v, root, out)
+            path_strings(v, out)
     elif isinstance(value, list):
         for v in value:
-            pdk_paths(v, root, out)
+            path_strings(v, out)
     return out
+
+
+def pdk_paths(value, root, pdk):
+    """The PDK paths of resolved.json, symlinks resolved: below root (the run's PDK_ROOT, resolved)
+    or the PDK home, or containing /<pdk>/libs. (another install); root itself (PDK_ROOT) is not one."""
+    home = os.path.realpath(os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel")))
+    real = sorted({os.path.realpath(p) for p in path_strings(value, [])})
+    return [p for p in real if p != root and (p.startswith(root + "/") or p.startswith(home + "/") or f"/{pdk}/libs." in p)]
 
 
 def make_pdk_content(out, cache, repo=ROOT):
@@ -273,13 +285,16 @@ def main():
         ok = ll_ver == pin("LIBRELANE_TAG", repo)
         rows.append(ok)
         print(f"  [{'PASS' if ok else 'FAIL'}] resolved_librelane: {ll_ver}, pinned {pin('LIBRELANE_TAG', repo)}")
-        ok = pdk_root.rstrip("/").endswith("/versions/" + pin("SKY130_PDK_HASH", repo))
+        real_root = os.path.realpath(pdk_root) if pdk_root else ""
+        checked = os.path.dirname(rec["pdk_realpath"]) if rec.get("pdk_realpath") else None
+        ok = pdk_root.rstrip("/").endswith("/versions/" + pin("SKY130_PDK_HASH", repo)) and real_root == checked
         rows.append(ok)
-        print(f"  [{'PASS' if ok else 'FAIL'}] resolved_pdk: PDK_ROOT {pdk_root or None}")
-        paths = pdk_paths(res, pdk_root, []) if ll_ver is not None and pdk_root else []
-        top = os.path.join(pdk_root, pin("PDK", repo))
+        print(f"  [{'PASS' if ok else 'FAIL'}] resolved_pdk: PDK_ROOT {pdk_root or None}"
+              + ("" if real_root == checked else f"; not the content-checked install {checked}"))
+        paths = pdk_paths(res, real_root, pin("PDK", repo)) if ll_ver is not None and pdk_root else []
+        top = os.path.join(real_root, pin("PDK", repo))
         outside = sorted({p for p in paths if p.rstrip("/") != top
-                          and not any(p.startswith(os.path.join(pdk_root, d) + "/") or p == os.path.join(pdk_root, d)
+                          and not any(p.startswith(os.path.join(real_root, d) + "/") or p == os.path.join(real_root, d)
                                       for d in pdk_content_dirs(repo))})
         ok = bool(paths) and not outside
         rows.append(ok)

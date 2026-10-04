@@ -21,6 +21,10 @@ local third_party/ checkout, no network); this repo's working tree is not touche
   resolved_ll     --verify with resolved.json LibreLane 3.0.13   FAIL resolved_librelane
   resolved_outside --verify with resolved.json reading a PDK file outside the content-checked
                   directories (sky130_fd_sc_hs)                  FAIL resolved_pdk_paths
+  resolved_other_install --verify with resolved.json PDK_ROOT = another directory named
+                  .../versions/<pinned hash> (a copy that could be edited) FAIL resolved_pdk
+  resolved_symlink --verify with resolved.json reading sky130_fd_sc_hs through the
+                  ~/.ciel/sky130A symlink                         FAIL resolved_pdk_paths
   no_record       --verify without the record file               FAIL record
   final_clean     --final on the clean clone with its own record  PASS (positive control)
   final_dirty     --final on a clone with one changed file       FAIL uncommitted
@@ -171,6 +175,19 @@ def main():
     r["EXTRA_LIBS"] = lib("sky130_fd_sc_hs")["*"]
     json.dump(r, open(bad, "w"))
     case("resolved_outside", prov("--verify", rec, "--resolved", bad, "--repo", repo), "resolved_pdk_paths")
+
+    bad = os.path.join(OUT, "resolved_other_install.json")
+    other = os.path.join(OUT, "other_install", "ciel", "sky130", "versions", pin("SKY130_PDK_HASH"))
+    json.dump({"meta": {"librelane_version": pin("LIBRELANE_TAG")}, "PDK_ROOT": other,
+               "LIB": {"*": [p.replace(pdk_root, other) for p in lib(pin("STD_CELL_LIBRARY"))["*"]]}}, open(bad, "w"))
+    case("resolved_other_install", prov("--verify", rec, "--resolved", bad, "--repo", repo), "resolved_pdk")
+
+    bad = os.path.join(OUT, "resolved_symlink.json")
+    r = json.load(open(resolved))
+    r["EXTRA_LIBS"] = [p.replace(pdk_root + "/" + pin("PDK"), os.path.join(os.path.expanduser("~/.ciel"), pin("PDK")))
+                       for p in lib("sky130_fd_sc_hs")["*"]]
+    json.dump(r, open(bad, "w"))
+    case("resolved_symlink", prov("--verify", rec, "--resolved", bad, "--repo", repo), "resolved_pdk_paths")
 
     case("no_record", prov("--verify", os.path.join(OUT, "missing.json"), "--resolved", resolved, "--repo", repo),
          "record")

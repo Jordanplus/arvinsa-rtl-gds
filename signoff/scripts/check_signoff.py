@@ -74,7 +74,10 @@ def main(metrics_path, limits_path, golden_path):
         vals = [run.get(k, "<missing>") for k in keys]
         ok = bool(keys) and finite(top) and all(finite(v) for v in vals)
         total = sum(vals) if ok else "<missing>"
-        row("max", f"{name} (sum of {', '.join(keys) or 'no keys'})", total, f"<= {top}", ok and total <= top)
+        # every term is a drop or rise and must be >= 0: a negative one would hide the other in the sum
+        neg = [k for k, v in zip(keys, vals) if finite(v) and v < 0]
+        row("max", f"{name} (sum of {', '.join(keys) or 'no keys'}{'; negative: ' + ', '.join(neg) if neg else ''})",
+            total, f"<= {top}, each >= 0", ok and not neg and total <= top)
     corners = limits.get("corners", {})
     names, top = corners.get("names", []), corners.get("slack_max")
     for kind in ("setup", "hold"):
@@ -101,7 +104,7 @@ def main(metrics_path, limits_path, golden_path):
             if hit:
                 row("golden", f"tolerance {pattern}", f"matches {hit[:3]}", "no [equal], count or area metric", False)
         keys = sorted(set(golden) | set(run))
-        tolerated = 0
+        tolerated, differ = 0, 0
         for key in keys:
             have, want = run.get(key, "<missing>"), golden.get(key, "<missing>")
             if have == want:
@@ -116,8 +119,9 @@ def main(metrics_path, limits_path, golden_path):
                 row("golden", key, have, f"{want} ({pattern}: {spec})", False)
             else:
                 row("golden", key, have, want, False)
-        row("golden", f"{len(keys)} metrics", f"{len(keys) - tolerated} identical, {tolerated} within tolerance",
-            golden_path.split("signoff/")[-1], True)
+            differ += 1
+        row("golden", f"{len(keys)} metrics", f"{len(keys) - tolerated - differ} identical, {tolerated} within tolerance, "
+            f"{differ} different", golden_path.split("signoff/")[-1], differ == 0)
 
     for key in limits.get("info", {}).get("keys", []):
         row("info", key, run.get(key, "<missing>"), "-", True)

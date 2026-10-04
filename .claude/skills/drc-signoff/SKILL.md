@@ -17,6 +17,7 @@ antenna 看 `antenna-signoff`；LVS 看 `lvs-signoff`。本 repo 實例：`pnr/s
    - 設 `ERROR_ON_MAGIC_DRC=false`，由自寫 checker 取代（`check_soc.py` magic_drc）：macro 外框外 = 0；框內**每一個**錯誤框都必須落在 macro 單獨檢查的報告中、**同規則**的框的聯集內（報告平移到 instance 位置，每個框放大容許值 δ）。
    - **只比規則種類不夠**（Phase 3 的做法）：外框內多一個已有規則的新錯誤（例如頂層 PDN 與 macro 圖形部分重疊，Magic 報的 `can't abut or partially overlap` 正好在 baseline 裡），checker 照樣 PASS，只剩 golden 總數擋，而改設計時 golden 一定重建。KLayout 不能補位：sky130 deck 對 `areaid:ce` 內的形狀有 22 處豁免。
    - macro 單獨檢查與放進設計後檢查，同一個錯誤被切成不同的框（5,579,161 vs 4,665,810，30 種規則相同），所以比「面積」不比「框」：先找完全相同的框，剩下的看是否被同規則框的聯集蓋住。
+   - **δ 只給量到需要的規則**（Phase 4 獨立審查）：100 nm 原本對 30 種規則都放寬，li.3 看不到新違規的面積從 SRAM 的 0.9% 變 6.5%。改成只有 li.5、diff/tap.9（`DRC_POS_TOL_RULES`）；golden run 仍是 0 個無法解釋的框（14,166 個在聯集內）。
    - **δ 用一個已知乾淨的 run 量出來**：Phase 3 的 run 中 4,651,644 個框完全相同、13,935 個在聯集內、231 個（li.5、diff/tap.9）只多出最多 85 nm（同一個錯誤畫得比較長），δ 取 100 nm。
    - **macro 單獨的報告每次重新產生**（`pnr/soc_top/sram_drc_alone.py`：用 run 自己的 Magic.DRC 設定，只把 `DESIGN_NAME` 換成 macro，約 2.5 分鐘、寫出約 1.5 GB），並與審查過的規則數量（`signoff/waivers/`）比對。兩次產生的報告逐 byte 相同（Phase 4 實測），所以可以當固定參考。位置比對約 20 秒（兩份報告共約 450 MB）。
 3. **GDS 輸出**：Magic 的 GDS 可能多出 top cell（soc_top：13 個；SRAM 子 cell 改名成 `T2_*` 放進設計，原名的 160 個又沒有引用地寫出一次），`KLayout.Render` 因此失敗 → 設 `PRIMARY_GDSII_STREAMOUT_TOOL=klayout`。確認方法：從 top cell 走得到所有 macro cell（自寫 GDS 結構解析），且 KLayout XOR = 0。

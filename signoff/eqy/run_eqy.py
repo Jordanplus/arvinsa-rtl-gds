@@ -32,16 +32,19 @@ EQY ends with `DONE (PASS, rc=0)`, the partition list is not empty, every partit
 `Proved equivalence of partition` line, and the partition log has no `found constant ... bit`
 line (EQY maps such a bit to the constant without proving it; see README.md), and the sequential
 cells (flip-flops, latches, clock gates) of the two netlists are the same instances with the same
-cell function, only the drive strength may differ (sequential_cells below). Prints `eqy: PASS` /
+cell function, only the drive strength may differ (sequential_cells below), and the clock pin of
+every sequential cell and macro reaches the same port (or constant) through buffers and inverters,
+with the same inversion, in both netlists (clock_sources below). Prints `eqy: PASS` /
 `eqy: FAIL`; exit code 0 only on PASS.
 
 Why the sequential cells are compared outside EQY (Phase 4): EQY's sat strategy does not prove the
 behaviour of a flip-flop itself. A final netlist with one dfxtp_2 replaced by a dfrtp_2 whose
 RESET_B is the resetn port (the flip-flop clears while reset is low) still gave 18100/18100
-partitions proved (neg_eqy.py flop_async_reset); the initial-state constraints of such a partition
-are unsatisfiable, so its base case proves nothing (agent experiment, 2026-10-04). The logic
-around each flip-flop (its D input and everything its Q drives) is still proved by EQY; the
-flip-flop cell itself is checked here.
+partitions proved (neg_eqy.py flop_async_reset); probably the initial-state constraints of such
+a partition are unsatisfiable, so its base case proves nothing (agent experiment, 2026-10-04, not
+saved). The logic around each flip-flop (its D input and everything its Q drives) is still proved
+by EQY; the flip-flop cell and its clock connection are checked here. EQY does not check the clock
+either: its sat strategy runs formalff -clk2ff, which puts every flip-flop on one implicit clock.
 """
 import argparse
 import glob
@@ -61,6 +64,14 @@ SEQ_CELL = re.compile(r"^\s*sky130_fd_sc_hd__((?:df|edf|sdf|sedf)\w*?|dl[xr]\w*?
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
 STACK_KB = 65520  # macOS hard limit for the main thread stack
+INST = re.compile(r"^\s*(sky130_\w+)\s+(\S+)\s*\((.*?)\);", re.M | re.S)
+PIN = re.compile(r"\.(\w+)\(((?:\{[^}]*\})|[^()]*)\)")
+# Cells a clock passes through between a port and a clock pin (CTS buffers, delay buffers,
+# inverters); group 2 is set for the inverting ones. Output pins of sky130_fd_sc_hd cells.
+CLOCK_PATH = re.compile(r"sky130_fd_sc_hd__(?:(buf|clkbuf|bufbuf|dlygate4sd\d|dlymetal6s\ds|clkdlybuf4s\d+)|"
+                        r"(inv|clkinv|clkinvlp|bufinv))_\d+$")
+OUT_PINS = ("X", "Y", "Q", "Q_N", "GCLK", "HI", "LO", "COUT", "SUM")
+CLOCK_PINS = ("CLK", "CLK_N", "GATE", "GATE_N")
 
 
 def nix_shell(cmd, log):
@@ -111,6 +122,71 @@ engine abc pdr
 def sequential_cells(text):
     """{instance name (no backslash): cell function, i.e. the cell name without the drive strength}."""
     return {name.lstrip("\\"): base for base, name in SEQ_CELL.findall(text)}
+
+
+def instances(text):
+    """{instance: (cell, {pin: [nets]})} of a flat gate netlist (escaped names without the backslash)."""
+    out = {}
+    for cell, name, body in INST.findall(text):
+        pins = {}
+        for pin, val in PIN.findall(body):
+            val = val.strip()
+            nets = [v.strip() for v in val[1:-1].split(",")] if val.startswith("{") else [val]
+            pins[pin] = [n.lstrip("\\").strip() for n in nets if n]
+        out[name.lstrip("\\")] = (cell, pins)
+    return out
+
+
+def clock_sources(text):
+    """{"<instance>/<pin>": source} for the clock pin of every sequential cell and every macro pin
+    named clk*. The source is what the pin reaches walking back through buffers and inverters: an
+    input port ("clk"), a constant ("1'b0"), or the output of another cell ("and2.X"); "~" in front
+    when the walk passed an odd number of inverters. The sequential cell check above only compares
+    cell types, and EQY's sat strategy turns every flip-flop into one on a common implicit clock
+    (formalff -clk2ff), so a flip-flop clocked by the inverted clock would pass both (Phase 4
+    review)."""
+    insts = instances(text)
+    ports = {p.lstrip("\\") for p in re.findall(r"^\s*input\s+(?:\[[^\]]*\]\s*)?(\S+?)\s*;", text, re.M)}
+    driver = {}
+    for name, (cell, pins) in insts.items():
+        for pin in OUT_PINS:
+            for net in pins.get(pin, []):
+                driver[net] = (name, cell, pin)
+
+    def source(net):
+        inv = False
+        for _ in range(200):
+            if net in ports:
+                return ("~" if inv else "") + net
+            if re.fullmatch(r"1'b[01]", net):
+                return f"1'b{int(net[-1]) ^ inv}"
+            if net not in driver:
+                return ("~" if inv else "") + "undriven"
+            name, cell, pin = driver[net]
+            path = CLOCK_PATH.match(cell)
+            if path and insts[name][1].get("A"):
+                inv ^= bool(path.group(2))
+                net = insts[name][1]["A"][0]
+                continue
+            if cell.startswith("sky130_fd_sc_hd__conb_"):
+                return f"1'b{int(pin == 'HI') ^ inv}"
+            return ("~" if inv else "") + re.sub(r"^sky130_fd_sc_hd__|_\d+$", "", cell) + "." + pin
+        return "loop"
+
+    seq = sequential_cells(text)
+    out = {}
+    for name, (cell, pins) in insts.items():
+        if name in seq:
+            keys = [p for p in CLOCK_PINS if p in pins]
+        elif not cell.startswith("sky130_fd_sc_hd__"):
+            keys = [p for p in pins if re.fullmatch(r"clk\d*", p, re.I)]
+        else:
+            continue
+        for pin in keys:
+            out[f"{name}/{pin}"] = source(pins[pin][0]) if pins[pin] else "unconnected"
+        if name in seq and not keys:
+            out[f"{name}/<clock pin>"] = "missing"
+    return out
 
 
 def main():
@@ -196,18 +272,28 @@ def main():
                       + ", ".join(f"{b} = {c}" for b, c in constants[:3]))
     if conflicts:
         errors.append(f"EQY partition step refused: {conflicts[0]}")
-    seq_gold, seq_gate = sequential_cells(open(gold, encoding="utf8").read()), sequential_cells(open(gate, encoding="utf8").read())
+    gold_text, gate_text = open(gold, encoding="utf8").read(), open(gate, encoding="utf8").read()
+    seq_gold, seq_gate = sequential_cells(gold_text), sequential_cells(gate_text)
     seq_bad = sorted(n for n in set(seq_gold) | set(seq_gate) if seq_gold.get(n) != seq_gate.get(n))
     if not seq_gold:
         errors.append("no sequential cell found in the synthesized netlist")
     if seq_bad:
         errors.append(f"{len(seq_bad)} sequential cell(s) differ from the synthesized netlist, e.g. "
                       + ", ".join(f"{n} ({seq_gold.get(n, 'missing')} -> {seq_gate.get(n, 'missing')})" for n in seq_bad[:3]))
+    clk_gold, clk_gate = clock_sources(gold_text), clock_sources(gate_text)
+    clk_bad = sorted(k for k in set(clk_gold) | set(clk_gate) if clk_gold.get(k) != clk_gate.get(k))
+    if not clk_gold:
+        errors.append("no clock pin found in the synthesized netlist")
+    if clk_bad:
+        errors.append(f"{len(clk_bad)} clock pin(s) reach another source than in the synthesized netlist, e.g. "
+                      + ", ".join(f"{k} ({clk_gold.get(k, 'missing')} -> {clk_gate.get(k, 'missing')})" for k in clk_bad[:3]))
     matched = sum(1 for line in open(os.path.join(out, "work", "matched.ids")) if not line.startswith("#")) \
         if os.path.isfile(os.path.join(out, "work", "matched.ids")) else 0
     summary = {"design": top, "gold": gold, "gate": gate, "partitions": len(parts), "proved": len(proved),
                "constant_matches": len(constants), "conflicting_matches": len(conflicts),
                "sequential_cells": len(seq_gate), "sequential_mismatch": seq_bad,
+               "clock_pins": len(clk_gate), "clock_sources": sorted(set(clk_gate.values())),
+               "clock_mismatch": sorted({k.split("/")[0] for k in clk_bad}),
                "matched_names": matched, "result": "PASS" if not errors else "FAIL", "errors": errors,
                "wall_time_s": round(time.time() - t0, 1)}
     json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=2)
@@ -217,7 +303,8 @@ def main():
         print(f"eqy: FAIL ({top}; details in {os.path.relpath(log, ROOT)})")
         return 1
     print(f"  [PASS] {top}: {len(proved)}/{len(parts)} partitions proved equivalent, "
-          f"{matched} matched names, {len(seq_gate)} sequential cells identical in function, {summary['wall_time_s']} s")
+          f"{matched} matched names, {len(seq_gate)} sequential cells identical in function, "
+          f"{len(clk_gate)} clock pins on the same source ({', '.join(summary['clock_sources'])}), {summary['wall_time_s']} s")
     print("eqy: PASS")
     return 0
 

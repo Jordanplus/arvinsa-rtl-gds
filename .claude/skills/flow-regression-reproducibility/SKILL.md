@@ -19,6 +19,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - 每個 target 各自一次 `make <target>`，依相依順序排（後面的要用前面的結果），第一個 FAIL 就停。
    - 只認 exit code 0；每支腳本自己也只在 PASS 時回 0。
    - 每個 target 的完整輸出存成 log，另外輸出摘要表與 JUnit XML。
+   - **開始前**：工作目錄必須乾淨、`MAKEFLAGS` 不能有 `-i`（子 make FAIL 也回 0）、`-n`／`-q`／`-t`（什麼都沒跑），並記下 HEAD；**結束時** HEAD 必須相同。只靠 `provenance-final` 時，它只比 harden 的紀錄：harden 之前的 target 可能跑在別的 commit 上（Phase 4 獨立審查）。`make neg-regress` 用假的 make 測這些拒絕條件（5 個情境，2 秒）。
    - 最後一個 target 是 `provenance-final`：HEAD 等於每個 harden run 記錄的 commit，而且工作目錄仍然乾淨，證明中間的步驟都在同一個 commit 上跑。
    - Makefile 加 `.NOTPARALLEL:`：多個 target 共用並會刪除 `runs/` 下的目錄，`make -j` 會互相刪檔。
 2. **只有乾淨 checkout 從頭跑到底才算驗證過**（`signoff-checker-qualification` 規則 10）：Phase 3 的 `make phase3` 跑了 4 次才在乾淨 checkout 跑完；前 3 次分別卡在隨機的工具錯誤、漏宣告 `fw` 依賴、植入腳本產生 Icarus 不收的網表。開發目錄都沒發現後兩個。LibreLane clone 不在版控內，worktree 用 `LIBRELANE_DIR` 指向主目錄的 `.tools/librelane`。
@@ -27,6 +28,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - LibreLane：clone 的 commit 等於釘版，而且 clone 的 `git status --porcelain` 為空。只比 commit 時，改了 clone 裡的 `base.sdc` 照樣 PASS（Phase 3 獨立審查實測）。
    - PDK：版本目錄名稱只是 hash 字串，不保證內容沒被改。要對 flow 讀的目錄算內容 sha256（每個目錄一個摘要：排序後的「相對路徑＋檔案 sha256」），參考值要從**下載的壓縮檔**算（壓縮檔 sha256 已釘），不要從安裝好的目錄算；537 MB、2109 個檔，約 1 秒。
    - 再檢查 run 的 `resolved.json` 裡每個 PDK 路徑都落在有檢查內容的目錄，否則多讀一個沒檢查的檔不會被發現。
+   - **路徑要解開 symlink 再比**：run 的 PDK_ROOT 解開後必須就是被檢查內容的那一份安裝；resolved.json 裡經 `~/.ciel/sky130A` symlink 指到的檔也算 PDK 路徑。只比字串時，另一份同名版本目錄、或經 symlink 讀範圍外的檔都 PASS（Phase 4 獨立審查；`neg_provenance.py resolved_other_install`、`resolved_symlink`）。
    - 開始與結束各檢查一次：結束時 HEAD 不變、目錄仍乾淨，flow 後段讀的 limits、golden 才是 commit 裡的版本。
 4. **下游步驟要確認 run 能用**（`run_guard.py`）：
    - `<run>_signoff/result.txt` 是 harden 的**整體**判定 PASS。

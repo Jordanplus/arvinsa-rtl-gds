@@ -22,7 +22,7 @@ Checks (each prints a PASS/FAIL row):
   magic_drc    Magic DRC on the full GDS (*-magic-drc/reports/drc.magic.rpt): no violation outside
                the SRAM outline, and every violation inside it is one of the SRAM alone: its box
                lies in the union of the same-rule boxes of the SRAM-alone report, moved to the
-               sram0 origin and enlarged by DRC_POS_TOL. The SRAM bitcells follow the sky130 SRAM
+               sram0 origin (li.5 and diff/tap.9 boxes enlarged by DRC_POS_TOL). The SRAM bitcells follow the sky130 SRAM
                rules, so the standard deck flags millions of shapes inside it (project-plan.md
                §6.3). Magic splits the same error into different boxes when the SRAM is checked
                inside soc_top (5,579,161 boxes alone, 4,665,810 inside soc_top), so the boxes are
@@ -40,6 +40,11 @@ Checks (each prints a PASS/FAIL row):
                (duty cycle distortion + half-period jitter for the pulse width, period jitter for
                the period; values from clock_uncertainty.sdc). The SRAM clk0 needs >= 12 ns high and
                low and a period >= 30 ns (padded.lib).
+  sram_derate  the SRAM derate of sta_extra_corner.tcl in every corner of STA_CORNERS: exactly one
+               line in <corner>/sta.log, `-late -cell_delay 1.575` for ss, `-early -cell_delay 0.665`
+               for ff, `no derate` for tt (ADR-0007, user decision 2026-10-04). P04 shows the ss
+               derate changes the timing; this row shows the hook ran with the right value in each
+               corner, including the ff early derate that no timing check depends on today.
 Prints `soc-checks: PASS` / `soc-checks: FAIL`; exit code 0 only on PASS. Python stdlib only.
 
 usage: check_soc.py --make-drc-baseline <drc.magic.rpt of the SRAM alone> <out.json>
@@ -63,8 +68,11 @@ BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", 
 # Enlargement (nm) of the SRAM-alone boxes in the position comparison. Measured on the Phase 3
 # run (2026-10-04): 4,651,644 of the 4,665,810 boxes inside the SRAM equal an SRAM-alone box,
 # 13,935 lie in the union of same-rule SRAM-alone boxes, and the other 231 stick out by up to
-# 85 nm (li.5 and diff/tap.9: the same error drawn longer); 100 nm covers all of them.
+# 85 nm (li.5 and diff/tap.9: the same error drawn longer); 100 nm covers all of them. Only those
+# two rules get it (Phase 4 review): for the others it would hide a new violation of the same rule
+# in a 5-7 times larger area, e.g. li.3 from 0.9 % to 6.5 % of the SRAM.
 DRC_POS_TOL = 100
+DRC_POS_TOL_RULES = ("(li.5)", "(diff/tap.9)")
 NUM = re.compile(r"^ (-?[\d.]+)um (-?[\d.]+)um (-?[\d.]+)um (-?[\d.]+)um$")
 
 
@@ -124,7 +132,8 @@ def drc_position_compare(alone_rpt, soc_rpt, origin, outline, tol=DRC_POS_TOL):
              for gy in range(b[1] // g, b[3] // g + 1)}
     grid = {}
     for r, b in magic_boxes(alone_rpt):
-        t = (b[0] + ox - tol, b[1] + oy - tol, b[2] + ox + tol, b[3] + oy + tol)
+        e = tol if r.endswith(DRC_POS_TOL_RULES) else 0
+        t = (b[0] + ox - e, b[1] + oy - e, b[2] + ox + e, b[3] + oy + e)
         for gx in range(t[0] // g, t[2] // g + 1):
             for gy in range(t[1] // g, t[3] // g + 1):
                 if (r, gx, gy) in cells:
@@ -297,11 +306,20 @@ def main(run_dir, config_path, sram_drc):
         hits = [[i for i, (yc, hw, x0, x1) in enumerate(stripes)
                  if abs(y * units - yc) <= hw and x0 <= x * units <= x1] for x, y, _, _ in pts]
         volt_ok = all((p[3] > 0) if net in (cfg.get("VDD_NETS") or []) else (p[3] == 0) for p in pts)
-        if not stripes or any(len(h) != 1 for h in hits) or sorted(h[0] for h in hits) != list(range(len(stripes))) or not volt_ok:
+        # One side only (the documented model): each source no larger than its stripe is wide, and
+        # within one stripe width of the stripe's left end. A larger source or one further in feeds
+        # the stripe over a longer stretch, i.e. a more optimistic model (Phase 4 review).
+        on = [(p, stripes[h[0]]) for p, h in zip(pts, hits) if len(h) == 1]
+        too_big = sum(1 for p, (yc, hw, x0, x1) in on if p[2] * units > 2 * hw)
+        not_end = sum(1 for p, (yc, hw, x0, x1) in on if p[0] * units - x0 > 2 * hw)
+        if not stripes or any(len(h) != 1 for h in hits) or sorted(h[0] for h in hits) != list(range(len(stripes))) \
+                or not volt_ok or too_big or not_end:
             problems.append(f"{net}: {len(pts)} points for {len(stripes)} met5 stripes, "
-                            f"{sum(1 for h in hits if len(h) != 1)} not on exactly one stripe, voltages {'ok' if volt_ok else 'wrong'}")
+                            f"{sum(1 for h in hits if len(h) != 1)} not on exactly one stripe, voltages {'ok' if volt_ok else 'wrong'}, "
+                            f"{too_big} larger than the stripe width, {not_end} not at the left end")
     row("ir_sources", bool(vsrc) and not problems,
-        f"one source on each met5 stripe of {', '.join(sorted(vsrc))}" if vsrc and not problems
+        f"one source, no larger than the stripe width, at the left end of each met5 stripe of {', '.join(sorted(vsrc))}"
+        if vsrc and not problems
         else ("; ".join(problems) if problems else "VSRC_LOC_FILES missing in the config"))
 
     # port 1 tie-off
@@ -354,11 +372,28 @@ def main(run_dir, config_path, sram_drc):
             if slack < r["required"][kind]:
                 problems.append(f"{c}: {kind} slack {slack} at {pin} < required {r['required'][kind]:.3g}")
     worst = {k: min((r[k][1], r[k][0]) for r in pw.values() if r and r[k]) for k in ("min_pulse_width", "min_period")}         if pw and not any(r is None or r["min_pulse_width"] is None or r["min_period"] is None for r in pw.values()) else {}
+    kinds = sorted({k for p in problems for k in ("min_pulse_width", "min_period", "missing") if k in p})
     row("pulse_width", bool(corners) and not problems,
         f"{len(pw)} corners; worst min pulse width slack {worst['min_pulse_width'][0]} ({worst['min_pulse_width'][1]}), "
         f"min period slack {worst['min_period'][0]} ({worst['min_period'][1]}), all >= the required slack"
         if corners and not problems else
-        f"{len(problems)} problem(s), e.g. {'; '.join(problems[:2])}" if corners else "STA_CORNERS missing in the config")
+        f"{len(problems)} problem(s) [{', '.join(kinds)}], e.g. {'; '.join(problems[:2])}" if corners
+        else "STA_CORNERS missing in the config")
+
+    # SRAM derate per corner (sta_extra_corner.tcl)
+    want = {"ss": "-late -cell_delay 1.575", "ff": "-early -cell_delay 0.665", "tt": "no derate"}
+    problems = []
+    for c in corners:
+        log = os.path.join(stas[-1], c, "sta.log") if stas else ""
+        lines = re.findall(r"^sta_extra_corner: " + re.escape(c) + r": sram0 (.*?)\s*$",
+                           open(log, encoding="utf8", errors="replace").read(), re.M) if os.path.isfile(log) else None
+        kind = c.split("_")[1] if c.count("_") >= 2 else None
+        if kind not in want or lines != [want[kind]]:
+            problems.append(f"{c}: {lines if lines is not None else 'no sta.log'}")
+    row("sram_derate", bool(corners) and not problems,
+        f"{len(corners)} corners: ss {want['ss']}, ff {want['ff']}, tt {want['tt']}" if corners and not problems
+        else f"{len(problems)} corner(s) without the expected line, e.g. {'; '.join(problems[:2])}" if corners
+        else "STA_CORNERS missing in the config")
 
     # Magic DRC (full GDS)
     base = json.load(open(BASELINE, encoding="utf8")) if os.path.isfile(BASELINE) else None
@@ -383,8 +418,10 @@ def main(run_dir, config_path, sram_drc):
         ex = "; ".join(f"{r!r} at ({b[0] / 1000}, {b[1] / 1000})-({b[2] / 1000}, {b[3] / 1000}) um" for r, b in unexplained[:2])
         row("magic_drc", ok, f"{outside} violations outside the SRAM outline; inside {n_in}, "
             + (f"all at the position of a violation of the SRAM alone ({how['exact']} identical boxes, "
-               f"{how['by_area']} within {DRC_POS_TOL} nm)" if not unexplained else
-               f"{len(unexplained)} not at the position of a same-rule violation of the SRAM alone, e.g. {ex}")
+               f"{how['by_area']} in the union of same-rule boxes, {DRC_POS_TOL} nm wider for {' '.join(DRC_POS_TOL_RULES)})"
+               if not unexplained else
+               f"{len(unexplained)} not at the position of a same-rule violation of the SRAM alone "
+               f"[rules: {' | '.join(sorted({r for r, _ in unexplained}))}], e.g. {ex}")
             + ("" if total == n_in + outside else f"; report COUNT {total} != {n_in + outside} parsed"))
 
     ok = all(rows) and rows

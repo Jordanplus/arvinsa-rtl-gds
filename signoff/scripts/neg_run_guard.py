@@ -13,8 +13,8 @@ Fake runs in runs/neg_run_guard/<case>/ have only <run>_signoff/result.txt and p
                 (no guard message) and FAIL later for a missing file
 For each case the step's output directory first holds a file stale.txt, which must be gone
 afterwards (a refused run leaves no output of an earlier run behind).
-Steps: run_eqy.py (soc_top, picorv32_core), run_gl_soc.py, run_gl_core.py, neg_eqy.py,
-neg_gl_soc.py, neg_gl_core.py, neg_pnr.py. Prints `neg-run-guard: PASS n/n` / `FAIL ...`; exit
+Steps: run_eqy.py (soc_top, picorv32_core), run_gl_soc.py, run_gl_core.py, neg_eqy.py (soc_top,
+picorv32_core), neg_gl_soc.py, neg_gl_core.py, neg_pnr.py. Prints `neg-run-guard: PASS n/n` / `FAIL ...`; exit
 code 0 only on PASS.
 """
 import json
@@ -37,6 +37,7 @@ STEPS = [
     ("run_gl_soc", "soc_top", [PY, S("dv/gl_soc/run_gl_soc.py"), "--harden-run", "{run}", "--out", "{out}"], "gl-soc: FAIL"),
     ("run_gl_core", "picorv32_core", [PY, S("dv/gl_core/run_gl_core.py"), "--harden-run", "{run}", "--out", "{out}"], "gl-core: FAIL"),
     ("neg_eqy_soc", "soc_top", [PY, S("signoff/eqy/neg_eqy.py"), "--design", "soc_top", "--run", "{run}", "--out", "{out}"], "neg-eqy: FAIL"),
+    ("neg_eqy_core", "picorv32_core", [PY, S("signoff/eqy/neg_eqy.py"), "--design", "picorv32_core", "--run", "{run}", "--out", "{out}"], "neg-eqy: FAIL"),
     ("neg_gl_soc", "soc_top", [PY, S("dv/gl_soc/neg_gl_soc.py"), "--harden-run", "{run}", "--out", "{out}"], "neg-gl-soc: FAIL"),
     ("neg_gl_core", "picorv32_core", [PY, S("dv/gl_core/neg_gl_core.py"), "--harden-run", "{run}", "--out", "{out}"], "neg-gl-core: FAIL"),
     ("neg_pnr", "soc_top", [PY, S("pnr/soc_top/neg_pnr.py"), "--run", "{run}", "--out", "{out}"], "neg-pnr: FAIL"),

@@ -9,8 +9,9 @@ neg-pnr instead of at the start of `make regress`.
 
 The check is deliberately loose: a name counts as defined if it is bound anywhere in the file
 (def, class, import, assignment, argument, loop or `with` target, except name, global), or is a
-builtin. It finds names that exist nowhere in the file; it does not check scopes. A file with
-`from x import *` is skipped.
+builtin. It finds names that exist nowhere in the file; it does not check scopes, nor names
+taken from another module (`from run_guard import guard_renamed`, `neg_eqy.renamed(...)` pass;
+Phase 4 review). A file with `from x import *` is skipped.
 Before scanning, it checks itself on a snippet that calls an undefined function and FAILs if
 that is not reported (a check that cannot report anything must not PASS).
 Prints `py-check: PASS <n> files` / `py-check: FAIL ...`; exit code 0 only on PASS.

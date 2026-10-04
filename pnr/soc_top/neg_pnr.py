@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P13-P20).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P28).
 
 usage: neg_pnr.py [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -46,10 +46,17 @@ step re-run one step on a copy of that step's saved config and input state
   P06  SRAM LEF with ANTENNAGATEAREA / 1000         OpenROAD check_antennas on the final DEF: > 0 violations
        (with the flow's LEF: 0; shows the antenna checker sees the nets on SRAM inputs)
   P07  metrics: VDD drop 11 mV and GND rise 11 mV  check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise
-       (each below 20 mV, the sum above: proves the budget is on the sum, and that the 90 mV of
-       Phase 3 is gone)
+       (each below 20 mV, the sum above: proves the budget is on the sum of the two nets)
+  P29  metrics: VDD drop 19 mV, GND rise -15 mV     check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise
+       (sum 4 mV; every term of the sum must be >= 0)
   P26  VSRC_LOC_FILES: one vccd1 source point moved check_soc.py ir_sources
        7 um off its met5 stripe (config copy)
+  P27  VSRC_LOC_FILES: one vccd1 source 2000 um      check_soc.py ir_sources
+       wide (it covers its whole stripe: close to the ideal-supply model that gave 0.3 mV)
+  P28  VSRC_LOC_FILES: one vccd1 source in the        check_soc.py ir_sources
+       middle of its stripe (fed from the middle, about 1/4 of the one-side drop)
+  P30  STA log of nom_ff_n40C_1v95 without the     check_soc.py sram_derate
+       sta_extra_corner derate line (the ff early derate no timing check depends on today)
   P08  final netlist: sram0 csb1 on a floating net   check_soc.py port1_tieoff
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
@@ -294,7 +301,10 @@ def pulse_case(run, d, waveform, kind):
     if out is None:
         return False, "STA re-run failed"
     ok, text = soc_case(run, d, "pulse_width", links={os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run): out})
-    return ok and re.search(r"\[FAIL\] pulse_width: \d+ problem\(s\), e\.g\. \w+: " + kind + " slack", text) is not None, \
+    # the kinds of all problems, not the first one: at 29 ns (P23) the ss corners also miss the min
+    # pulse width, and only the report order put a min_period problem first (Phase 4 review)
+    hit = re.search(r"\[FAIL\] pulse_width: \d+ problem\(s\) \[([^\]]*)\]", text)
+    return ok and hit is not None and kind in hit.group(1).split(", "), \
         f"check_soc.py pulse_width: {kind} slack below the required slack (only row FAIL, soc-checks: FAIL)"
 
 
@@ -401,9 +411,11 @@ def p21(run, d):
     ok, out = soc_case(run, d, "magic_drc", links={magic_rel(run): rpt})
     base = json.load(open(os.path.join(ROOT, "signoff", "waivers", "soc_top", "sram_magic_drc_baseline.json")))["rules"]
     hit = re.search(r"\[FAIL\] magic_drc: 0 violations outside the SRAM outline; inside \d+, ([1-9]\d*) not at the position "
-                    r"of a same-rule violation of the SRAM alone, e\.g\. '([^']+)' at \(([\d.]+), ([\d.]+)\)", out)
-    ok = ok and hit is not None and hit.group(2) in base \
-        and abs(float(hit.group(3)) - x) < 1.5 and abs(float(hit.group(4)) - y) < 1.5
+                    r"of a same-rule violation of the SRAM alone \[rules: ([^\]]+)\], e\.g\. '([^']+)' at \(([\d.]+), ([\d.]+)\)", out)
+    # every rule of the unexplained boxes is in the SRAM-alone baseline: a rule the SRAM alone does
+    # not have would also FAIL the Phase 3 rule-type check, so it would not show the fix (Phase 4 review)
+    ok = ok and hit is not None and all(r in base for r in hit.group(2).split(" | ")) \
+        and abs(float(hit.group(4)) - x) < 1.5 and abs(float(hit.group(5)) - y) < 1.5
     return ok, (f"check_soc.py magic_drc: a new {hit.group(2) if hit else 'li'!r} violation inside the SRAM outline at "
                 f"({x:.2f}, {y:.2f}) um; that rule is in the SRAM-alone baseline, so the Phase 3 rule-type check would PASS")
 
@@ -462,6 +474,30 @@ def soc_case(run, d, row, replace=None, links=None, also=(), config=CONFIG):
     rc, out = check_soc(fake_run(run, d, replace or {}, links), d, run, config)
     failed = set(re.findall(r"^  \[FAIL\] (\w+):", out, re.M))
     return rc != 0 and failed == {row, *also} and "soc-checks: FAIL" in out, out
+
+
+def sta_dir_with(run, d, corner, edit):
+    """A copy of the signoff STA directory made of symlinks, except <corner>/sta.log, which is
+    edit(text) of the original. Returns (relative path of the STA directory in the run, copy)."""
+    src = step_dir(run, "OpenROAD.STAPostPNR")
+    dst = os.path.join(d, "sta")
+    for root, dirs, files in os.walk(src):
+        here = os.path.join(dst, os.path.relpath(root, src))
+        os.makedirs(here, exist_ok=True)
+        for f in files:
+            if os.path.relpath(os.path.join(root, f), src) == os.path.join(corner, "sta.log"):
+                open(os.path.join(here, f), "w").write(edit(open(os.path.join(root, f), errors="replace").read()))
+            else:
+                os.symlink(os.path.join(root, f), os.path.join(here, f))
+    return os.path.relpath(src, run), dst
+
+
+def p30(run, d):
+    rel, sta = sta_dir_with(run, d, "nom_ff_n40C_1v95",
+                            lambda t: re.sub(r"^sta_extra_corner: nom_ff_n40C_1v95: sram0 .*\n", "", t, flags=re.M))
+    ok, out = soc_case(run, d, "sram_derate", links={rel: sta})
+    return ok and "nom_ff_n40C_1v95: []" in out, \
+        "check_soc.py sram_derate: no SRAM derate line in nom_ff_n40C_1v95 (only row FAIL, soc-checks: FAIL)"
 
 
 def p00(run, d):
@@ -544,6 +580,15 @@ def p07(run, d):
         "check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise (each net 11 mV, sum 22 mV)"
 
 
+def p29(run, d):
+    rc, out = signoff_with(run, d, lambda m: m.update({"design_powergrid__drop__worst__net:vccd1": 0.019,
+                                                       "design_powergrid__drop__worst__net:vssd1": -0.015}))
+    failed = re.findall(r"^  \[FAIL\] (\w+)\s+(\S+)", out, re.M)
+    return rc != 0 and [f for f in failed if f[0] == "max"] == [("max", "ir_vdd_drop_plus_gnd_rise")] \
+        and "negative: design_powergrid__drop__worst__net:vssd1" in out, \
+        "check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise (VDD 19 mV, GND -15 mV: sum 4 mV, a term below 0)"
+
+
 def p26(run, d):
     cfg = json.load(open(CONFIG))
     src = os.path.join(ROOT, cfg["VSRC_LOC_FILES"]["vccd1"].replace("dir::", "", 1))
@@ -558,6 +603,34 @@ def p26(run, d):
     ok, out = soc_case(run, d, "ir_sources", config=cfg_p)
     return ok and "vccd1: 5 points for 5 met5 stripes, 1 not on exactly one stripe" in out, \
         "check_soc.py ir_sources: a vccd1 source point off its met5 stripe (only row FAIL, soc-checks: FAIL)"
+
+
+def vsrc_case(run, d, edit, expect):
+    """check_soc.py with the second vccd1 source point changed by edit(x, y, size) -> (x, y, size)."""
+    cfg = json.load(open(CONFIG))
+    src = os.path.join(ROOT, cfg["VSRC_LOC_FILES"]["vccd1"].replace("dir::", "", 1))
+    lines = open(src).read().splitlines()
+    x, y, size, volt = lines[1].split(",")
+    lines[1] = ",".join(f"{v:.3f}" for v in edit(float(x), float(y), float(size))) + "," + volt
+    vsrc = os.path.join(d, "vccd1.vsrc")
+    open(vsrc, "w").write("\n".join(lines) + "\n")
+    cfg["VSRC_LOC_FILES"]["vccd1"] = vsrc
+    cfg_p = os.path.join(d, "config.json")
+    json.dump(cfg, open(cfg_p, "w"), indent=1)
+    ok, out = soc_case(run, d, "ir_sources", config=cfg_p)
+    return ok and expect in out
+
+
+def p27(run, d):
+    ok = vsrc_case(run, d, lambda x, y, size: (x, y, 2000.0),
+                   "vccd1: 5 points for 5 met5 stripes, 0 not on exactly one stripe, voltages ok, 1 larger than the stripe width, 0 not at")
+    return ok, "check_soc.py ir_sources: a 2000 um vccd1 source (covers its whole stripe) (only row FAIL, soc-checks: FAIL)"
+
+
+def p28(run, d):
+    ok = vsrc_case(run, d, lambda x, y, size: (500.0, y, size),
+                   "vccd1: 5 points for 5 met5 stripes, 0 not on exactly one stripe, voltages ok, 0 larger than the stripe width, 1 not at the left end")
+    return ok, "check_soc.py ir_sources: a vccd1 source in the middle of its stripe (only row FAIL, soc-checks: FAIL)"
 
 
 def p12(run, d):
@@ -670,7 +743,7 @@ def p20(run, d):
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
-         ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26)]
+         ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30)]
 
 
 def main():

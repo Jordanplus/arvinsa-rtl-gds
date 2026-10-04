@@ -41,15 +41,21 @@ PASS 需要全部成立：
 4. 切分紀錄（`work/partition.log`）沒有 `found constant ... bit`。這行表示 gate 端某個 bit 是常數，EQY 會直接把 gold 端對應的 bit 換成那個常數，**之後不再證明它**。negative test `wdata3_stuck0`（把 `mem_wdata[3]` 接成 0）原本就是這樣漏掉、判 PASS 的。正向的 run 沒有出現過這一行，所以出現就 FAIL。
 5. 切分紀錄沒有 `ERROR: conflicting ... for`。這表示 EQY 在切分時遇到互相矛盾的名稱對應而中止（試做時看過 `conflicting matches for gold bit eoi[0]`），沒有做任何證明。
 6. **兩份網表的 sequential cell（flip-flop、latch、clock gate）是同樣的 instance、同樣的功能**，只允許 drive strength 不同（Phase 4）。這一項在 EQY 之外比對，因為 EQY 的 `sat` strategy 證不到 flip-flop 本身的行為：把一顆 `dfxtp_2` 換成 reset 時會清除的 `dfrtp_2`（RESET_B 接 `resetn`），EQY 仍是 18100/18100 個分區證明通過（`neg_eqy.py flop_async_reset`）。原因推測是含 flip-flop 的分區，初始狀態的約束本身無解，base case 什麼都沒證（agent 實驗，紀錄沒有存進 repo）；soc_top 的 2639 個含 flip-flop 的分區每個都只有 2 顆 `$dff`。flip-flop 周圍的邏輯仍由 EQY 證明。
+7. **每個 sequential cell 的 clock pin 與 macro 的 `clk*` pin，在兩份網表追到同一個來源**（Phase 4 獨立審查後加）：從 pin 往回走，只穿過 buffer／inverter（含 CTS 的 clkbuf、delay buffer），走到 input port、常數或其他 cell 的輸出為止，並記下反相次數的奇偶。EQY 也看不到 clock：`sat` strategy 會先做 `formalff -clk2ff`，把所有 flip-flop 改成同一個隱含的 clock；第 6 點只比 cell 種類。審查者實測：讓一顆 flip-flop 的 CLK 經過一顆新加的反相器（變成下降緣取樣），第 6 點照樣 2639/2639 相同，切分出的 18100 個分區沒有一個以 CLK 為邊界。soc_top 是 2639 個 CLK 與 `sram0/clk0` 都追到 `clk`、`sram0/clk1` 追到常數 0；picorv32 是 2382 個 CLK 都追到 `clk`。
 
 ## Negative test（`make neg-eqy-core`、`make neg-eqy-soc`）
 
-在最終網表的複本植入錯誤，每一個都必須讓 `run_eqy.py` FAIL，且失敗原因是有分區證不出來、常數規則或名稱對應矛盾（不是缺檔之類的其他錯誤）。案例清單在 `neg_eqy.py` 的開頭。
+在最終網表的複本植入錯誤，每一個都必須讓 `run_eqy.py` FAIL，且失敗原因是有分區證不出來、常數規則、名稱對應矛盾、sequential cell 不同或 clock 來源不同（不是缺檔之類的其他錯誤）。案例清單在 `neg_eqy.py` 的開頭。
 
 Phase 4 加了三件事（前兩件是 `docs/phase_exit/phase3.md` 已知限制 4、16）：
 - **`nand2_to_nor2`**：第一顆 nand2（依 instance 名稱排序）換成同尺寸的 nor2，名稱與接線不動。這種錯誤不是常數、也不會造成名稱矛盾，只有證明步驟抓得到。soc_top 與 picorv32_core 都是 1 個分區證不出來。
 - **`flop_q_inverted`、`flop_async_reset`**：第一顆 `dfxtp_2` 換成輸出反相的 `dfxbp_2`（Q_N）或 reset 會清除的 `dfrtp_2`。前者在切分時就因名稱矛盾被拒絕；後者 EQY 全部證明通過，只有判定第 6 點抓得到。
-- **FAIL 的位置要對得上植入點**：從 EQY 的紀錄取出 FAIL 牽涉的名稱（證不出來的分區、被換成常數的 bit、名稱矛盾的兩邊），每一個都必須落在植入點附近：被改到的 cell、它被改到的腳上的 net，以及這些 net 上的 cell；遇到 buffer／inverter 時繼續往下走（placement 與 routing 會在合成網表的 flip-flop 和 port 之間插好幾級 buffer，EQY 報的是合成網表的名稱）。clock net 不走。用 Phase 3 的 11 個案例驗證過：每個案例的 FAIL 名稱都在自己的範圍內，任兩個案例交換後都會被判不符。
+- **FAIL 的位置要對得上植入點**：從 EQY 的紀錄取出 FAIL 牽涉的名稱（證不出來的分區、被換成常數的 bit、名稱矛盾的兩邊），每一個都必須落在植入點附近：被改到的 cell、它被改到的腳上的 net（bus pin 只算改到的那幾個 bit），以及這些 net 上的 cell；遇到 buffer／inverter 時繼續往下走（placement 與 routing 會在合成網表的 flip-flop 和 port 之間插好幾級 buffer，EQY 報的是合成網表的名稱）。clock net 不走。
+- **位置檢查要分得出不同案例**（Phase 4 獨立審查後加）：`neg_eqy.py` 最後對每一對改到不同 instance 的案例檢查，A 的 FAIL 名稱不能全部落在 B 的植入點附近，否則「在植入點附近」等於什麼都接受。改到同一顆 flip-flop 的 `flop_*` 案例之間不比。審查前 bus pin 整條一起算，`din5_stuck0` 的範圍有 224 個名稱、包含全部 32 個 `din0` bit；改成逐 bit 後是 10 個。已知限制：新接上 reset 這類大扇出 net 的案例（`flop_async_reset`），範圍仍包含整棵 reset buffer 樹（291 個名稱）。
+
+Phase 4 獨立審查後再加兩個案例：
+- **`flop_clk_inverted`**（兩個設計）：第一顆 `dfxtp_2` 的 CLK 改經過一顆新加的 `clkinv_1`。EQY 的分區全部證明通過，第 6 點也相同，只有第 7 點抓得到。
+- **`clk0_inverted`**（soc_top）：`sram0` 的 `clk0` 改經過一顆新加的 `clkinv_1`。
 
 ## 執行時間（Apple Silicon，10 核）
 
