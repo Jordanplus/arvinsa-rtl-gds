@@ -412,7 +412,7 @@ def p11(run, d):
     kgds = json.load(open(os.path.join(step_dir(run, "KLayout.XOR"), "state_in.json")))["klayout_gds"]
     bad = os.path.join(d, "soc_top.klayout.gds")
     log = os.path.join(d, "run.log")
-    if gds_add_met2(kgds, bad, d, log) != 0:
+    if gds_add_box(kgds, bad, d, log) != 0:
         return False, "could not edit the GDS"
     rc, text = rerun(run, d, "KLayout.XOR", "Checker.XOR", edit_state=lambda s: s.update(klayout_gds=bad))
     return rc not in (0, None) and "XOR differences found" in text, "Checker.XOR: XOR differences found"

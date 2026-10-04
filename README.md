@@ -30,7 +30,12 @@ make smoke         # lint + firmware + RTL 模擬 smoke（約 30 秒）
 make phase1        # Phase 1 完整檢查（約 4 分鐘）
 make phase2        # Phase 2 完整檢查：LibreLane harden + GL regression（約 24 分鐘，需要 flow 環境）
 make phase3        # Phase 3 完整檢查：SoC 與 core 的 harden、EQY、GL 模擬與全部植入錯誤（約 91 分鐘，需要 flow 環境）
+make regress       # 全部檢查一次跑完（Phase 1–4，依序執行、第一個 FAIL 就停；約 3 小時，需要 flow 環境）
 ```
+
+`make regress` 的結果在 `runs/regress/`：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
+它會先刪掉 `runs/regress/`，並由每個 harden 步驟重新產生自己的 run；下游步驟只接受同一個 commit 產生、且 PASS 的 run。
+工作目錄有未提交的修改時，來源追溯（provenance）會判 FAIL，所以請在乾淨的 checkout 上執行。
 
 第一次在新機器上建 flow 環境的步驟見 [env/setup.md](env/setup.md)。
 

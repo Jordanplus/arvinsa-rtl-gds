@@ -40,6 +40,10 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - fixture 只用來測程式，結果不能當 signoff 證據；證據只來自規則 2 的乾淨 run。
 7. **golden 與 commit 的先後**：更新 golden 的那個 run 一定來自更新前的 commit，所以那個 run 自己永遠不會通過下游檢查。流程是：harden（golden 比對 FAIL、其他檢查 PASS）→ 逐項檢視差異 → commit 新 golden → 乾淨 checkout 跑完整 regression，由它證明新 golden 可重現。
 8. **`make -n` 不是完全不執行**：recipe 裡有 `$(MAKE)` 的那一行在 `-n` 下仍會執行（子 make 繼承 `-n`，只印出指令）。測 dispatch 用的 target 時要確認子 make 確實只有印。
+9. **長 regression 之前，先把會在中途才出錯的東西提前抓**：
+   - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。
+   - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 3 小時的重跑。
+   - 預跑時多個步驟同時跑會互相拖慢，有牆鐘時限的步驟（GL 模擬）可能逾時；逾時的要單獨重跑確認（`gate-level-simulation` 規則 6）。
 
 ## 已知陷阱
 
@@ -50,6 +54,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 來源追溯只比版本字串 | 比內容（規則 3） | Phase 3 獨立審查 |
 | 下游拿過期的 run | `run_guard.py`（規則 4） | Phase 3 獨立審查 |
 | 長 run 中改了檔案，結束時來源追溯 FAIL | 另開 worktree（規則 5） | Phase 4 |
+| 函式改名後漏改的呼叫，要跑到那一案才 `NameError` | `make py-check`（規則 9） | Phase 4 預跑（neg-pnr P11） |
 | macOS 的 Spotlight 會索引 `runs/` 裡幾 GB 的報告檔，占兩個核心 | 長 run 時注意 `mds` 的 CPU；可把 `runs/` 排除在索引外（系統設定，使用者決定） | Phase 4（`ps` 觀察） |
 
 ## 用完後
@@ -65,3 +70,4 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 2026-10-04 | Phase 4 開發 | `neg_provenance.py` 的 positive control FAIL：clone 裡沒有 `env/pdk_content.sha256` | 已驗證：negative test 從 HEAD clone，新檔還沒 commit | 先在本機 commit（不推）再測 | `runs/neg_provenance/clean.log` |
 | 2026-10-04 | Phase 4 開發 | dev fixture 整個 symlink 到舊 run，下游檢查仍讀到舊 run 的 `_signoff` | 已驗證：`Path.resolve()` 跟著 symlink | fixture 改成真目錄＋逐檔 symlink（規則 6） | `dv/gl_soc/run_gl_soc.py` |
 | 2026-10-04 | Phase 4 第 1 次 harden-soc | 要在 run 期間改文件與測試 | 已驗證：結束時的來源追溯會 FAIL | 另開 worktree `p4dev`（規則 5） | `git worktree list` |
+| 2026-10-04 | Phase 4 預跑（dev fixture） | `[FAIL] P11: expected FAIL at case error: NameError("name 'gds_add_met2' is not defined")`，`neg-pnr: FAIL 26/27` | 已驗證：`gds_add_met2` 改成 `gds_add_box` 時漏改 P11 | 改呼叫；新增 `make py-check`，對修正前的檔案確認會 FAIL；單獨重跑 P11 PASS | `runs/dev5_neg_pnr.log` |

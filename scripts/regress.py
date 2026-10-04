@@ -5,7 +5,7 @@ usage: regress.py [--list]
 
 Runs these make targets in this order, each as its own `make <target>`, and stops at the first one
 that FAILs (later targets use earlier results, e.g. eqy-soc uses the run of harden-soc):
-  RTL and firmware (Phase 1)   env-check-flow lint synth-check fw core-stock regress-rtl neg-rtl
+  RTL and firmware (Phase 1)   env-check-flow py-check lint synth-check fw core-stock regress-rtl neg-rtl
   checkers of the flow         neg-provenance neg-run-guard test-flow-retry
   soc_top (Phase 3, 4)         harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr
   PicoRV32 alone (Phase 2)     harden-core gl-core neg-gl-core eqy-core neg-eqy-core
@@ -27,7 +27,7 @@ from xml.sax.saxutils import escape
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "runs", "regress")
 TARGETS = [
-    "env-check-flow", "lint", "synth-check", "fw", "core-stock", "regress-rtl", "neg-rtl",
+    "env-check-flow", "py-check", "lint", "synth-check", "fw", "core-stock", "regress-rtl", "neg-rtl",
     "neg-provenance", "neg-run-guard", "test-flow-retry",
     "harden-soc", "eqy-soc", "neg-eqy-soc", "gl-soc", "gl-soc-powered", "neg-gl-soc", "neg-pnr",
     "harden-core", "gl-core", "neg-gl-core", "eqy-core", "neg-eqy-core",

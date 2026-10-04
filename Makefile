@@ -16,7 +16,7 @@ DRY_RUN ?= 0
 .PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
-        neg-run-guard gl-soc-powered provenance-final harden regress clean
+        neg-run-guard gl-soc-powered provenance-final harden regress py-check clean
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -36,7 +36,7 @@ help:
 	@echo "  make regress-rtl-smoke    smoke subset on Icarus"
 	@echo "  make neg-rtl              bug injection (all dv/bugs.toml entries), each must FAIL at its checker"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
-	@echo "  make smoke                env-check lint fw regress-rtl-smoke"
+	@echo "  make smoke                env-check py-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"
 	@echo ""
 	@echo "Phase 2 targets (PicoRV32 hardened alone, see pnr/picorv32_core/README.md):"
@@ -55,7 +55,7 @@ help:
 	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
-	@echo "  make neg-pnr              bug injection P01-P20 (STA, PDN, DRC, XOR, placement, inputs, ...), each must FAIL at its checker"
+	@echo "  make neg-pnr              bug injection P00-P26 (STA, PDN, IR, DRC, XOR, placement, inputs, ...), each must FAIL at its checker"
 	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
@@ -68,6 +68,7 @@ help:
 	@echo "                            PicoRV32 alone, provenance-final; logs, summary.md and junit.xml in runs/regress/"
 	@echo "  make gl-soc-powered       L5: the powered netlist (final/pnl) in lockstep with the RTL, cells powered by VPWR/VGND"
 	@echo "  make provenance-final     HEAD and working tree unchanged since harden-soc and harden-core started"
+	@echo "  make py-check             every name a tracked Python file reads is defined in that file (seconds, not at runtime)"
 	@echo "  make harden D=soc_top|picorv32_core   same as harden-soc / harden-core"
 	@echo ""
 	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
@@ -114,7 +115,7 @@ neg-rtl: fw
 core-stock:
 	bash scripts/core_stock.sh
 
-smoke: env-check lint fw regress-rtl-smoke
+smoke: env-check py-check lint fw regress-rtl-smoke
 
 phase1: env-check lint synth-check fw core-stock regress-rtl neg-rtl
 
@@ -178,6 +179,9 @@ harden:
 # The whole regression (scripts/regress.py lists the targets and their order).
 regress:
 	$(PY) scripts/regress.py
+
+py-check:
+	$(PY) scripts/check_py_names.py
 
 test-flow-retry:
 	bash pnr/test_librelane_flow.sh
