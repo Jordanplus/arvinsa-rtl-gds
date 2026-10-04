@@ -32,7 +32,8 @@
 | Phase 4 第 5 次 harden-soc（commit `e5b7a4b`） | 本檔來源 |
 | Phase 4 `make regress` 第 1 次（乾淨 checkout，commit `72e5433`） | 434 個完全相同（沒有用到誤差） |
 | Phase 4 `make regress` 第 2 次（乾淨 checkout，commit `c635ffb`） | 349 個相同、84 個在誤差內、1 個不同：`route__drc_errors__iter:2` 14（golden 11）→ harden-soc FAIL |
-| ＜Phase 4 `make regress` 第 3 次（乾淨 checkout）＞ | ＜待填＞ |
+| Phase 4 `make regress` 第 3 次（乾淨 checkout，commit `59c6748`） | 434 個完全相同（LibreLane 遇到一次已知的 GRT-0229，從第 41 步重試後完成）；這次 regress 後來在 gl-soc-powered FAIL（gate-level 牆鐘時限，`dv/gl_soc/README.md` 判定第 4 點） |
+| ＜Phase 4 `make regress` 第 4 次（乾淨 checkout）＞ | ＜待填＞ |
 
 第 2 次與第 1 次的設定（`resolved.json`，路徑以外）相同，送進 `OpenROAD.DetailedRouting`（第 45 步）的 ODB 逐 byte 相同；之前抽查的各步（floorplan、placement、CTS、global routing、antenna 修補）DEF 也相同。第 45 步的主繞線各輪 DRC 數兩次一樣（15174 → 8308 → 7550 → 747 → 21 → 0），差異從 antenna 修補後的第一次重繞開始（第 1 輪 309 vs 308），最後一次重繞的第 2 輪剩 11 vs 14 個；最終 DRC 兩次都是 0。第 1 次 434 個完全相同只是剛好，不代表繞線每次都一樣。`route__drc_errors__iter:N` 是「最後一次走到第 N 輪的繞線呼叫」在第 N 輪後剩下的 DRC 數，屬於繞線器中間過程，因此使用者決定（2026-10-04）兩個設計都給 ±100 的誤差（高於看過的所有值：本設計最大 87），最終 `route__drc_errors` 仍要完全相同且 = 0；`neg_pnr.py` P31 證明最終 DRC 數 +1、中間輪 +101 都 FAIL，+3 PASS。剩下的風險：如果某次繞線多跑或少跑幾輪，`route__drc_errors__iter:*` 的 key 會多或少，比對仍判 FAIL（到目前每次都是同一組 key）。
 

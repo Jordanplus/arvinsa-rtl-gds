@@ -17,8 +17,9 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。用腳本修改網表時也一樣：新加的 `wire` 要放在第一次使用之前，Yosys 不檢查這點（`neg_eqy.edit()`）。
 5. **coverage 缺口**：firmware 沒用到的功能 GL 模擬看不到（Phase 2：`rdcycleh`、bus-error IRQ）。formal 只證明合成網表 → 最終網表，合成這一步仍靠模擬，所以要補 directed 測試（`dv-directed-tests`；Phase 4 的 `counters`、`buserr` 在網表植入對應錯誤後都被 lockstep 抓到）。
 6. **時間與機器負載**：soc_top 13 支測試約 9 分鐘（memtest 87 萬 cycle 占 552 秒；Phase 4 的網表單獨跑 memtest 429 秒）。
-   - 每支模擬有牆鐘時限（`dvlib.default_timeout`：120 秒＋cycle 上限／4000），用途是擋住卡死的模擬，不是速度規格；真正的判定是 cycle 上限與 checker。
-   - 和 neg-pnr、EQY 同時跑時每支慢 3–6 倍（Phase 4 預跑：hello 4→12 秒、unmapped 12→82 秒），memtest、boot_uart_max、uart_burst 超過時限判 FAIL；單獨重跑 3 支都 PASS。`make regress` 依序執行，不會遇到。
+   - 每支模擬有牆鐘時限，用途是擋住不再前進的模擬器，不是速度規格；firmware 卡住由 cycle 上限與 `timeout` checker 判定。
+   - **gate-level 的時限要用 gate-level 的速度算**：RTL 的 `dvlib.default_timeout`（120 秒＋cycle 上限／4000）套到 gate-level（每秒約 1200–1600 cycle）只剩約 2 倍餘裕。`run_gl_soc.py` 改用 `gl_timeout`（120 秒＋cycle 上限／400），比實測時間多 10–50 倍。
+   - 機器忙時每支慢 2–6 倍：Phase 4 預跑與 neg-pnr、EQY 同時跑（hello 4→12 秒、unmapped 12→82 秒，3 支逾時）；**依序執行的 `make regress` 也會遇到**——第 3 次 regress 時 Spotlight 在索引 `runs/`（約 10 個 `mdworker`），memtest 548→952 秒，boot_uart_max 在舊時限 620 秒被停掉，整個 regress FAIL。
    - 手動預跑時 GL 要單獨跑；同時跑了而逾時，先單獨重跑逾時的那幾支，再判斷是不是設計問題（看全部測試是否一致變慢）。
 7. **firmware 是建置產物**：`make gl-soc`、`make neg-gl-soc` 讀 `fw/build/`（不在版控），Makefile 要宣告依賴 `fw`。gl-core 不需要，因為它在 export 出來的上游樹裡自己編 firmware（`run_gl_core.py`）。
 
@@ -40,3 +41,4 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 | 2026-10-04 | Phase 4 L5 第一次 | `log_scan` FAIL：13270 行 `Instantiating module sky130_fd_sc_hd__tapvpwrvgnd_1 with dangling input port 3 (VPB) floating` | 已驗證：tap cell 的 LEF 只有 VPWR／VGND | 只對這個 cell 的 VPB／VNB 加白名單（規則 8） | `dv/log_whitelist.txt` |
 | 2026-10-04 | 第三次 `make phase3`，neg-gl-soc | `csb0_inverted` 編譯失敗：`Unable to bind wire ... neg_eqy_inv ... Check for declaration after use` | 已驗證：植入腳本把 `wire` 宣告加在 module 最後 | 宣告移到 `sram0` 前；修正後 11/11 支測試報 `sram0.csb0` 不一致。另外 `mux_swap` 只在 1/11 支測試被抓到，lockstep 能抓到的範圍受 firmware 用到的功能限制（規則 5） | `runs/p3_phase3_clean3.log` |
 | 2026-10-04 | Phase 4 預跑（dev fixture，與 neg-pnr、EQY 同時跑） | `gl-soc: FAIL 12/15`：memtest、boot_uart_max、uart_burst `wall-clock timeout: simulation killed after 1370/620/170 s` | 已驗證：機器負載；全部 15 支一致慢 3–6 倍，單獨重跑 3 支 PASS（429、209、23 秒） | 規則 6；不改時限 | `runs/dev5_gl.log`、`runs/gl_dev5_rerun/` |
+| 2026-10-04 | Phase 4 `make regress` 第 3 次（乾淨 checkout，`59c6748`） | `gl-soc-powered: FAIL 14/15`：boot_uart_max `wall-clock timeout: simulation killed after 620 s`（regress 1 同一支 304 秒） | 已驗證：Spotlight 索引造成負載（load 17–21，約 10 個 `mdworker`）；時限是照 RTL 速度算的，gate-level 只剩約 2 倍餘裕 | `gl_timeout`（規則 6）；第二次發生，從「不改時限」改成規則 | `runs/p4_regress_clean3.log` |

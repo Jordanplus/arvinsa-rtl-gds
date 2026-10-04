@@ -27,6 +27,7 @@ PASS 需要全部成立：
 1. harden run 自己的所有檢查都 PASS：`runs/soc_top_signoff/result.txt` 是 `harden-soc: PASS`（signoff 門檻與 golden、soc 專用檢查、輸入一致、來源追溯），而且這個 run 是從目前的 commit 產生的（`provenance.json` 的 `repo_head` 等於 HEAD；`signoff/scripts/run_guard.py`，Phase 4）。
 2. `dv/tests.toml` 中所有不是 `negative_only` 的測試（15 支；Phase 4 加了 `counters`、`buserr`）在這個 build 上都 PASS（Phase 1 的全部 checker）。
 3. 每支測試的 `tb_result.txt` 有 `fail.gl_lockstep=0`，而且 `gl_compares` > 0（比對真的有執行）。
+4. 每支模擬在牆鐘時限內結束（實際經過的時間，不是模擬時間）：120 秒 + cycle 上限 ÷ 400（`gl_timeout`；boot_uart_max 5120 秒、memtest 12620 秒、20 萬 cycle 的測試 620 秒）。這個時限只用來停掉不再前進的模擬器；firmware 卡住會先在 cycle 上限被 `timeout` checker 判 FAIL。原本沿用 RTL 的時限（每秒 4000 cycle），但 gate-level 只有每秒約 1200–1600 cycle，餘裕只有約 2 倍；Phase 4 `make regress` 第 3 次時 Spotlight 在索引 `runs/`，boot_uart_max（帶電源）在 620 秒被停掉而 FAIL。
 
 ## L5：帶電源的網表（`make gl-soc-powered`，`run_gl_soc.py --powered`，Phase 4）
 

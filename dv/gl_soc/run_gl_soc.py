@@ -18,6 +18,7 @@ PASS needs all of:
     records HEAD)
   - every selected test PASS (all Phase 1 checkers, dv/scripts/dvlib.py run_test)
   - every test: tb_result.txt fail.gl_lockstep=0 and gl_compares > 0 (the comparison ran)
+  - every simulation ends within its wall-clock limit (gl_timeout: sized for the gate-level speed)
 
 --powered (`make gl-soc-powered`, project-plan.md §7.1 L5): the powered netlist
 <harden-run>/final/pnl/soc_top.pnl.v instead, compiled with -DUSE_POWER_PINS: every cell (also
@@ -53,6 +54,18 @@ from run_guard import guard  # noqa: E402
 
 LOCKSTEP_V = ROOT / "dv" / "monitors" / "gl_lockstep.v"
 GL_FLAGS = ["-DGL_LOCKSTEP", "-DFUNCTIONAL", "-DUNIT_DELAY=#1"]
+# Wall-clock limit of one simulation. dvlib.default_timeout assumes the RTL speed (4000 cycles/s);
+# the lockstep simulation runs about 1200-1600 cycles/s here with 8 in parallel (Phase 4 make
+# regress 1, powered: boot_uart_max 362843 cycles in 304 s, memtest 871219 in 548 s) and 2-6 times
+# slower on a loaded machine (Phase 4 make regress 3, Spotlight indexing: boot_uart_max killed at
+# the old 620 s). A hung firmware already ends at max_cycles in simulated time (checker timeout);
+# this limit only stops a simulator that no longer advances, so it is sized for 400 cycles/s:
+# boot_uart_max 5120 s, memtest 12620 s, a 200k-cycle test 620 s (10-50x the measured times).
+GL_CYCLES_PER_S = 400
+
+
+def gl_timeout(max_cycles):
+    return int(120 + max_cycles / GL_CYCLES_PER_S)
 
 
 def rename_top(text):
@@ -124,7 +137,8 @@ def main():
     print(f"[{label}] run {len(names)} tests, {args.j} in parallel")
 
     def one(name):
-        r = dvlib.run_test(name, "icarus", out_root=str(out), build_result=b, quiet=True)
+        r = dvlib.run_test(name, "icarus", out_root=str(out), build_result=b, quiet=True,
+                           timeout=gl_timeout(tests[name]["max_cycles"]))
         tbr_path = ROOT / r.get("run_dir", "") / "tb_result.txt"
         tbr = dvlib._parse_tb_result(tbr_path) if tbr_path.is_file() else {}
         problems = []
