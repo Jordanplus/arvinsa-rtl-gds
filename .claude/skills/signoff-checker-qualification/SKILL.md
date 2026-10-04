@@ -21,6 +21,7 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - **下游也要確認 run 是這個 commit 產生的**：`provenance.json` 的 `repo_head` 必須等於目前的 `HEAD`。只看 `result.txt` 時，改了 RTL 後單獨跑 `make eqy-soc` 仍會用舊網表而 PASS。Phase 4 已加 `signoff/scripts/run_guard.py` 與 `neg_run_guard.py`。
 4. **「不是 0」的計數要寫出組成**並固定下來：Phase 2 unannotated 114 = 35 PCPI port + 41 tie HI + 38 clkload；soc_top = clkload + 32 個 `sram0/dout1` + 未用的 tie 輸出（soc_explore4：92 + 32 + 11）。
 5. **golden**：逐項比對全部 metrics（key 集合也要相同）；只對**實測會變**的族群給誤差（detailed routing 多執行緒不可重現：slack、skew、線長、via、功耗、IR），約實測差異的 30–200 倍；count／area 一律不給誤差（`check_signoff.py` 會拒絕這種設定）。至少重跑一次確認可重現性。
+   - **族群要依「哪一步產生的」來分，不能只看「到目前有沒有變過」**：不可重現那一步（detailed routing）算出來的每個 metric 都先分類——最終 signoff 數字（`route__drc_errors`）完全相同；中間過程數字（`route__drc_errors__iter:*`，繞線器各輪剩下的 DRC 數）給誤差。Phase 4 的教訓：Phase 2 的 5 次 run 與 Phase 4 regress 1 這組都沒變，於是被列為「必須完全相同」；regress 2 才變（11 → 14），整個 regression FAIL 一次（約 30 分鐘後才 FAIL，重跑又要 2 小時）。中間過程數字給的誤差要寫明它其實等於不比（例如 ±100，高於看過的所有值），並用 negative test 證明最終數字仍被保護（`neg_pnr.py` P31）。
 6. **更新 golden**：先確認所有 limits 與自寫 checker PASS → 逐項說明與舊 golden 的差異 → 複製並記 sha256 → 再跑一次確認新 golden PASS。
 7. **negative test 設計**：
    - 每個 checker 至少一個真錯誤，加一個正向對照（沒植入時 PASS）。
@@ -100,3 +101,4 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 2026-10-04 | Phase 4 修 5 個漏洞 | 加上「只有被植入的那一列 FAIL」的斷言後，P09、P14 各多一列 FAIL | 已驗證：兩列共用同一個輸入（DEF 位置、`sram0` 實例） | 斷言改成「剛好這幾列」並寫明原因（規則 7） | `pnr/soc_top/neg_pnr.py` |
 | 2026-10-04 | Phase 4 P21 第一版 | 外框內植入被 `li.c1` 抓到，但這條規則不在 SRAM 基準裡 | 已驗證：不是在測位置比對 | 改 `li.3`（規則 7） | `drc-signoff` negative test 一節 |
 | 2026-10-04 | Phase 4 獨立審查（checker 漏洞，agent） | 10 項：clock 接線沒人檢查、IR 電壓源大小與位置、provenance symlink、regress 開頭沒記 HEAD、`make -i`、P21／P23 只看第一個問題、neg-eqy 位置範圍太寬、`[max_sum]` 負項、DRC 容許值太寬、py-check 不看跨檔名稱 | 已驗證（審查者用 python 小實驗與程式碼；主控重讀程式確認） | 除了 run_guard 不查工作目錄（regress 已由 provenance-final 擋）與 py-check 跨檔（記為限制）都修正並加 negative test | `docs/phase_exit/phase4.md` 獨立審查一節 |
+| 2026-10-04 | Phase 4 `make regress` 第 2 次（乾淨 checkout，`c635ffb`） | harden-soc FAIL：`[FAIL] golden route__drc_errors__iter:2: run=14 expected=11`；其他 433 個在誤差內或相同，signoff 全部 PASS | 已驗證：第 45 步輸入逐 byte 相同，多執行緒繞線在 antenna 修補後的重繞分歧；這組中間數字被錯列為「必須完全相同」 | 使用者決定給 ±100（兩個設計），最終 DRC 數仍完全相同；P31（規則 5） | `signoff/golden/soc_top/README.md` 可重現性 |

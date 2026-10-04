@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P28).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P31).
 
 usage: neg_pnr.py [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -60,6 +60,9 @@ step re-run one step on a copy of that step's saved config and input state
   P08  final netlist: sram0 csb1 on a floating net   check_soc.py port1_tieoff
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
+  P31  metrics: final route__drc_errors golden + 1;  check_signoff.py golden comparison
+       route__drc_errors__iter:2 golden + 101 (each alone; the iteration-count tolerance is 100,
+       and does not cover the final count); positive control: iter:2 golden + 3 (Phase 4 regress 2)
   P13  signoff SDC without its set_output_delay line OpenROAD.STAPostPNR -> check_soc.py sta_setup
        (unconstrained endpoints, project-plan.md §7.2; check_soc.py runs on a fake run whose
        STA directory is the re-run)
@@ -639,6 +642,22 @@ def p12(run, d):
         "check_signoff.py golden design__instance__count"
 
 
+def p31(run, d):
+    golden = json.load(open(GOLDEN))
+    results = []
+    for name, key, delta, caught in (("final_plus_1", "route__drc_errors", 1, True),
+                                     ("iter2_plus_101", "route__drc_errors__iter:2", 101, True),
+                                     ("iter2_plus_3", "route__drc_errors__iter:2", 3, False)):
+        sub = os.path.join(d, name)
+        os.makedirs(sub)
+        rc, out = signoff_with(run, sub, lambda m: m.update({key: golden[key] + delta}))
+        row = re.search(rf"^  \[FAIL\] golden {re.escape(key)}:", out, re.M) is not None
+        results.append(row == caught and (rc != 0) == caught)
+    return all(results), \
+        "check_signoff.py golden route__drc_errors and route__drc_errors__iter:2 FAIL; iter:2 + 3 PASS " \
+        f"(final +1, iter +101, iter +3: {results})"
+
+
 def p13(run, d):
     """Unconstrained endpoints are caught: the signoff SDC without its set_output_delay line, re-run
     STA, then check_soc.py on a fake run whose signoff STA directory is the re-run: sta_setup must be
@@ -743,7 +762,8 @@ def p20(run, d):
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
-         ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30)]
+         ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
+         ("P31", p31)]
 
 
 def main():

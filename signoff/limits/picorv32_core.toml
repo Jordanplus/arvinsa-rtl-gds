@@ -82,6 +82,10 @@ slack_max = 40.0
 "power__*" = { rel = 0.001 }
 "design_powergrid__*" = { rel = 0.001 }
 "ir__*" = { rel = 0.001 }
+# Same router, same noise: in soc_top (Phase 4 make regress 2) the intermediate iteration counts of
+# the last re-route after antenna repair differed (11 vs 14), see signoff/limits/soc_top.toml.
+# abs = 100, above every count seen (90 here); the final route__drc_errors stays exact.
+"route__drc_errors__iter:*" = { abs = 100 }
 
 [info]
 keys = [

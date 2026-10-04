@@ -57,6 +57,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 下游拿過期的 run | `run_guard.py`（規則 4） | Phase 3 獨立審查 |
 | 長 run 中改了檔案，結束時來源追溯 FAIL | 另開 worktree（規則 5） | Phase 4 |
 | 函式改名後漏改的呼叫，要跑到那一案才 `NameError` | `make py-check`（規則 9） | Phase 4 預跑（neg-pnr P11） |
+| 一次乾淨 run 與 golden 完全相同，就當作流程可重現 | 不可重現的那一步（多執行緒 detailed routing）產生的 metrics 先逐一分類（`signoff-checker-qualification` 規則 5）；完全相同可能只是剛好 | Phase 4 regress 1 434/434 相同，regress 2 有 1 個中間數字不同而 FAIL |
 | macOS 的 Spotlight 會索引 `runs/` 裡幾 GB 的報告檔，占兩個核心 | 長 run 時注意 `mds` 的 CPU；可把 `runs/` 排除在索引外（系統設定，使用者決定） | Phase 4（`ps` 觀察） |
 
 ## 用完後
@@ -73,3 +74,4 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 2026-10-04 | Phase 4 開發 | dev fixture 整個 symlink 到舊 run，下游檢查仍讀到舊 run 的 `_signoff` | 已驗證：`Path.resolve()` 跟著 symlink | fixture 改成真目錄＋逐檔 symlink（規則 6） | `dv/gl_soc/run_gl_soc.py` |
 | 2026-10-04 | Phase 4 第 1 次 harden-soc | 要在 run 期間改文件與測試 | 已驗證：結束時的來源追溯會 FAIL | 另開 worktree `p4dev`（規則 5） | `git worktree list` |
 | 2026-10-04 | Phase 4 預跑（dev fixture） | `[FAIL] P11: expected FAIL at case error: NameError("name 'gds_add_met2' is not defined")`，`neg-pnr: FAIL 26/27` | 已驗證：`gds_add_met2` 改成 `gds_add_box` 時漏改 P11 | 改呼叫；新增 `make py-check`，對修正前的檔案確認會 FAIL；單獨重跑 P11 PASS | `runs/dev5_neg_pnr.log` |
+| 2026-10-04 | Phase 4 `make regress` 第 2 次 | 12/25 PASS 後 harden-soc FAIL（golden 一個中間輪 DRC 數 11 → 14），第 1 次同設定是 434/434 相同 | 已驗證：多執行緒 detailed routing 不可重現，這次波及繞線器中間各輪的 DRC 數 | 給誤差（使用者決定），補 P31，乾淨 checkout 跑第 3 次 | `signoff/golden/soc_top/README.md` |

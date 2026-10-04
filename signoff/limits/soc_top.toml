@@ -86,6 +86,14 @@ slack_max = 42.0
 "power__*" = { rel = 0.001 }
 "design_powergrid__*" = { rel = 0.001 }
 "ir__*" = { rel = 0.001 }
+# Phase 4 make regress 2 (clean checkout, commit c635ffb; the input of OpenROAD.DetailedRouting
+# byte-identical to regress 1): the last re-route after antenna repair left 14 instead of 11
+# violations after its 2nd iteration. route__drc_errors__iter:N is the count after iteration N of
+# the last router call (main route, then one re-route per antenna repair) that reached iteration N:
+# intermediate numbers, not signoff numbers. abs = 100, above every count seen (87 here, 90 in
+# picorv32_core).
+# The final route__drc_errors stays exact ([equal] = 0 and golden). neg_pnr.py P31.
+"route__drc_errors__iter:*" = { abs = 100 }
 
 [info]
 keys = [
