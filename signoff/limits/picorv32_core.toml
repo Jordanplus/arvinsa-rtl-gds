@@ -39,9 +39,12 @@
 # row above is the real check, this one is kept as a second guard for the ports.
 "timing__unannotated_net_filtered__count" = 0
 
-[min]
-# §7.2: nom_tt setup worst slack >= 10 % of the 40 ns clock period
-"timing__setup__ws__corner:nom_tt_025C_1v80" = 4.0
+# §7.2 also asked for "nom_tt setup worst slack >= 10 % of the clock period". Removed as for
+# soc_top (user decision 2026-10-04, see signoff/limits/soc_top.toml); printed in [info].
+
+[max]
+# Static IR drop <= 20 mV, the same budget as soc_top (signoff/limits/soc_top.toml [max]).
+"ir__drop__worst" = 0.02
 
 [corners]
 names = [
@@ -87,6 +90,7 @@ keys = [
     "design__instance__count__class:sequential_cell",
     "route__wirelength",
     "timing__setup__ws",
+    "timing__setup__ws__corner:nom_tt_025C_1v80",
     "timing__hold__ws",
     "power__total",
     "ir__drop__worst",

@@ -5,8 +5,11 @@
 #   2. LibreLane run                   : runs/soc_top (tag soc_top, design dir = repo root)
 #   3. signoff/scripts/check_signoff.py: limits in signoff/limits/soc_top.toml and the golden run in
 #                                        signoff/golden/soc_top/metrics.json
-#   4. pnr/soc_top/check_soc.py        : SRAM placement, port 1 tie-off, disconnected pins,
-#                                        STA check_setup, Magic DRC only inside the SRAM
+#   4. pnr/soc_top/sram_drc_alone.py   : Magic DRC of the SRAM alone (about 2.5 minutes), the
+#                                        reference for the Magic DRC comparison of check_soc.py
+#      pnr/soc_top/check_soc.py        : SRAM placement, port 1 tie-off, disconnected pins,
+#                                        STA check_setup, min pulse width and period, Magic DRC
+#                                        inside the SRAM only where the SRAM alone has it
 #   5. check_inputs.py --resolved      : the run really used rtl/rtl.f, padded.lib and the antenna LEF
 #   0/6. signoff/scripts/provenance.py : before and after the run: committed working tree, pinned
 #                                        LibreLane and PDK (project-plan.md §7.2)
@@ -72,7 +75,8 @@ if [ ! -s "$OUT/metrics.json" ]; then
 fi
 
 python3 signoff/scripts/check_signoff.py "$OUT/metrics.json" "$LIMITS" "$GOLDEN" | tee "$OUT/signoff.txt" || true
-python3 pnr/soc_top/check_soc.py "$RUN_DIR" | tee "$OUT/soc_checks.txt" || true
+python3 pnr/soc_top/sram_drc_alone.py "$RUN_DIR" "$OUT/sram_drc_alone" | tee "$OUT/sram_drc_alone.txt" || true
+python3 pnr/soc_top/check_soc.py "$RUN_DIR" --sram-drc "$OUT/sram_drc_alone/step/reports/drc.magic.rpt" | tee "$OUT/soc_checks.txt" || true
 python3 pnr/soc_top/check_inputs.py --resolved "$RUN_DIR/resolved.json" > "$OUT/inputs_resolved.txt" 2>&1 || true
 tail -1 "$OUT/inputs_resolved.txt"
 python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \

@@ -6,3 +6,5 @@
 # docs/decisions/0009-signoff-max-transition.md.
 source $::env(SCRIPTS_DIR)/base.sdc
 set_max_fanout 8 [current_design]
+# Clock uncertainty by component (setup, hold, half-cycle paths); same file as signoff.sdc.
+source [file join [file dirname [info script]] clock_uncertainty.sdc]

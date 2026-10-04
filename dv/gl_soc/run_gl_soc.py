@@ -19,12 +19,20 @@ PASS needs all of:
   - every selected test PASS (all Phase 1 checkers, dv/scripts/dvlib.py run_test)
   - every test: tb_result.txt fail.gl_lockstep=0 and gl_compares > 0 (the comparison ran)
 
-usage: run_gl_soc.py [--harden-run <dir>] [--netlist <path>] [--out <dir>] [--tests a,b] [-j N]
+--powered (`make gl-soc-powered`, project-plan.md §7.1 L5): the powered netlist
+<harden-run>/final/pnl/soc_top.pnl.v instead, compiled with -DUSE_POWER_PINS: every cell (also
+the fill, tap, decap and diode cells) has its VPWR/VGND/VPB/VNB pins and the SRAM model its
+vccd1/vssd1, driven by the testbench with 1/0. The cell models then pass every output through a
+power-good primitive, so a cell whose supply pins are not on vccd1/vssd1 drives X and the lockstep
+comparison FAILs. No SDF: Icarus is not a signoff simulator for timing (project-plan.md §7.1).
+
+usage: run_gl_soc.py [--harden-run <dir>] [--netlist <path>] [--out <dir>] [--tests a,b] [-j N] [--powered]
   --harden-run  LibreLane run of `make harden-soc` (default runs/soc_top)
   --netlist     netlist to simulate instead of <harden-run>/final/nl/soc_top.nl.v (negative tests)
-  --out         output directory (default runs/gl_soc)
+  --out         output directory (default runs/gl_soc, with --powered runs/gl_soc_powered)
   --tests       comma-separated subset of tests (default: all positive tests)
-Prints `gl-soc: PASS` / `gl-soc: FAIL`; exit code 0 only on PASS. Python stdlib only.
+Prints `gl-soc: PASS` / `gl-soc: FAIL` (`gl-soc-powered: ...` with --powered); exit code 0 only
+on PASS. Python stdlib only.
 """
 import argparse
 import json
@@ -58,17 +66,21 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--harden-run", default=str(ROOT / "runs" / "soc_top"))
     ap.add_argument("--netlist")
-    ap.add_argument("--out", default=str(ROOT / "runs" / "gl_soc"))
+    ap.add_argument("--out")
     ap.add_argument("--tests")
     ap.add_argument("-j", type=int, default=dvlib.default_jobs())
+    ap.add_argument("--powered", action="store_true")
     args = ap.parse_args()
     harden_run = Path(args.harden_run).resolve()
-    netlist = Path(args.netlist).resolve() if args.netlist else harden_run / "final" / "nl" / "soc_top.nl.v"
-    out = Path(args.out).resolve()
+    name = "gl-soc-powered" if args.powered else "gl-soc"
+    default_nl = harden_run / "final" / ("pnl/soc_top.pnl.v" if args.powered else "nl/soc_top.nl.v")
+    netlist = Path(args.netlist).resolve() if args.netlist else default_nl
+    out = Path(args.out or ROOT / "runs" / ("gl_soc_powered" if args.powered else "gl_soc")).resolve()
+    flags = GL_FLAGS + (["-DUSE_POWER_PINS"] if args.powered else [])
     t0 = time.time()
 
     def fail(msg):
-        print(f"gl-soc: FAIL ({msg})")
+        print(f"{name}: FAIL ({msg})")
         return 1
 
     # Only the output directory is removed, first, so that a refused run leaves no old result behind.
@@ -101,14 +113,14 @@ def main():
     except ValueError as e:
         return fail(str(e))
 
-    print(f"[gl-soc] netlist {netlist}")
-    print(f"[gl-soc] compile tb_soc with the RTL and gate-level SoC (Icarus)")
+    print(f"[{name}] netlist {netlist}")
+    print(f"[{name}] compile tb_soc with the RTL and gate-level SoC (Icarus, {' '.join(flags)})")
     b = dvlib.build("icarus", extra_files=[LOCKSTEP_V] + [Path(m) for m in cell_models] + [gl_v],
-                    extra_flags=GL_FLAGS, variant="gl")
+                    extra_flags=flags, variant="glp" if args.powered else "gl")
     if not b.ok:
         return fail(f"compile: {b.message}")
 
-    print(f"[gl-soc] run {len(names)} tests, {args.j} in parallel")
+    print(f"[{name}] run {len(names)} tests, {args.j} in parallel")
 
     def one(name):
         r = dvlib.run_test(name, "icarus", out_root=str(out), build_result=b, quiet=True)
@@ -139,7 +151,7 @@ def main():
                "wall_time_s": round(time.time() - t0, 1)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     status = "PASS" if errors == 0 and results else "FAIL"
-    print(f"gl-soc: {status} {len(results) - errors}/{len(results)} tests passed ({summary['wall_time_s']} s)")
+    print(f"{name}: {status} {len(results) - errors}/{len(results)} tests passed ({summary['wall_time_s']} s)")
     return 0 if status == "PASS" else 1
 
 

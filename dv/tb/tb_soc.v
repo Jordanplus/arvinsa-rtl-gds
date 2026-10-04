@@ -141,6 +141,11 @@ module tb_soc;
     wire [31:0] gl_host_rdata;
 
     soc_top_gl dut_gl (
+`ifdef USE_POWER_PINS
+        // L5: the powered netlist (final/pnl), every cell powered through VPWR/VGND/VPB/VNB
+        .vccd1      (vccd1),
+        .vssd1      (vssd1),
+`endif
         .clk        (clk),
         .resetn     (resetn),
         .uart_tx    (gl_uart_tx),

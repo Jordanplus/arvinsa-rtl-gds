@@ -1,4 +1,4 @@
-# Signoff limits for `make harden-soc` (soc_top with the SRAM macro, Phase 3).
+# Signoff limits for `make harden-soc` (soc_top with the SRAM macro; Phase 3, updated in Phase 4).
 # Checked by signoff/scripts/check_signoff.py; every row must PASS, a missing metric is a FAIL.
 # Sources: project-plan.md §7.2 (signoff metrics) and §8 Phase 3 exit criteria.
 # soc_top-specific checks that are not metrics (SRAM placement, port 1 tie-off, Magic DRC only
@@ -38,20 +38,27 @@
 "timing__unannotated_net__count" = 134
 "timing__unannotated_net_filtered__count" = 0
 
-[min]
-# §7.2: nom_tt setup worst slack >= 10 % of the 40 ns clock period
-"timing__setup__ws__corner:nom_tt_025C_1v80" = 4.0
+# §7.2 also asked for "nom_tt setup worst slack >= 10 % of the clock period" (4 ns). Removed
+# (user decision 2026-10-04, docs/notes/signoff_criteria_soc_top.md): the ss delays are 1.4-1.9 x
+# tt, so "ss >= 0" is always stricter and the rule never decided anything. The margin is in the
+# clock uncertainty instead, with its components listed (pnr/soc_top/clock_uncertainty.sdc).
+# The nom_tt slack is still printed in [info].
 
 [max]
-# §7.2: IR drop <= 5 % of VDD (1.8 V). The SRAM current in the power analysis comes from the
-# analytical .lib (ADR-0007), so this covers the standard cells reliably, the SRAM only roughly.
-"ir__drop__worst" = 0.09
+# Static IR drop <= 20 mV: the ss corner is characterized at 1.60 V and the lowest supply of the
+# carrier (Caravel VCCD) is 1.62 V, so only 20 mV may be lost on chip before the ss STA stops being
+# pessimistic (user decision 2026-10-04; was 5 % of VDD = 90 mV in project-plan.md §7.2). The SRAM
+# current in the power analysis comes from the analytical .lib (ADR-0007), so this covers the
+# standard cells reliably, the SRAM only roughly.
+"ir__drop__worst" = 0.02
 
 [corners]
+# STA_CORNERS of pnr/soc_top/config.json: LibreLane's 9 plus the temperature-inversion PVTs
+# ss_n40C_1v60 and ff_100C_1v95 (Phase 4).
 names = [
-    "nom_tt_025C_1v80", "nom_ss_100C_1v60", "nom_ff_n40C_1v95",
-    "min_tt_025C_1v80", "min_ss_100C_1v60", "min_ff_n40C_1v95",
-    "max_tt_025C_1v80", "max_ss_100C_1v60", "max_ff_n40C_1v95",
+    "nom_tt_025C_1v80", "nom_ss_100C_1v60", "nom_ff_n40C_1v95", "nom_ss_n40C_1v60", "nom_ff_100C_1v95",
+    "min_tt_025C_1v80", "min_ss_100C_1v60", "min_ff_n40C_1v95", "min_ss_n40C_1v60", "min_ff_100C_1v95",
+    "max_tt_025C_1v80", "max_ss_100C_1v60", "max_ff_n40C_1v95", "max_ss_n40C_1v60", "max_ff_100C_1v95",
 ]
 setup_ws_min = 0.0
 hold_ws_min = 0.0
@@ -77,6 +84,7 @@ slack_max = 40.0
 
 [info]
 keys = [
+    "timing__setup__ws__corner:nom_tt_025C_1v80",
     "magic__drc_error__count",
     "design__instance__count",
     "design__instance__area__stdcell",

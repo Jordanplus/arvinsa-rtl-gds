@@ -25,6 +25,8 @@ local third_party/ checkout, no network); this repo's working tree is not touche
   final_clean     --final on the clean clone with its own record  PASS (positive control)
   final_dirty     --final on a clone with one changed file       FAIL uncommitted
   final_head      --final with a record from another commit      FAIL same_head
+A negative case PASSes only if the expected row is the one that FAILs (pdk: also pdk_content,
+because the other version directory is empty) and the verdict is `provenance: FAIL`.
 Prints `neg-provenance: PASS n/n` / `neg-provenance: FAIL ...`; exit code 0 only on PASS.
 """
 import json
@@ -85,13 +87,13 @@ def main():
 
     results = []
 
-    def case(name, rc_out, want):
+    def case(name, rc_out, want, also=()):
         rc, out = rc_out
         if want == "PASS":
             ok = rc == 0 and out.rstrip().endswith("provenance: PASS")
         else:
-            ok = rc != 0 and re.search(rf"^  \[FAIL\] {want}:", out, re.M) is not None \
-                and out.rstrip().endswith("provenance: FAIL")
+            failed = set(re.findall(r"^  \[FAIL\] (\w+):", out, re.M))
+            ok = rc != 0 and failed == {want, *also} and out.rstrip().endswith("provenance: FAIL")
         results.append(ok)
         open(os.path.join(OUT, f"{name}.log"), "w").write(out)
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: expected {want if want == 'PASS' else 'FAIL at ' + want}")
@@ -128,7 +130,7 @@ def main():
     other = os.path.join(fake, "ciel", "sky130", "versions", "0" * 40, pin("PDK"))
     os.makedirs(other)
     os.symlink(other, os.path.join(fake, pin("PDK")))
-    case("pdk", prov("--record", os.devnull, "--repo", repo, env={"PDK_ROOT": fake}), "pdk")
+    case("pdk", prov("--record", os.devnull, "--repo", repo, env={"PDK_ROOT": fake}), "pdk", also=("pdk_content",))
 
     # Same version hash, one edited file: real directories with symlinks to the real PDK, except a
     # copy of libs.tech/netgen.
@@ -155,12 +157,13 @@ def main():
     case("head_changed", prov("--verify", bad_rec, "--resolved", resolved, "--repo", repo), "same_head")
 
     bad = os.path.join(OUT, "resolved_pdk.json")
-    json.dump({"meta": {"librelane_version": pin("LIBRELANE_TAG")},
-               "PDK_ROOT": pdk_root.replace(pin("SKY130_PDK_HASH"), "0" * 40)}, open(bad, "w"))
+    other = pdk_root.replace(pin("SKY130_PDK_HASH"), "0" * 40)
+    json.dump({"meta": {"librelane_version": pin("LIBRELANE_TAG")}, "PDK_ROOT": other,
+               "LIB": {"*": [p.replace(pdk_root, other) for p in lib(pin("STD_CELL_LIBRARY"))["*"]]}}, open(bad, "w"))
     case("resolved_pdk", prov("--verify", rec, "--resolved", bad, "--repo", repo), "resolved_pdk")
 
     bad = os.path.join(OUT, "resolved_ll.json")
-    json.dump({"meta": {"librelane_version": "3.0.13"}, "PDK_ROOT": pdk_root}, open(bad, "w"))
+    json.dump({"meta": {"librelane_version": "3.0.13"}, "PDK_ROOT": pdk_root, "LIB": lib(pin("STD_CELL_LIBRARY"))}, open(bad, "w"))
     case("resolved_ll", prov("--verify", rec, "--resolved", bad, "--repo", repo), "resolved_librelane")
 
     bad = os.path.join(OUT, "resolved_outside.json")

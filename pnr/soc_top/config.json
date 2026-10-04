@@ -71,7 +71,7 @@
     "//IO_PIN_ORDER_CFG": "IO pins only on the left and bottom edges, away from the SRAM (project-plan.md §5.4). clk sits in the middle of the bottom edge, near the centre of the flip-flops: at the bottom of the left edge (run soc_explore2) its 660 um wire to the first clock buffer gave a 0.92 ns slew in the ss corners.",
     "IO_PIN_ORDER_CFG": "dir::pnr/soc_top/pin_order.cfg",
     "ERRORS_ON_UNMATCHED_IO": "both",
-    "//CORNERS": "Fail on setup, hold, max slew and max cap in all 9 corners (LibreLane's sky130 default fails setup only in tt; project-plan.md §6.2).",
+    "//CORNERS": "Fail on setup, hold, max slew and max cap in every STA corner (LibreLane's sky130 default fails setup only in tt; project-plan.md §6.2).",
     "SETUP_VIOLATION_CORNERS": [
         "*"
     ],
@@ -84,13 +84,49 @@
     "MAX_CAP_VIOLATION_CORNERS": [
         "*"
     ],
+    "//STA_CORNERS": "LibreLane's 9 sky130 corners (tt/ss/ff x nom/min/max RC) plus two for temperature inversion: at 1.60 V most cells are slower at -40 C than at 100 C (dfxtp_1 CLK->Q 11 % slower), so ss_n40C_1v60 is added, and ff_100C_1v95 for symmetry on the fast side (docs/notes/signoff_criteria_soc_top.md, Phase 4). Setting LIB replaces LibreLane's sky130 default (librelane/config/pdk_compat.py), so all five PVTs are listed. PnR uses the same corners (PNR_CORNERS defaults to STA_CORNERS).",
+    "STA_CORNERS": [
+        "nom_tt_025C_1v80",
+        "nom_ss_100C_1v60",
+        "nom_ff_n40C_1v95",
+        "nom_ss_n40C_1v60",
+        "nom_ff_100C_1v95",
+        "min_tt_025C_1v80",
+        "min_ss_100C_1v60",
+        "min_ff_n40C_1v95",
+        "min_ss_n40C_1v60",
+        "min_ff_100C_1v95",
+        "max_tt_025C_1v80",
+        "max_ss_100C_1v60",
+        "max_ff_n40C_1v95",
+        "max_ss_n40C_1v60",
+        "max_ff_100C_1v95"
+    ],
+    "DEFAULT_CORNER": "nom_tt_025C_1v80",
+    "LIB": {
+        "*_tt_025C_1v80": [
+            "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"
+        ],
+        "*_ss_100C_1v60": [
+            "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib"
+        ],
+        "*_ff_n40C_1v95": [
+            "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib"
+        ],
+        "*_ss_n40C_1v60": [
+            "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C_1v60.lib"
+        ],
+        "*_ff_100C_1v95": [
+            "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_100C_1v95.lib"
+        ]
+    },
     "//STA_EXTRA_CORNER_TCL_FILE": "Derates sram0 in the ss and ff corners during STA (docs/decisions/0007-sram-padded-lib.md).",
     "STA_EXTRA_CORNER_TCL_FILE": "dir::pnr/soc_top/sta_extra_corner.tcl",
     "//PNR_SDC_FILE": "base.sdc with max fanout 8 for the PnR steps: antenna repair adds diodes after the resizer fixed fanout (a diode pin counts as a load; run soc_explore7: 10 loads + 1 diode). Signoff keeps 10. docs/decisions/0009-signoff-max-transition.md.",
     "PNR_SDC_FILE": "dir::pnr/soc_top/pnr.sdc",
     "//SIGNOFF_SDC_FILE": "LibreLane's base.sdc unchanged (0.75 ns, fanout 10). Set explicitly because without it the signoff STA falls back to PNR_SDC_FILE (fanout 8). docs/decisions/0009-signoff-max-transition.md (the 1.0 ns signoff limit recorded there was withdrawn once PL_TARGET_DENSITY_PCT fixed the slews).",
     "SIGNOFF_SDC_FILE": "dir::pnr/soc_top/signoff.sdc",
-    "//ERROR_ON_MAGIC_DRC": "Magic DRC runs on the full GDS (LibreLane default MAGIC_DRC_USE_GDS = true). The SRAM's own GDS has about 4.67 million violations of the standard sky130 deck (its bitcells follow the SRAM rules), all inside the SRAM outline, so the flow must not stop on them. pnr/soc_top/check_soc.py replaces LibreLane's checker: 0 violations outside the SRAM outline and, inside it, the same count per rule as the SRAM checked alone (signoff/waivers/soc_top/). Abstract mode (MAGIC_DRC_USE_GDS = false) was tried: it reports 416 nwell.4 errors on every standard cell row, because the abstract cell views have no taps; the full-GDS run has none. See README.md.",
+    "//ERROR_ON_MAGIC_DRC": "Magic DRC runs on the full GDS (LibreLane default MAGIC_DRC_USE_GDS = true). The SRAM's own GDS has about 4.67 million violations of the standard sky130 deck (its bitcells follow the SRAM rules), all inside the SRAM outline, so the flow must not stop on them. pnr/soc_top/check_soc.py replaces LibreLane's checker: 0 violations outside the SRAM outline and, inside it, every violation at the position of a same-rule violation of the SRAM checked alone (pnr/soc_top/sram_drc_alone.py; rule counts reviewed in signoff/waivers/soc_top/). Abstract mode (MAGIC_DRC_USE_GDS = false) was tried: it reports 416 nwell.4 errors on every standard cell row, because the abstract cell views have no taps; the full-GDS run has none. See README.md.",
     "ERROR_ON_MAGIC_DRC": false,
     "//PRIMARY_GDSII_STREAMOUT_TOOL": "Final GDS from KLayout. Magic's GDS of this design has 13 top cells: it places the SRAM through renamed copies of its sub-cells (T2_*) and also writes the 160 original sub-cells unreferenced, so KLayout.Render failed with 'The layout has multiple top cells'. The KLayout GDS has one top cell (soc_top) and all 161 SRAM cells are reachable from it. Magic still streams out; KLayout.XOR compares the two. See README.md.",
     "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout",

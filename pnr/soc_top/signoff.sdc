@@ -4,3 +4,5 @@
 # This file exists because without SIGNOFF_SDC_FILE the signoff STA falls back to PNR_SDC_FILE
 # (pnr.sdc, max fanout 8; verified: sta.log reads pnr.sdc), and signoff must check the real limits.
 source $::env(SCRIPTS_DIR)/base.sdc
+# Clock uncertainty by component (setup, hold, half-cycle paths); same file as pnr.sdc.
+source [file join [file dirname [info script]] clock_uncertainty.sdc]

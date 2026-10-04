@@ -30,6 +30,12 @@
 - `pnr/soc_top/sta_extra_corner.tcl`：`*ss*` → `set_timing_derate -late -cell_delay 1.5`、`*ff*` → `set_timing_derate -early -cell_delay 0.7`，只套在 `sram0`。
 - 限制：這個 hook 只在 LibreLane 的 STA step 生效（`librelane/scripts/openroad/sta/corner.tcl` 第 59–61 行），placement／CTS／resizer 最佳化時看不到 derate。所以 PnR 是用 TT 等級的 padded 數字收斂，signoff STA 再用 derate 後的數字判定。這個 hook 是實驗性功能，必須有 negative test 證明它真的有作用（P04：derate 設 10 → setup 必須 FAIL）。
 
+## Phase 4 補充（2026-10-04）：derate 乘進 OCV
+
+- OpenSTA 對 instance 設的 derate 會**取代** global derate，不會相乘（`sdc/Sdc.cc` 626–662，skill `signoff-criteria` 規則 5）。原本 ss 的 1.5 實際就是 1.5 倍，`base.sdc` 的 ±5% OCV 沒有套到 SRAM。
+- 使用者決定（2026-10-04）：把 OCV 乘進去，ss late 改成 1.5 × 1.05 = **1.575**，ff early 改成 0.7 × 0.95 = **0.665**（`docs/notes/signoff_criteria_soc_top.md`）。
+- P04 的植入改成把 1.575 換成 10。
+
 ## 已知殘餘風險
 
 1. 所有數字都是假設，不是特性化結果。Phase 3.5／6 用 OpenRAM SPICE 特性化產生 TT／SS／FF .lib 後取代。

@@ -5,8 +5,9 @@ because the RTL/GL lockstep comparison (dv/monitors/gl_lockstep.v) sees a differ
 usage: neg_gl_soc.py [--harden-run <dir>] [--out <dir>]   (defaults runs/soc_top, runs/neg_gl_soc)
 The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now).
 
-Uses the same netlist edits as signoff/eqy/neg_eqy.py (soc_top cases; each edit must match
-exactly one place). Each edited netlist runs dv/gl_soc/run_gl_soc.py on the positive tests except
+Uses four of the netlist edits of signoff/eqy/neg_eqy.py (soc_top cases in GL_CASES; each edit
+must match exactly one place). nand2_to_nor2 is left to EQY: whether simulation sees it depends on
+whether the firmware exercises that gate. Each edited netlist runs dv/gl_soc/run_gl_soc.py on the positive tests except
 the two longest (memtest, boot_uart_max), outputs in runs/neg_gl_soc/<case>/. Cases run one after another (they share
 one build directory). A case counts as caught only if gl-soc FAILs and at least one test reports fail.gl_lockstep > 0 (not a compile
 error or some other failure).
@@ -31,6 +32,7 @@ import neg_eqy  # noqa: E402
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
 
+GL_CASES = ["din5_stuck0", "csb0_inverted", "host_rdata7_inverted", "mux_swap"]
 TESTS = ["hello", "irq", "muldiv", "uart_echo", "bootrom_march", "boot_uart_hello", "boot_host_hello",
          "regs", "unmapped", "uart_burst", "reset_store"]
 
@@ -74,7 +76,10 @@ def main():
 
     # One case at a time: every case compiles into the same build directory (dvlib variant "gl"),
     # so a second compile would replace the executable the first case is still running.
-    results = [one(c) for c in neg_eqy.CASES["soc_top"]]
+    results = [one(c) for c in neg_eqy.CASES["soc_top"] if c[0] in GL_CASES]
+    if len(results) != len(GL_CASES):
+        print(f"neg-gl-soc: FAIL (cases {GL_CASES} not all found in neg_eqy.py)")
+        return 1
     caught = 0
     for name, ok, msg in results:
         caught += ok
