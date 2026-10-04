@@ -50,7 +50,7 @@ PASS 需要全部成立：
 Phase 4 加了三件事（前兩件是 `docs/phase_exit/phase3.md` 已知限制 4、16）：
 - **`nand2_to_nor2`**：第一顆 nand2（依 instance 名稱排序）換成同尺寸的 nor2，名稱與接線不動。這種錯誤不是常數、也不會造成名稱矛盾，只有證明步驟抓得到。soc_top 與 picorv32_core 都是 1 個分區證不出來。
 - **`flop_q_inverted`、`flop_async_reset`**：第一顆 `dfxtp_2` 換成輸出反相的 `dfxbp_2`（Q_N）或 reset 會清除的 `dfrtp_2`。前者在切分時就因名稱矛盾被拒絕；後者 EQY 全部證明通過，只有判定第 6 點抓得到。
-- **FAIL 的位置要對得上植入點**：從 EQY 的紀錄取出 FAIL 牽涉的名稱（證不出來的分區、被換成常數的 bit、名稱矛盾的兩邊），每一個都必須落在植入點附近：被改到的 cell、它被改到的腳上的 net（bus pin 只算改到的那幾個 bit），以及這些 net 上的 cell；遇到 buffer／inverter 時繼續往下走（placement 與 routing 會在合成網表的 flip-flop 和 port 之間插好幾級 buffer，EQY 報的是合成網表的名稱）。clock net 不走。
+- **FAIL 的位置要對得上植入點**：從 EQY 的紀錄取出 FAIL 牽涉的名稱（證不出來的分區、被換成常數的 bit、名稱矛盾的兩邊），每一個都必須落在植入點附近：被改到的 cell、它被改到的腳上的 net（bus pin 只算改到的那幾個 bit），以及這些 net 上的 cell；遇到 buffer／inverter 時繼續往下走（placement 與 routing 會在合成網表的 flip-flop 和 port 之間插好幾級 buffer，EQY 報的是合成網表的名稱）。clock net 不往下走（否則整棵 clock tree 都算「附近」），只把它的源頭算進來：沿 clock buffer 往回追到的 port（`clk`）。`clk0_inverted` 第一次預跑時 EQY 報的正是 `clk` 與反相後的線名稱衝突，沒有這條規則會被判成「不在植入點附近」。
 - **位置檢查要分得出不同案例**（Phase 4 獨立審查後加）：`neg_eqy.py` 最後對每一對改到不同 instance 的案例檢查，A 的 FAIL 名稱不能全部落在 B 的植入點附近，否則「在植入點附近」等於什麼都接受。改到同一顆 flip-flop 的 `flop_*` 案例之間不比。審查前 bus pin 整條一起算，`din5_stuck0` 的範圍有 224 個名稱、包含全部 32 個 `din0` bit；改成逐 bit 後是 10 個。已知限制：新接上 reset 這類大扇出 net 的案例（`flop_async_reset`），範圍仍包含整棵 reset buffer 樹（291 個名稱）。
 
 Phase 4 獨立審查後再加兩個案例：

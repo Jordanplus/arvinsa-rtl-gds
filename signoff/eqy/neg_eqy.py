@@ -125,13 +125,13 @@ def flop_async_reset(text):
 
 
 def flop_clk_inverted(text):
-    """First dfxtp_2 (sorted by instance name): its CLK net becomes neg_eqy_inv, which edit() drives
-    from the original clock net through an inverter, so the flip-flop samples on the falling edge."""
+    """First dfxtp_2 (sorted by instance name): its CLK net becomes neg_eqy_flop_clk_inv, which edit()
+    drives from the original clock net through an inverter, so the flip-flop samples on the falling edge."""
     cands = sorted(re.findall(r"sky130_fd_sc_hd__dfxtp_2 (\S+) \(\.CLK\(", text))
     if not cands:
         return re.compile(r"(?!x)x"), None
     rx = re.compile(r"(sky130_fd_sc_hd__dfxtp_2 " + re.escape(cands[0]) + r" \(\.CLK\()([^)]*)(\))")
-    return rx, lambda m: m.group(1) + "neg_eqy_inv" + m.group(3)
+    return rx, lambda m: m.group(1) + "neg_eqy_flop_clk_inv" + m.group(3)
 
 
 def nand2_to_nor2(text):
@@ -177,6 +177,17 @@ def neighborhood(orig_text, new_text):
                 if o != w:
                     nets.update([x for pair in zip(o, w) if pair[0] != pair[1] for x in pair]
                                 if len(o) == len(w) else o + w)
+    # A clock net is not walked (the whole clock tree would be "at the injection"); instead its source
+    # is added, found by walking back through the clock buffers (EQY names the gold clock port when a
+    # clock pin is inverted: clk0_inverted).
+    drv = {net: name for name, (cell, pins) in a.items() if BUFFER.match(cell) for pin in ("X", "Y")
+           for net in pins.get(pin, [])}
+    for n in [n for n in nets if n.startswith("clknet")]:
+        for _ in range(100):
+            if n not in drv or not a[drv[n]][1].get("A"):
+                break
+            n = a[drv[n]][1]["A"][0]
+        nets.add(n)
     nets = {n for n in nets if not re.fullmatch(r"\d+'[bh][0-9a-fA-F]+", n) and not n.startswith("clknet")}
     on_net = {}
     for name, (_, pins) in a.items():
@@ -235,9 +246,9 @@ def sram_pin_const0(pin):
     return rx, repl
 
 
-def sram_pin_inverted(pin):
+def sram_pin_inverted(pin, net="neg_eqy_inv"):
     rx = re.compile(r"(sky130_sram_2kbyte_1rw1r_32x512_8 sram0 \(.*?\." + pin + r"\()([^)]+)(\))", re.S)
-    return rx, lambda m: (m.group(1) + "neg_eqy_inv" + m.group(3))
+    return rx, lambda m: (m.group(1) + net + m.group(3))
 
 
 CASES = {
@@ -257,7 +268,7 @@ CASES = {
     "soc_top": [
         ("din5_stuck0", lambda t: sram_pin_const0("din0[5]")),
         ("csb0_inverted", lambda t: sram_pin_inverted("csb0")),
-        ("clk0_inverted", lambda t: sram_pin_inverted("clk0")),
+        ("clk0_inverted", lambda t: sram_pin_inverted("clk0", "neg_eqy_clk0_inv")),
         ("host_rdata7_inverted", lambda t: buf_inverted("host_rdata[7]")),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
@@ -267,11 +278,12 @@ CASES = {
     ],
 }
 
-# Cases whose edit points a pin at the new net neg_eqy_inv: (instance it belongs to, pin, inverter cell).
-# edit() drives neg_eqy_inv from the pin's original net through that inverter.
-INVERTER = {"csb0_inverted": ("sram0", "csb0", "sky130_fd_sc_hd__inv_2"),
-            "clk0_inverted": ("sram0", "clk0", "sky130_fd_sc_hd__clkinv_1"),
-            "flop_clk_inverted": (None, "CLK", "sky130_fd_sc_hd__clkinv_1")}
+# Cases whose edit points a pin at a new net: (instance it belongs to, pin, inverter cell, new net).
+# edit() drives the new net from the pin's original net through that inverter (instance <net>_cell).
+# Each case has its own names, so the location cross check compares them with each other.
+INVERTER = {"csb0_inverted": ("sram0", "csb0", "sky130_fd_sc_hd__inv_2", "neg_eqy_inv"),
+            "clk0_inverted": ("sram0", "clk0", "sky130_fd_sc_hd__clkinv_1", "neg_eqy_clk0_inv"),
+            "flop_clk_inverted": (None, "CLK", "sky130_fd_sc_hd__clkinv_1", "neg_eqy_flop_clk_inv")}
 
 
 def edit(name, text, fn):
@@ -283,14 +295,14 @@ def edit(name, text, fn):
     if name in INVERTER:
         # Drive the new net from the pin's original net through an inverter. The wire is declared just
         # before the instance, its first use (Icarus rejects declaration after use; Yosys accepts it).
-        inst, pin, cell = INVERTER[name]
+        inst, pin, cell, net = INVERTER[name]
         if inst is None:  # the instance the edit changed
-            inst = next(n for n, (c, p) in instances(new).items() if p.get(pin) == ["neg_eqy_inv"])
+            inst = next(n for n, (c, p) in instances(new).items() if p.get(pin) == [net])
         a = instances(text)[inst]
         orig = a[1][pin][0]
-        new, n = re.subn(r"^( *)(" + re.escape(a[0]) + r" \\?" + re.escape(inst) + r" \()", r"\1wire neg_eqy_inv;\n\1\2",
+        new, n = re.subn(r"^( *)(" + re.escape(a[0]) + r" \\?" + re.escape(inst) + r" \()", r"\1wire " + net + r";\n\1\2",
                          new, count=1, flags=re.M)
-        inv = f" {cell} neg_eqy_inv_cell (.A({orig}),\n    .Y(neg_eqy_inv));\nendmodule"
+        inv = f" {cell} {net}_cell (.A({orig}),\n    .Y({net}));\nendmodule"
         new, m = re.subn(r"endmodule\s*$", inv, new.rstrip() + "\n")
         if n != 1 or m != 1:
             return None, "could not add the inverter"
