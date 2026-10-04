@@ -1,6 +1,6 @@
 # 工具與版本清單（toolchain）
 
-最後更新：2026-10-03　維護者：專案主控（Claude 與使用者）
+最後更新：2026-10-04　維護者：專案主控（Claude 與使用者）
 
 這份清單記錄本專案用到的每個工具、版本與來源。**釘版的唯一來源是 `env/versions.mk`**，本文件是給人看的說明。
 
@@ -21,6 +21,7 @@
 | riscv64-elf-binutils | 組譯、連結、objcopy、objdump | 2.46.1 | — | Homebrew `riscv64-elf-binutils` |
 | C++ 編譯器（Apple clang） | Verilator `--binary` 把產生的 C++ 編譯成模擬執行檔（`make regress-rtl` 的 Verilator 部分需要） | 21.0.0 | — | Xcode Command Line Tools（`/usr/bin/c++`，CLTools 27.0） |
 | Python | regression script、checker（只用標準函式庫，設定檔用 `tomllib`） | 3.14.6 | 3.11 | Homebrew `python@3.14` |
+| ngspice | SRAM macro 的 SPICE 特性化（Phase 3.5，ADR-0010）；sky130 模型的設定用 PDK 的 `libs.tech/ngspice/spinit` | 47 | 47 | Homebrew `ngspice`（含 KLU） |
 | GNU make | 統一入口 | 3.81 | — | macOS 內建 `/usr/bin/make` |
 | bash | script 執行 | 3.2.57 | — | macOS 內建 `/bin/bash` |
 | git | 版本控制、submodule | 2.54.0 | — | macOS 內建（Apple Git-157） |

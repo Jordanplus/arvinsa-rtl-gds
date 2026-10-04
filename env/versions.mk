@@ -30,3 +30,5 @@ YOSYS_MIN            = 0.69
 RISCV_PREFIX         = riscv64-elf-
 RISCV_GCC_MIN        = 16.1
 PYTHON_MIN           = 3.11
+# ngspice: SRAM macro SPICE characterization (Phase 3.5, ADR-0010); verified on 2026-10-04
+NGSPICE_MIN          = 47

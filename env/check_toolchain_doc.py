@@ -27,6 +27,7 @@ TOOLS = {
     "riscv64-elf-binutils": (["riscv64-elf-as", "--version"], r"Binutils\)\s+([0-9.]+)", None),
     "C++ 編譯器（Apple clang）": (["c++", "--version"], r"clang version\s+([0-9.]+)", None),
     "Python": (["python3", "--version"], r"Python\s+([0-9.]+)", "PYTHON_MIN"),
+    "ngspice": (["ngspice", "--version"], r"ngspice-([0-9]+)", "NGSPICE_MIN"),
     "GNU make": (["make", "--version"], r"GNU Make\s+([0-9.]+)", None),
     "bash": (["bash", "--version"], r"version\s+([0-9.]+)", None),
     "git": (["git", "--version"], r"git version\s+([0-9.]+)", None),

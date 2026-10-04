@@ -1,6 +1,6 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，產生保守的 padded .lib 給全部 corner；LEF 缺 antenna 資料）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，產生保守的 padded .lib 給全部 corner，要用 SPICE 實測取代時看 openram-macro-characterization；LEF 缺 antenna 資料）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
 ---
 
 # Hard macro 整合
@@ -15,7 +15,7 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
    |---|---|---|
    | GDS | PDK 原檔 | `config.json` MACROS |
    | LEF | PDK LEF 補 `ANTENNAGATEAREA`（`gen_antenna_lef.py`） | ADR-0008、`antenna-signoff` |
-   | .lib | 保守的 padded.lib，`lib: {"*": [...]}`；少一個 corner 會被當 black box 且不報錯 | ADR-0007、`project-plan.md` §6.2 |
+   | .lib | 保守的 padded.lib，`lib: {"*": [...]}`；少一個 corner 會被當 black box 且不報錯。用 SPICE 實測取代的做法見 `openram-macro-characterization` | ADR-0007、`project-plan.md` §6.2 |
    | 合成 | `(* blackbox *)` 的 `.bb.v`（MACROS `vh`）；行為模型不可進 `VERILOG_FILES` | §6.1 |
    | 模擬 | 修正過的行為模型（加 timescale、關 VERBOSE、宣告順序） | `ip/sram/.../README.md` |
 

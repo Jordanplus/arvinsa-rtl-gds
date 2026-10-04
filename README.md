@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-04）：Phase 0–4 完成，下一步 Phase 5（Phase 3.5 可選）。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-04）：Phase 0–4 完成；Phase 3.5 進行中（用 SPICE 實測 SRAM 的時序，ADR-0010），之後做 Phase 5。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -76,7 +76,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 1 | SoC RTL 與 firmware、RTL 模擬 regression | 完成（2026-10-03） |
 | 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 完成（2026-10-03） |
 | 3 | 整合預建 SRAM macro | 完成（2026-10-04） |
-| 3.5 | （可選）用 OpenRAM 做 SPICE characterization，校正 SRAM 時序模型 | 未開始 |
+| 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 進行中 |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
 | 5 | 換成 Hazard3 | 未開始 |
 | 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 未開始 |
@@ -95,7 +95,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 19 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
+`.claude/skills/` 放了 20 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
 
 **Claude 怎麼挑 skill**：每次對話開始時，Claude 只看得到每個 skill 開頭的 `description`，也就是一段「什麼情況用」的說明。判斷和手上的任務相關，才讀整份 `SKILL.md`。所以 `description` 要寫出會遇到的情況與錯誤訊息。這一節是給人看的索引：先用「依情況找 skill」查，再看每個 skill 的說明。
 
@@ -122,7 +122,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
-| 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta |
+| 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
+| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容 | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM | pdn-ir-drop | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
@@ -158,6 +159,7 @@ RTL：合成、lint ........................ rtl-synthesis-lint
 PnR 各步驟用的 SDC 與 corner .......... timing-constraints-sdc、multicorner-sta
 
 signoff 條件的數值從哪來 ............... signoff-criteria
+macro 的時序模型（.lib）從哪來 ......... openram-macro-characterization
 貫穿全程 ............................... librelane-run-debug（執行與除錯）
                                          signoff-checker-qualification（checker、golden、植入錯誤）
                                          flow-regression-reproducibility（regression、來源追溯）
@@ -174,6 +176,7 @@ signoff 條件的數值從哪來 ............... signoff-criteria
 | [signoff-checker-qualification](.claude/skills/signoff-checker-qualification/SKILL.md) | checker 與 golden 的設計，用植入錯誤證明 checker 抓得到 | 通用 |
 | [drv-timing-closure](.claude/skills/drv-timing-closure/SKILL.md) | 多 corner 的 setup／hold 與 slew／cap／fanout 收斂 | LibreLane／OpenROAD；cell 名稱是 sky130 |
 | [hard-macro-integration](.claude/skills/hard-macro-integration/SKILL.md) | SRAM 等 hard macro 的整合清單 | LibreLane；SRAM 細節是 sky130 |
+| [openram-macro-characterization](.claude/skills/openram-macro-characterization/SKILL.md) | 用 SPICE 實測 SRAM macro 的時序、產生每個 corner 的 .lib | 方法通用；ngspice、Magic 的細節是 sky130 |
 | [drc-signoff](.claude/skills/drc-signoff/SKILL.md) | DRC、GDS 輸出、XOR、macro 內部 DRC、金屬密度 | 多為 sky130；位置比對方法通用 |
 | [formal-equivalence-eqy](.claude/skills/formal-equivalence-eqy/SKILL.md) | EQY 等價證明、它會靜默略過的情況與補法 | Yosys／EQY |
 | [antenna-signoff](.claude/skills/antenna-signoff/SKILL.md) | antenna 檢查與修復，macro 沒有 antenna 資料時的處理 | OpenROAD；數值是 sky130 |
@@ -235,11 +238,25 @@ signoff 條件的數值從哪來 ............... signoff-criteria
 - **何時用**：把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
 - **重點**：
   - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、保守的 padded .lib、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
-  - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以只有 TT 時，產生一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
+  - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以只有 TT 時，產生一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）；要用 SPICE 實測取代時看 openram-macro-characterization。
   - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
   - 未用的 port 要 tie-off，checker 要檢查實際接的值。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
 - **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008。negative test：P08、P09、P14、P16–P20。
+
+#### openram-macro-characterization：SRAM macro 的 SPICE 特性化
+
+- **名詞**：特性化是用電路模擬量出 macro 的延遲、setup/hold、最小週期，寫成 STA 讀的 .lib；解析模型是 OpenRAM 不跑模擬、用公式估出來的 .lib。
+- **何時用**：macro 的 .lib 只是解析模型或只有一個 corner，要用 SPICE 實測取代；要產生每個 PVT 的 .lib；ngspice 讀大網表很慢、輸出 bus 節點時報 `bad v() syntax`；要從 GDS 萃取寄生電容；Phase 6 用 OpenRAM 自產 macro。
+- **重點**：
+  - 先判斷廠商 .lib 是不是解析模型：延遲表每一列相同、最小週期是延遲乘固定倍數。sky130 PDK 附的 SRAM .lib 全部是這種。
+  - 量 macro 隨附的網表（和 GDS 同一顆電路），不要用重新產生的電路代替。
+  - OpenRAM 自己的 SPICE 特性化有缺陷：setup/hold 只量輸入端那顆 DFF、只量第一個 corner、rise 抄 fall、pulse width 取週期一半、預設沒有走線 RC。
+  - 2 KB 完整網表在 ngspice 光讀檔就超過 35 分鐘，要修剪成只留第一／最後一列與行，並和完整網表比對一次；模擬步長也要用小步長驗證。
+  - OpenRAM SRAM 的 dout 在上升緣後約 1 ns 就被拉回 0，廠商 .lib 沒有這條時序弧，STA 不會檢查接收端的 hold；新 .lib 要加上。
+  - Magic 沒設 `PDK_ROOT` 時會 exit 0 但沒有輸出，要檢查輸出檔。
+- **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
+- **本 repo 實例**：ADR-0010、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/`（Phase 3.5 建立中）。
 
 #### drc-signoff：DRC、GDS 輸出、XOR
 
@@ -418,7 +435,7 @@ signoff 條件的數值從哪來 ............... signoff-criteria
 ### skill 的由來
 
 - 最初 11 個依使用者要求，對應重大流程任務（CTS、LVS、DRC、IR、timing、EQY……）。
-- `floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的。同一次審查建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7），會在進入那個 Phase 時建立。
+- `floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的。同一次審查建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7），會在進入那個 Phase 時建立；`openram-macro-characterization` 已在 Phase 3.5 開始時（2026-10-04）建立。
 - `signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多半沿用預設值、沒有推導，依使用者要求新增。
 - 最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增的：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review。Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件、CTS 與 resizer 餘量）寫回既有的 skill。
 

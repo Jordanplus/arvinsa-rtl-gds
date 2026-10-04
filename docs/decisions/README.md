@@ -11,3 +11,4 @@
 | [0007](0007-sram-padded-lib.md) | SRAM macro 用保守的 padded.lib 做 STA（9 corner 共用，ss／ff 加 derate） | 2026-10-03 |
 | [0008](0008-sram-antenna-lef.md) | SRAM 的 LEF 補上 antenna 資料（ANTENNAGATEAREA，由 macro 自己的 SPICE 算出） | 2026-10-03 |
 | [0009](0009-signoff-max-transition.md) | PnR 的 max fanout 用 8；signoff max transition 放寬到 1.0 ns 的決定已撤回（改用 placement 密度 55% 解決） | 2026-10-03 |
+| [0010](0010-sram-spice-characterization.md) | SRAM macro 的時序改用本機 ngspice 實測 PDK 附的網表（Phase 3.5，進行中；完成後取代 0007） | 2026-10-04 |
