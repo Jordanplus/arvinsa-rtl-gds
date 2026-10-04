@@ -27,3 +27,4 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
 |---|---|---|---|---|---|
 | 2026-10-03 | Phase 3 收尾 | Phase 2 延過來的來源追溯差點漏做 | 已驗證：沒有逐條對照上一階段的限制 | 規則 1 | `docs/phase_exit/phase3.md` |
 | 2026-10-04 | Phase 3 獨立審查 | 文件 6 個數字或事實寫錯；5 個 checker 漏洞 | 已驗證（重新核對證據與實驗） | 文件更正；漏洞列為已知限制 12–16，Phase 4 開頭修 | `docs/phase_exit/phase3.md`、`docs/notes/phase3_review/` |
+| 2026-10-04 | Phase 4 收尾 | 乾淨 checkout 的 `make regress` 跑了 4 次才 PASS：第 1 次 PASS 後依審查修 checker；第 2 次多執行緒繞線的中間數字不同；第 3 次 gate-level 模擬被 Spotlight 負載拖過牆鐘時限 | 已驗證：後兩個是前幾次乾淨 run 剛好沒遇到的不可重現與負載問題 | 結案證據只用最後一次（規則 2），前幾次寫明為什麼不算；改比對規則先問使用者（規則 6）；時程要預留至少兩次完整 regression | `docs/phase_exit/phase4.md` |
