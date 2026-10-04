@@ -137,8 +137,10 @@
         "max_ss_100C_1v60",
         "max_ff_n40C_1v95"
     ],
-    "//CTS_DELAY_BUFFER_DERATE_PCT": "0: CTS does not add delay buffers to make the sram0 clock as late as the flip-flop clocks. With LibreLane's default it put 7 clkbuf_16 in series on the sram0 clock branch (about 4 ns latency at ss_n40C), and both kinds of sram0 path got worse: dout0 is launched on the falling edge and captured by rdata_q on the next rising edge (half a period), and the sram0 inputs need 0.5 ns hold after its clock (padded.lib). Phase 4 harden-soc 2: setup -0.41 ns at min_ss_n40C on sram0 dout0, hold -0.09 ns at min_ff_n40C on sram0 din0; no other failing path.",
-    "CTS_DELAY_BUFFER_DERATE_PCT": 0,
+    "//PL_RESIZER_HOLD_SLACK_MARGIN": "0.3 ns (default 0.1): the post-CTS hold repair reached +0.100 ns, but after routing the hold on sram0 input pins (padded.lib hold 0.5 ns, sram0 clock delayed by CTS latency balancing) fell to -0.088 ns at min_ff_n40C (Phase 4 harden-soc 2 and 3). CTS_DELAY_BUFFER_DERATE_PCT 0 or 1 did not change the 10 delay buffers of that balancing (OpenROAD CTS-0036, single-step CTS re-run), so the margin is taken in the hold repair.",
+    "PL_RESIZER_HOLD_SLACK_MARGIN": 0.3,
+    "//PL_RESIZER_SETUP_SLACK_MARGIN": "0.6 ns (default 0.05): the resizer sees only the 9 corners of RSZ_CORNERS, where the sram0 dout0 half-cycle path had +0.09..+0.17 ns at ss_100C and needed no repair, while signoff at ss_n40C found -0.24..-0.41 ns. Asking for 0.6 ns at ss_100C makes the resizer work on that path (other paths have several ns).",
+    "PL_RESIZER_SETUP_SLACK_MARGIN": 0.6,
     "//STA_EXTRA_CORNER_TCL_FILE": "Derates sram0 in the ss and ff corners during STA (docs/decisions/0007-sram-padded-lib.md).",
     "STA_EXTRA_CORNER_TCL_FILE": "dir::pnr/soc_top/sta_extra_corner.tcl",
     "//PNR_SDC_FILE": "base.sdc with max fanout 8 for the PnR steps: antenna repair adds diodes after the resizer fixed fanout (a diode pin counts as a load; run soc_explore7: 10 loads + 1 diode). Signoff keeps 10. docs/decisions/0009-signoff-max-transition.md.",
