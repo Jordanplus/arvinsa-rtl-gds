@@ -30,12 +30,13 @@
 "design__max_cap_violation__count" = 0
 "design__max_fanout_violation__count" = 0
 # Drivers without extracted parasitics (STA report_parasitic_annotation), all of them driving no
-# routed wire. 134 = 91 CTS dummy-load (clkload*) outputs + 32 unused SRAM read-port outputs
+# routed wire. 133 = 90 CTS dummy-load (clkload*) outputs + 32 unused SRAM read-port outputs
 # (sram0/dout1[31:0], connected to the RTL wires unused_sram_dout1) + 11 unused tie-cell outputs
 # (11 conb_1: 10 use LO and leave HI open, 1 uses HI and leaves LO open). Checked in
 # runs/soc_top/*-openroad-stapostpnr/*/checks.rpt (same list in every corner). Any other
-# unannotated driver changes the count and FAILs.
-"timing__unannotated_net__count" = 134
+# unannotated driver changes the count and FAILs. (Phase 3: 134 with 91 dummy loads; the Phase 4
+# clock tree has one fewer, re-checked 2026-10-04.)
+"timing__unannotated_net__count" = 133
 "timing__unannotated_net_filtered__count" = 0
 
 # §7.2 also asked for "nom_tt setup worst slack >= 10 % of the clock period" (4 ns). Removed

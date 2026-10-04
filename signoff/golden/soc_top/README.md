@@ -7,17 +7,31 @@
 | 項目 | 值 |
 |---|---|
 | 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`，原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-03，Apple Silicon macOS（arm64） |
+| 日期／平台 | 2026-10-04（Phase 4），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 4 第 5 次 harden-soc，commit `e5b7a4b`（除了與舊 golden 比對以外，limits、`check_soc.py`、輸入一致、來源追溯全部 PASS） |
 | LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config.json` sha256 `abb94013cff62201db83745ec422a6896b7e78587f021c457da253a23e88008f`（golden 建立時）。之後只改過 `//` 註解（2026-10-03，更正 GRT-0229 的說明），現在是 `827b3add2a897461791ae85f354c970818e732d44b720c722d0aac3b1f94992d`；LibreLane 不讀 `//` 開頭的 key（`librelane/config/config.py` 第 1056 行；`resolved.json` 裡沒有這些 key） |
-| 本檔 sha256 | `1c017aa38985fbc1759a5795bc23e627cfc9b9f57d21cd04b0c91bafbbbe765d` |
+| flow 設定 | `pnr/soc_top/config.json` sha256 `3623be19eb2cfeb089690bb3abd3459652905f39516744684d4083b1b8d8b6d2` |
+| 本檔 sha256 | `5c7b95eb6ad7abf3e6d1d7b92c542629bf8d6d8680e9c931d8e7b8510f5fa351` |
+
+## 與 Phase 3 golden 的差異（逐項檢視過）
+
+- metrics 從 320 個變成 434 個：多的 114 個是新加的 6 個溫度反轉 corner（`*_ss_n40C_1v60`、`*_ff_100C_1v95`）各 19 個；沒有 metric 消失。
+- 127 個值改變，原因都是 Phase 4 的設定變更：
+  - 週期 40 → 42 ns（使用者決定，ADR-0004 補充），uncertainty 分成 setup／hold 並加 duty cycle 預算（`clock_uncertainty.sdc`），SRAM derate 1.575／0.665：最差 setup slack 3.553 → 0.313 ns（min_ss_n40C，SRAM 半週期路徑）。
+  - resizer hold 餘裕 0.1 → 0.3 ns：hold buffer 2468 → 3452，最差 hold 0.032 → 0.082 ns。
+  - PnR 的 max transition 0.70 ns（signoff 仍 0.75）、clock pin 的線切段（`CTS_CLK_MAX_WIRE_LENGTH` 150）：standard cell 27,932 → 29,352 顆，面積 227,740 → 237,644 µm²，clock buffer 551 → 531。
+  - IR 改一側供電模型：`ir__drop__worst` 0.306 → 4.04 mV（GND 抬升 4.03 mV）。
+  - unannotated driver 134 → 133（CTS dummy load 91 → 90，組成見 `signoff/limits/soc_top.toml`）。
+- 沒變的：Magic DRC 4,665,810（全部在 SRAM 框內、位置與 SRAM 單獨檢查相同）、KLayout DRC 0、LVS 0、XOR 0、最長線 619.53 µm、SRAM 位置。
 
 ## 可重現性
 
 | run | 與本檔比較 |
 |---|---|
-| 試跑 soc_explore10（與定案設定相同：密度 55% 由命令列 `-c` 給，signoff SDC 為 1.0 ns 版本，PnR 部分與定案相同） | 320 個 metrics 完全相同（兩種 signoff 門檻下 slew／fanout 違規都是 0，所以違規數也相同） |
-| 定案設定的第 1 次正式 run（`make harden-soc`，2026-10-03；`pnr/soc_top/README.md` 試跑紀錄的 harden-soc 2） | 本檔來源 |
+| Phase 4 第 5 次 harden-soc（commit `e5b7a4b`） | 本檔來源 |
+| ＜Phase 4 `make regress`（乾淨 checkout）＞ | ＜待填＞ |
+
+Phase 3 的 golden（320 個 metrics，2026-10-03）與它的可重現性紀錄見 git 歷史（commit `3b08251` 以前的本檔）。
 
 ## 何時更新
 
