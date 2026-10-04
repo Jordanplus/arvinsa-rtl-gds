@@ -23,8 +23,12 @@ description: 9 個 corner 的 STA 出現 setup／hold 違規，或 max slew／ma
 4. **實作與簽核分開的約束**：`PNR_SDC_FILE` 給 PnR（可比簽核更嚴），`SIGNOFF_SDC_FILE` 只給 `OpenROAD.STAPostPNR`。兩者都 `source $::env(SCRIPTS_DIR)/base.sdc` 再改一兩項。驗證方式：同一份版圖只重跑 STAPostPNR，確認只有預期的項目改變（setup／hold 數字不變）。
 5. **先找根因，再考慮放寬 signoff 上限**：殘留的少數 DRV 先查是不是繞路（`floorplan-congestion` 規則 4）。soc_top 曾經放寬到 1.0 ns（使用者決定），後來查到根因是 L 形轉角壅塞，把 `PL_TARGET_DENSITY_PCT` 從自動的 68% 降到 55% 後，0.75 ns 下全部乾淨，放寬就撤回了（ADR-0009）。真的要放寬時須由使用者決定並寫 ADR；依據可用 sky130_fd_sc_hd .lib（`default_max_transition` 1.5 ns、最嚴的 pin 1.0 ns），0.75 ns 來自 PDK 的 OpenLane 預設（`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 63 行）。
 6. **macro 時序**：padded.lib 給 9 corner 共用；derate 只在 STA 生效，PnR 用 TT 等級的數字收斂（ADR-0007）。SRAM 讀出是半週期路徑（下降緣送出、上升緣接收）。
-7. **hold**：hold buffer 約 2200–2500 顆，由 `PL_RESIZER_HOLD_SLACK_MARGIN` 決定。
+7. **hold**：hold buffer 的數量由 `PL_RESIZER_HOLD_SLACK_MARGIN` 決定。預設 0.1 ns 時約 2200–2500 顆。Phase 4 soc_top 改成 0.3 ns 後變成 3452 顆（+984），最差 hold +0.082 ns；改的原因是 SRAM 輸入腳的 hold 繞線後變負（`cts-clock-tree` 規則 10）。
 8. **corner 變多時，resizer 用的 corner 要另外控制**：resizer 讀 `RSZ_CORNERS`（不是 `PNR_CORNERS`）。soc_top 加溫度反轉 corner 後，resizer 看 15 個 corner 時 post-GRT 修復停不下來，改回原本 9 個就正常（`multicorner-sta` 規則 2、3）。只給 signoff 看的 corner，要確認 signoff 在那些 corner 的 DRV 也是 0。
+9. **resizer 看不到的 corner，用 PnR 的餘量補**（接規則 8）：soc_top 的 ss_n40C 只有 signoff 看。
+   - setup：`PL_RESIZER_SETUP_SLACK_MARGIN` 設 0.6 ns（預設 0.05）。SRAM 半週期路徑在 resizer 看得到的 ss_100C 有 +0.09～+0.17 ns，resizer 不會修；signoff 在 ss_n40C 卻是 −0.24～−0.41 ns。第 4 次 harden（40 ns）加了這個餘量仍差 0.42 ns，最後是週期改 42 ns 才通過（使用者決定）。
+   - slew：`pnr.sdc` 的 `set_max_transition` 設 0.70 ns，signoff 維持 0.75 ns。ss_n40C 的 transition 比 ss_100C 慢約 25%，第 4 次 harden 有一條 data net 在那裡到 0.766 ns。
+   - 這是補償，不是證明：設計變大或時序更緊時可能不夠（`docs/phase_exit/phase4.md` 已知限制 4）。數字見 `pnr/soc_top/README.md` 的設定表。
 
 ## 退回過的做法
 
@@ -62,3 +66,4 @@ P01 setup uncertainty 30 ns → `Checker.SetupViolations`；P02 hold uncertainty
 | 2026-10-03 | soc_top 正式 run 1（+ `pnr.sdc` fanout 8） | signoff 上限 1.0 ns 下仍有 ss slew 1.42 ns；每換一個設定，都是不同的少數幾條線變差 | 已驗證：最差兩條線大幅繞路（端點距離約 117 µm，繞線 353 µm，往東繞到 SRAM 下方；另一條 636 µm），都在 L 形 logic 區的轉角附近。推測：轉角繞線壅塞（global placement 目標密度 0.68，logic 區整體只用了約 48%） | 試降低 `PL_TARGET_DENSITY_PCT`（soc_explore10／11） | `runs/soc_top/final/def/soc_top.def` NETS `_03575_`、`net750` |
 | 2026-10-03 | soc_explore10／11 | `PL_TARGET_DENSITY_PCT` 55／50 後 9 corner 的 slew／cap／fanout 全 0，0.75 ns 下也是 0 | 已驗證（兩組都是 0） | 採用 55，撤回 1.0 ns 放寬 | `runs/sdc075_10`、ADR-0009 |
 | 2026-10-03 | `make phase3` 第一次 | `RepairDesignPostGRT` 隨機 GRT-0229（同一份輸入 2/4） | 已驗證隨機；機制推測見 `librelane-run-debug` | 更正「退回過的做法」表中 explore3 的歸因 | `pnr/soc_top/README.md` 已知限制 4 |
+| 2026-10-04 | Phase 4 第 4、5 次 harden-soc | 第 4 次（40 ns，hold 餘裕 0.3、setup 餘裕 0.6）：hold 通過，ss_n40C 的 setup 仍差 0.42 ns、8 個 max slew 違規 | 推測：resizer 只看 9 個 corner，看不到 ss_n40C（沒有保留 resizer 的 log 可以確認） | 第 5 次：42 ns（使用者決定）、PnR max transition 0.70 ns、clock pin 線切段，15 個 corner 全部 PASS（規則 7、9） | `docs/phase_exit/phase4.md` 收斂過程 |

@@ -5,7 +5,7 @@ description: Clock tree synthesis（CTS）相關問題：clock buffer 的 fanout
 
 # Clock tree（CTS）
 
-資料路徑的 DRV 看 `drv-timing-closure`。目前經驗較少，邊用邊補。本 repo 實例：`pnr/picorv32_core/README.md`（試跑 #8、#9）、`pnr/soc_top/pin_order.cfg`。
+資料路徑的 DRV 看 `drv-timing-closure`。目前經驗較少，邊用邊補。本 repo 實例：`pnr/picorv32_core/README.md`（試跑 #8、#9）、`pnr/soc_top/pin_order.cfg`、`pnr/soc_top/README.md` 的設定表（Phase 4）。
 
 ## 規則（已驗證）
 
@@ -18,10 +18,17 @@ description: Clock tree synthesis（CTS）相關問題：clock buffer 的 fanout
 7. **`CTS_APPLY_NDR` 的 `half`**：只在 clock tree 的前半層套用 non-default rule（OpenROAD `src/cts/README.md`），不是「leaf 以外全部」。sky130 的 CTS NDR 是 2 倍間距，線寬沒有加大。
 8. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**：`resolved.json` 為 None。soc_top 的 clock 繞線段：met1 9750、met2 2901、met3 90、met4 7。要讓 clock 走粗金屬，必須在專案 config 明確設定。
 9. **duty cycle**：clock tree 本身造成的 rise／fall 延遲差（nom_ss 下 SRAM `clk0` 約 0.30 ns），STA 已經算到；clock 來源本身的 duty 偏差 STA 不知道，要靠約束（`signoff-criteria`）。
+10. **CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚**（latency 對齊）：soc_top 的 `sram0/clk0` 前面被插了 10 顆 delay buffer（`delaybuf_*`）。
+    - 後果一，SRAM 輸入腳的 hold 變差：padded.lib 要求 0.5 ns。post-CTS 的 hold 修到 +0.100 ns，繞線後在 min_ff_n40C 變成 −0.088 ns（Phase 4 第 2、3 次 harden-soc）。後來用 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 補過去（`drv-timing-closure`）。
+    - 後果二，SRAM 下降緣送出的半週期路徑也比較吃緊。
+    - **`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步**：設 0 或 1，結果與預設完全相同，仍是 10 顆。目前沒有找到可以關掉的設定（`docs/phase_exit/phase4.md` 已知限制 5）。
+11. **clock 輸入 pin 到 clock tree 根部的線**（接規則 4）：`CTS_CLK_MAX_WIRE_LENGTH` 預設 0，表示依 slew 算出來的長度，約 3.5 mm，所以 360 µm 的線不會被切段。pin 的 driver 是 LibreLane 假設的 `inv_2`（`SYNTH_CLK_DRIVING_CELL` 預設），max_ss_n40C 的 slew 0.767 ns，超過 0.75 ns（Phase 4 第 4 次 harden-soc）。
+    - 設 150 µm 後，CTS（LibreLane `cts.tcl` 的 `repair_clock_nets`）會把這段線切開加 buffer。
+    - 第 5 次 harden 同時改了週期與 max transition，15 個 corner 全部通過；這一項的效果沒有單獨實驗。
 
 ## 待補
 
-macro clock pin 的插入延遲平衡（soc_top 有 `delaybuf_0_clk`）、skew 在 golden 中的誤差範圍、25 ns 目標下的 CTS 設定。
+怎麼關掉或縮短 macro 的 latency 對齊（規則 10；`CTS_DELAY_BUFFER_DERATE_PCT` 無效）；週期縮短時的 CTS 設定（Phase 4 的 25 ns 只在同一份版圖重跑 STA，沒有重做 CTS）。skew 在 golden 比對中的誤差是 ±0.01 ns，實測差異 ≤ 0.0002 ns（`signoff-checker-qualification` 規則 5）。
 
 ## 用完後 / 經驗紀錄
 
@@ -31,3 +38,5 @@ macro clock pin 的插入延遲平衡（soc_top 有 `delaybuf_0_clk`）、skew �
 |---|---|---|---|---|---|
 | 2026-10-03 | soc_explore2 | `clk` port slew 0.919 ns（max_ss） | 已驗證：pin 在左下角，到 `clkbuf_regs_0_clk` 約 660 µm | pin 移到下邊中段 | soc_explore4 無此違規 |
 | 2026-10-03 | signoff 條件調查（核對 agent） | skew metric 含 uncertainty 與 derate；NDR half 的意義；`RT_CLOCK_MIN_LAYER` 沒有生效 | 已驗證（報告數字、`resolved.json`、DEF 統計） | 規則 6–9 | `docs/notes/signoff_criteria_soc_top.md` |
+| 2026-10-04 | Phase 4 第 2、3 次 harden-soc | SRAM 輸入腳 hold 在 min_ff_n40C −0.088 ns；`CTS_DELAY_BUFFER_DERATE_PCT` 0 與 1 結果都與預設相同 | 已驗證：CTS 對齊 `sram0` 與 flip-flop 的 latency，插 10 顆 delay buffer | resizer hold 餘裕 0.3 ns；規則 10；列為已知限制 | `pnr/soc_top/README.md` 設定表 |
+| 2026-10-04 | Phase 4 第 4 次 harden-soc | `clk` pin 到第一顆 clock buffer 約 360 µm，max_ss_n40C slew 0.767 ns | 已驗證：預設的切段長度約 3.5 mm，這段線沒有被切 | `CTS_CLK_MAX_WIRE_LENGTH` 150（規則 11） | `pnr/soc_top/config.json` 註解 |
