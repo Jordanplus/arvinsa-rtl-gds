@@ -193,6 +193,14 @@ Exit criteria 出處：`project-plan.md` §8 Phase 3。原文為：GDS 含 macro
 
     12–16 是獨立審查找到的 checker 漏洞，都不影響本次結果（理由見各點）。修正會改到 `make phase3` 用的程式，依規則要在乾淨 checkout 重跑一次，所以留到 Phase 4 開頭一起做。
 
+## 使用者決定（2026-10-04）
+
+- checker 漏洞（已知限制 12–16）：Phase 4 開頭一起修。
+- IR drop 上限：90 mV 改成 20 mV，與 ss corner 的 1.60 V 和 Caravel 最低供電 1.62 V 一致。
+- SRAM 的 instance derate：1.5／0.7 改成 1.575／0.665，把 ±5% 的 OCV 乘進去。
+- 「nom_tt setup ≥ 週期 10%」：降為只報告、不判 FAIL；時序餘量改放在最慢 corner 的 uncertainty，並列出成分。
+- 以上門檻都在 Phase 4 和漏洞修正一起實作，再在乾淨 checkout 完整跑一次。細節在 `docs/notes/signoff_criteria_soc_top.md`。
+
 ## 獨立審查（2026-10-04）
 
 結案前請兩個沒參與實作的 agent 反向檢查：
