@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-04）：Phase 0–3 完成，下一步 Phase 4（Phase 3.5 可選）。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-04）：Phase 0–4 完成，下一步 Phase 5（Phase 3.5 可選）。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -20,6 +20,13 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
   - `make phase3` 在乾淨 checkout 從頭到尾跑完 PASS。這是第四次：第一次遇到 OpenROAD 的隨機錯誤，用有上限的重試繞過；第二、三次分別是少宣告 firmware 依賴、一個植入案例編譯不過，都已修正。
   - signoff 條件本身的缺口（clock duty cycle、IR 預算等）列為 Phase 4 待辦。
   - 紀錄見 [docs/phase_exit/phase3.md](docs/phase_exit/phase3.md)。
+- Phase 4：signoff 收斂與一鍵 regression。
+  - soc_top 收斂在 42 ns：25 ns、40 ns 在加嚴的條件下做不到，使用者決定改 42 ns；SRAM 的時序仍是假設值（ADR-0007）。
+  - 15 個 corner（加上溫度反轉）的 setup／hold 與 slew／cap 全部 PASS；IR 的 VDD 降壓加 GND 抬升 8.07 mV（上限 20 mV）。
+  - EQY 另外比對 flip-flop 種類與 clock 接線；帶電源網表的 gate-level 模擬 15/15 PASS；補 2 支 directed 測試。
+  - `make regress` 一個指令跑完 Phase 1–4 的全部檢查。第 4 次在乾淨 checkout 25/25 PASS（123 分鐘），163 個植入錯誤全部在預期的 checker FAIL。前 3 次重跑的原因：依獨立審查修改 checker、多執行緒繞線的中間數字不同、gate-level 模擬的時限太緊。
+  - 重現性只在同一台機器驗證過。
+  - 紀錄見 [docs/phase_exit/phase4.md](docs/phase_exit/phase4.md)。
 
 ## 快速開始
 
@@ -30,7 +37,7 @@ make smoke         # 環境檢查、Python 名稱檢查、lint、firmware、RTL 
 make phase1        # Phase 1 完整檢查（約 4 分鐘）
 make phase2        # Phase 2 完整檢查：LibreLane harden + GL regression（約 24 分鐘，需要 flow 環境）
 make phase3        # Phase 3 完整檢查：SoC 與 core 的 harden、EQY、GL 模擬與全部植入錯誤（約 91 分鐘，需要 flow 環境）
-make regress       # 全部檢查一次跑完（Phase 1–4，依序執行、第一個 FAIL 就停；約 3 小時，需要 flow 環境）
+make regress       # 全部檢查一次跑完（Phase 1–4，依序執行、第一個 FAIL 就停；約 2–2.5 小時，需要 flow 環境）
 ```
 
 `make regress` 的結果在 `runs/regress/`：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
@@ -70,7 +77,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 完成（2026-10-03） |
 | 3 | 整合預建 SRAM macro | 完成（2026-10-04） |
 | 3.5 | （可選）用 OpenRAM 做 SPICE characterization，校正 SRAM 時序模型 | 未開始 |
-| 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 未開始 |
+| 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
 | 5 | 換成 Hazard3 | 未開始 |
 | 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 未開始 |
 | 7 | （可選）chip-level 整合，例如 ChipFoundry Caravel | 未開始 |

@@ -25,6 +25,8 @@
 | 正式 run 第 2 次（`make phase2`） | 定案設定 | 254 個相同，71 個有極小差異（見下）。當時規則是全部逐項相同，所以這次 `make phase2` 在 harden-core 的 golden 比對 FAIL，後面的步驟沒有執行；加入誤差規則後重新判定為 PASS |
 | 正式 run 第 3 次（`make harden-core`） | 定案設定 | 325 個 metrics 完全相同 |
 | 正式 run 第 4 次（最後一次 `make phase2`） | 定案設定（說明文字更新後） | 325 個 metrics 完全相同 |
+| Phase 4 `make regress` 第 1 次（乾淨 checkout，`72e5433`） | 定案設定 | 254 個相同，71 個在誤差內 |
+| Phase 4 `make regress` 第 4 次（乾淨 checkout，`b7860b7`） | 定案設定 | 325 個 metrics 完全相同 |
 
 **detailed routing 不是每次都一樣。** 上表 5 次 run（試跑 #9 多一項沒有作用的設定，其餘設定完全相同）中，只有第 2 次不同。第 2 次與第 3 次（`resolved.json` 完全相同）逐步比對中間產出的 DEF：從 floorplan 到 global routing、post-GRT repair（第 13–41 步）全部逐 byte 相同，第一個不同的是 `OpenROAD.DetailedRouting`（第 45 步，多執行緒）。第 2 次與試跑 #9 比對的結果也一樣。之後算出來的 metrics 因此有極小差異（第 1 次 vs 第 2 次）：
 
