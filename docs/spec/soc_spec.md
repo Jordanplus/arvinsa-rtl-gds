@@ -9,7 +9,7 @@
 
 ## 1. 共通規則
 
-- Repo 根目錄：`/Users/mcgradymac/claude_prjs/arvinsa-rtl-gds`。所有 script 從 repo 根目錄執行，路徑一律相對於 repo 根目錄。
+- Repo 根目錄：clone 下來的 `arvinsa-rtl-gds/` 目錄。所有 script 從 repo 根目錄執行，路徑一律相對於 repo 根目錄。
 - **唯讀**：`third_party/`（git submodule）、`ip/sram/*/upstream/`、`rtl/include/memmap.vh`、`env/versions.mk`、本文件。
 - 不得 `git commit`、不得 `git push`、不得改 submodule commit。
 - GNU make 版本是 **3.81**（macOS 內建）：不可用 `.SHELLFLAGS`、`.ONESHELL`、`$(file ...)`、`undefine`。Makefile recipe 不用 pipe；需要嚴格錯誤處理的邏輯寫在 bash（`set -euo pipefail`）或 Python script 裡。
