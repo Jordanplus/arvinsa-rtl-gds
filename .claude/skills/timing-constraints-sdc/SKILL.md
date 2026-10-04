@@ -27,13 +27,17 @@ description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path�
     - `set_max_transition -clock_path` 在 propagated clock 下沒有作用。
     - 同名 clock 用 `create_clock` 重新定義之後，之前設的 inter-clock uncertainty 仍然有效。要改約束時，重新產生整份 SDC，不要逐行修補。
 
+11. **PnR 與 signoff 共用的約束放一個檔，兩份 SDC 都 source 它**（soc_top 的 `clock_uncertainty.sdc`）：`source [file join [file dirname [info script]] <檔名>]`；OpenSTA 的 `read_sdc` 下 `[info script]` 是 SDC 自己的路徑（實測）。SDC 在全域範圍執行，裡面設的變數 STA hook 也讀得到（`multicorner-sta` 規則 4）。
+12. **`write_sdc` 會保留指定邊緣的 uncertainty**（`-fall_from ... -rise_to ... -setup`，實測），所以 PnR 後段讀的是寫回的 SDC 時仍有效。
+13. **複製 SDC 做植入時要先把 `source` 展開**：`[info script]` 會變成複本所在的目錄，找不到被 source 的檔（`neg_pnr.py` 的 `flat_sdc()`）。改 clock 波形時編輯原本的 `create_clock` 那一行，不要在檔尾再定義一次同名 clock。
+
 ## negative test
 
-P01／P02／P03（在 run 實際用的 signoff SDC 後面追加 uncertainty 或 max transition；直接改 config 變數會被後讀的 SDC 蓋掉）；P13（signoff SDC 把 base.sdc 展開後刪掉 `set_output_delay` 那一行 → check_setup 在 9 個 corner 報 42 個未受約束的輸出 → `sta_setup` FAIL；不用 unset 的原因見規則 6）。
+P01／P02／P03（在 run 實際用的 signoff SDC 後面追加 uncertainty 或 max transition；直接改 config 變數會被後讀的 SDC 蓋掉）；P13（signoff SDC 展開後刪掉 `set_output_delay` 那一行 → check_setup 在每個 corner 報 42 個未受約束的輸出 → `check_soc.py` 的 `sta_setup` 是唯一 FAIL 的列；不用 unset 的原因見規則 6）；P22／P23（clock 波形 {0 10}、週期 29 ns → `pulse_width` FAIL）；P24／P25（duty cycle 60%、duty 預算改 60% → setup FAIL，最差路徑從 sram0 下降緣送出）。
 
 ## 待補
 
-例外路徑（`set_false_path`、`set_multicycle_path`）的使用準則；非同步 reset 的處理；Phase 7 Caravel／Wishbone 介面的 IO 約束（clock 來自 Caravel 的 `wb_clk_i`／`user_clock2`，duty cycle 待查）。clock uncertainty、derate、IR／SI margin 這些數字怎麼決定，放在 `signoff-criteria`。
+例外路徑（`set_false_path`、`set_multicycle_path`）的使用準則；非同步 reset 的處理；Phase 7 Caravel／Wishbone 介面的 IO 約束（clock 來自 Caravel 的 `wb_clk_i`／`user_clock2`；jitter 與 duty cycle 確定後替換 `clock_uncertainty.sdc` 開頭的假設值）。clock uncertainty、derate、IR／SI margin 這些數字怎麼決定，放在 `signoff-criteria`。
 
 ## 用完後 / 經驗紀錄
 

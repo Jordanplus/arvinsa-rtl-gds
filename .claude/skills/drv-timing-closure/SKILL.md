@@ -24,6 +24,7 @@ description: 9 個 corner 的 STA 出現 setup／hold 違規，或 max slew／ma
 5. **先找根因，再考慮放寬 signoff 上限**：殘留的少數 DRV 先查是不是繞路（`floorplan-congestion` 規則 4）。soc_top 曾經放寬到 1.0 ns（使用者決定），後來查到根因是 L 形轉角壅塞，把 `PL_TARGET_DENSITY_PCT` 從自動的 68% 降到 55% 後，0.75 ns 下全部乾淨，放寬就撤回了（ADR-0009）。真的要放寬時須由使用者決定並寫 ADR；依據可用 sky130_fd_sc_hd .lib（`default_max_transition` 1.5 ns、最嚴的 pin 1.0 ns），0.75 ns 來自 PDK 的 OpenLane 預設（`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 63 行）。
 6. **macro 時序**：padded.lib 給 9 corner 共用；derate 只在 STA 生效，PnR 用 TT 等級的數字收斂（ADR-0007）。SRAM 讀出是半週期路徑（下降緣送出、上升緣接收）。
 7. **hold**：hold buffer 約 2200–2500 顆，由 `PL_RESIZER_HOLD_SLACK_MARGIN` 決定。
+8. **corner 變多時，resizer 用的 corner 要另外控制**：resizer 讀 `RSZ_CORNERS`（不是 `PNR_CORNERS`）。soc_top 加溫度反轉 corner 後，resizer 看 15 個 corner 時 post-GRT 修復停不下來，改回原本 9 個就正常（`multicorner-sta` 規則 2、3）。只給 signoff 看的 corner，要確認 signoff 在那些 corner 的 DRV 也是 0。
 
 ## 退回過的做法
 

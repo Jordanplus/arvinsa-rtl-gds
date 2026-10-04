@@ -83,7 +83,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 15 個 Claude Code skill，每個對應 RTL-to-GDS 流程中一項重大任務。skill 是一份工作說明（`SKILL.md`）：在這個 repo 裡用 Claude Code 做到相關任務時會自動載入，照裡面的步驟、PASS 條件與已知陷阱做事。
+`.claude/skills/` 放了 19 個 Claude Code skill，每個對應 RTL-to-GDS 流程中一項重大任務。skill 是一份工作說明（`SKILL.md`）：在這個 repo 裡用 Claude Code 做到相關任務時會自動載入，照裡面的步驟、PASS 條件與已知陷阱做事。
 
 **經驗怎麼累積**：每個 `SKILL.md` 的結尾都有「經驗紀錄」表。每次做完該任務，把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。同一個現象出現兩次以上，或根因已經用實驗確認，才從紀錄搬進規則本文。這顆設計的具體數字（設定理由、試跑紀錄）留在 repo 文件，skill 只放可以帶到下一顆設計的規則與指向 repo 文件的連結。規則見 [CLAUDE.md](CLAUDE.md)。Phase 0 的環境建置不做成 skill。
 
@@ -104,8 +104,12 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | [timing-constraints-sdc](.claude/skills/timing-constraints-sdc/SKILL.md) | SDC 時序約束、PnR 與 signoff 約束分開、未受約束路徑的檢查 | 2 |
 | [rtl-synthesis-lint](.claude/skills/rtl-synthesis-lint/SKILL.md) | Yosys 合成設定、狀態機重新編碼、lint、latch、邏輯深度 | 3 |
 | [signoff-criteria](.claude/skills/signoff-criteria/SKILL.md) | signoff 條件的數值怎麼推導：uncertainty 成分、duty cycle、derate、corner、IR／EM／SI 預算、PDK 規則，以及工具沒分析的項目怎麼補 | 1 |
+| [flow-regression-reproducibility](.claude/skills/flow-regression-reproducibility/SKILL.md) | 一鍵 regression、乾淨 checkout 驗證、來源追溯（commit、LibreLane、PDK 內容）、下游拒絕過期的 run、長 run 期間怎麼開發 | 1 |
+| [multicorner-sta](.claude/skills/multicorner-sta/SKILL.md) | 增減 STA corner、每個 corner 的 hook 與報告、只重跑 STA 的 what-if、從路徑推最小週期、corner 變多時 PnR 變慢 | 2 |
+| [dv-directed-tests](.claude/skills/dv-directed-tests/SKILL.md) | 從漏掉的植入錯誤找出沒被測到的功能，寫 directed firmware 測試補上，再用植入錯誤證明抓得到 | 2 |
+| [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：exit criteria 與證據、與計畫不同的地方、已知限制、獨立審查、使用者決定 | 1 |
 
-優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。後 3 個是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。`signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多數沿用預設值、沒有推導，依使用者要求新增。
+優先 1 經驗最多、最常重用；優先 3 目前經驗較少，內容會在之後的 Phase 補齊。`floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的；審查同時建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7）會在進入那個 Phase 時建立。`signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多數沿用預設值、沒有推導，依使用者要求新增。最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review；Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件）寫回既有的 skill。
 
 ### librelane-run-debug：LibreLane 執行與除錯
 
@@ -198,6 +202,30 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **何時用**：Yosys 合成設定、狀態機重新編碼、被常數化的暫存器、lint 警告、latch、為時序目標調整合成。
 - **內容**：harden 參數與 SoC instance 一致的檢查；LibreLane 合成固定跑 `fsm` 重新編碼（影響 RTL 對網表的 formal）；X 語意下的常數化；LibreLane lint 警告的來源與鎖定方式；待補 25 ns 的合成策略。
 
+
+### flow-regression-reproducibility：一鍵 regression、可重現性與來源追溯
+
+- **何時用**：建立或執行 `make regress`／`make phase<N>`、在乾淨 checkout 驗證、檢查一個 run 是哪個 commit 與哪版工具產生的、讓下游步驟拒絕過期或沒 PASS 的 run、長時間 run 期間繼續開發。
+- **內容**：regression 的結構（依序、第一個 FAIL 就停、log／摘要／JUnit、最後再確認 commit 沒變）；來源追溯要涵蓋 LibreLane clone 的內容與 PDK 檔案內容（參考值從下載的壓縮檔算）；下游的 run 檢查與它的 negative test；用另一個 worktree 開發；拿舊 run 測新 checker 的方法與限制；golden 與 commit 的先後。
+- **實例**：`scripts/regress.py`、`signoff/scripts/provenance.py`、`run_guard.py`、`neg_provenance.py`、`neg_run_guard.py`。
+
+### multicorner-sta：多 corner STA
+
+- **何時用**：增減 PVT／RC corner、在 LibreLane 設 corner 與每個 corner 的 hook、只重跑 STA 做 what-if（週期、duty cycle、uncertainty、derate）、推最小週期、corner 變多後 PnR 變慢。
+- **內容**：設 `LIB` 會取代 LibreLane 的整組預設；resizer／CTS／其他 step 各自讀哪個 corner 變數；15 個 corner 讓 post-GRT 修復停不下來的實例與處理；hook 裡加 derate 與輸出報告；兩種 what-if 的做法；半週期路徑的最小週期算法。
+- **實例**：`pnr/soc_top/config.json`、`sta_extra_corner.tcl`、`neg_pnr.py`（P01–P04、P22–P25）。
+
+### dv-directed-tests：directed 測試補驗證缺口
+
+- **何時用**：植入錯誤沒被抓到、或 formal 範圍沒涵蓋某段時，找出沒被用到的功能並補 directed firmware 測試。
+- **內容**：缺口從漏掉的植入錯誤找；先讀 RTL 確認實際行為；編譯器會改寫非對齊存取（要用 inline assembly 並看反組譯）；寫明測不到的部分；新測試要登記的地方；在網表植入對應錯誤證明新測試抓得到。
+- **實例**：`fw/tests/counters/`、`fw/tests/buserr/`、`dv/gl_soc/neg_gl_soc.py`。
+
+### phase-exit-review：Phase exit review 與獨立審查
+
+- **何時用**：一個 Phase 收尾。
+- **內容**：exit criteria 加上一階段帶過來的項目；證據只用乾淨 checkout 的 run；數字逐一對證據、注意容易誤讀的彙總 metric；章節結構；兩個獨立審查 agent（文件核對、找 checker 漏洞）；使用者決定的記錄；收尾的 README、記憶、skill 回寫與推送規則。
+- **實例**：`docs/phase_exit/phase*.md`。
 ## 授權
 
 本 repo 的內容以 [Apache License 2.0](LICENSE) 授權。

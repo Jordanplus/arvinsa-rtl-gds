@@ -14,9 +14,11 @@ antenna 看 `antenna-signoff`；LVS 看 `lvs-signoff`。本 repo 實例：`pnr/s
    - 完整 GDS（預設）在 macro 外是 0。所以「abstract DRC = 0」（`project-plan.md` §6.3 原案）的前提不成立，改用完整 GDS。
 2. **macro 內部 DRC**：
    - 標準規則對 SRAM bitcell 會報大量違規（2 KB SRAM 約 466 萬個，bitcell 用 SRAM 專用規則）。
-   - 設 `ERROR_ON_MAGIC_DRC=false`，由自寫 checker 取代：macro 外框外 = 0；框內只能出現 macro 單獨檢查時也有的規則種類；總數由 golden 鎖定（`magic__drc_error__count`）。
-   - **只比規則種類不夠**：外框內多一個已有規則的新錯誤（例如頂層 PDN 與 macro 圖形部分重疊，Magic 報的 `can't abut or partially overlap` 正好在 baseline 裡），checker 照樣 PASS，只剩 golden 總數擋，而改設計時 golden 一定重建。應改成比位置：外框內每個錯誤框都要和 macro 單獨報告（平移到 instance 位置）中同規則的框相同、被包含或相接。soc_top 這樣比過：4,665,810 個全部對得回，0 個無法解釋（Phase 3 獨立審查）。KLayout 不能補位：sky130 deck 對 `areaid:ce` 內的形狀有 22 處豁免。
-   - macro 單獨檢查與放進設計後檢查，同一個錯誤被切成不同的框（5,579,161 vs 4,665,810，30 種規則相同），不能逐框比對。
+   - 設 `ERROR_ON_MAGIC_DRC=false`，由自寫 checker 取代（`check_soc.py` magic_drc）：macro 外框外 = 0；框內**每一個**錯誤框都必須落在 macro 單獨檢查的報告中、**同規則**的框的聯集內（報告平移到 instance 位置，每個框放大容許值 δ）。
+   - **只比規則種類不夠**（Phase 3 的做法）：外框內多一個已有規則的新錯誤（例如頂層 PDN 與 macro 圖形部分重疊，Magic 報的 `can't abut or partially overlap` 正好在 baseline 裡），checker 照樣 PASS，只剩 golden 總數擋，而改設計時 golden 一定重建。KLayout 不能補位：sky130 deck 對 `areaid:ce` 內的形狀有 22 處豁免。
+   - macro 單獨檢查與放進設計後檢查，同一個錯誤被切成不同的框（5,579,161 vs 4,665,810，30 種規則相同），所以比「面積」不比「框」：先找完全相同的框，剩下的看是否被同規則框的聯集蓋住。
+   - **δ 用一個已知乾淨的 run 量出來**：Phase 3 的 run 中 4,651,644 個框完全相同、13,935 個在聯集內、231 個（li.5、diff/tap.9）只多出最多 85 nm（同一個錯誤畫得比較長），δ 取 100 nm。
+   - **macro 單獨的報告每次重新產生**（`pnr/soc_top/sram_drc_alone.py`：用 run 自己的 Magic.DRC 設定，只把 `DESIGN_NAME` 換成 macro，約 2.5 分鐘、寫出約 1.5 GB），並與審查過的規則數量（`signoff/waivers/`）比對。兩次產生的報告逐 byte 相同（Phase 4 實測），所以可以當固定參考。位置比對約 20 秒（兩份報告共約 450 MB）。
 3. **GDS 輸出**：Magic 的 GDS 可能多出 top cell（soc_top：13 個；SRAM 子 cell 改名成 `T2_*` 放進設計，原名的 160 個又沒有引用地寫出一次），`KLayout.Render` 因此失敗 → 設 `PRIMARY_GDSII_STREAMOUT_TOOL=klayout`。確認方法：從 top cell 走得到所有 macro cell（自寫 GDS 結構解析），且 KLayout XOR = 0。
 4. **代價**：完整 GDS DRC 約 4.5 分鐘；`drc.magic.rpt` 約 190 MB、`drc.magic.lyrdb` 約 1 GB；解析報告 7 秒。
 5. **兩套 deck 涵蓋的範圍不同**：
@@ -50,6 +52,8 @@ antenna 看 `antenna-signoff`；LVS 看 `lvs-signoff`。本 repo 實例：`pnr/s
 
 ## negative test（`pnr/soc_top/neg_pnr.py`）
 
+- **補比對粒度的漏洞時，植入的錯誤要選「舊 checker 會漏」的那一種**：規則必須是 macro 單獨時也有的，否則只比種類的舊 checker 也會抓到，等於沒測到漏洞。Magic 把整顆 SRAM 範圍當 core 區：在空白處畫一條 0.05 µm 寬的 li1 線，報的是 `li.c1`（core 區 li 寬度），SRAM 單獨時沒有這個規則；改成兩塊相距 0.1 µm 的 0.5 µm li1 方塊，報 `li.3`（li 間距），SRAM 單獨時也有（P21）。植入點要先用 KLayout 確認附近沒有 li1／licon／mcon／diff／poly／tap。
+
 P10：GDS 在 (2, 2) µm（SRAM 外框外）加一條 0.05 µm 寬的 met2，同一份 GDS 分別重跑：
 - `KLayout.DRC` → `Checker.KLayoutDRC` FAIL。
 - `Magic.DRC`（完整 GDS，約 4 分鐘）→ `check_soc.py magic_drc` FAIL：框外 1 個違規，框內 4,665,810 不變。
@@ -71,3 +75,5 @@ P11：只改 KLayout 那份 GDS → `Checker.XOR` FAIL。
 | 2026-10-03 | neg-pnr P10 | 說明寫 Magic 與 KLayout DRC 都會 FAIL，程式只斷言 KLayout；自寫的 magic_drc checker 沒有被植入錯誤測過 | 已驗證（讀程式） | 補 Magic.DRC 單步重跑；結果 `[FAIL] magic_drc: 1 violations outside the SRAM outline` | `runs/neg_pnr/P10/run.log` |
 | 2026-10-03 | signoff 條件調查（核對 agent） | KLayout deck 不含 LU／implant，傳參變數名對不上；81/14 只在 Magic GDS；cf-precheck 只檢查 density 上限 | 已驗證（讀 deck、PDK 文件、cf-precheck 原始碼） | 規則 5–8、density 一節 | `docs/notes/signoff_criteria_soc_top.md` |
 | 2026-10-04 | Phase 3 獨立審查（找 checker 漏洞） | 假報告在 SRAM 外框內多加一個 `li.1` 錯誤，`check_soc.py magic_drc` 仍 PASS | 已驗證（審查 agent 實驗）：checker 只比規則種類 | 規則 2 補「比位置」；位置比對證實本次 0 個無法解釋；修正與 P10b（外框內植入）列入 Phase 4 | `docs/phase_exit/phase3.md` 已知限制 14 |
+| 2026-10-04 | Phase 4 位置比對 | 嚴格的「被同規則框聯集蓋住」在已知乾淨的 run 上有 231 個框不通過 | 已驗證：同一個錯誤在 soc_top 裡畫得比較長，最多 85 nm | δ = 100 nm（規則 2） | `pnr/soc_top/check_soc.py` `DRC_POS_TOL` |
+| 2026-10-04 | neg-pnr P21 第一版 | 植入的 li1 細線被報成 `li.c1`，SRAM 單獨時沒有這個規則 | 已驗證：SRAM 範圍在 Magic 是 core 區 | 改兩塊方塊 → `li.3`（negative test 一節） | `runs/neg_pnr_dev/P21/run.log`（本機） |

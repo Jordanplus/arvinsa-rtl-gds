@@ -37,6 +37,9 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗要找原因、從�
 | `pkill -f <字串>` 會誤殺命令字串含相同字的其他程序 | 用完整、唯一的字串（例如 `run-tag soc_explore8`） | 本專案 Phase 3 eqyB 被誤殺 |
 | `OpenROAD.RepairDesignPostGRT` 修復後的 global routing 隨機中止：`[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200`；位置是 clk pin 所在的 GCell | 已驗證是隨機的（同一份輸入 2/4 中止，修復結果 4 次相同）；`pnr/librelane_flow.sh` 只對這個訊息從該步接續，最多 3 次 | `make phase3` 第一次（worktree）、單步重跑 r1–r4 |
 | 實驗性選項 `RUN_POST_GRT_DESIGN_REPAIR` 搭配很大的 slew 餘裕（50%）或很短的長線限制（120 µm）時，單執行緒跑十幾分鐘以上不結束 | 先限時觀察：同一步正常約 1 分鐘；超過 10 分鐘就停掉換設定 | soc_explore6、8 |
+| 同上，起因是 corner 變多：resizer 看 15 個 corner（加了溫度反轉）時 `RepairDesignPostGRT` 35 分鐘以上不結束 | 停掉後拿同一份 `state_in.json` 單步重跑、只改 `RSZ_CORNERS` 回 9 個 → 58 秒，確認原因後才改 config（`multicorner-sta` 規則 3） | Phase 4 第 1 次 harden-soc |
+| 診斷「是不是卡住」：log 有緩衝，看不到進度 | `ps -o cputime,rss` 看 CPU 時間與記憶體是否持續增加；macOS `sample <pid> 2` 看 call stack 卡在哪個函式 | Phase 4（看到每加一顆 buffer 就做一次增量 global routing） |
+| 停掉一個 run 時誤殺別的程序 | 用 `ps -eo pid,pgid,command` 找這個 run 的 process group，`kill -TERM -<pgid>` 只停那一組 | Phase 4（同時有 agent 在跑 openroad） |
 
 ## 時間預估（Apple Silicon，10 核）
 

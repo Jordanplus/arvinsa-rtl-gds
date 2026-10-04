@@ -142,6 +142,22 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | density | 700 µm 視窗，35%–70%（met5 45%–76%） | 屬於 chip-level：macro 只記錄實測密度，不判 FAIL。但 macro 若畫了禁止 fill 的區域，該區的密度要自己達標（SkyWater waffleDrop 規則，IP 等級必須遵守） |
 | LVS 範圍 | LibreLane 只做到 macro 為 black box 的 LVS | device-level LVS、soft connection、ERC（CVC-RV）都在 LibreLane 之外 |
 
+## 實作範本（soc_top，Phase 4）
+
+推導出來的條件要變成 flow 的一部分，而且每一項都有植入錯誤的案例：
+
+| 條件 | 寫在哪裡 | 怎麼判 | negative test |
+|---|---|---|---|
+| setup／hold uncertainty 分開、逐項列成分 | `pnr/soc_top/clock_uncertainty.sdc`（PnR 與 signoff 的 SDC 都 source） | STA 本身 | P01、P02 |
+| 半週期路徑的 DCD 預算 | 同上：`-fall_from`／`-rise_from` 的 inter-edge uncertainty = 半週期 jitter + DCD + margin | STA 本身 | P24（D = 60%）、P25（預算改 60%），最差路徑必須從 sram0 下降緣送出 |
+| min pulse width、min period | `sta_extra_corner.tcl` 每個 corner 輸出報告，必要的 slack 從 SDC 的變數算 | `check_soc.py pulse_width` | P22、P23 |
+| macro derate 乘進 OCV | `sta_extra_corner.tcl` | STA 本身 | P04 |
+| 溫度反轉 corner | `config.json` 的 `STA_CORNERS`、`LIB`（resizer 用 `RSZ_CORNERS` 另外控制，`multicorner-sta`） | `[corners]` | — |
+| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES` | `check_signoff.py`、`check_soc.py ir_sources` | P07、P26 |
+| 「typical corner slack ≥ 週期 X%」 | 降為只報告（`[info]`） | — | — |
+
+假設值（jitter、duty cycle 範圍、供電位置）集中寫在檔案開頭並標「假設」，確定來源後只改那幾個值。
+
 ## 不分析的項目清單（每次 signoff 都要逐條寫在報告裡）
 
 SI（delta delay 與 glitch）、dynamic IR、signal EM、aging、ESD、density 下限、chip-level latch-up marker、device-level LVS、電路層級 ERC。
@@ -169,3 +185,5 @@ SI（delta delay 與 glitch）、dynamic IR、signal EM、aging、ESD、density 
 | 2026-10-03 | arvinsa-rtl-gds soc_top | 最差 setup 路徑是 SRAM 下降緣送出的半週期路徑；0.25 ns uncertainty 沒有 DCD 預算 | 已驗證：nom_ss 改 waveform，D = 59% 時 slack −0.022 ns，D = 60% 時 −0.422 ns | 列入 Phase 4 待辦，等 clock 來源規格確定再定數值 | `docs/notes/signoff_criteria_soc_top.md` |
 | 2026-10-03 | 同上 | IR 上限 90 mV，但 ss corner 1.60 V 對 Caravel 最低供電 1.62 V 只隱含 20 mV 預算 | 已驗證（規格與 .lib 數值）；實測 0.3 mV，所以是規則不一致，不是違規 | 同上 | 同上 |
 | 2026-10-03 | 同上 | 調查 agent 的 22 項論述中有部分錯誤：把 skew metric 當真值、`-clock_path` 的建議無效、全域 coupling factor 當上界、hold 預設的判 FAIL corner 寫錯 | 已驗證：獨立核對 agent 實測推翻 | 本 skill 只收錄核對過的結論 | workflow `signoff-criteria-research` |
+| 2026-10-04 | soc_top Phase 4 | uncertainty 成分、DCD、pulse width、溫度反轉 corner、derate×OCV、IR 預算全部實作 | 已驗證（單 corner `sta` 實驗：半週期路徑 slack 0.83 ns；pulse width slack 7.95 ns） | 「實作範本」一節 | `docs/notes/signoff_criteria_soc_top.md` |
+| 2026-10-04 | soc_top IR 研究 | LibreLane 的 IR 是「所有 pin 理想」且只看 VDD；換成一側供電 + VDD/GND 合計後 8.2 mV（最壞組合 11.5 mV） | 已驗證（agent 單步重跑 16 種組合） | IR 預算改判合計；`pdn-ir-drop` 規則 4、10、11 | `docs/notes/ir_worst_case_soc_top.md` |
