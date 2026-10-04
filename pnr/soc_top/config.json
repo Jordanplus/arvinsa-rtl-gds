@@ -84,7 +84,7 @@
     "MAX_CAP_VIOLATION_CORNERS": [
         "*"
     ],
-    "//STA_CORNERS": "LibreLane's 9 sky130 corners (tt/ss/ff x nom/min/max RC) plus two for temperature inversion: at 1.60 V most cells are slower at -40 C than at 100 C (dfxtp_1 CLK->Q 11 % slower), so ss_n40C_1v60 is added, and ff_100C_1v95 for symmetry on the fast side (docs/notes/signoff_criteria_soc_top.md, Phase 4). Setting LIB replaces LibreLane's sky130 default (librelane/config/pdk_compat.py), so all five PVTs are listed. PnR uses the same corners (PNR_CORNERS defaults to STA_CORNERS).",
+    "//STA_CORNERS": "LibreLane's 9 sky130 corners (tt/ss/ff x nom/min/max RC) plus two for temperature inversion: at 1.60 V most cells are slower at -40 C than at 100 C (dfxtp_1 CLK->Q 11 % slower), so ss_n40C_1v60 is added, and ff_100C_1v95 for symmetry on the fast side (docs/notes/signoff_criteria_soc_top.md, Phase 4). Setting LIB replaces LibreLane's sky130 default (librelane/config/pdk_compat.py), so all five PVTs are listed. PnR steps other than the resizer use the same corners (PNR_CORNERS defaults to STA_CORNERS); see RSZ_CORNERS.",
     "STA_CORNERS": [
         "nom_tt_025C_1v80",
         "nom_ss_100C_1v60",
@@ -120,6 +120,18 @@
             "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_100C_1v95.lib"
         ]
     },
+    "//RSZ_CORNERS": "The resizer steps (RepairDesignPostGPL, ResizerTimingPostCTS, RepairDesignPostGRT) use only LibreLane's 9 corners; the two temperature-inversion PVTs are checked by signoff STA only. With all 15 corners, OpenROAD.RepairDesignPostGRT ran more than 35 minutes without finishing (Phase 4 harden-soc 1, stopped); a single-step re-run of the same input state with these 9 corners took 58 s (1702 slew violations found, 765 buffers). The resizer uses RSZ_CORNERS, not PNR_CORNERS (librelane/steps/openroad.py ResizerStep).",
+    "RSZ_CORNERS": [
+        "nom_tt_025C_1v80",
+        "nom_ss_100C_1v60",
+        "nom_ff_n40C_1v95",
+        "min_tt_025C_1v80",
+        "min_ss_100C_1v60",
+        "min_ff_n40C_1v95",
+        "max_tt_025C_1v80",
+        "max_ss_100C_1v60",
+        "max_ff_n40C_1v95"
+    ],
     "//STA_EXTRA_CORNER_TCL_FILE": "Derates sram0 in the ss and ff corners during STA (docs/decisions/0007-sram-padded-lib.md).",
     "STA_EXTRA_CORNER_TCL_FILE": "dir::pnr/soc_top/sta_extra_corner.tcl",
     "//PNR_SDC_FILE": "base.sdc with max fanout 8 for the PnR steps: antenna repair adds diodes after the resizer fixed fanout (a diode pin counts as a load; run soc_explore7: 10 loads + 1 diode). Signoff keeps 10. docs/decisions/0009-signoff-max-transition.md.",

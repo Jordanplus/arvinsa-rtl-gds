@@ -31,6 +31,7 @@
 | `IO_PIN_ORDER_CFG` | `pin_order.cfg`：pin 只在左、下兩邊；`clk` 在下邊中段 | 遠離 SRAM（§5.4）。`clk` 原本在左邊最下方，到第一級 clock buffer 有 660 µm 的線，ss corner 的 slew 0.92 ns 超標 |
 | `SETUP/HOLD/MAX_SLEW/MAX_CAP_VIOLATION_CORNERS` | `["*"]` | 每個 corner 都判 FAIL（LibreLane 對 sky130 預設只判 tt 的 setup） |
 | `STA_CORNERS`、`LIB`（Phase 4） | LibreLane 的 9 個加 `ss_n40C_1v60`、`ff_100C_1v95` 的 nom／min／max，共 15 個 | 溫度反轉：1.60 V 時多數 cell 低溫反而比較慢（`docs/notes/signoff_criteria_soc_top.md`）。設了 `LIB` 就取代 LibreLane 的 sky130 預設，所以 5 個 PVT 都要列 |
+| `RSZ_CORNERS`（Phase 4） | LibreLane 原本的 9 個 | resizer（`RepairDesignPostGPL`、`ResizerTimingPostCTS`、`RepairDesignPostGRT`）只看這 9 個，溫度反轉的 2 個 PVT 只在 signoff STA 判定。15 個 corner 全給 resizer 時，`RepairDesignPostGRT` 跑了 35 分鐘以上沒有結束（Phase 4 第 1 次 harden，已停）；同一份輸入只改成 9 個 corner 單步重跑，58 秒完成。resizer 讀的是 `RSZ_CORNERS`，不是 `PNR_CORNERS` |
 | `STA_EXTRA_CORNER_TCL_FILE` | `sta_extra_corner.tcl` | ss／ff corner 對 `sram0` 加 derate 1.575／0.665（ADR-0007，Phase 4 乘進 OCV）；P04 證明它有作用。另外每個 corner 輸出 min pulse width／min period 報告 |
 | `PNR_SDC_FILE`、`SIGNOFF_SDC_FILE` 共用的 `clock_uncertainty.sdc`（Phase 4） | setup 0.25、hold 0.25、半週期路徑 setup 2.25 ns | 各項成分見 `docs/notes/signoff_criteria_soc_top.md`；P24、P25 證明半週期路徑的 duty cycle 預算有作用 |
 | `ERROR_ON_MAGIC_DRC` | false | Magic 讀完整 GDS 檢查時，SRAM 自己的 GDS 有約 466 萬個標準規則違規（bitcell 用 SRAM 專用規則），全部在 SRAM 外框內；由 `check_soc.py` 的 magic_drc 列取代 LibreLane 的判定。abstract 模式（`MAGIC_DRC_USE_GDS=false`，規劃 §6.3 原案）試過：每一條 standard cell row 都報 `nwell.4`（共 416 個），因為 abstract cell 沒有 tap；完整 GDS 模式沒有 |
