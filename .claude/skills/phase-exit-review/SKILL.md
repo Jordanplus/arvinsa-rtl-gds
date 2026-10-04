@@ -18,7 +18,8 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
 5. **獨立審查用兩個沒參與實作的 agent**：一個逐條核對文件與證據（數字、說法），一個找 checker 漏洞（要做實驗，不能只讀程式）。審查找到的問題：修正並重跑，或列為已知限制並寫理由；沒有重跑就不能寫「已修正」。
 6. **要使用者決定的事**（放寬或收緊門檻、接受風險、改計畫）：用選擇題問，選項附建議與理由；答案連同日期寫進「使用者決定」，並同步到相關文件。
 7. **寫法**：給人看的內容用白話與 IC 業界術語，名詞第一次出現就解釋；數字附出處；推測要標明（使用者的全域規則）。
-8. **收尾**：README 的狀態行與 roadmap、專案記憶、各 skill 的經驗紀錄與規則回寫。推送只在使用者明確要求時做，兩個 remote 都推並用 `git ls-remote` 確認；repo 是 public，推送前檢查本機絕對路徑與機密。
+8. **分析本階段的重大任務，沒有對應 skill 的就新建**（使用者 2026-10-04：「這個 phase 4 的重要任務也要分析建立對應的skill」）：列出本階段做過的重大任務，逐一對照既有 skill；涵蓋得到的寫回該 skill，涵蓋不到的新建（Phase 4 新建了 `flow-regression-reproducibility`、`multicorner-sta`、`dv-directed-tests` 與本 skill）。新建或改名時同步更新 README 的 skill 一節與 `CLAUDE.md`。
+9. **收尾**：README 的狀態行與 roadmap、專案記憶、各 skill 的經驗紀錄與規則回寫。推送只在使用者明確要求時做，兩個 remote 都推並用 `git ls-remote` 確認；repo 是 public，推送前檢查本機絕對路徑與機密。
 
 ## 用完後 / 經驗紀錄
 

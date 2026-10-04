@@ -45,14 +45,16 @@
 
 ## clock uncertainty 的成分（Phase 4，`pnr/soc_top/clock_uncertainty.sdc`）
 
+數字以 soc_top 的週期 42 ns 計（使用者 2026-10-04 決定由 40 ns 改 42 ns，原因見 ADR-0004 Phase 4 補充）；DCD 與它相關的兩列隨 `CLOCK_PERIOD` 自動計算。
+
 PnR（`pnr.sdc`）與 signoff（`signoff.sdc`）都 source 同一個檔案。clock 是 propagated，skew 由 STA 算，不放進 uncertainty（skill `signoff-criteria` 時序表）。
 
 | 項目 | 值（ns） | 成分 | 依據 |
 |---|---|---|---|
 | setup（整週期路徑） | 0.25 | period jitter 0.15（**假設**）＋ 工具沒分析的效應 0.10（SI 的延遲變化、dynamic IR、aging） | jitter 待 Phase 7 的 clock 規格；總數與 LibreLane 原本的 0.25 相同 |
 | hold | 0.25 | 0.25：SI 造成的加速、capture clock 的 dynamic IR、寄生萃取誤差。同一個 edge 送出又接收，period jitter 互相抵銷，所以不含 jitter | hold 最緊的是 ff corner |
-| 半週期路徑的 setup（下降緣送、上升緣收，以及反方向） | 2.25 | 半週期 jitter 0.15（**假設**，取整週期 jitter）＋ DCD 2.0 ＋ 0.10。DCD =（55% − 50%）× 40 ns，duty cycle 範圍 45/55% 是**假設** | 指定邊緣的 uncertainty 會**取代**一般值，不是相加（skill 規則 3），所以要含完整的 jitter 與 margin。`write_sdc` 會保留這兩行，PnR 後段讀的 SDC 也有 |
-| min pulse width 需要的 slack | 2.15 | DCD 2.0 ＋ 半週期 jitter 0.15 | STA 用理想的 50% 波形量脈寬，看不到 DCD |
+| 半週期路徑的 setup（下降緣送、上升緣收，以及反方向） | 2.35 | 半週期 jitter 0.15（**假設**，取整週期 jitter）＋ DCD 2.1 ＋ 0.10。DCD =（55% − 50%）× 42 ns，duty cycle 範圍 45/55% 是**假設** | 指定邊緣的 uncertainty 會**取代**一般值，不是相加（skill 規則 3），所以要含完整的 jitter 與 margin。`write_sdc` 會保留這兩行，PnR 後段讀的 SDC 也有 |
+| min pulse width 需要的 slack | 2.25 | DCD 2.1 ＋ 半週期 jitter 0.15 | STA 用理想的 50% 波形量脈寬，看不到 DCD |
 | min period 需要的 slack | 0.15 | period jitter | 同上 |
 
 「最慢 corner 的餘量」的意思：setup uncertainty 對每個 corner 都一樣，但 setup 只會在 ss corner 被用到（tt、ff 的 slack 大很多），所以這筆餘量實際上只作用在最慢的 corner。
