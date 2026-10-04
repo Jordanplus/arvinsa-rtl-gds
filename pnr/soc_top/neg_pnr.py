@@ -45,8 +45,11 @@ step re-run one step on a copy of that step's saved config and input state
        report and signoff STA directory; the edited file replaces its link)
   P06  SRAM LEF with ANTENNAGATEAREA / 1000         OpenROAD check_antennas on the final DEF: > 0 violations
        (with the flow's LEF: 0; shows the antenna checker sees the nets on SRAM inputs)
-  P07  metrics: ir__drop__worst 0.025 V              check_signoff.py [max] row (above the 20 mV
-       limit, below the 90 mV of Phase 3: proves the new limit is the one applied)
+  P07  metrics: VDD drop 11 mV and GND rise 11 mV  check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise
+       (each below 20 mV, the sum above: proves the budget is on the sum, and that the 90 mV of
+       Phase 3 is gone)
+  P26  VSRC_LOC_FILES: one vccd1 source point moved check_soc.py ir_sources
+       7 um off its met5 stripe (config copy)
   P08  final netlist: sram0 csb1 on a floating net   check_soc.py port1_tieoff
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
@@ -446,17 +449,17 @@ def fake_run(run, d, replace, links=None):
     return fr
 
 
-def check_soc(fr, d, run):
-    cp = subprocess.run([sys.executable, CHECK_SOC, fr, "--config", CONFIG, "--sram-drc", sram_drc_alone(run)],
+def check_soc(fr, d, run, config=CONFIG):
+    cp = subprocess.run([sys.executable, CHECK_SOC, fr, "--config", config, "--sram-drc", sram_drc_alone(run)],
                         capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
     return cp.returncode, cp.stdout
 
 
-def soc_case(run, d, row, replace=None, links=None, also=()):
+def soc_case(run, d, row, replace=None, links=None, also=(), config=CONFIG):
     """check_soc.py on a fake run with one edit: (caught, output). Caught only if the FAIL rows are
     exactly `row` (plus `also`) and the verdict is soc-checks: FAIL."""
-    rc, out = check_soc(fake_run(run, d, replace or {}, links), d, run)
+    rc, out = check_soc(fake_run(run, d, replace or {}, links), d, run, config)
     failed = set(re.findall(r"^  \[FAIL\] (\w+):", out, re.M))
     return rc != 0 and failed == {row, *also} and "soc-checks: FAIL" in out, out
 
@@ -534,8 +537,27 @@ def signoff_with(run, d, edit):
 
 
 def p07(run, d):
-    rc, out = signoff_with(run, d, lambda m: m.update({"ir__drop__worst": 0.025}))
-    return rc != 0 and re.search(r"\[FAIL\] max\s+ir__drop__worst", out) is not None, "check_signoff.py [max] ir__drop__worst"
+    rc, out = signoff_with(run, d, lambda m: m.update({"design_powergrid__drop__worst__net:vccd1": 0.011,
+                                                       "design_powergrid__drop__worst__net:vssd1": 0.011}))
+    failed = re.findall(r"^  \[FAIL\] (\w+)\s+(\S+)", out, re.M)
+    return rc != 0 and [f for f in failed if f[0] == "max"] == [("max", "ir_vdd_drop_plus_gnd_rise")], \
+        "check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise (each net 11 mV, sum 22 mV)"
+
+
+def p26(run, d):
+    cfg = json.load(open(CONFIG))
+    src = os.path.join(ROOT, cfg["VSRC_LOC_FILES"]["vccd1"].replace("dir::", "", 1))
+    lines = open(src).read().splitlines()
+    x, y, size, volt = lines[1].split(",")
+    lines[1] = ",".join([x, f"{float(y) - 7.0:.3f}", size, volt])
+    vsrc = os.path.join(d, "vccd1.vsrc")
+    open(vsrc, "w").write("\n".join(lines) + "\n")
+    cfg["VSRC_LOC_FILES"]["vccd1"] = vsrc
+    cfg_p = os.path.join(d, "config.json")
+    json.dump(cfg, open(cfg_p, "w"), indent=1)
+    ok, out = soc_case(run, d, "ir_sources", config=cfg_p)
+    return ok and "vccd1: 5 points for 5 met5 stripes, 1 not on exactly one stripe" in out, \
+        "check_soc.py ir_sources: a vccd1 source point off its met5 stripe (only row FAIL, soc-checks: FAIL)"
 
 
 def p12(run, d):
@@ -648,7 +670,7 @@ def p20(run, d):
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
-         ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25)]
+         ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26)]
 
 
 def main():

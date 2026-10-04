@@ -30,7 +30,18 @@ PASS needs: the harden run passed all its checks and was made from the commit ch
 which includes signoff limits, golden and source tracking; provenance.json records HEAD),
 EQY ends with `DONE (PASS, rc=0)`, the partition list is not empty, every partition is in a
 `Proved equivalence of partition` line, and the partition log has no `found constant ... bit`
-line (EQY maps such a bit to the constant without proving it; see README.md). Prints `eqy: PASS` / `eqy: FAIL`; exit code 0 only on PASS.
+line (EQY maps such a bit to the constant without proving it; see README.md), and the sequential
+cells (flip-flops, latches, clock gates) of the two netlists are the same instances with the same
+cell function, only the drive strength may differ (sequential_cells below). Prints `eqy: PASS` /
+`eqy: FAIL`; exit code 0 only on PASS.
+
+Why the sequential cells are compared outside EQY (Phase 4): EQY's sat strategy does not prove the
+behaviour of a flip-flop itself. A final netlist with one dfxtp_2 replaced by a dfrtp_2 whose
+RESET_B is the resetn port (the flip-flop clears while reset is low) still gave 18100/18100
+partitions proved (neg_eqy.py flop_async_reset); the initial-state constraints of such a partition
+are unsatisfiable, so its base case proves nothing (agent experiment, 2026-10-04). The logic
+around each flip-flop (its D input and everything its Q drives) is still proved by EQY; the
+flip-flop cell itself is checked here.
 """
 import argparse
 import glob
@@ -43,6 +54,10 @@ import sys
 import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# sky130_fd_sc_hd sequential cells: flip-flops (df*, edf*, sdf*, sedf*), latches (dlx*, dlr*) and
+# clock gates (dlclkp, sdlclkp). Not the delay buffers dlygate*/dlymetal*/dlybuf*, which are
+# combinational.
+SEQ_CELL = re.compile(r"^\s*sky130_fd_sc_hd__((?:df|edf|sdf|sedf)\w*?|dl[xr]\w*?|s?dlclkp)_\d+\s+(\S+)\s*\(", re.M)
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
 STACK_KB = 65520  # macOS hard limit for the main thread stack
@@ -91,6 +106,11 @@ depth 5
 use sby
 engine abc pdr
 """
+
+
+def sequential_cells(text):
+    """{instance name (no backslash): cell function, i.e. the cell name without the drive strength}."""
+    return {name.lstrip("\\"): base for base, name in SEQ_CELL.findall(text)}
 
 
 def main():
@@ -176,10 +196,18 @@ def main():
                       + ", ".join(f"{b} = {c}" for b, c in constants[:3]))
     if conflicts:
         errors.append(f"EQY partition step refused: {conflicts[0]}")
+    seq_gold, seq_gate = sequential_cells(open(gold, encoding="utf8").read()), sequential_cells(open(gate, encoding="utf8").read())
+    seq_bad = sorted(n for n in set(seq_gold) | set(seq_gate) if seq_gold.get(n) != seq_gate.get(n))
+    if not seq_gold:
+        errors.append("no sequential cell found in the synthesized netlist")
+    if seq_bad:
+        errors.append(f"{len(seq_bad)} sequential cell(s) differ from the synthesized netlist, e.g. "
+                      + ", ".join(f"{n} ({seq_gold.get(n, 'missing')} -> {seq_gate.get(n, 'missing')})" for n in seq_bad[:3]))
     matched = sum(1 for line in open(os.path.join(out, "work", "matched.ids")) if not line.startswith("#")) \
         if os.path.isfile(os.path.join(out, "work", "matched.ids")) else 0
     summary = {"design": top, "gold": gold, "gate": gate, "partitions": len(parts), "proved": len(proved),
                "constant_matches": len(constants), "conflicting_matches": len(conflicts),
+               "sequential_cells": len(seq_gate), "sequential_mismatch": seq_bad,
                "matched_names": matched, "result": "PASS" if not errors else "FAIL", "errors": errors,
                "wall_time_s": round(time.time() - t0, 1)}
     json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=2)
@@ -189,7 +217,7 @@ def main():
         print(f"eqy: FAIL ({top}; details in {os.path.relpath(log, ROOT)})")
         return 1
     print(f"  [PASS] {top}: {len(proved)}/{len(parts)} partitions proved equivalent, "
-          f"{matched} matched names, {summary['wall_time_s']} s")
+          f"{matched} matched names, {len(seq_gate)} sequential cells identical in function, {summary['wall_time_s']} s")
     print("eqy: PASS")
     return 0
 

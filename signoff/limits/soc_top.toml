@@ -44,13 +44,16 @@
 # clock uncertainty instead, with its components listed (pnr/soc_top/clock_uncertainty.sdc).
 # The nom_tt slack is still printed in [info].
 
-[max]
-# Static IR drop <= 20 mV: the ss corner is characterized at 1.60 V and the lowest supply of the
-# carrier (Caravel VCCD) is 1.62 V, so only 20 mV may be lost on chip before the ss STA stops being
-# pessimistic (user decision 2026-10-04; was 5 % of VDD = 90 mV in project-plan.md §7.2). The SRAM
-# current in the power analysis comes from the analytical .lib (ADR-0007), so this covers the
-# standard cells reliably, the SRAM only roughly.
-"ir__drop__worst" = 0.02
+[max_sum]
+# Static IR drop: VDD drop + GND rise <= 20 mV. The ss corner is characterized at 1.60 V and the
+# lowest supply of the carrier (Caravel VCCD) is 1.62 V, so a cell may lose only 20 mV between its
+# VPWR and VGND before the ss STA stops being pessimistic (user decision 2026-10-04; was 5 % of VDD
+# = 90 mV on the VDD drop alone in project-plan.md §7.2). LibreLane's ir__drop__worst is the VDD
+# drop only, so both nets are summed here (the sum of the two worst values is >= the worst sum on
+# any one cell). Supply model: one side only (VSRC_LOC_FILES in config.json); the worst corner
+# combination of that model is in docs/notes/ir_worst_case_soc_top.md. The SRAM current comes from
+# the analytical .lib (ADR-0007).
+"ir_vdd_drop_plus_gnd_rise" = { keys = ["design_powergrid__drop__worst__net:vccd1", "design_powergrid__drop__worst__net:vssd1"], max = 0.02 }
 
 [corners]
 # STA_CORNERS of pnr/soc_top/config.json: LibreLane's 9 plus the temperature-inversion PVTs

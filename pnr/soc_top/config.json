@@ -68,6 +68,11 @@
     "PDN_MACRO_CONNECTIONS": [
         "sram0 vccd1 vssd1 vccd1 vssd1"
     ],
+    "//VSRC_LOC_FILES": "Static IR drop (OpenROAD PSM) with the supply entering from one side only: one 1.6 um source at the left end of each of the 5 met5 straps per net (format x_um,y_um,size_um,voltage; 1.80 V = the nom_tt lib voltage of the IR step). Without this file PSM takes every pin shape as an ideal source (all 5 met5 and 7 met4 straps over their whole length), which gave 0.3 mV and cannot be a signoff number. Where the carrier (Caravel) really feeds this macro is known only in Phase 7; one side is the pessimistic assumption that still connects every strap (study: docs/notes/ir_worst_case_soc_top.md). check_soc.py ir_sources checks that every point lies on a met5 strap of its net in the final DEF.",
+    "VSRC_LOC_FILES": {
+        "vccd1": "dir::pnr/soc_top/vsrc/vccd1.vsrc",
+        "vssd1": "dir::pnr/soc_top/vsrc/vssd1.vsrc"
+    },
     "//IO_PIN_ORDER_CFG": "IO pins only on the left and bottom edges, away from the SRAM (project-plan.md §5.4). clk sits in the middle of the bottom edge, near the centre of the flip-flops: at the bottom of the left edge (run soc_explore2) its 660 um wire to the first clock buffer gave a 0.92 ns slew in the ss corners.",
     "IO_PIN_ORDER_CFG": "dir::pnr/soc_top/pin_order.cfg",
     "ERRORS_ON_UNMATCHED_IO": "both",

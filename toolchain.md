@@ -61,6 +61,7 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 | open_pdks commit（LibreLane 3.0.14 綁定，`librelane/pdk_hashes.yaml`） | `8afc8346a57fe1ab7934ba5a6056ea8b43078e71` | 已安裝 |
 | 安裝方式 | `make pdk-fetch`（`env/fetch_pdk.sh`）：7 個壓縮檔平行下載、可續傳，快取在 `.tools/pdk-cache/`；sha256 釘在 `env/sky130_pdk_assets.sha256`（取自 GitHub release 的 digest）；再由 ciel 從本機 mirror 安裝 | — |
 | 安裝位置與內容 | `~/.ciel`（2.1 GB）：ciel 的 sky130 預設函式庫 sky130_fd_io、sky130_fd_pr、sky130_fd_sc_hd、sky130_fd_sc_hvl、sky130_ml_xx_hd、sky130_sram_macros | — |
+| PDK 內容（Phase 4） | flow 讀的 6 個目錄（`libs.tech/{klayout,magic,netgen,openlane}`、`libs.ref/sky130_fd_sc_hd`、`libs.ref/sky130_sram_macros`，2109 個檔）的 sha256 摘要釘在 `env/pdk_content.sha256`，由 `provenance.py --make-pdk-content --from-tarballs .tools/pdk-cache/sky130-<hash>` 從上面的壓縮檔算出；每次 harden 由 `provenance.py` 比對安裝好的 PDK（改過任何一個檔就 FAIL）。升級 PDK 時要重新產生 | — |
 | SRAM macro 檢查（`make env-check`） | PDK 內 `sky130_sram_2kbyte_1rw1r_32x512_8` 的 LEF 有 `FOREIGN`、尺寸 683.1 × 416.54 µm；Verilog 模型與 §4 釘版副本 sha256 相同 | PASS |
 
 為什麼不用 LibreLane 自己下載 PDK：ciel 只用一條連線、不能續傳。2026-10-03 本機到 GitHub 單一連線只有 45–175 KB/s，中斷就要從頭重下約 340 MB；平行下載約 360 KB/s。

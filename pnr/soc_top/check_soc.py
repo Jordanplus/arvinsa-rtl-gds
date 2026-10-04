@@ -7,6 +7,10 @@ Checks (each prints a PASS/FAIL row):
   macro        the final netlist has exactly one SRAM macro instance, named sram0
   placement    sram0 in the final DEF is FIXED at the location and orientation of config.json
                MACROS (§7.2 "擺放": the macro must not drift)
+  ir_sources   the static IR supply model (config VSRC_LOC_FILES, one side only): every source point
+               of a net lies on a met5 stripe of that net in the final DEF, every met5 stripe of the
+               net has exactly one point, and the voltage column is > 0 for VDD_NETS and 0 for
+               GND_NETS. A point that misses its stripe would silently remove a supply (Phase 4).
   port1_tieoff sram0 port 1 is tied off in the final netlist: csb1 to a tie-high (conb_1 HI),
                clk1 and addr1[8:0] to tie-low (conb_1 LO) (§5.1); dout1 is left unconnected
   disconnected LibreLane's Odb.ReportDisconnectedPins finds no disconnected pin (log line
@@ -202,6 +206,21 @@ def read_pulse_width(path):
     return out
 
 
+def met5_stripes(def_text, net):
+    """[(y_center, half_width, x0, x1)] in DEF units of the horizontal met5 STRIPE shapes of a special net."""
+    sn = def_text[def_text.index("\nSPECIALNETS"):def_text.index("END SPECIALNETS")]
+    m = re.search(r"^\s*- " + re.escape(net) + r" .*?;\s*$", sn, re.M | re.S)
+    if not m:
+        return []
+    out = []
+    for w, x0, y0, x1, y1 in re.findall(r"(?:ROUTED|NEW) met5 (\d+) \+ SHAPE STRIPE \( (-?\d+) (-?\d+) \) \( (-?\d+|\*) (-?\d+|\*) \)",
+                                       m.group(0)):
+        y1 = y0 if y1 == "*" else y1
+        if y0 == y1:
+            out.append((int(y0), int(w) // 2, min(int(x0), int(x1)), max(int(x0), int(x1))))
+    return out
+
+
 def sram_connections(netlist_text):
     """{pin: net} for sram0 in the final netlist (bus connections expanded, MSB first)."""
     m = re.search(re.escape(MACRO) + r"\s+" + INST + r"\s*\((.*?)\);", netlist_text, re.S)
@@ -262,6 +281,28 @@ def main(run_dir, config_path, sram_drc):
         want = (float(inst_cfg["location"][0]), float(inst_cfg["location"][1]), inst_cfg.get("orientation", "N"))
         ok = status == "FIXED" and abs(x - want[0]) < 1e-6 and abs(y - want[1]) < 1e-6 and orient == want[2]
         row("placement", ok, f"{INST} {status} ({x}, {y}) {orient}; config.json ({want[0]}, {want[1]}) {want[2]}")
+
+    # static IR supply model
+    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    vsrc = cfg.get("VSRC_LOC_FILES") or {}
+    problems = []
+    for net in list(cfg.get("VDD_NETS") or []) + list(cfg.get("GND_NETS") or []):
+        path = vsrc.get(net)
+        path = os.path.join(root, path[len("dir::"):]) if path and path.startswith("dir::") else path
+        if not path or not os.path.isfile(path):
+            problems.append(f"{net}: no source file ({vsrc.get(net)})")
+            continue
+        stripes = met5_stripes(d, net)
+        pts = [[float(v) for v in line.split(",")] for line in open(path) if line.strip()]
+        hits = [[i for i, (yc, hw, x0, x1) in enumerate(stripes)
+                 if abs(y * units - yc) <= hw and x0 <= x * units <= x1] for x, y, _, _ in pts]
+        volt_ok = all((p[3] > 0) if net in (cfg.get("VDD_NETS") or []) else (p[3] == 0) for p in pts)
+        if not stripes or any(len(h) != 1 for h in hits) or sorted(h[0] for h in hits) != list(range(len(stripes))) or not volt_ok:
+            problems.append(f"{net}: {len(pts)} points for {len(stripes)} met5 stripes, "
+                            f"{sum(1 for h in hits if len(h) != 1)} not on exactly one stripe, voltages {'ok' if volt_ok else 'wrong'}")
+    row("ir_sources", bool(vsrc) and not problems,
+        f"one source on each met5 stripe of {', '.join(sorted(vsrc))}" if vsrc and not problems
+        else ("; ".join(problems) if problems else "VSRC_LOC_FILES missing in the config"))
 
     # port 1 tie-off
     try:

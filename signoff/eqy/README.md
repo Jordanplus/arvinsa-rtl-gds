@@ -40,13 +40,15 @@ PASS 需要全部成立：
 3. 分區清單不是空的，而且每個分區都有 `Proved equivalence of partition` 紀錄。
 4. 切分紀錄（`work/partition.log`）沒有 `found constant ... bit`。這行表示 gate 端某個 bit 是常數，EQY 會直接把 gold 端對應的 bit 換成那個常數，**之後不再證明它**。negative test `wdata3_stuck0`（把 `mem_wdata[3]` 接成 0）原本就是這樣漏掉、判 PASS 的。正向的 run 沒有出現過這一行，所以出現就 FAIL。
 5. 切分紀錄沒有 `ERROR: conflicting ... for`。這表示 EQY 在切分時遇到互相矛盾的名稱對應而中止（試做時看過 `conflicting matches for gold bit eoi[0]`），沒有做任何證明。
+6. **兩份網表的 sequential cell（flip-flop、latch、clock gate）是同樣的 instance、同樣的功能**，只允許 drive strength 不同（Phase 4）。這一項在 EQY 之外比對，因為 EQY 的 `sat` strategy 證不到 flip-flop 本身的行為：把一顆 `dfxtp_2` 換成 reset 時會清除的 `dfrtp_2`（RESET_B 接 `resetn`），EQY 仍是 18100/18100 個分區證明通過（`neg_eqy.py flop_async_reset`）。原因是含 flip-flop 的分區，初始狀態的約束本身無解，base case 什麼都沒證（agent 實驗）。flip-flop 周圍的邏輯仍由 EQY 證明。
 
 ## Negative test（`make neg-eqy-core`、`make neg-eqy-soc`）
 
 在最終網表的複本植入錯誤，每一個都必須讓 `run_eqy.py` FAIL，且失敗原因是有分區證不出來、常數規則或名稱對應矛盾（不是缺檔之類的其他錯誤）。案例清單在 `neg_eqy.py` 的開頭。
 
-Phase 4 加了兩件事（`docs/phase_exit/phase3.md` 已知限制 4、16）：
+Phase 4 加了三件事（前兩件是 `docs/phase_exit/phase3.md` 已知限制 4、16）：
 - **`nand2_to_nor2`**：第一顆 nand2（依 instance 名稱排序）換成同尺寸的 nor2，名稱與接線不動。這種錯誤不是常數、也不會造成名稱矛盾，只有證明步驟抓得到。soc_top 與 picorv32_core 都是 1 個分區證不出來。
+- **`flop_q_inverted`、`flop_async_reset`**：第一顆 `dfxtp_2` 換成輸出反相的 `dfxbp_2`（Q_N）或 reset 會清除的 `dfrtp_2`。前者在切分時就因名稱矛盾被拒絕；後者 EQY 全部證明通過，只有判定第 6 點抓得到。
 - **FAIL 的位置要對得上植入點**：從 EQY 的紀錄取出 FAIL 牽涉的名稱（證不出來的分區、被換成常數的 bit、名稱矛盾的兩邊），每一個都必須落在植入點附近：被改到的 cell、它被改到的腳上的 net，以及這些 net 上的 cell；遇到 buffer／inverter 時繼續往下走（placement 與 routing 會在合成網表的 flip-flop 和 port 之間插好幾級 buffer，EQY 報的是合成網表的名稱）。clock net 不走。用 Phase 3 的 11 個案例驗證過：每個案例的 FAIL 名稱都在自己的範圍內，任兩個案例交換後都會被判不符。
 
 ## 執行時間（Apple Silicon，10 核）

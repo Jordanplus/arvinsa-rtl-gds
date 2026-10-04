@@ -8,8 +8,9 @@ run_eqy.py checks it again for every case.
 Each case edits a copy of <run>/final/nl/<DESIGN_NAME>.nl.v and runs run_eqy.py on it
 (outputs in runs/neg_eqy_<design>/<case>/). An edit must match exactly one place in the
 netlist, otherwise the case itself FAILs. A case PASSes when run_eqy.py prints `eqy: FAIL` for an
-equivalence reason: a partition not proved, a bit mapped to a constant without proof, or EQY's
-partition step refusing conflicting name matches (not some other error such as a missing file),
+equivalence reason: a partition not proved, a bit mapped to a constant without proof, EQY's
+partition step refusing conflicting name matches, or a sequential cell that differs from the
+synthesized netlist (not some other error such as a missing file),
 and every name in those reasons is at the injection (known limitation 16 of
 docs/phase_exit/phase3.md): an instance whose cell or connections the edit changed, a net on
 one of their pins, or an instance on such a net (fail_names, neighborhood).
@@ -24,6 +25,10 @@ Cases (the same kinds of error as the Phase 2 GL qualification, docs/phase_exit/
     x8_bit24_stuck0       flip-flop cpuregs[8][24] D tied to 0
     mux_swap              first mux2_1 cell (by instance name) that drives a flip-flop D
                           directly gets its A0 and A1 inputs swapped
+    flop_q_inverted       first dfxtp_2 (by instance name) becomes a dfxbp_2 driving its net from Q_N
+    flop_async_reset      first dfxtp_2 becomes a dfrtp_2 with RESET_B on the resetn port; EQY alone
+                          proves all partitions (its sat strategy does not see a flip-flop's own
+                          behaviour), so only run_eqy.py's sequential cell check catches it
     nand2_to_nor2         first nand2 cell (by instance name) becomes the nor2 of the same size,
                           same name and connections: a wrong function that is neither a constant
                           nor a name conflict, so only the proof step can catch it (Phase 3
@@ -85,6 +90,29 @@ def mux_swap(text):
         return re.compile(r"(?!x)x"), None
     rx = re.compile(r"(sky130_fd_sc_hd__mux2_1 " + re.escape(cands[0][0]) + r" \(\.A0\()([^)]*)(\),\s*\.A1\()([^)]*)(\))")
     return rx, lambda m: m.group(1) + m.group(4) + m.group(3) + m.group(2) + m.group(5)
+
+
+def flop_q_inverted(text):
+    """First dfxtp_2 flip-flop (sorted by instance name) becomes a dfxbp_2 whose inverted output Q_N
+    drives the same net: a state element that holds the inverse of what it should. Every bit of its
+    fan-in and fan-out keeps its name, so only the proof of the partition with this flip-flop can
+    catch it (Phase 4: EQY's sat strategy may prove partitions with flip-flops vacuously)."""
+    cands = sorted(re.findall(r"sky130_fd_sc_hd__dfxtp_2 (\S+) \(\.CLK\(", text))
+    if not cands:
+        return re.compile(r"(?!x)x"), None
+    rx = re.compile(r"sky130_fd_sc_hd__dfxtp_2( " + re.escape(cands[0]) + r" \(\.CLK\([^)]*\),\s*\.D\([^)]*\),\s*\.)Q(\()")
+    return rx, lambda m: "sky130_fd_sc_hd__dfxbp_2" + m.group(1) + "Q_N" + m.group(2)
+
+
+def flop_async_reset(text):
+    """First dfxtp_2 (sorted by instance name) becomes a dfrtp_2 whose RESET_B is the resetn port: a
+    flip-flop that is cleared while resetn is low, which the synthesized one is not. Every name stays
+    the same, so only the proof of the partition with this flip-flop can catch it."""
+    cands = sorted(re.findall(r"sky130_fd_sc_hd__dfxtp_2 (\S+) \(\.CLK\(", text))
+    if not cands or not re.search(r"^\s*input resetn;", text, re.M):
+        return re.compile(r"(?!x)x"), None
+    rx = re.compile(r"sky130_fd_sc_hd__dfxtp_2( " + re.escape(cands[0]) + r" \(\.CLK\([^)]*\),\s*\.D\([^)]*\),)(\s*\.Q\()")
+    return rx, lambda m: "sky130_fd_sc_hd__dfrtp_2" + m.group(1) + "\n    .RESET_B(resetn)," + m.group(2)
 
 
 def nand2_to_nor2(text):
@@ -209,6 +237,8 @@ CASES = {
         ("x8_bit24_stuck0", lambda t: flop_d_const(r"\cpuregs[8][24] ", 0)),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
+        ("flop_q_inverted", flop_q_inverted),
+        ("flop_async_reset", flop_async_reset),
     ],
     "soc_top": [
         ("din5_stuck0", lambda t: sram_pin_const0("din0[5]")),
@@ -216,6 +246,8 @@ CASES = {
         ("host_rdata7_inverted", lambda t: buf_inverted("host_rdata[7]")),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
+        ("flop_q_inverted", flop_q_inverted),
+        ("flop_async_reset", flop_async_reset),
     ],
 }
 
@@ -311,7 +343,9 @@ def main():
                 reasons.append(f"{summ['constant_matches']} bit(s) mapped to a constant")
             if summ.get("conflicting_matches", 0) > 0:
                 reasons.append("partition step refused: conflicting name matches")
-            names = fail_names(os.path.join(case_dir, "eqy"))
+            if summ.get("sequential_mismatch"):
+                reasons.append(f"sequential cells differ: {', '.join(summ['sequential_mismatch'][:3])}")
+            names = fail_names(os.path.join(case_dir, "eqy")) | set(summ.get("sequential_mismatch") or [])
             outside = sorted(names - near[name])
             if rc != 0 and "eqy: FAIL" in text_log and reasons and names and not outside:
                 caught += 1

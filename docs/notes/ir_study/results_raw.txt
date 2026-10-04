@@ -1,0 +1,96 @@
+em_BTERM_maxffssR        corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=0.414mV avg=0.050mV nsrc=1096 | vssd1 worst=0.339mV avg=0.049mV nsrc=1103 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=bterms(pins) | rc=0 wall=85s
+em_ONESIDE_maxffssR      corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=5.750mV avg=3.170mV nsrc=5 | vssd1 worst=5.730mV avg=3.150mV nsrc=5 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=vsrc | rc=0 wall=85s
+em_SINGLE_maxffssR       corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=33.600mV avg=25.800mV nsrc=1 | vssd1 worst=33.600mV avg=25.800mV nsrc=1 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=vsrc | rc=0 wall=85s
+m_BTERM_maxff            corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=0.246mV avg=0.035mV nsrc=1096 | vssd1 worst=0.202mV avg=0.035mV nsrc=1103 | R/sq met1=0.0875042 met5=0.0199472 | src=bterms(pins) | rc=0 wall=14s
+m_BTERM_maxffssR         corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=0.414mV avg=0.050mV nsrc=1096 | vssd1 worst=0.339mV avg=0.049mV nsrc=1103 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=bterms(pins) | rc=0 wall=19s
+m_BTERM_maxss            corner=max_ss_100C_1v60 V=1.60e+00 P=6.50e-03W rp_total=6.50e-03 sram0=7.08e-04 | vccd1 worst=0.353mV avg=0.043mV nsrc=1096 | vssd1 worst=0.338mV avg=0.042mV nsrc=1103 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=bterms(pins) | rc=0 wall=22s
+m_BTERM_nomtt            corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.306mV avg=0.039mV nsrc=1096 | vssd1 worst=0.249mV avg=0.038mV nsrc=1103 | R/sq met1=0.125006 met5=0.028495999999999997 | src=bterms(pins) | rc=0 wall=39s
+m_ONESIDE_maxff          corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=3.190mV avg=1.790mV nsrc=5 | vssd1 worst=3.180mV avg=1.780mV nsrc=5 | R/sq met1=0.0875042 met5=0.0199472 | src=vsrc | rc=0 wall=14s
+m_ONESIDE_maxffssR       corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=5.750mV avg=3.170mV nsrc=5 | vssd1 worst=5.730mV avg=3.150mV nsrc=5 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=vsrc | rc=0 wall=19s
+m_ONESIDE_maxss          corner=max_ss_100C_1v60 V=1.60e+00 P=6.50e-03W rp_total=6.50e-03 sram0=7.08e-04 | vccd1 worst=4.890mV avg=2.720mV nsrc=5 | vssd1 worst=4.870mV avg=2.710mV nsrc=5 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=vsrc | rc=0 wall=22s
+m_ONESIDE_nomtt          corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=4.110mV avg=2.290mV nsrc=5 | vssd1 worst=4.090mV avg=2.280mV nsrc=5 | R/sq met1=0.125006 met5=0.028495999999999997 | src=vsrc | rc=0 wall=39s
+m_SINGLE_maxff           corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=18.600mV avg=14.400mV nsrc=1 | vssd1 worst=18.600mV avg=14.400mV nsrc=1 | R/sq met1=0.0875042 met5=0.0199472 | src=vsrc | rc=0 wall=14s
+m_SINGLE_maxffssR        corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=33.600mV avg=25.800mV nsrc=1 | vssd1 worst=33.600mV avg=25.800mV nsrc=1 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=vsrc | rc=0 wall=19s
+m_SINGLE_maxss           corner=max_ss_100C_1v60 V=1.60e+00 P=6.50e-03W rp_total=6.50e-03 sram0=7.08e-04 | vccd1 worst=28.800mV avg=22.200mV nsrc=1 | vssd1 worst=28.800mV avg=22.200mV nsrc=1 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=vsrc | rc=0 wall=22s
+m_SINGLE_nomtt           corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=24.000mV avg=18.500mV nsrc=1 | vssd1 worst=24.100mV avg=18.600mV nsrc=1 | R/sq met1=0.125006 met5=0.028495999999999997 | src=vsrc | rc=0 wall=39s
+m_STRAPS_maxff           corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=0.482mV avg=0.157mV nsrc=145 | vssd1 worst=0.437mV avg=0.156mV nsrc=145 | R/sq met1=0.0875042 met5=0.0199472 | src=Using strap pattern on met5 with pitch 34.0000um and offset 17.0000um. | rc=0 wall=19s
+m_STRAPS_maxffssR        corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=9.03e-03 sram0=7.08e-04 | vccd1 worst=0.782mV avg=0.223mV nsrc=145 | vssd1 worst=0.705mV avg=0.222mV nsrc=145 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=Using strap pattern on met5 with pitch 34.0000um and offset 17.0000um. | rc=0 wall=25s
+m_STRAPS_maxss           corner=max_ss_100C_1v60 V=1.60e+00 P=6.50e-03W rp_total=6.50e-03 sram0=7.08e-04 | vccd1 worst=0.664mV avg=0.189mV nsrc=145 | vssd1 worst=0.598mV avg=0.188mV nsrc=145 | R/sq met1=0.1625078 met5=0.037044799999999996 | src=Using strap pattern on met5 with pitch 34.0000um and offset 17.0000um. | rc=0 wall=26s
+m_STRAPS_nomtt           corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.583mV avg=0.174mV nsrc=145 | vssd1 worst=0.525mV avg=0.173mV nsrc=145 | R/sq met1=0.125006 met5=0.028495999999999997 | src=Using strap pattern on met5 with pitch 34.0000um and offset 17.0000um. | rc=0 wall=46s
+m_off_BTERM_maxff        corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=n/a sram0=n/a | vccd1 worst=0.246mV avg=0.035mV nsrc=None | vssd1 worst=0.202mV avg=0.035mV nsrc=None | R/sq met1=None met5=None | src=bterms(pins) | rc=0 wall=19s
+m_off_BTERM_maxffssR     corner=max_ff_n40C_1v95 V=1.95e+00 P=9.03e-03W rp_total=n/a sram0=n/a | vccd1 worst=0.414mV avg=0.050mV nsrc=None | vssd1 worst=0.339mV avg=0.049mV nsrc=None | R/sq met1=None met5=None | src=bterms(pins) | rc=0 wall=19s
+m_off_BTERM_maxss        corner=max_ss_100C_1v60 V=1.60e+00 P=6.50e-03W rp_total=n/a sram0=n/a | vccd1 worst=0.353mV avg=0.043mV nsrc=None | vssd1 worst=0.338mV avg=0.042mV nsrc=None | R/sq met1=None met5=None | src=bterms(pins) | rc=0 wall=19s
+m_off_ONESIDE_nomtt      corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=n/a sram0=n/a | vccd1 worst=4.110mV avg=2.290mV nsrc=None | vssd1 worst=4.090mV avg=2.280mV nsrc=None | R/sq met1=None met5=None | src=vsrc | rc=0 wall=19s
+r01_base_FULL_nomtt      corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=n/a sram0=n/a | vccd1 worst=0.306mV avg=0.039mV nsrc=None | vssd1 worst=0.249mV avg=0.038mV nsrc=None | R/sq met1=None met5=None | src=bterms(pins) | rc=? wall=?s
+r02_custom_base_nomtt    corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.306mV avg=0.039mV nsrc=1096 | vssd1 worst=0.249mV avg=0.038mV nsrc=1103 | R/sq met1=0.125006 met5=0.028495999999999997 | src=bterms(pins) | rc=0 wall=11s
+r03_STRAPS_default_nomtt corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.306mV avg=0.039mV nsrc=1096 | vssd1 worst=0.249mV avg=0.038mV nsrc=1103 | R/sq met1=0.125006 met5=0.028495999999999997 | src=bterms(pins) | rc=0 wall=22s
+r04_STRAPS_nobterm_nomtt corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.583mV avg=0.174mV nsrc=145 | vssd1 worst=0.525mV avg=0.173mV nsrc=145 | R/sq met1=0.125006 met5=0.028495999999999997 | src=Using strap pattern on met5 with pitch 34.0000um and offset 17.0000um. | rc=0 wall=37s
+r05_FULLgen_nobterm_nomtt corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.565mV avg=0.164mV nsrc=495 | vssd1 worst=0.506mV avg=0.163mV nsrc=495 | R/sq met1=0.125006 met5=0.028495999999999997 | src=Using all nodes on met5 as sources. | rc=0 wall=37s
+r06_BUMPS_nobterm_nomtt  corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=0.746mV avg=0.353mV nsrc=68 | vssd1 worst=0.652mV avg=0.339mV nsrc=68 | R/sq met1=0.125006 met5=0.028495999999999997 | src=Using bump pattern with x-pitch 140.0000um, y-pitch 140.0000um, and size 70.0000um with an reduction factor of 3x. | rc=0 wall=37s
+t02_vsrc_fmt_csv         corner=nom_tt_025C_1v80 V=1.80e+00 P=7.76e-03W rp_total=7.76e-03 sram0=7.08e-04 | vccd1 worst=24.000mV avg=18.500mV nsrc=1 | vssd1 worst=24.100mV avg=18.600mV nsrc=1 | R/sq met1=0.125006 met5=0.028495999999999997 | src=vsrc | rc=0 wall=10s
+
+m_BTERM_maxff          worst per-instance (VDD drop + GND rise) = 0.448 mV at clkbuf_0_clk  (Vnom 1.95)
+m_BTERM_maxffssR       worst per-instance (VDD drop + GND rise) = 0.753 mV at clkbuf_0_clk  (Vnom 1.95)
+m_BTERM_maxss          worst per-instance (VDD drop + GND rise) = 0.674 mV at sram0  (Vnom 1.6)
+m_BTERM_nomtt          worst per-instance (VDD drop + GND rise) = 0.555 mV at clkbuf_0_clk  (Vnom 1.8)
+m_ONESIDE_maxff        worst per-instance (VDD drop + GND rise) = 6.356 mV at _19946_  (Vnom 1.95)
+m_ONESIDE_maxffssR     worst per-instance (VDD drop + GND rise) = 11.464 mV at _19946_  (Vnom 1.95)
+m_ONESIDE_maxss        worst per-instance (VDD drop + GND rise) = 9.747 mV at _19946_  (Vnom 1.6)
+m_ONESIDE_nomtt        worst per-instance (VDD drop + GND rise) = 8.191 mV at _19946_  (Vnom 1.8)
+m_SINGLE_maxff         worst per-instance (VDD drop + GND rise) = 37.226 mV at clkbuf_leaf_253_clk_regs  (Vnom 1.95)
+m_SINGLE_maxffssR      worst per-instance (VDD drop + GND rise) = 67.131 mV at clkbuf_leaf_253_clk_regs  (Vnom 1.95)
+m_SINGLE_maxss         worst per-instance (VDD drop + GND rise) = 57.572 mV at clkbuf_leaf_253_clk_regs  (Vnom 1.6)
+m_SINGLE_nomtt         worst per-instance (VDD drop + GND rise) = 48.106 mV at _13353_  (Vnom 1.8)
+m_STRAPS_maxff         worst per-instance (VDD drop + GND rise) = 0.919 mV at clkbuf_0_clk  (Vnom 1.95)
+m_STRAPS_maxffssR      worst per-instance (VDD drop + GND rise) = 1.487 mV at clkbuf_0_clk  (Vnom 1.95)
+m_STRAPS_maxss         worst per-instance (VDD drop + GND rise) = 1.262 mV at clkbuf_0_clk  (Vnom 1.6)
+m_STRAPS_nomtt         worst per-instance (VDD drop + GND rise) = 1.108 mV at clkbuf_0_clk  (Vnom 1.8)
+
+== em_BTERM_maxffssR/em-vccd1.csv
+  via   ('met1', 'met2') max I = 0.0226 mA vs 0.29 mA per cut -> 7.8% if this connection were ONE cut at ('788.4400', '301.9200', '789.8400', '301.9200')
+  via2  ('met2', 'met3') max I = 0.0226 mA vs 0.48 mA per cut -> 4.7% if this connection were ONE cut at ('789.8400', '301.9200', '789.8400', '301.9200')
+  via3  ('met3', 'met4') max I = 0.0226 mA vs 0.48 mA per cut -> 4.7% if this connection were ONE cut at ('789.8400', '301.9200', '789.8400', '301.9200')
+  via4  ('met4', 'met5') max I = 0.1002 mA vs 2.49 mA per cut -> 4.0% if this connection were ONE cut at ('307.3900', '640.2500', '307.3900', '640.2500')
+  met1  max I = 0.0213 mA  0.044 mA/um (width 0.48 um) vs limit 2.8 mA/um -> 1.6%  at ('784.9900', '301.9200', '788.4400', '301.9200')
+  met4  max I = 0.1002 mA  0.063 mA/um (width 1.6 um) vs limit 6.8 mA/um -> 0.9%  at ('307.3900', '572.7500', '307.3900', '640.2500')
+  met5  max I = 0.0000 mA  0.000 mA/um (width 1.6 um) vs limit 10.17 mA/um -> 0.0%  at ('979.2300', '487.0700', '990.5200', '487.0700')
+== em_BTERM_maxffssR/em-vssd1.csv
+  via   ('met1', 'met2') max I = 0.0225 mA vs 0.29 mA per cut -> 7.8% if this connection were ONE cut at ('638.2500', '119.6800', '639.5400', '119.6800')
+  via2  ('met2', 'met3') max I = 0.0225 mA vs 0.48 mA per cut -> 4.7% if this connection were ONE cut at ('639.5400', '119.6800', '639.5400', '119.6800')
+  via3  ('met3', 'met4') max I = 0.0225 mA vs 0.48 mA per cut -> 4.7% if this connection were ONE cut at ('639.5400', '119.6800', '639.5400', '119.6800')
+  via4  ('met4', 'met5') max I = 0.0968 mA vs 2.49 mA per cut -> 3.9% if this connection were ONE cut at ('303.9900', '643.5500', '300.5200', '643.5500')
+  met1  max I = 0.0178 mA  0.037 mA/um (width 0.48 um) vs limit 2.8 mA/um -> 1.3%  at ('788.2100', '282.8800', '790.7400', '282.8800')
+  met4  max I = 0.0968 mA  0.060 mA/um (width 1.6 um) vs limit 6.8 mA/um -> 0.9%  at ('303.9900', '572.7500', '303.9900', '643.5500')
+  met5  max I = 0.0000 mA  0.000 mA/um (width 1.6 um) vs limit 10.17 mA/um -> 0.0%  at ('980.5200', '643.5500', '990.5200', '643.5500')
+== em_ONESIDE_maxffssR/em-vccd1.csv
+  via   ('met1', 'met2') max I = 0.0346 mA vs 0.29 mA per cut -> 11.9% if this connection were ONE cut at ('21.6200', '133.2800', '21.8400', '133.2800')
+  via2  ('met2', 'met3') max I = 0.0346 mA vs 0.48 mA per cut -> 7.2% if this connection were ONE cut at ('21.8400', '133.2800', '21.8400', '133.2800')
+  via3  ('met3', 'met4') max I = 0.0346 mA vs 0.48 mA per cut -> 7.2% if this connection were ONE cut at ('21.8400', '133.2800', '21.8400', '133.2800')
+  via4  ('met4', 'met5') max I = 0.7941 mA vs 2.49 mA per cut -> 31.9% if this connection were ONE cut at ('21.8400', '176.8000', '20.5200', '180.7100')
+  met1  max I = 0.0376 mA  0.078 mA/um (width 0.48 um) vs limit 2.8 mA/um -> 2.8%  at ('175.2600', '111.5200', '177.7900', '111.5200')
+  met4  max I = 0.4296 mA  0.268 mA/um (width 1.6 um) vs limit 6.8 mA/um -> 3.9%  at ('21.8400', '24.4800', '21.8400', '29.9200')
+  met5  max I = 1.3210 mA  0.826 mA/um (width 1.6 um) vs limit 10.17 mA/um -> 8.1%  at ('10.5200', '180.7100', '20.5200', '180.7100')
+== em_ONESIDE_maxffssR/em-vssd1.csv
+  via   ('met1', 'met2') max I = 0.0363 mA vs 0.29 mA per cut -> 12.5% if this connection were ONE cut at ('25.1400', '152.3200', '25.1400', '152.3200')
+  via2  ('met2', 'met3') max I = 0.0363 mA vs 0.48 mA per cut -> 7.6% if this connection were ONE cut at ('25.1400', '152.3200', '25.1400', '152.3200')
+  via3  ('met3', 'met4') max I = 0.0363 mA vs 0.48 mA per cut -> 7.6% if this connection were ONE cut at ('25.1400', '152.3200', '25.1400', '152.3200')
+  via4  ('met4', 'met5') max I = 0.8077 mA vs 2.49 mA per cut -> 32.4% if this connection were ONE cut at ('25.1400', '179.5200', '20.5200', '184.0100')
+  met1  max I = 0.0357 mA  0.074 mA/um (width 0.48 um) vs limit 2.8 mA/um -> 2.7%  at ('177.7900', '108.8000', '180.0900', '108.8000')
+  met4  max I = 0.4299 mA  0.269 mA/um (width 1.6 um) vs limit 6.8 mA/um -> 4.0%  at ('25.1400', '27.2000', '25.1400', '32.6400')
+  met5  max I = 1.3180 mA  0.824 mA/um (width 1.6 um) vs limit 10.17 mA/um -> 8.1%  at ('10.5200', '184.0100', '20.5200', '184.0100')
+== em_SINGLE_maxffssR/em-vccd1.csv
+  via   ('met1', 'met2') max I = 0.0687 mA vs 0.29 mA per cut -> 23.7% if this connection were ONE cut at ('175.4400', '350.8800', '175.4400', '350.8800')
+  via2  ('met2', 'met3') max I = 0.0687 mA vs 0.48 mA per cut -> 14.3% if this connection were ONE cut at ('175.4400', '350.8800', '175.4400', '350.8800')
+  via3  ('met3', 'met4') max I = 0.0687 mA vs 0.48 mA per cut -> 14.3% if this connection were ONE cut at ('175.4400', '350.8800', '175.4400', '350.8800')
+  via4  ('met4', 'met5') max I = 3.2930 mA vs 2.49 mA per cut -> 132.2% if this connection were ONE cut at ('21.8400', '639.2000', '20.5200', '640.2500')
+  met1  max I = 0.0818 mA  0.170 mA/um (width 0.48 um) vs limit 2.8 mA/um -> 6.1%  at ('175.4400', '350.8800', '177.3300', '350.8800')
+  met4  max I = 2.5480 mA  1.593 mA/um (width 1.6 um) vs limit 6.8 mA/um -> 23.4%  at ('21.8400', '633.7600', '21.8400', '639.2000')
+  met5  max I = 4.6310 mA  2.894 mA/um (width 1.6 um) vs limit 10.17 mA/um -> 28.5%  at ('10.5200', '640.2500', '20.5200', '640.2500')
+== em_SINGLE_maxffssR/em-vssd1.csv
+  via   ('met1', 'met2') max I = 0.0637 mA vs 0.29 mA per cut -> 22.0% if this connection were ONE cut at ('23.6900', '641.9200', '25.1400', '641.9200')
+  via2  ('met2', 'met3') max I = 0.0637 mA vs 0.48 mA per cut -> 13.3% if this connection were ONE cut at ('25.1400', '641.9200', '25.1400', '641.9200')
+  via3  ('met3', 'met4') max I = 0.0637 mA vs 0.48 mA per cut -> 13.3% if this connection were ONE cut at ('25.1400', '641.9200', '25.1400', '641.9200')
+  via4  ('met4', 'met5') max I = 3.3240 mA vs 2.49 mA per cut -> 133.5% if this connection were ONE cut at ('25.1400', '641.9200', '20.5200', '643.5500')
+  met1  max I = 0.0773 mA  0.161 mA/um (width 0.48 um) vs limit 2.8 mA/um -> 5.7%  at ('177.3300', '353.6000', '181.2400', '353.6000')
+  met4  max I = 2.5570 mA  1.598 mA/um (width 1.6 um) vs limit 6.8 mA/um -> 23.5%  at ('25.1400', '636.4800', '25.1400', '641.9200')
+  met5  max I = 4.6310 mA  2.894 mA/um (width 1.6 um) vs limit 10.17 mA/um -> 28.5%  at ('10.5200', '643.5500', '20.5200', '643.5500')

@@ -8,6 +8,8 @@ usage: check_signoff.py <metrics.json> <limits.toml> <golden metrics.json>
   [equal]   "<metric>" = value       metric must equal value (a number must be a number, not a bool)
   [min]     "<metric>" = value       metric must be a finite number >= value
   [max]     "<metric>" = value       metric must be a finite number <= value
+  [max_sum] "<name>" = {keys = [...], max = value}   every key a finite number, their sum <= value
+                                     (e.g. VDD drop + GND rise against one supply budget)
   [corners] names = [...]            for every corner: setup_ws_min <= timing__setup__ws__corner:<c> < slack_max
             setup_ws_min, hold_ws_min,                  hold_ws_min  <= timing__hold__ws__corner:<c>  < slack_max
             slack_max                names must be unique and equal the corners present in the metrics.
@@ -67,6 +69,12 @@ def main(metrics_path, limits_path, golden_path):
     for key, want in limits.get("max", {}).items():
         have = run.get(key, "<missing>")
         row("max", key, have, f"<= {want}", finite(have) and have <= want)
+    for name, spec in limits.get("max_sum", {}).items():
+        keys, top = (spec.get("keys") or [], spec.get("max")) if isinstance(spec, dict) else ([], None)
+        vals = [run.get(k, "<missing>") for k in keys]
+        ok = bool(keys) and finite(top) and all(finite(v) for v in vals)
+        total = sum(vals) if ok else "<missing>"
+        row("max", f"{name} (sum of {', '.join(keys) or 'no keys'})", total, f"<= {top}", ok and total <= top)
     corners = limits.get("corners", {})
     names, top = corners.get("names", []), corners.get("slack_max")
     for kind in ("setup", "hold"):

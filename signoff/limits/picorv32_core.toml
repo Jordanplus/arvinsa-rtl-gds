@@ -42,9 +42,12 @@
 # §7.2 also asked for "nom_tt setup worst slack >= 10 % of the clock period". Removed as for
 # soc_top (user decision 2026-10-04, see signoff/limits/soc_top.toml); printed in [info].
 
-[max]
-# Static IR drop <= 20 mV, the same budget as soc_top (signoff/limits/soc_top.toml [max]).
-"ir__drop__worst" = 0.02
+[max_sum]
+# Static IR drop: VDD drop + GND rise <= 20 mV, the same budget as soc_top (signoff/limits/soc_top.toml
+# [max_sum]). The core keeps LibreLane's supply model (every pin shape an ideal source), which is
+# optimistic; the core is a flow test vehicle, soc_top is the deliverable. The core power nets are
+# LibreLane's default VPWR/VGND.
+"ir_vdd_drop_plus_gnd_rise" = { keys = ["design_powergrid__drop__worst__net:VPWR", "design_powergrid__drop__worst__net:VGND"], max = 0.02 }
 
 [corners]
 names = [
