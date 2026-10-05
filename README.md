@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-04）：Phase 0–4 完成；Phase 3.5 進行中（用 SPICE 實測 SRAM 的時序，ADR-0010），之後做 Phase 5。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-05）：Phase 0–4 與 Phase 3.5 完成，下一步 Phase 5（換 Hazard3）。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -27,6 +27,13 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
   - `make regress` 一個指令跑完 Phase 1–4 的全部檢查。第 4 次在乾淨 checkout 25/25 PASS（123 分鐘），163 個植入錯誤全部在預期的 checker FAIL。前 3 次重跑的原因：依獨立審查修改 checker、多執行緒繞線的中間數字不同、gate-level 模擬的時限太緊。
   - 重現性只在同一台機器驗證過。
   - 紀錄見 [docs/phase_exit/phase4.md](docs/phase_exit/phase4.md)。
+- Phase 3.5：SRAM 的時序改用 SPICE 實測（本機 ngspice 量 PDK 附的電晶體級網表，ADR-0010）。
+  - 5 個 PVT 各一份 .lib，由量測結果的 JSON 產生並檢查沒過期；加上 dout0 在 clock 上升緣後就開始變化的 hold 弧。
+  - 延遲、setup、週期都仍由原本保守的下限決定；新的 hold 弧讓 soc_top 週期 42 → 43 ns（使用者決定）。
+  - **頭號下線風險**：這顆 SRAM 在 ss 1.60 V 的 −40°C 與 25°C 讀取失敗（讀成前一次的值，sense amp 的設計問題），ss −40°C corner 用佔位 .lib，Phase 6 自產 macro 要修正。
+  - `make regress` 第 2 次在乾淨 checkout 25/25 PASS（136 分鐘），soc_top 439 個 metric 與 golden 完全相同，164 個植入錯誤全部在預期的 checker FAIL。第 1 次因一個植入程式的 bug FAIL，已修正。
+  - 獨立審查更正了文件，並找到 12 個 checker 漏洞（沒有一個造成假 PASS），Phase 5 開頭修。
+  - 紀錄見 [docs/phase_exit/phase3_5.md](docs/phase_exit/phase3_5.md)。
 
 ## 快速開始
 
@@ -76,7 +83,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 1 | SoC RTL 與 firmware、RTL 模擬 regression | 完成（2026-10-03） |
 | 2 | 單獨 harden PicoRV32，打通流程並取得面積與時序實測值 | 完成（2026-10-03） |
 | 3 | 整合預建 SRAM macro | 完成（2026-10-04） |
-| 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 進行中 |
+| 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 完成（2026-10-05） |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
 | 5 | 換成 Hazard3 | 未開始 |
 | 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 未開始 |
