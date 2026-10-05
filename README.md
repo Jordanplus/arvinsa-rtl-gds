@@ -123,7 +123,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
 | 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
-| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容 | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
+| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM | pdn-ir-drop | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
@@ -227,36 +227,42 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - LibreLane 對 sky130 預設只在 tt 判 setup FAIL，slew／cap 不判；先把四個 `*_VIOLATION_CORNERS` 都設 `["*"]`。
   - DRV 收斂清單，依實際有效的順序：排除延遲 cell、設 `LAYERS_RC`、開 post-GRT 修復、長線切段；剩下少數違規先查是不是繞路。
   - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。
+  - macro 的 .lib 要每個 PVT 一份，resizer 才看得到 macro 在慢 corner 的延遲；只靠 STA hook 加 derate 時，PnR 看不到。OpenRAM SRAM 的 .lib 要有 dout 在上升緣後開始變化的時序弧，STA 才會檢查接收 flop 的 hold。
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
   - 附「退回過的做法」表，避免再試沒用的設定。
 - **不在這裡**：SDC 寫法看 timing-constraints-sdc；corner 設定看 multicorner-sta；clock tree 看 cts-clock-tree；數值怎麼定看 signoff-criteria。
-- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009。negative test：P01–P04。
+- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010。negative test：P01–P04、P32。
 
 #### hard-macro-integration：hard macro 整合
 
 - **何時用**：把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
 - **重點**：
-  - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、保守的 padded .lib、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
-  - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以只有 TT 時，產生一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）；要用 SPICE 實測取代時看 openram-macro-characterization。
+  - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、每個 PVT 一份的 .lib（SPICE 實測，Phase 3.5 起）、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
+  - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以 .lib 要每個 PVT 一份（用 SPICE 實測產生，看 openram-macro-characterization）；只有廠商的單一 TT 解析 .lib 時，暫時用一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
   - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
   - 未用的 port 要 tie-off，checker 要檢查實際接的值。
+  - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫會讀出前一次的值。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
-- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008。negative test：P08、P09、P14、P16–P20。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008／0010。negative test：P08、P09、P14、P16–P20、P30、P32。
 
 #### openram-macro-characterization：SRAM macro 的 SPICE 特性化
 
 - **名詞**：特性化是用電路模擬量出 macro 的延遲、setup/hold、最小週期，寫成 STA 讀的 .lib；解析模型是 OpenRAM 不跑模擬、用公式估出來的 .lib。
-- **何時用**：macro 的 .lib 只是解析模型或只有一個 corner，要用 SPICE 實測取代；要產生每個 PVT 的 .lib；ngspice 讀大網表很慢、輸出 bus 節點時報 `bad v() syntax`；要從 GDS 萃取寄生電容；Phase 6 用 OpenRAM 自產 macro。
+- **何時用**：macro 的 .lib 只是解析模型或只有一個 corner，要用 SPICE 實測取代；要產生每個 PVT 的 .lib；macro 在某些 corner 讀出前一次的值；ngspice 讀大網表很慢、輸出 bus 節點時報 `bad v() syntax`；要從 GDS 萃取寄生電容；Phase 6 用 OpenRAM 自產 macro。
 - **重點**：
   - 先判斷廠商 .lib 是不是解析模型：延遲表每一列相同、最小週期是延遲乘固定倍數。sky130 PDK 附的 SRAM .lib 全部是這種。
   - 量 macro 隨附的網表（和 GDS 同一顆電路），不要用重新產生的電路代替。
   - OpenRAM 自己的 SPICE 特性化有缺陷：setup/hold 只量輸入端那顆 DFF、只量第一個 corner、rise 抄 fall、pulse width 取週期一半、預設沒有走線 RC。
   - 2 KB 完整網表在 ngspice 光讀檔就超過 35 分鐘，要修剪成只留第一／最後一列與行，並和完整網表比對一次；模擬步長也要用小步長驗證。
-  - OpenRAM SRAM 的 dout 在上升緣後約 1 ns 就被拉回 0，廠商 .lib 沒有這條時序弧，STA 不會檢查接收端的 hold；新 .lib 要加上。
-  - Magic 沒設 `PDK_ROOT` 時會 exit 0 但沒有輸出，要檢查輸出檔。
+  - OpenRAM SRAM 的 dout 在上升緣後約 1 ns 就開始變化，廠商 .lib 沒有這條時序弧，STA 不會檢查接收端的 hold；新 .lib 要加上。
+  - setup/hold 要在整顆 macro 上量：內部 clock buffer 讓 setup 變負、hold 變大，只量 DFF 的 hold 少算約 0.3 ns。
+  - Magic 沒設 `PDK_ROOT` 時會 exit 0 但沒有輸出，要檢查輸出檔。萃取網表的基板網路 VSUBS 與被修剪 cell 的儲存節點會浮接（singular matrix），要接地；處理後仍有暫態不收斂的問題未解決。
+  - 量測方法先驗證誤差（步長、修剪、初始條件、延遲表推算，都要偏保守），再用植入錯誤證明腳本量得對；植入的字串要先確認找得到、改到預期的次數，否則植入什麼都沒做，測不到要測的東西。
+  - 新加的 `rising_edge` 弧接進 SoC 後，要有 negative test 證明 STA 真的用到它。
+  - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
-- **本 repo 實例**：ADR-0010、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/`（Phase 3.5 建立中）。
+- **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N8（`make neg-char`）與 P04、P17、P30、P32。
 
 #### drc-signoff：DRC、GDS 輸出、XOR
 
@@ -458,7 +464,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **要依新設計重做的**：
   - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，並用 `signoff-criteria` 重新推導。
   - golden。
-  - 和設計綁在一起的植入錯誤案例，例如 `neg_pnr.py` 的 P01–P31。
+  - 和設計綁在一起的植入錯誤案例，例如 `neg_pnr.py` 的 P01–P32。
   - ADR、exit review 的內容。
 - **經驗寫回這裡**：新專案用到某個 skill 時發現的通用經驗，寫回本 repo 的 `SKILL.md`，並同步本節，維持單一來源；只屬於新設計的數字留在新專案的文件。
 

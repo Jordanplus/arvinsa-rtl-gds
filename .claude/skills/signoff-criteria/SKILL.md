@@ -151,7 +151,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | setup／hold uncertainty 分開、逐項列成分 | `pnr/soc_top/clock_uncertainty.sdc`（PnR 與 signoff 的 SDC 都 source） | STA 本身 | P01、P02 |
 | 半週期路徑的 DCD 預算 | 同上：`-fall_from`／`-rise_from` 的 inter-edge uncertainty = 半週期 jitter + DCD + margin | STA 本身 | P24（D = 60%）、P25（預算改 60%），最差路徑必須從 sram0 下降緣送出 |
 | min pulse width、min period | `sta_extra_corner.tcl` 每個 corner 輸出報告，必要的 slack 從 SDC 的變數算 | `check_soc.py pulse_width` | P22、P23 |
-| macro derate 乘進 OCV | `sta_extra_corner.tcl` | STA 本身 | P04 |
+| macro 的 PVT 差異 | Phase 4：`sta_extra_corner.tcl` 的 instance derate 乘進 OCV；Phase 3.5 起：每個 PVT 一份 SRAM .lib，不加 instance derate，OCV 由 `base.sdc` 套用（ADR-0010） | STA 本身、`check_soc.py sram_lib` | P04、P30 |
 | 溫度反轉 corner | `config.json` 的 `STA_CORNERS`、`LIB`（resizer 用 `RSZ_CORNERS` 另外控制，`multicorner-sta`） | `[corners]` | — |
 | IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES` | `check_signoff.py`、`check_soc.py ir_sources` | P07、P26–P29 |
 | 「typical corner slack ≥ 週期 X%」 | 降為只報告（`[info]`） | — | — |

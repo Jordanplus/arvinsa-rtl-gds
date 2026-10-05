@@ -1,0 +1,950 @@
+{
+ "macro": "sky130_sram_2kbyte_1rw1r_32x512_8",
+ "netlist": "schematic",
+ "netlist_sha256": "43038684a01bd83ce09fa1fabdab1fa3678c9c70430d063e587ee7ea92ec172e",
+ "trim": {
+  "kept": 1264,
+  "dropped": 15120,
+  "rows": [
+   0,
+   127
+  ],
+  "columns": [
+   0,
+   1,
+   2,
+   3,
+   124,
+   125,
+   126,
+   127
+  ]
+ },
+ "ngspice": "47",
+ "pdk": "8afc8346a57fe1ab7934ba5a6056ea8b43078e71",
+ "tstep": "100p",
+ "tmax": null,
+ "resolution_ns": 0.04,
+ "clk_slews_ns": [
+  0.05,
+  0.2,
+  0.5
+ ],
+ "loads_pf": [
+  0.005,
+  0.02,
+  0.05
+ ],
+ "clk_slew_mid_ns": 0.2,
+ "in_slew_ns": 0.2,
+ "period_ns": 20.0,
+ "constraint_period_ns": {
+  "tt": 10.0,
+  "ff": 10.0,
+  "ss": 16.0
+ },
+ "brackets_ns": {
+  "setup": [
+   -1.0,
+   1.56
+  ],
+  "hold": [
+   -1.0,
+   1.56
+  ],
+  "pulse_high": [
+   0.2,
+   10.44
+  ],
+  "pulse_low": [
+   0.2,
+   10.44
+  ],
+  "pulse_period": [
+   1.0,
+   21.48
+  ]
+ },
+ "seed_half_width_ns": {
+  "constraints": 0.5,
+  "pulse": 1.0
+ },
+ "pvts": {
+  "tt_025C_1v80": {
+   "pvt": "tt_025C_1v80",
+   "model": "tt",
+   "vdd": 1.8,
+   "temp": 25.0,
+   "delay": {
+    "settle_max": [
+     [
+      2.67327,
+      2.803,
+      3.00272
+     ],
+     [
+      2.69,
+      2.79511,
+      3.01461
+     ],
+     [
+      2.71758,
+      2.84291,
+      3.04788
+     ]
+    ],
+    "d50_max": [
+     [
+      2.06617,
+      2.66744,
+      2.80989
+     ],
+     [
+      2.07409,
+      2.66969,
+      2.82218
+     ],
+     [
+      2.10823,
+      2.71032,
+      2.85697
+     ]
+    ],
+    "tran_max": [
+     [
+      1.11799,
+      1.29568,
+      1.35694
+     ],
+     [
+      1.11014,
+      1.29277,
+      1.35644
+     ],
+     [
+      1.10627,
+      1.29698,
+      1.35593
+     ]
+    ],
+    "depart_min": [
+     [
+      1.1752,
+      1.22187,
+      1.27997
+     ],
+     [
+      1.20091,
+      1.24156,
+      1.29739
+     ],
+     [
+      1.19714,
+      1.24933,
+      1.30782
+     ]
+    ],
+    "depart_max": [
+     [
+      11.63159,
+      11.75665,
+      11.97261
+     ],
+     [
+      11.63694,
+      11.76502,
+      11.97966
+     ],
+     [
+      11.67316,
+      11.7983,
+      12.01294
+     ]
+    ],
+    "simulated": [
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.22,
+     "pass": -0.2
+    },
+    "csb_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "csb_hold_rise": {
+     "fail": 0.2,
+     "pass": 0.22
+    },
+    "csb_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "web_setup_rise": {
+     "fail": -0.22,
+     "pass": -0.2
+    },
+    "web_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "web_hold_rise": {
+     "fail": 0.2,
+     "pass": 0.22
+    },
+    "web_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "addr_setup_rise": {
+     "fail": -0.22,
+     "pass": -0.2
+    },
+    "addr_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "addr_hold_rise": {
+     "fail": 0.2,
+     "pass": 0.22
+    },
+    "addr_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "din_setup_rise": {
+     "fail": -0.24,
+     "pass": -0.22
+    },
+    "din_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "din_hold_rise": {
+     "fail": 0.22,
+     "pass": 0.24
+    },
+    "din_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "wmask_setup_rise": {
+     "fail": -0.22,
+     "pass": -0.2
+    },
+    "wmask_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "wmask_hold_rise": {
+     "fail": 0.2,
+     "pass": 0.22
+    },
+    "wmask_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 0.78,
+     "pass": 0.8
+    },
+    "pulse_low": {
+     "fail": 2.78,
+     "pass": 2.8
+    },
+    "pulse_period": {
+     "fail": 5.6,
+     "pass": 5.62
+    }
+   },
+   "seed": null,
+   "date": "2026-10-05"
+  },
+  "ss_100C_1v60": {
+   "pvt": "ss_100C_1v60",
+   "model": "ss",
+   "vdd": 1.6,
+   "temp": 100.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      3.92589,
+      5.2519,
+      5.62422
+     ],
+     [
+      3.95811,
+      5.28412,
+      5.65644
+     ],
+     [
+      4.0018,
+      5.32781,
+      5.70013
+     ]
+    ],
+    "d50_max": [
+     [
+      3.48503,
+      4.52504,
+      5.32422
+     ],
+     [
+      3.51738,
+      4.55739,
+      5.35658
+     ],
+     [
+      3.56106,
+      4.60107,
+      5.40026
+     ]
+    ],
+    "tran_max": [
+     [
+      1.21862,
+      2.56097,
+      3.15387
+     ],
+     [
+      1.21914,
+      2.56149,
+      3.15439
+     ],
+     [
+      1.21914,
+      2.56149,
+      3.15439
+     ]
+    ],
+    "depart_min": [
+     [
+      2.69939,
+      2.91409,
+      3.23318
+     ],
+     [
+      2.77515,
+      2.98985,
+      3.30894
+     ],
+     [
+      2.8467,
+      3.06141,
+      3.38049
+     ]
+    ],
+    "depart_max": [
+     [
+      12.92552,
+      13.19707,
+      13.60689
+     ],
+     [
+      12.96509,
+      13.23665,
+      13.64647
+     ],
+     [
+      13.00405,
+      13.2756,
+      13.68542
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.4187,
+     "pass": -0.3875
+    },
+    "csb_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "csb_hold_rise": {
+     "fail": 0.3762,
+     "pass": 0.4075
+    },
+    "csb_hold_fall": {
+     "fail": 0.2937,
+     "pass": 0.325
+    },
+    "web_setup_rise": {
+     "fail": -0.4187,
+     "pass": -0.3875
+    },
+    "web_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "web_hold_rise": {
+     "fail": 0.3762,
+     "pass": 0.4075
+    },
+    "web_hold_fall": {
+     "fail": 0.325,
+     "pass": 0.3562
+    },
+    "addr_setup_rise": {
+     "fail": -0.4187,
+     "pass": -0.3875
+    },
+    "addr_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "addr_hold_rise": {
+     "fail": 0.3762,
+     "pass": 0.4075
+    },
+    "addr_hold_fall": {
+     "fail": 0.2937,
+     "pass": 0.325
+    },
+    "din_setup_rise": {
+     "fail": -0.4075,
+     "pass": -0.3762
+    },
+    "din_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "din_hold_rise": {
+     "fail": 0.3962,
+     "pass": 0.4275
+    },
+    "din_hold_fall": {
+     "fail": 0.2937,
+     "pass": 0.325
+    },
+    "wmask_setup_rise": {
+     "fail": -0.4187,
+     "pass": -0.3875
+    },
+    "wmask_setup_fall": {
+     "fail": -0.3163,
+     "pass": -0.285
+    },
+    "wmask_hold_rise": {
+     "fail": 0.3762,
+     "pass": 0.4075
+    },
+    "wmask_hold_fall": {
+     "fail": 0.325,
+     "pass": 0.3562
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 1.8,
+     "pass": 1.8266
+    },
+    "pulse_low": {
+     "fail": 4.6437,
+     "pass": 4.675
+    },
+    "pulse_period": {
+     "fail": 9.3388,
+     "pass": 9.37
+    }
+   },
+   "seed": "ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-05"
+  },
+  "ff_n40C_1v95": {
+   "pvt": "ff_n40C_1v95",
+   "model": "ff",
+   "vdd": 1.95,
+   "temp": -40.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      1.63498,
+      1.6894,
+      1.83008
+     ],
+     [
+      1.65606,
+      1.71049,
+      1.85117
+     ],
+     [
+      1.6736,
+      1.72802,
+      1.86871
+     ]
+    ],
+    "d50_max": [
+     [
+      1.33054,
+      1.60974,
+      1.693
+     ],
+     [
+      1.35496,
+      1.63416,
+      1.71742
+     ],
+     [
+      1.35962,
+      1.63882,
+      1.72208
+     ]
+    ],
+    "tran_max": [
+     [
+      0.73526,
+      0.74,
+      0.82621
+     ],
+     [
+      0.72813,
+      0.73286,
+      0.81908
+     ],
+     [
+      0.75355,
+      0.75829,
+      0.8445
+     ]
+    ],
+    "depart_min": [
+     [
+      0.72301,
+      0.73997,
+      0.76917
+     ],
+     [
+      0.71812,
+      0.73508,
+      0.76428
+     ],
+     [
+      0.71344,
+      0.73039,
+      0.7596
+     ]
+    ],
+    "depart_max": [
+     [
+      11.02216,
+      11.08366,
+      11.19601
+     ],
+     [
+      11.03569,
+      11.09719,
+      11.20954
+     ],
+     [
+      11.06616,
+      11.12767,
+      11.24002
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.1375,
+     "pass": -0.1062
+    },
+    "csb_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "csb_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "csb_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "web_setup_rise": {
+     "fail": -0.1375,
+     "pass": -0.1062
+    },
+    "web_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "web_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "web_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "addr_setup_rise": {
+     "fail": -0.1375,
+     "pass": -0.1062
+    },
+    "addr_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "addr_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "addr_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "din_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "din_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "din_hold_rise": {
+     "fail": 0.115,
+     "pass": 0.1462
+    },
+    "din_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "wmask_setup_rise": {
+     "fail": -0.1375,
+     "pass": -0.1062
+    },
+    "wmask_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "wmask_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "wmask_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 0.4453,
+     "pass": 0.4719
+    },
+    "pulse_low": {
+     "fail": 1.7062,
+     "pass": 1.7375
+    },
+    "pulse_period": {
+     "fail": 3.4638,
+     "pass": 3.495
+    }
+   },
+   "seed": "ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-05"
+  },
+  "ss_n40C_1v60": {
+   "pvt": "ss_n40C_1v60",
+   "model": "ss",
+   "vdd": 1.6,
+   "temp": -40.0,
+   "read_fail": [
+    "cycle 4 r511: expected 0x5a5aa5a5, wrong bits 0:0.00V 2:0.00V 5:0.00V 7:0.00V 8:0.00V 10:0.00V ...",
+    "cycle 5 r508: expected 0xa5a55a5a, wrong bits 1:0.00V 3:0.00V 4:0.00V 6:0.00V 9:0.00V 11:0.00V ...",
+    "cycle 6 r3: expected 0xa5a55a5a, wrong bits 1:0.00V 3:0.00V 4:0.00V 6:0.00V 9:0.00V 11:0.00V ...",
+    "cycle 7 r0: expected 0x5a5aa5a5, wrong bits 0:0.00V 2:0.00V 5:0.00V 7:0.00V 8:0.00V 10:0.00V ...",
+    "cycle 8 r511: expected 0x5a5aa5a5, wrong bits 0:0.00V 2:0.00V 5:0.00V 7:0.00V 8:0.00V 10:0.00V ...",
+    "cycle 9 r0: expected 0x5a5aa5a5, wrong bits 0:0.00V 2:0.00V 5:0.00V 7:0.00V 8:0.00V 10:0.00V ...",
+    "cycle 10 r508: expected 0xa5a55a5a, wrong bits 1:0.00V 3:0.00V 4:0.00V 6:0.00V 9:0.00V 11:0.00V ..."
+   ],
+   "seed": "ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-05"
+  },
+  "ff_100C_1v95": {
+   "pvt": "ff_100C_1v95",
+   "model": "ff",
+   "vdd": 1.95,
+   "temp": 100.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      1.30736,
+      1.46791,
+      1.75525
+     ],
+     [
+      1.31902,
+      1.47958,
+      1.76691
+     ],
+     [
+      1.29521,
+      1.45576,
+      1.7431
+     ]
+    ],
+    "d50_max": [
+     [
+      1.2315,
+      1.34029,
+      1.50939
+     ],
+     [
+      1.24526,
+      1.35405,
+      1.52315
+     ],
+     [
+      1.22266,
+      1.33145,
+      1.50055
+     ]
+    ],
+    "tran_max": [
+     [
+      0.22169,
+      0.37727,
+      0.67722
+     ],
+     [
+      0.22391,
+      0.37949,
+      0.67944
+     ],
+     [
+      0.21855,
+      0.37413,
+      0.67408
+     ]
+    ],
+    "depart_min": [
+     [
+      0.73154,
+      0.75248,
+      0.78001
+     ],
+     [
+      0.74456,
+      0.7655,
+      0.79303
+     ],
+     [
+      0.74439,
+      0.76533,
+      0.79286
+     ]
+    ],
+    "depart_max": [
+     [
+      11.13216,
+      11.16341,
+      11.21573
+     ],
+     [
+      11.14368,
+      11.17493,
+      11.22726
+     ],
+     [
+      11.12371,
+      11.15496,
+      11.20729
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.1687,
+     "pass": -0.1375
+    },
+    "csb_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "csb_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "csb_hold_fall": {
+     "fail": 0.1062,
+     "pass": 0.1375
+    },
+    "web_setup_rise": {
+     "fail": -0.1687,
+     "pass": -0.1375
+    },
+    "web_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "web_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "web_hold_fall": {
+     "fail": 0.1062,
+     "pass": 0.1375
+    },
+    "addr_setup_rise": {
+     "fail": -0.1687,
+     "pass": -0.1375
+    },
+    "addr_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "addr_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "addr_hold_fall": {
+     "fail": 0.1062,
+     "pass": 0.1375
+    },
+    "din_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "din_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "din_hold_rise": {
+     "fail": 0.1462,
+     "pass": 0.1775
+    },
+    "din_hold_fall": {
+     "fail": 0.1062,
+     "pass": 0.1375
+    },
+    "wmask_setup_rise": {
+     "fail": -0.1687,
+     "pass": -0.1375
+    },
+    "wmask_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "wmask_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "wmask_hold_fall": {
+     "fail": 0.1062,
+     "pass": 0.1375
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 0.6047,
+     "pass": 0.6313
+    },
+    "pulse_low": {
+     "fail": 1.3937,
+     "pass": 1.425
+    },
+    "pulse_period": {
+     "fail": 2.87,
+     "pass": 2.9013
+    }
+   },
+   "seed": "ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-05"
+  }
+ }
+}

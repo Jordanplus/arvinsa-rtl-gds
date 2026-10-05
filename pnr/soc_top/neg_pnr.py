@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P31).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P32).
 
 usage: neg_pnr.py [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -15,8 +15,9 @@ step re-run one step on a copy of that step's saved config and input state
   P02  signoff SDC + set_clock_uncertainty -hold 5    OpenROAD.STAPostPNR -> Checker.HoldViolations
        (P01-P03 start from the run's SIGNOFF_SDC_FILE, so they test the SDC that signoff really uses)
   P03  signoff SDC + set_max_transition 0.05 ns     OpenROAD.STAPostPNR -> Checker.MaxSlewViolations
-  P04  sta_extra_corner.tcl with SRAM derate 10      OpenROAD.STAPostPNR -> Checker.SetupViolations
-       (proves the derate hook is applied: the SRAM half-cycle path then needs 100 ns)
+  P04  sta_extra_corner.tcl + sram0 derate 10       OpenROAD.STAPostPNR -> Checker.SetupViolations
+       (proves STA times the SRAM dout0 arcs of the char .lib: the half-cycle path then needs
+       10 times the SRAM read delay, more than half the period)
   P05  final DEF without the grid vias on the SRAM power ring
                                                      Magic.SpiceExtraction -> Netgen.LVS -> Checker.LVS
        (PDN_CONNECT_MACROS_TO_GRID=false was tried first: the grid is identical, because the core
@@ -55,8 +56,11 @@ step re-run one step on a copy of that step's saved config and input state
        wide (it covers its whole stripe: close to the ideal-supply model that gave 0.3 mV)
   P28  VSRC_LOC_FILES: one vccd1 source in the        check_soc.py ir_sources
        middle of its stripe (fed from the middle, about 1/4 of the one-side drop)
-  P30  STA log of nom_ff_n40C_1v95 without the     check_soc.py sram_derate
-       sta_extra_corner derate line (the ff early derate no timing check depends on today)
+  P30  STA log of nom_ff_n40C_1v95 reading the     check_soc.py sram_lib
+       tt_025C_1v80 SRAM .lib
+  P32  SRAM .lib copies with the dout0 rising_edge   OpenROAD.STAPostPNR -> Checker.HoldViolations
+       arc set to 0 (the read data would change at the clock edge: proves STA checks the hold of
+       the register that captures dout0, which the vendor .lib had no arc for; ADR-0010)
   P08  final netlist: sram0 csb1 on a floating net   check_soc.py port1_tieoff
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
@@ -69,7 +73,8 @@ step re-run one step on a copy of that step's saved config and input state
   P14  final netlist: sram0 renamed sram9            check_soc.py macro
   P15  disconnected-pin log: 1 critical pin          check_soc.py disconnected
   P16  config.json: one VERILOG_FILES entry dropped  check_inputs.py rtl_files
-  P17  padded.lib: one dout0 delay table edited      check_inputs.py padded_lib
+  P17  char .lib (tt): dout0 rising_edge arc turned  check_inputs.py char_lib
+       into a second falling_edge arc
   P18  SRAM LEF: one ANTENNAGATEAREA line dropped    check_inputs.py antenna_lef
   P19  config.json: MACROS lib = the PDK TT .lib     check_inputs.py macro_lib
   P20  resolved.json: MACROS lib = the PDK TT .lib   check_inputs.py --resolved
@@ -100,6 +105,7 @@ CONFIG = os.path.join(ROOT, "pnr", "soc_top", "config.json")
 SRAM = "sky130_sram_2kbyte_1rw1r_32x512_8"
 SRAM_IP = os.path.join(ROOT, "ip", "sram", SRAM)
 PDK_TT_LIB = f"pdk_dir::libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
+NUM_RE = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
 LIMITS = os.path.join(ROOT, "signoff", "limits", "soc_top.toml")
 GOLDEN = os.path.join(ROOT, "signoff", "golden", "soc_top", "metrics.json")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
@@ -269,14 +275,14 @@ def p03(run, d):
 
 def p04(run, d):
     tcl = open(os.path.join(ROOT, "pnr", "soc_top", "sta_extra_corner.tcl")).read()
-    new = tcl.replace("set sram_late_ss 1.575\n", "set sram_late_ss 10\n")
-    assert new != tcl
+    new = tcl + ('\nset_timing_derate -late -cell_delay 10 [get_cells sram0]\n'
+                 'puts "sta_extra_corner: $corner_name: P04 sram0 -late -cell_delay 10"\n')
     p = os.path.join(d, "sta_extra_corner.tcl")
     open(p, "w").write(new)
     rc, text = rerun(run, d, "OpenROAD.STAPostPNR", "Checker.SetupViolations",
                      edit_config=lambda c: c.update(STA_EXTRA_CORNER_TCL_FILE=p))
-    ok = rc not in (0, None) and "Setup violations found" in text and "sram0 -late -cell_delay 10" in text_of(d)
-    return ok, "Checker.SetupViolations in the ss corners, and the hook printed the derate 10"
+    ok = rc not in (0, None) and "Setup violations found" in text and "P04 sram0 -late -cell_delay 10" in text_of(d)
+    return ok, "Checker.SetupViolations, and the hook printed the derate 10"
 
 
 def text_of(d):
@@ -496,11 +502,31 @@ def sta_dir_with(run, d, corner, edit):
 
 
 def p30(run, d):
+    wrong = f"{SRAM}__tt_025C_1v80.lib"
     rel, sta = sta_dir_with(run, d, "nom_ff_n40C_1v95",
-                            lambda t: re.sub(r"^sta_extra_corner: nom_ff_n40C_1v95: sram0 .*\n", "", t, flags=re.M))
-    ok, out = soc_case(run, d, "sram_derate", links={rel: sta})
-    return ok and "nom_ff_n40C_1v95: []" in out, \
-        "check_soc.py sram_derate: no SRAM derate line in nom_ff_n40C_1v95 (only row FAIL, soc-checks: FAIL)"
+                            lambda t: edit_once(t, re.escape(f"{SRAM}__ff_n40C_1v95.lib"), wrong, "the ff SRAM .lib in sta.log"))
+    ok, out = soc_case(run, d, "sram_lib", links={rel: sta})
+    return ok and f"nom_ff_n40C_1v95: ['{wrong}']" in out, \
+        "check_soc.py sram_lib: nom_ff_n40C_1v95 read the tt SRAM .lib (only row FAIL, soc-checks: FAIL)"
+
+
+def p32(run, d):
+    """Hold arc of dout0 set to 0 in copies of the five char .lib; the signoff STA must report hold violations."""
+    libs = {}
+    for key, paths in json.load(open(CONFIG))["MACROS"][SRAM]["lib"].items():
+        src = os.path.join(ROOT, paths[0][len("dir::"):])
+        text = open(src).read()
+        i = text.index("timing_type : rising_edge;")
+        j = text.index("rise_transition", i)
+        head, body = text[:i], text[i:j]
+        body = re.sub(r'values\(((?:[^()]|\n)*?)\)', lambda m: "values(" + re.sub(NUM_RE, "0.0000", m.group(1)) + ")", body)
+        dst = os.path.join(d, os.path.basename(src))
+        open(dst, "w").write(head + body + text[j:])
+        libs[key] = [dst]
+    rc, text = rerun(run, d, "OpenROAD.STAPostPNR", "Checker.HoldViolations",
+                     edit_config=lambda c: c["MACROS"][SRAM].update(lib=libs))
+    ok = rc not in (0, None) and re.search(r"[Hh]old violations found", text) is not None
+    return ok, "Checker.HoldViolations: Hold violations found"
 
 
 def p00(run, d):
@@ -724,12 +750,13 @@ def p16(run, d):
 
 
 def p17(run, d):
-    text = open(os.path.join(SRAM_IP, "padded.lib")).read()
-    new = edit_once(text, r'values\("10\.000, ', 'values("1.000, ', "first 10 ns dout0 delay table")
-    p = os.path.join(d, "padded.lib")
-    open(p, "w").write(new)
-    rc, out = inputs_check(d, "--padded", p)
-    return inputs_failed(rc, out, "padded_lib"), "check_inputs.py padded_lib"
+    char = os.path.join(d, "char")
+    shutil.copytree(os.path.join(SRAM_IP, "char"), char)
+    f = os.path.join(char, f"{SRAM}__tt_025C_1v80.lib")
+    open(f, "w").write(edit_once(open(f).read(), "timing_type : rising_edge;", "timing_type : falling_edge;",
+                                 "the dout0 rising_edge arc"))
+    rc, out = inputs_check(d, "--char-dir", char)
+    return inputs_failed(rc, out, "char_lib"), "check_inputs.py char_lib"
 
 
 def p18(run, d):
@@ -750,9 +777,9 @@ def p19(run, d):
 def p20(run, d):
     res = json.load(open(os.path.join(run, "resolved.json")))
     lib = res["MACROS"][SRAM]["lib"]
-    if list(lib) != ["*"]:
+    if "*_tt_025C_1v80" not in lib:
         return False, f"unexpected resolved MACROS lib {lib}"
-    res["MACROS"][SRAM]["lib"] = {"*": [res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"]}
+    lib["*_tt_025C_1v80"] = [res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"]
     p = os.path.join(d, "resolved.json")
     json.dump(res, open(p, "w"), indent=1)
     rc, out = inputs_check(d, "--resolved", p)
@@ -763,7 +790,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
-         ("P31", p31)]
+         ("P31", p31), ("P32", p32)]
 
 
 def main():

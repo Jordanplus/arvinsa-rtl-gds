@@ -19,7 +19,7 @@ description: Clock tree（CTS）問題時使用：clock buffer 的 fanout／cap 
 8. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**：`resolved.json` 為 None。soc_top 的 clock 繞線段：met1 9750、met2 2901、met3 90、met4 7。要讓 clock 走粗金屬，必須在專案 config 明確設定。
 9. **duty cycle**：clock tree 本身造成的 rise／fall 延遲差（nom_ss 下 SRAM `clk0` 約 0.30 ns），STA 已經算到；clock 來源本身的 duty 偏差 STA 不知道，要靠約束（`signoff-criteria`）。
 10. **CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚**（latency 對齊）：soc_top 的 `sram0/clk0` 前面被插了 10 顆 delay buffer（`delaybuf_*`）。
-    - 後果一，SRAM 輸入腳的 hold 變差：padded.lib 要求 0.5 ns。post-CTS 的 hold 修到 +0.100 ns，繞線後在 min_ff_n40C 變成 −0.088 ns（Phase 4 第 2、3 次 harden-soc）。後來用 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 補過去（`drv-timing-closure`）。
+    - 後果一，SRAM 輸入腳的 hold 變差：SRAM .lib 要求 0.5 ns（ADR-0007 的值，ADR-0010 沿用為下限；實測 TT 為 0.20–0.24 ns）。post-CTS 的 hold 修到 +0.100 ns，繞線後在 min_ff_n40C 變成 −0.088 ns（Phase 4 第 2、3 次 harden-soc）。後來用 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 補過去（`drv-timing-closure`）。
     - 後果二，SRAM 下降緣送出的半週期路徑也比較吃緊。
     - **`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步**：設 0 或 1，結果與預設完全相同，仍是 10 顆。目前沒有找到可以關掉的設定（`docs/phase_exit/phase4.md` 已知限制 5）。
 11. **clock 輸入 pin 到 clock tree 根部的線**（接規則 4）：`CTS_CLK_MAX_WIRE_LENGTH` 預設 0，表示依 slew 算出來的長度，約 3.5 mm，所以 360 µm 的線不會被切段。pin 的 driver 是 LibreLane 假設的 `inv_2`（`SYNTH_CLK_DRIVING_CELL` 預設），max_ss_n40C 的 slew 0.767 ns，超過 0.75 ns（Phase 4 第 4 次 harden-soc）。

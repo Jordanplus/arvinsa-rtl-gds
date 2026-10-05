@@ -1,6 +1,6 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，產生保守的 padded .lib 給全部 corner，要用 SPICE 實測取代時看 openram-macro-characterization；LEF 缺 antenna 資料）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner 不能動時的佔位 .lib、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
 ---
 
 # Hard macro 整合
@@ -15,18 +15,19 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
    |---|---|---|
    | GDS | PDK 原檔 | `config.json` MACROS |
    | LEF | PDK LEF 補 `ANTENNAGATEAREA`（`gen_antenna_lef.py`） | ADR-0008、`antenna-signoff` |
-   | .lib | 保守的 padded.lib，`lib: {"*": [...]}`；少一個 corner 會被當 black box 且不報錯。用 SPICE 實測取代的做法見 `openram-macro-characterization` | ADR-0007、`project-plan.md` §6.2 |
+   | .lib | 每個 PVT 一份（`lib: {"*_<pvt>": [...]}`，萬用字元不可重疊），由 SPICE 實測產生，見 `openram-macro-characterization`。少一個 corner 會被當 black box 且不報錯。只有廠商的單一解析 .lib 時，先用保守的 padded .lib 給全部 corner（`"*"`）再用 STA hook 加 derate | ADR-0010（取代 ADR-0007）、`project-plan.md` §6.2 |
    | 合成 | `(* blackbox *)` 的 `.bb.v`（MACROS `vh`）；行為模型不可進 `VERILOG_FILES` | §6.1 |
    | 模擬 | 修正過的行為模型（加 timescale、關 VERBOSE、宣告順序） | `ip/sram/.../README.md` |
 
 2. **擺放**：macro 位置、halo、IO pin 與壅塞的規則在 `floorplan-congestion`；這裡只檢查 `MACROS.instances` 的座標與方向和 floorplan 決定一致（`check_soc.py placement`）。
 3. **未用的 port**：輸入接 tie cell（RTL 直接寫常數，合成會產生 `conb_1`）；輸出接 RTL 具名 wire，就不算斷線。checker 要檢查實際的 tie 值（`check_soc.py port1_tieoff`）。
 4. **電源**：`VDD_NETS`／`GND_NETS` 與 macro 電源 pin 同名；`PDN_MACRO_CONNECTIONS`；實體連接靠 LVS 驗證（`lvs-signoff`、`pdn-ir-drop`）。
-5. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
+5. **macro 在每個 STA corner 都要先證明功能正確**：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫讀出前一次的值（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
+6. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
 
 ## negative test
 
-P08 tie-off 斷開 → `check_soc.py port1_tieoff`；P09 擺放漂移 → `check_soc.py placement`；P14 `sram0` 改名 → `check_soc.py macro`；P16–P20 產生檔與來源不一致（少一個 RTL 檔、padded.lib 的表被改、antenna LEF 少一行、MACROS 的 lib 指回 PDK 的 TT .lib，config 與 `resolved.json` 各一次）→ `check_inputs.py` 對應的列；P04／P05／P06 見對應 skill。
+P08 tie-off 斷開 → `check_soc.py port1_tieoff`；P09 擺放漂移 → `check_soc.py placement`；P14 `sram0` 改名 → `check_soc.py macro`；P16–P20 產生檔與來源不一致（少一個 RTL 檔、特性化 .lib 的 hold 弧被改、antenna LEF 少一行、MACROS 的 lib 指回 PDK 的 TT .lib，config 與 `resolved.json` 各一次）→ `check_inputs.py` 對應的列；P30 某個 corner 讀到別的 PVT 的 .lib → `check_soc.py sram_lib`；P32 hold 弧設 0 → `Checker.HoldViolations`；P04／P05／P06 見對應 skill。
 
 ## 用完後
 

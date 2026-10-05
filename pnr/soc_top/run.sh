@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make harden-soc: Phase 3 (project-plan.md §8). Hardens soc_top with the prebuilt SRAM macro using
 # the pinned LibreLane Classic flow, then checks the signoff metrics.
-#   1. pnr/soc_top/check_inputs.py     : config.json VERILOG_FILES == rtl/rtl.f, padded.lib up to date
+#   1. pnr/soc_top/check_inputs.py     : config.json VERILOG_FILES == rtl/rtl.f, SRAM .lib (char/) up to date
 #   2. LibreLane run                   : runs/soc_top (tag soc_top, design dir = repo root)
 #   3. signoff/scripts/check_signoff.py: limits in signoff/limits/soc_top.toml and the golden run in
 #                                        signoff/golden/soc_top/metrics.json
@@ -10,7 +10,7 @@
 #      pnr/soc_top/check_soc.py        : SRAM placement, port 1 tie-off, disconnected pins,
 #                                        STA check_setup, min pulse width and period, Magic DRC
 #                                        inside the SRAM only where the SRAM alone has it
-#   5. check_inputs.py --resolved      : the run really used rtl/rtl.f, padded.lib and the antenna LEF
+#   5. check_inputs.py --resolved      : the run really used rtl/rtl.f, the SRAM .lib and the antenna LEF
 #   0/6. signoff/scripts/provenance.py : before and after the run: committed working tree, pinned
 #                                        LibreLane and PDK (project-plan.md §7.2)
 # Checker outputs go to runs/soc_top_signoff/; the verdict line is also written to result.txt, which
@@ -53,7 +53,7 @@ if ! grep -q '^provenance: PASS$' "$OUT/provenance.txt"; then
   echo "harden-soc: provenance FAIL - this run cannot be a signoff run (the verdict will be FAIL); the flow and the other checks still run"
 fi
 
-echo "harden-soc: inputs (config.json vs rtl/rtl.f, padded.lib vs the PDK .lib)"
+echo "harden-soc: inputs (config.json vs rtl/rtl.f, SRAM .lib vs char.json and the PDK .lib)"
 python3 pnr/soc_top/check_inputs.py | tee "$OUT/inputs.txt"
 grep -q '^soc-inputs: PASS$' "$OUT/inputs.txt"
 

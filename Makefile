@@ -16,7 +16,8 @@ DRY_RUN ?= 0
 .PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
-        neg-run-guard gl-soc-powered provenance-final harden regress py-check skill-check neg-regress clean
+        neg-run-guard gl-soc-powered provenance-final harden regress py-check skill-check neg-regress clean \
+        sram-lib sram-char sram-extract neg-char
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -55,7 +56,7 @@ help:
 	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
-	@echo "  make neg-pnr              bug injection P00-P31 (STA, PDN, IR, DRC, XOR, placement, inputs, ...), each must FAIL at its checker"
+	@echo "  make neg-pnr              bug injection P00-P32 (STA, PDN, IR, DRC, XOR, placement, inputs, ...), each must FAIL at its checker"
 	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
@@ -72,6 +73,13 @@ help:
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
 	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, and stop at a FAIL"
 	@echo "  make harden D=soc_top|picorv32_core   same as harden-soc / harden-core"
+	@echo ""
+	@echo "Phase 3.5 targets (SRAM timing from SPICE, ADR-0010, ip/sram/char/README.md; need ngspice):"
+	@echo "  make sram-lib             regenerate the five SRAM .lib from $(SRAM_CHAR)/char.json (seconds)"
+	@echo "  make neg-char             bug injection into the characterization N1-N8, each must be caught (about 40 minutes)"
+	@echo "  make sram-char            ngspice characterization of the SRAM: tt, then the other four PVTs seeded from tt,"
+	@echo "                            into $(SRAM_CHAR)/char.json, then sram-lib (hours; not part of make regress)"
+	@echo "  make sram-extract         Magic extraction of the SRAM GDS with wire capacitances (about 30 minutes)"
 	@echo ""
 	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
 
@@ -177,6 +185,26 @@ provenance-final:
 harden:
 	@case "$(D)" in soc_top) $(MAKE) harden-soc ;; picorv32_core) $(MAKE) harden-core ;; \
 	  *) echo "harden: FAIL - D must be soc_top or picorv32_core (got '$(D)')"; exit 1 ;; esac
+
+# SRAM SPICE characterization (Phase 3.5, ADR-0010). char.json and the five .lib are committed;
+# make harden-soc checks the .lib against char.json (pnr/soc_top/check_inputs.py char_lib).
+SRAM_CHAR = ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char
+SRAM_PDK_LIB = $${PDK_ROOT:-$$HOME/.ciel}/sky130A/libs.ref/sky130_sram_macros/lib/sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib
+
+sram-lib:
+	$(PY) ip/sram/char/gen_char_lib.py $(SRAM_CHAR)/char.json "$(SRAM_PDK_LIB)" $(SRAM_CHAR)
+
+neg-char:
+	$(PY) ip/sram/char/neg_char.py
+
+sram-extract:
+	$(PY) ip/sram/char/extract_sram.py
+
+sram-char:
+	$(PY) ip/sram/char/characterize.py $(SRAM_CHAR)/char.json --pvt tt_025C_1v80
+	$(PY) ip/sram/char/characterize.py $(SRAM_CHAR)/char.json --seed $(SRAM_CHAR)/char.json \
+	  --pvt ss_100C_1v60 ff_n40C_1v95 ss_n40C_1v60 ff_100C_1v95
+	$(MAKE) sram-lib
 
 # The whole regression (scripts/regress.py lists the targets and their order).
 regress:

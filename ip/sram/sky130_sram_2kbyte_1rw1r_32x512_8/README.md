@@ -18,7 +18,7 @@ OpenRAM 產生的 sky130 2 KB SRAM macro（512 words × 32 bit，byte write mask
 | `upstream/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 上游行為模型原檔，未修改 |
 | `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v` | 模擬用副本，由 `ip/sram/gen_sim_model.py` 從上游原檔產生，差異見 `sim/sky130_sram_2kbyte_1rw1r_32x512_8.v.diff`；`make env-check` 會檢查它是否過期 |
 | `sky130_sram_2kbyte_1rw1r_32x512_8.bb.v` | lint 與合成用的 blackbox 宣告；**不可**放進模擬 |
-| `padded.lib` | STA 用的保守時序模型，由 `gen_padded_lib.py` 從 PDK 的 TT .lib 產生（ADR-0007）；`make harden-soc` 會檢查它沒有過期 |
+| `char/char.json`、`char/<macro>__<pvt>.lib` | STA 用的時序模型，每個 PVT 一份：ngspice 量 PDK 附的電晶體網表（`char.json`），由 `ip/sram/char/gen_char_lib.py` 產生 .lib，數值以 ADR-0007 的 padded 值為下限（ADR-0010）；`make harden-soc` 會檢查它們沒有過期。說明見 [`../char/README.md`](../char/README.md) |
 | `sky130_sram_2kbyte_1rw1r_32x512_8.lef` | flow 用的 LEF：PDK 的 LEF 加上輸入 pin 的 `ANTENNAGATEAREA`，由 `gen_antenna_lef.py` 產生（ADR-0008）；`make harden-soc` 會檢查它沒有過期 |
 | `gate_area.py` | 從 PDK 的 SPICE netlist 算每個輸入 pin 接到的閘極面積（`gen_antenna_lef.py` 使用） |
 
@@ -30,7 +30,7 @@ OpenRAM 產生的 sky130 2 KB SRAM macro（512 words × 32 bit，byte write mask
 
 重新產生：`python3 ip/sram/gen_sim_model.py ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/upstream/sky130_sram_2kbyte_1rw1r_32x512_8.v ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sim/sky130_sram_2kbyte_1rw1r_32x512_8.v`
 
-GDS 直接用 PDK 內的版本，不在此 vendor；.lib 與 LEF 用上表的產生檔（原檔在 PDK 的 `libs.ref/sky130_sram_macros/`）。
+GDS 直接用 PDK 內的版本，不在此 vendor；.lib 與 LEF 用上表的產生檔（原檔在 PDK 的 `libs.ref/sky130_sram_macros/`）。Phase 3 用的 `padded.lib` 與 `gen_padded_lib.py` 已在 Phase 3.5 移除，它的數值保留在 `gen_char_lib.py` 的 `FLOOR`。
 
 ## 行為模型時序（模擬用，非 silicon 時序）
 
@@ -40,4 +40,4 @@ GDS 直接用 PDK 內的版本，不在此 vendor；.lib 與 LEF 用上表的產
 - Port 1 tie-off（clk1=0）時，port 1 的 always block 不會觸發。
 - Verilator 是 2-state 模擬器：上升緣後的 X 會變成 0，所以「讀出資料過期」這類問題只有 Icarus 看得到 X。
 
-注意：上游 .lib 是 OpenRAM 解析模型（analytical model），時序數字偏樂觀；見 project-plan.md §5.4、§6.2。
+注意：上游 .lib 是 OpenRAM 解析模型（analytical model），時序數字偏樂觀；見 project-plan.md §5.4、§6.2。上游 .lib 也沒有描述 dout0 在上升緣後約 1 ns 開始變化（行為模型的 `T_HOLD`）；`char/` 的 .lib 加了這條時序弧（ADR-0010）。

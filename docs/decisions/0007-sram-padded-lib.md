@@ -1,6 +1,6 @@
 # ADR-0007：SRAM macro 用保守的 padded.lib 做 STA
 
-- 狀態：已採用（2026-10-03），Phase 3.5／Phase 6 用 OpenRAM SPICE 特性化的 .lib 取代。
+- 狀態：**已由 ADR-0010 取代（2026-10-05）**。`padded.lib`、`gen_padded_lib.py` 與 `sta_extra_corner.tcl` 的 SRAM derate 已移除；本 ADR 的數值（dout 延遲 10 ns、ss ×1.5、transition 0.5 ns、setup 1.0、hold 0.5、min_period 30、min_pulse_width 12 ns）仍是新 .lib 的下限（ADR-0010 的使用者決定），見 `ip/sram/char/gen_char_lib.py` 的 `FLOOR`。以下保留當時的紀錄。
 - 背景：PDK 只附一份 TT 的 .lib（`sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib`），由 OpenRAM 解析模型（analytical model）算出，沒有做 SPICE 特性化，數字明顯樂觀（`project-plan.md` §5.4、§6.2）。用它做 signoff，等於 SRAM 的時序沒有被檢查。
 
 ## 決策

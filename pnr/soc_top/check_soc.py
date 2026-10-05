@@ -38,13 +38,11 @@ Checks (each prints a PASS/FAIL row):
                sta_extra_corner.tcl with report_check_types) in every corner of STA_CORNERS: both
                tables present and each worst slack >= the required slack printed in the report
                (duty cycle distortion + half-period jitter for the pulse width, period jitter for
-               the period; values from clock_uncertainty.sdc). The SRAM clk0 needs >= 12 ns high and
-               low and a period >= 30 ns (padded.lib).
-  sram_derate  the SRAM derate of sta_extra_corner.tcl in every corner of STA_CORNERS: exactly one
-               line in <corner>/sta.log, `-late -cell_delay 1.575` for ss, `-early -cell_delay 0.665`
-               for ff, `no derate` for tt (ADR-0007, user decision 2026-10-04). P04 shows the ss
-               derate changes the timing; this row shows the hook ran with the right value in each
-               corner, including the ff early derate that no timing check depends on today.
+               the period; values from clock_uncertainty.sdc). The SRAM clk0 limits are in its
+               characterized .lib (ADR-0010).
+  sram_lib     in every corner of STA_CORNERS, <corner>/sta.log reads exactly one SRAM .lib and it is
+               ip/sram/<macro>/char/<macro>__<pvt>.lib of that corner's PVT (ADR-0010). LibreLane
+               matches the MACROS lib wildcards to corners silently; this row shows what STA used.
 Prints `soc-checks: PASS` / `soc-checks: FAIL`; exit code 0 only on PASS. Python stdlib only.
 
 usage: check_soc.py --make-drc-baseline <drc.magic.rpt of the SRAM alone> <out.json>
@@ -380,19 +378,20 @@ def main(run_dir, config_path, sram_drc):
         f"{len(problems)} problem(s) [{', '.join(kinds)}], e.g. {'; '.join(problems[:2])}" if corners
         else "STA_CORNERS missing in the config")
 
-    # SRAM derate per corner (sta_extra_corner.tcl)
-    want = {"ss": "-late -cell_delay 1.575", "ff": "-early -cell_delay 0.665", "tt": "no derate"}
+    # SRAM .lib per corner: the STA of corner <rc>_<pvt> reads one SRAM .lib, the characterized one of <pvt>
     problems = []
     for c in corners:
         log = os.path.join(stas[-1], c, "sta.log") if stas else ""
-        lines = re.findall(r"^sta_extra_corner: " + re.escape(c) + r": sram0 (.*?)\s*$",
-                           open(log, encoding="utf8", errors="replace").read(), re.M) if os.path.isfile(log) else None
-        kind = c.split("_")[1] if c.count("_") >= 2 else None
-        if kind not in want or lines != [want[kind]]:
-            problems.append(f"{c}: {lines if lines is not None else 'no sta.log'}")
-    row("sram_derate", bool(corners) and not problems,
-        f"{len(corners)} corners: ss {want['ss']}, ff {want['ff']}, tt {want['tt']}" if corners and not problems
-        else f"{len(problems)} corner(s) without the expected line, e.g. {'; '.join(problems[:2])}" if corners
+        text = open(log, encoding="utf8", errors="replace").read() if os.path.isfile(log) else None
+        libs = re.findall(r"^Reading cell library for the '" + re.escape(c) + r"' corner at '(.*?)'", text, re.M) \
+            if text is not None else []
+        sram = [l for l in libs if os.path.basename(l).startswith(MACRO)]
+        want = f"/ip/sram/{MACRO}/char/{MACRO}__{c.split('_', 1)[1]}.lib"
+        if text is None or len(sram) != 1 or not sram[0].endswith(want):
+            problems.append(f"{c}: {'no sta.log' if text is None else [os.path.basename(l) for l in sram]}")
+    row("sram_lib", bool(corners) and not problems,
+        f"{len(corners)} corners, each read only the char .lib of its PVT (ADR-0010)" if corners and not problems
+        else f"{len(problems)} corner(s) with the wrong SRAM .lib, e.g. {'; '.join(problems[:2])}" if corners
         else "STA_CORNERS missing in the config")
 
     # Magic DRC (full GDS)

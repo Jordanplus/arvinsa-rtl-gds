@@ -5,7 +5,7 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與
 
 # 多 corner STA：設定、hook、what-if 與最小週期
 
-條件設多少看 `signoff-criteria`；SDC 怎麼寫看 `timing-constraints-sdc`；違規怎麼修看 `drv-timing-closure`。本 repo 實例：`pnr/soc_top/config.json`（`STA_CORNERS`、`LIB`、`RSZ_CORNERS`）、`pnr/soc_top/sta_extra_corner.tcl`、`pnr/soc_top/neg_pnr.py`（P01–P04、P22–P25、P30：拿掉 nom_ff 的 SRAM derate，`check_soc.py sram_derate` 必須 FAIL）。
+條件設多少看 `signoff-criteria`；SDC 怎麼寫看 `timing-constraints-sdc`；違規怎麼修看 `drv-timing-closure`。本 repo 實例：`pnr/soc_top/config.json`（`STA_CORNERS`、`LIB`、`RSZ_CORNERS`）、`pnr/soc_top/sta_extra_corner.tcl`、`pnr/soc_top/neg_pnr.py`（P01–P04、P22–P25、P30：某個 corner 的 STA 讀到別的 PVT 的 SRAM .lib，`check_soc.py sram_lib` 必須 FAIL）。
 
 名詞：
 - **PVT corner**：製程（tt／ss／ff）、溫度、電壓的組合，對應一份 .lib，例如 `ss_n40C_1v60`。
@@ -22,7 +22,7 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與
    - 做法：resizer 用原本的 corner，新加的 corner 只在 signoff STA 判定；signoff 若在新 corner 出現 slew／cap 違規，再另外處理。
 4. **每個 corner 的 hook**（`STA_EXTRA_CORNER_TCL_FILE`）：
    - LibreLane 的 STA step 在每個 corner 讀完 SDC 之後 source 它（`scripts/openroad/sta/corner.tcl` 59–61 行），變數 `$corner_name` 是 corner 名稱；resizer、CTS 看不到。
-   - 適合放 instance derate（例如 macro 依 corner 加 derate）與 LibreLane 沒有輸出的報告。
+   - 適合放 instance derate（例如 macro 只有一份 .lib 時依 corner 加 derate；有每個 PVT 的 .lib 就不需要，ADR-0010）與 LibreLane 沒有輸出的報告。
    - 報告寫法：`puts "%OL_CREATE_REPORT <name>.rpt"`，接著 report 指令，最後 `puts "%OL_END_REPORT"`，LibreLane 會存成 `<step>/<corner>/<name>.rpt`。
    - SDC 是在全域範圍執行的（`base.sdc` 自己就用 `::clock_port`），所以 SDC 裡設的變數 hook 讀得到，可用來把 SDC 的預算（例如 duty cycle）帶進 hook 的判定。
 5. **兩種 what-if**：
