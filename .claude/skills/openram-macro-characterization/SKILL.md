@@ -1,6 +1,6 @@
 ---
 name: openram-macro-characterization
-description: SRAM macro（OpenRAM 產生的預建 macro 或自產 macro）的時序要用 SPICE 實測、產生多 corner 的 .lib 時使用：判斷廠商 .lib 是不是解析模型、macro 在低溫讀出前一次的值（sense amp 沒有預充電、column mux 只有 NMOS）與不能動的 corner 怎麼給佔位 .lib、用 ngspice 量 clk→dout 延遲與 dout 在上升緣後被拉回的時間、setup/hold、最小週期與 pulse width、網表修剪與模擬步長怎麼驗證、從 GDS 萃取寄生電容（Magic）、OpenRAM 自己特性化的缺陷、量測結果怎麼寫成 .lib 並用植入錯誤證明量得對，以及 ngspice 讀大網表很慢、bus 節點名稱報 bad v() syntax、萃取網表報 singular matrix 或 Timestep too small 這類問題。macro 怎麼放進設計看 hard-macro-integration，餘量怎麼定看 signoff-criteria。Use for SPICE characterization of SRAM macros (ngspice + sky130), per-corner Liberty generation, netlist trimming, parasitic extraction and OpenRAM characterizer pitfalls.
+description: SRAM macro（OpenRAM 產生的預建 macro 或自產 macro）的時序要用 SPICE 實測、產生多 corner 的 .lib 時使用：判斷廠商 .lib 是不是解析模型、macro 在低溫讀出前一次的值（sense amp 沒有預充電、column mux 只有 NMOS）與不能動的 corner 怎麼給佔位 .lib、換上新 .lib 後 repair_design 跑很久或異常結束（延遲表的負載斜率）、用 ngspice 量 clk→dout 延遲與 dout 在上升緣後被拉回的時間、setup/hold、最小週期與 pulse width、網表修剪與模擬步長怎麼驗證、從 GDS 萃取寄生電容（Magic）、OpenRAM 自己特性化的缺陷、量測結果怎麼寫成 .lib 並用植入錯誤證明量得對，以及 ngspice 讀大網表很慢、bus 節點名稱報 bad v() syntax、萃取網表報 singular matrix 或 Timestep too small 這類問題。macro 怎麼放進設計看 hard-macro-integration，餘量怎麼定看 signoff-criteria。Use for SPICE characterization of SRAM macros (ngspice + sky130), per-corner Liberty generation, netlist trimming, parasitic extraction and OpenRAM characterizer pitfalls.
 ---
 
 # SRAM macro 的 SPICE 特性化與 .lib
@@ -59,6 +59,10 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
     - 測試序列要有「連續讀取不同值」的讀取，否則看不到這個錯；每個 PVT 先跑一次，有錯就只記下錯的讀取（`read_fail`），不量時序。
     - 不能動的 PVT 仍要給 STA 一份 .lib（`hard-macro-integration` 第 5 項）：用同製程、能動的 PVT 的數字，hold 弧取所有 PVT 最早的值，檔頭寫明 PLACEHOLDER；並列為下線風險。
     - 修剪後只剩 2 顆 bitcell 的 bitline 電容太小，會讓這個錯更早出現（ss 25°C、60°C 只有這些 bit 錯），判斷時要看完整 bitline 的那幾個 bit。
+14. **.lib 延遲表的負載斜率會被 OpenROAD 當成 driver 的強度**（sky130 2 KB；ADR-0010「延遲表為什麼不隨負載變化」）：
+    - 讀出穩定時間是 dout 進入有效電壓範圍的時刻，不是 RC 延遲，會隨負載跳動（ss 100°C 5 → 20 fF 跳 1.3 ns）。直接寫進表裡，等於 60–140 kΩ 的 driver。
+    - 這樣的表讓 `repair_design` 一直在輸出 net 上插 buffer：同一份輸入單步重跑，卡在第 9000 個 driver 之後；加大輸出 pin 的 `max_transition` 沒用；表在負載方向攤平後 52–98 秒完成。
+    - 做法：每列（clock slew）取負載中的最大延遲、hold 弧取最小值，`max_capacitance` 設成特性化過的最大負載。產生 .lib 後先用單步重跑 `OpenROAD.RepairDesignPostGPL` 確認時間正常，再跑完整流程（`librelane-run-debug` 規則 3）。
 
 ## 待補
 
@@ -88,3 +92,4 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
 | 2026-10-05 | Phase 3.5 特性化的植入錯誤 | N6（手改 .lib 必須被 `--check` 抓到）改成新餘量後，要替換的字串 `2.7500` 已不在 .lib 裡，植入什麼都沒做，`--check` 判沒有過期，N6 FAIL | 已驗證：餘量改變後 .lib 的數字跟著變 | 改成編輯 `timing_type : rising_edge;` 並檢查替換次數（規則 11）；N1–N6 6/6 PASS | `ip/sram/char/neg_char.py` |
 | 2026-10-05 | Phase 3.5 ss −40°C 診斷 | 6 個各約 25 分鐘的模擬全部在最後報 `Error: no such vector xsram.xbank0.xport_data0.bl_0`，沒有波形 | 已驗證：子電路的 port 節點用上一層的網路名稱（`xsram.xbank0.bl_0_0`），只有子電路內部節點才是 `<instance>.<node>`；`wrdata` 到模擬結束才檢查名稱 | 長模擬前先跑一個 1 ns 的同一份 deck 確認每個探測節點都存在 | scratchpad `diag2.py` 的 `check_names` |
 | 2026-10-05 | Phase 3.5 ss −40°C | 延遲模擬每次讀取都錯；tt −40°C、ss −40°C 到 1.95 V 都讀成前一次的值 | 已驗證（修剪網表，量 bit 0 的 column mux 輸出與 sense amp 內部節點）：sense amp 沒有預充電、column mux 只有 NMOS（規則 13）；完整網表的確認見 `docs/phase_exit/phase3_5.md` | 使用者決定：ss −40°C 用佔位 .lib，列為頭號下線風險，Phase 6 修正 | ADR-0010 |
+| 2026-10-05 | Phase 3.5 harden-soc 第 1 次（`ccc536c`） | `OpenROAD.RepairDesignPostGPL` 75 分鐘後 `failed with an unexpected error`（Phase 4 同一步 44 秒） | 已驗證（單步重跑 4 種 .lib）：dout0 延遲表的負載斜率等於 60–140 kΩ 的 driver | 規則 14：負載方向取最大值 | ADR-0010 |

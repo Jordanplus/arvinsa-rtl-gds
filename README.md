@@ -123,7 +123,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
 | 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
-| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
+| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM | pdn-ir-drop | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
@@ -260,6 +260,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - Magic 沒設 `PDK_ROOT` 時會 exit 0 但沒有輸出，要檢查輸出檔。萃取網表的基板網路 VSUBS 與被修剪 cell 的儲存節點會浮接（singular matrix），要接地；處理後仍有暫態不收斂的問題未解決。
   - 量測方法先驗證誤差（步長、修剪、初始條件、延遲表推算，都要偏保守），再用植入錯誤證明腳本量得對；植入的字串要先確認找得到、改到預期的次數，否則植入什麼都沒做，測不到要測的東西。
   - 新加的 `rising_edge` 弧接進 SoC 後，要有 negative test 證明 STA 真的用到它。
+  - .lib 延遲表的負載斜率會被 OpenROAD 當成 driver 強度。讀出穩定時間會隨負載跳動，照實寫進表裡等於 60–140 kΩ 的 driver，`repair_design` 會一直插 buffer。所以每列取負載中的最大延遲（hold 弧取最小），產生後先單步重跑 repair 確認時間正常。
   - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
 - **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N8（`make neg-char`）與 P04、P17、P30、P32。

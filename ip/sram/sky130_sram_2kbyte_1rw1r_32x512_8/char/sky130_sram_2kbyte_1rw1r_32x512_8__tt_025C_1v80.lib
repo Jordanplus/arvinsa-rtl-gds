@@ -2,6 +2,8 @@
    characterization char.json (netlist schematic, sha256 43038684a01b, ngspice 47).
    PVT tt_025C_1v80: model tt, 1.8 V, 25 C. Port 0: each limit is the larger of the
    padded.lib value (ADR-0007) and the schematic measurement x1.6 (setup/hold +0.1 ns);
+   dout0 delays do not depend on the load: each slew row holds its largest delay over the loads
+   (the earliest change for the rising_edge arc);
    dout0 transition 0.5 ns; dout0 rising_edge (hold) arc = earliest change x0.9.
    Port 1 and power keep the PDK's analytical numbers. ADR-0010. Do not edit by hand.
 */
@@ -165,14 +167,14 @@ cell (sky130_sram_2kbyte_1rw1r_32x512_8){
             related_pin : "clk0"; 
             timing_type : falling_edge; 
             cell_rise(CELL_TABLE) {
-            values("10.0000, 10.2076, 10.5271",\
-                   "10.0268, 10.1949, 10.5461",\
-                   "10.0709, 10.2714, 10.5994");
+            values("10.0000, 10.0000, 10.0000",\
+                   "10.0190, 10.0190, 10.0190",\
+                   "10.0723, 10.0723, 10.0723");
             }
             cell_fall(CELL_TABLE) {
-            values("10.0000, 10.2076, 10.5271",\
-                   "10.0268, 10.1949, 10.5461",\
-                   "10.0709, 10.2714, 10.5994");
+            values("10.0000, 10.0000, 10.0000",\
+                   "10.0190, 10.0190, 10.0190",\
+                   "10.0723, 10.0723, 10.0723");
             }
             rise_transition(CELL_TABLE) {
             values("0.5000, 0.5000, 0.5000",\
@@ -190,14 +192,14 @@ cell (sky130_sram_2kbyte_1rw1r_32x512_8){
             related_pin : "clk0"; 
             timing_type : rising_edge; 
             cell_rise(CELL_TABLE) {
-            values("1.0577, 1.0997, 1.1520",\
-                   "1.0808, 1.1174, 1.1677",\
-                   "1.0774, 1.1244, 1.1770");
+            values("1.0577, 1.0577, 1.0577",\
+                   "1.0808, 1.0808, 1.0808",\
+                   "1.0774, 1.0774, 1.0774");
             }
             cell_fall(CELL_TABLE) {
-            values("1.0577, 1.0997, 1.1520",\
-                   "1.0808, 1.1174, 1.1677",\
-                   "1.0774, 1.1244, 1.1770");
+            values("1.0577, 1.0577, 1.0577",\
+                   "1.0808, 1.0808, 1.0808",\
+                   "1.0774, 1.0774, 1.0774");
             }
             rise_transition(CELL_TABLE) {
             values("0.5000, 0.5000, 0.5000",\

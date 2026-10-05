@@ -12,13 +12,21 @@ bitcell-annotated test), so every limit is the more conservative of the ADR-0007
 value (FLOOR) and the characterized value with a parasitic allowance. For each PVT:
   library name, operating conditions, nominal voltage/temperature, VCCD1 voltage map
   CELL_TABLE / CONSTRAINT_TABLE indices  -> the characterized clk0 slews and dout0 loads
-  dout0 falling_edge cell_rise/cell_fall -> settle_max x PARASITIC, the whole table shifted up so its
-                                            smallest entry is at least FLOOR dout (x PVT_FLOOR_SCALE)
+  dout0 falling_edge cell_rise/cell_fall -> settle_max x PARASITIC, each row (clk0 slew) set to its
+                                            largest value over the loads, then the whole table shifted
+                                            up so its smallest entry is at least FLOOR dout (x PVT_FLOOR_SCALE)
         rise/fall_transition             -> DOUT_TRANSITION (user decision: the schematic, 1.1-1.3 ns,
                                             and the annotated test, 0.23-0.28 ns, disagree 5x)
-  dout0 rising_edge arc (new)            -> depart_min x HOLD_ARC_SCALE: the data of the previous read
-                                            starts to change this long after the rising edge (the
-                                            annotated test changes later, so this is the early side)
+  dout0 rising_edge arc (new)            -> depart_min x HOLD_ARC_SCALE, each row set to its smallest
+                                            value over the loads: the data of the previous read starts
+                                            to change this long after the rising edge (the annotated
+                                            test changes later, so this is the early side)
+  Why no load slope: settle_max is when dout enters the valid band, not an RC delay; at ss it jumps
+  1.3 ns from 5 to 20 fF. As a load slope it reads as a 60-140 kOhm driver and OpenROAD's
+  repair_design kept buffering the dout0 nets (Phase 3.5 harden-soc 1: 75 minutes, then the step
+  ended with an error; the same step finished in 98 s with a flat table). Within the characterized
+  loads (max_capacitance) the row maximum bounds the delay from above and the row minimum bounds
+  the earliest change from below.
   setup_rising / hold_rising of din0 addr0 wmask0 csb0 web0
                                          -> max(FLOOR, first passing offset + CONSTRAINT_ADD) (rise/fall)
   clk0 minimum_period / min_pulse_width  -> max(FLOOR, first passing value x PARASITIC)
@@ -160,12 +168,12 @@ def transform(src, doc, pvt):
     src = sub1(r"(lu_table_template\(CONSTRAINT_TABLE\)\{[^}]*?index_1\()[^)]*(\);[^}]*?index_2\()[^)]*(\);)",
                lambda m: m.group(1) + idx(slews) + m.group(2) + idx(slews) + m.group(3), src, "constraint_template")
 
-    settle = [[x * PARASITIC for x in row] for row in d["settle_max"]]
+    settle = [[max(row) * PARASITIC] * len(row) for row in d["settle_max"]]
     floor = FLOOR["dout"] * PVT_FLOOR_SCALE[r["model"]]
     lift = max(0.0, floor - min(min(row) for row in settle))
     settle = [[x + lift for x in row] for row in settle]
     tran = const(DOUT_TRANSITION, len(slews), len(loads))
-    depart = [[x * HOLD_ARC_SCALE for x in row] for row in d["depart_min"]]
+    depart = [[min(row) * HOLD_ARC_SCALE] * len(row) for row in d["depart_min"]]
     cons = r["constraints"]
     pulse = r["pulse"]
 
@@ -241,6 +249,8 @@ def transform(src, doc, pvt):
               f" sha256 {doc['netlist_sha256'][:12]}, ngspice {doc['ngspice']}).\n"
               f"   PVT {pvt}: model {r['model']}, {r['vdd']} V, {r['temp']:g} C. Port 0: each limit is the larger of the\n"
               f"   padded.lib value (ADR-0007) and the schematic measurement x{PARASITIC} (setup/hold +{CONSTRAINT_ADD} ns);\n"
+              f"   dout0 delays do not depend on the load: each slew row holds its largest delay over the loads\n"
+              f"   (the earliest change for the rising_edge arc);\n"
               f"   dout0 transition {DOUT_TRANSITION} ns; dout0 rising_edge (hold) arc = earliest change x{HOLD_ARC_SCALE}.\n"
               f"   Port 1 and power keep the PDK's analytical numbers. ADR-0010. Do not edit by hand.\n"
               + note + "*/\n")

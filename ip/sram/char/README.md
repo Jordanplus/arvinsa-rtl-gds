@@ -38,9 +38,9 @@ make sram-char     # 重新特性化：先 tt，再以 tt 為中心跑其他 4 �
 
 | 量測 | 定義 | 寫進 .lib |
 |---|---|---|
-| 讀出穩定時間 | 下降緣 → bit 最後一次進入有效範圍（≥ 0.8 或 ≤ 0.2 VDD） | dout0 `falling_edge` 的 cell_rise／cell_fall |
+| 讀出穩定時間 | 下降緣 → bit 最後一次進入有效範圍（≥ 0.8 或 ≤ 0.2 VDD） | dout0 `falling_edge` 的 cell_rise／cell_fall；每列（clock slew）取負載中的最大值，表不隨負載變化（ADR-0010「延遲表為什麼不隨負載變化」） |
 | 轉換時間 | 讀 1 時 dout 的 10–90% | rise／fall_transition |
-| 資料開始變化 | 上升緣 → 前一次讀出的值偏離 0.1 VDD | 新增的 dout0 `rising_edge` 弧（hold 檢查用） |
+| 資料開始變化 | 上升緣 → 前一次讀出的值偏離 0.1 VDD | 新增的 dout0 `rising_edge` 弧（hold 檢查用）；每列取負載中的最小值 |
 | setup/hold | 在測試週期把一組輸入的轉態時間往前或往後移，看寫入或讀回的資料是新值還是舊值；二分搜尋 | 各輸入的 setup_rising／hold_rising |
 | 最小 pulse width、週期 | 縮短 clock 高（或低、或兩者）的時間，直到讀寫出錯；二分搜尋 | clk0 的 min_pulse_width、minimum_period |
 
