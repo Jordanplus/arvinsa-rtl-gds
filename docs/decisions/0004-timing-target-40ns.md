@@ -13,3 +13,11 @@
 - 25 ns（stretch goal）：同一份版圖做 STA what-if，25 ns 時 SRAM 路徑差約 7 ns，不含 SRAM 的路徑也差 1.8 ns（ss 100 °C）到 4.7 ns（ss −40 °C）。在目前的 SRAM 假設下做不到。
 - picorv32_core（Phase 2 的單獨 harden，沒有 SRAM）維持 40 ns。
 - RTL 與 gate-level 模擬的 testbench clock 仍是 40 ns：模擬只看 cycle，不檢查時序，週期數值不影響結果。
+
+## Phase 3.5 補充（2026-10-05）：soc_top 改 43 ns
+
+- Phase 3.5 換上 SPICE 特性化的 SRAM .lib（ADR-0010），多了一條 dout0 的 `rising_edge` hold 弧：資料在 clock 上升緣後 0.64 ns（ff，× 0.9）就開始變化。
+- post-CTS 的 hold 修復有 0.3 ns 額外餘量（`PL_RESIZER_HOLD_SLACK_MARGIN`），為了這條弧在 `rdata_q` 前插了一顆 delay cell（`dlygate4sd3`，ss −40°C 約 1.17 ns）。不插的話 ff 的 hold 仍有約 +0.18 ns。
+- 這顆 cell 也在 SRAM 讀出的半週期路徑上：42 ns 時 min_ss_n40C 的 setup 差 0.066 ns（Phase 3.5 第 2 次 `make harden-soc`，commit `3e9b011`），ss 100°C 從 +0.79 降到 +0.47 ns。
+- 使用者決定（2026-10-05）：soc_top 改 **43 ns**，不動任何檢查或餘量。另兩個選項沒有採用：把 resizer 的 hold 餘量降到 0.15 ns（全域設定，Phase 4 是因為 SRAM 輸入 pin 的 hold 才調到 0.3）；ss −40°C 的 SRAM 路徑不判 setup（放寬檢查）。
+- picorv32_core 維持 40 ns；模擬的 testbench clock 不變（同上一節）。
