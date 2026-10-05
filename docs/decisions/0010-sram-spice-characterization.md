@@ -98,7 +98,7 @@ ss −40°C 1.60 V 的延遲模擬中，每次讀取都錯（`char.json` 的 `re
 
 - 所以只有「連續兩次讀取的值不同」時會錯；ss −40°C 把電壓提高到 1.95 V 也救不回來。
 
-**修剪的影響**：bit 1–30 的 bitline 在修剪網表裡只有 2 顆 bitcell（原本 128 顆），電容小很多。和 sense amp 內部節點分電荷後，電壓又更低，所以 ss 25°C、60°C 只有這些 bit 出錯。這部分是修剪造成的、比實際電路悲觀；bit 0、31 的 bitline 是完整的。用完整網表在 ss −40°C 1.60／1.70 V 重跑確認，結果記在 `docs/phase_exit/phase3_5.md`。
+**修剪的影響**：bit 1–30 的 bitline 在修剪網表裡只有 2 顆 bitcell（原本 128 顆），電容小很多。和 sense amp 內部節點分電荷後，電壓又更低，所以 ss 25°C、60°C 只有這些 bit 出錯。這部分是修剪造成的、比實際電路悲觀；bit 0、31 的 bitline 是完整的。**完整網表確認**：ss −40°C 1.70 V 用未修剪的 PDK 網表重跑同一個序列，失敗的讀取完全相同（第 5、6、10 次），第 5 次讀取前 `dint` 1.53 V、`dint_bar` 0.01 V（修剪網表 1.53／0.00 V）。所以 bit 0 的失敗不是修剪造成的。
 
 **和矽量測的關係**：OpenRAM 團隊對 1 KB macro 的量測是「≥ 1.7 V 才不出錯」（查證結果第 4 點，室溫）。和這個機制的方向一致：VDD − Vt 的餘量越小越容易錯。但量測沒有低溫資料，無法直接對照。
 
@@ -171,7 +171,7 @@ ss −40°C 1.60 V 的延遲模擬中，每次讀取都錯（`char.json` 的 `re
 2. **走線寄生沒有模擬**。用 × 1.6 補。依據只是「換上萃取 bitcell」的試驗（+42–65%）；周邊電路（decoder、sense amp、控制邏輯）的走線寄生沒有算進去。
 3. **Magic 萃取的完整網表無法模擬**：處理浮接節點、加 `rshunt` 之後，暫態仍在第一個 clock 邊緣報 `Timestep too small`（修剪或完整都一樣），原因未解。
 4. **換上萃取 bitcell 後，TT 寫入第 0 列第 0 行失敗**（20 ns 與 40 ns 週期都失敗）。寫入脈衝由 macro 內部自己產生；預充電只到 1.68 V，寫入時兩條 bitline 同時偏低。可能是真的寫入餘量不足，也可能是只換 bitcell、周邊沒有寄生造成的不一致。**這是下線前的風險**：使用者決定記為已知限制，在 Phase 6 用 OpenRAM 環境（含寄生的特性化）確認，Phase 7 下線前必須有結論。
-5. **dout0 transition 兩個模型差 5 倍**（見使用者決定 3）。如果電路圖的 1.1–1.3 ns 才是對的，`rdata_q` 的輸入 slew 被低估；這條是半週期路徑，slack 見 `docs/phase_exit/phase3_5.md`（Phase 6 確認）。
+5. **dout0 transition 兩個模型差 5 倍**（見使用者決定 3）。如果電路圖的 1.1–1.3 ns 才是對的，`rdata_q` 的輸入 slew 被低估；這條是半週期路徑。用 OpenSTA 在 Phase 3.5 的最終版圖做 what-if（只換 .lib 的 dout0 transition，min RC）：ss −40°C 從 0.5 改 1.3 ns，最差 setup slack 從 +0.38 降到 +0.03 ns；ss 100°C 改成實測最差的 3.15 ns（50 fF），從 +0.92 降到 +0.17 ns。兩者都仍 PASS，但如果電路圖的 transition 才是對的，43 ns 的餘量幾乎用完（Phase 6 確認）。
 6. **沒有模擬元件的隨機誤差（mismatch／Monte Carlo）**：sense amp 的 offset 會影響讀出時間，目前只靠 × 1.6 與 padded.lib 下限涵蓋。
 7. **只在 bit 0、31 量時序、只用 8 個位址**；其他 30 個 bit 只檢查讀出值對不對。
 8. **port 1 與功耗沿用 PDK 的解析值**。現在 port 1 tie-off，不影響 STA；Phase 5 如果用 port 1 做 instruction fetch（`project-plan.md` §8 的建議），port 1 也要特性化。

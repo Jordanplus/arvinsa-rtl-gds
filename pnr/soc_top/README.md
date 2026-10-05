@@ -1,6 +1,6 @@
 # soc_top：整合預建 SRAM macro 的 harden（Phase 3，Phase 4 更新）
 
-`make harden-soc`（`run.sh`）用釘版的 LibreLane Classic flow harden `soc_top`（PicoRV32 + 2 KB SRAM macro + Boot ROM + 周邊），週期 42 ns（Phase 4 使用者決定，ADR-0004 的 Phase 4 補充；Phase 3 是 40 ns），再用下列 checker 判定。本機約 20–30 分鐘（正式 run 1、2 分別 28 與 18 分鐘；其中 Magic 全 GDS DRC 約 3–4.5 分鐘）。
+`make harden-soc`（`run.sh`）用釘版的 LibreLane Classic flow harden `soc_top`（PicoRV32 + 2 KB SRAM macro + Boot ROM + 周邊），週期 43 ns（Phase 3.5 使用者決定，ADR-0004 的 Phase 3.5 補充；Phase 4 是 42 ns、Phase 3 是 40 ns），再用下列 checker 判定。本機約 20–30 分鐘（正式 run 1、2 分別 28 與 18 分鐘；其中 Magic 全 GDS DRC 約 3–4.5 分鐘）。
 
 ## 檢查項
 
@@ -10,7 +10,7 @@
 | LibreLane 內建 checker | flow 本身 | lint、合成、routing DRC、KLayout DRC、LVS、XOR、15 個 corner 的 setup／hold／max slew／max cap；任何一項 FAIL 時 flow 就中止。Magic DRC 例外，見下一列與「設定與理由」 |
 | soc 專用 | `sram_drc_alone.py` + `check_soc.py` | SRAM 只有一顆、名稱 `sram0`；最終 DEF 中 `sram0` 是 FIXED，座標與方向等於 `config.json`；port 1 有 tie-off（`csb1` 接 tie-high，`clk1`、`addr1[8:0]` 接 tie-low）；沒有任何斷線 pin；`check_setup` 在 `STA_CORNERS` 的每個 corner 只有預期的 `sram0/clk1`；min pulse width 與 min period 的 slack ≥ duty cycle 與 jitter 的預算（Phase 4）；每個 corner 的 STA 只讀了它那個 PVT 的 SRAM .lib（`sram_lib`，Phase 3.5）；IR 的電壓源每條 met5 strap 剛好一點，大小不超過 strap 寬度，位置在 strap 左端（`ir_sources`，Phase 4）；Magic DRC（完整 GDS）在 SRAM 外框之外是 0，框內**每一個**違規都在 SRAM 單獨檢查時同規則違規的位置（Phase 4；只有 li.5 與 diff/tap.9 容許 0.1 µm，這兩條規則在乾淨的 run 中量到最多凸出 85 nm；SRAM 單獨的報告每次 harden 重新產生，規則數量與 `signoff/waivers/soc_top/sram_magic_drc_baseline.json` 相同） |
 | 來源追溯 | `signoff/scripts/provenance.py`（flow 開始前與結束後各一次） | 工作目錄已全部 commit（含未追蹤檔）、submodule 在記錄的 commit、LibreLane 與 PDK 是 `env/versions.mk` 釘的版本、LibreLane clone 沒有改過的檔、PDK 6 個目錄的內容與 `env/pdk_content.sha256` 相同（Phase 4）；結束時 HEAD 不變，`resolved.json` 實際用的版本也對、讀的 PDK 檔都在檢查過的目錄裡（`project-plan.md` §7.2）。不乾淨時 flow 照跑、整體判 FAIL |
-| signoff metrics | `signoff/scripts/check_signoff.py` + `signoff/limits/soc_top.toml` | 見該檔：各種違規數 = 0、15 個 corner 的 setup／hold slack ≥ 0 且 < 42 ns、IR drop ≤ 20 mV（Phase 4，使用者決定）；nom_tt setup 只報告；所有 metrics 與 golden（`signoff/golden/soc_top/`）相同，只有 detailed routing 造成微小差異的族群有明確的小誤差 |
+| signoff metrics | `signoff/scripts/check_signoff.py` + `signoff/limits/soc_top.toml` | 見該檔：各種違規數 = 0、15 個 corner 的 setup／hold slack ≥ 0 且 < 43 ns、IR drop ≤ 20 mV（Phase 4，使用者決定）；nom_tt setup 只報告；所有 metrics 與 golden（`signoff/golden/soc_top/`）相同，只有 detailed routing 造成微小差異的族群有明確的小誤差 |
 
 全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案，而且 run 是從目前的 commit 產生的（`signoff/scripts/run_guard.py`）：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`／`gl-soc-powered`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-gl-soc`（網表植入錯誤，lockstep 必須抓到）、`make neg-pnr`（PnR 與 checker 的 negative test P00–P32，`neg_pnr.py`）。
 
@@ -38,7 +38,7 @@
 | `pnr.sdc` 的 `set_max_transition`（Phase 4） | PnR 0.70 ns；signoff 維持 0.75 ns | resizer 看不到 ss_n40C，而那裡的 transition 比 ss_100C 慢約 25%；第 4 次 harden 有一條 data net 在那裡到 0.766 ns |
 | `VSRC_LOC_FILES`（Phase 4） | `vsrc/vccd1.vsrc`、`vsrc/vssd1.vsrc`：每條 met5 strap 左端一個 1.6 µm 的電壓源 | IR 用一側供電的模型。不設時 PSM 把所有 pin 形狀都當理想電源，得到 0.3 mV，不能當 signoff 數字。`check_soc.py` 的 ir_sources 列確認每個點都在同一個 net 的 met5 strap 上、大小不超過 strap 寬度、在 strap 左端（P26–P28；`docs/notes/ir_worst_case_soc_top.md`） |
 | `STA_EXTRA_CORNER_TCL_FILE` | `sta_extra_corner.tcl` | 每個 corner 輸出 min pulse width／min period 報告。Phase 4 的 SRAM derate（ss 1.575、ff 0.665）在 Phase 3.5 拿掉：每個 PVT 有自己的 .lib，`sram0` 和其他 cell 一樣只套 `base.sdc` 的 ±5% OCV（ADR-0010）。P04 改成在這個 hook 加 derate 10，證明 STA 用到 SRAM 的時序弧 |
-| `PNR_SDC_FILE`、`SIGNOFF_SDC_FILE` 共用的 `clock_uncertainty.sdc`（Phase 4） | setup 0.25、hold 0.25、半週期路徑 setup 2.35 ns（42 ns 時：jitter 0.15 + duty cycle 預算 2.1 + 0.10） | 各項成分見 `docs/notes/signoff_criteria_soc_top.md`；P24、P25 證明半週期路徑的 duty cycle 預算有作用 |
+| `PNR_SDC_FILE`、`SIGNOFF_SDC_FILE` 共用的 `clock_uncertainty.sdc`（Phase 4） | setup 0.25、hold 0.25、半週期路徑 setup 2.40 ns（43 ns 時：jitter 0.15 + duty cycle 預算 2.15 + 0.10） | 各項成分見 `docs/notes/signoff_criteria_soc_top.md`；P24、P25 證明半週期路徑的 duty cycle 預算有作用 |
 | `ERROR_ON_MAGIC_DRC` | false | Magic 讀完整 GDS 檢查時，SRAM 自己的 GDS 有約 466 萬個標準規則違規（bitcell 用 SRAM 專用規則），全部在 SRAM 外框內；由 `check_soc.py` 的 magic_drc 列取代 LibreLane 的判定。abstract 模式（`MAGIC_DRC_USE_GDS=false`，規劃 §6.3 原案）試過：每一條 standard cell row 都報 `nwell.4`（共 416 個），因為 abstract cell 沒有 tap；完整 GDS 模式沒有 |
 | `PRIMARY_GDSII_STREAMOUT_TOOL` | klayout | Magic 寫出的 GDS 有 13 個 top cell：它用改名的 `T2_*` 子 cell 放 SRAM，又把 160 個原名子 cell 沒有引用地寫出來，KLayout.Render 因此失敗。KLayout 的 GDS 只有 `soc_top` 一個 top cell，161 個 SRAM cell 都接得到；兩份 GDS 的 XOR = 0 |
 | `DESIGN_REPAIR_MAX_WIRE_LENGTH` | 200 µm | placement 後的修復把超過 200 µm 的線切段加 buffer。沒有它時：ss corner 50 個 max slew 違規（300–700 µm 的線）、antenna 修復在單一長線上插 10–11 顆 diode 造成 7 個 max fanout 違規、SRAM 輸入線最長 355 µm |

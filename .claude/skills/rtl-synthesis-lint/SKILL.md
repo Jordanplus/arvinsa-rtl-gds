@@ -5,7 +5,7 @@ description: 處理 Yosys 合成（策略、參數、狀態機重新編碼、常
 
 # RTL 合成與 lint
 
-PnR 階段的時序修復看 `drv-timing-closure`；合成對 formal equivalence 的影響看 `formal-equivalence-eqy`。目前經驗較少。Phase 4 判定 25 ns 做不到（SRAM 半週期路徑差約 7 ns，其他路徑在 ss 也差 1.8–4.7 ns），改 42 ns，沒有調整合成；下方待補在要壓週期時再做。本 repo 實例：`rtl/scripts/`、`pnr/picorv32_core/cpu_params.py`、LibreLane `librelane/scripts/pyosys/synthesize.py`。
+PnR 階段的時序修復看 `drv-timing-closure`；合成對 formal equivalence 的影響看 `formal-equivalence-eqy`。目前經驗較少。Phase 4 判定 25 ns 做不到（SRAM 半週期路徑差約 7 ns，其他路徑在 ss 也差 1.8–4.7 ns），改 42 ns（Phase 3.5 因 SRAM 的 hold 弧再改 43 ns），沒有調整合成；下方待補在要壓週期時再做。本 repo 實例：`rtl/scripts/`、`pnr/picorv32_core/cpu_params.py`、LibreLane `librelane/scripts/pyosys/synthesize.py`。
 
 ## 規則（已驗證）
 

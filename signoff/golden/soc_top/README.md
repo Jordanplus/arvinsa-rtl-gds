@@ -7,13 +7,27 @@
 | 項目 | 值 |
 |---|---|
 | 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`，原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-04（Phase 4），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 4 第 5 次 harden-soc，commit `e5b7a4b`。limits 有兩類 FAIL：與舊 golden 比對（預期）；沒有寄生值的 driver 133 個，當時上限寫「剛好 134」（見下方最後一點，檢視後上限改 133）。`check_soc.py`、輸入一致、來源追溯 PASS |
+| 日期／平台 | 2026-10-05（Phase 3.5），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 3.5 第 3 次 harden-soc，commit `edb7d63`。只有與舊 golden 比對的 102 列 FAIL（預期）；其他 limits、`check_soc.py`（含新的 `sram_lib`）、輸入一致、來源追溯全部 PASS |
 | LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config.json` sha256 `3623be19eb2cfeb089690bb3abd3459652905f39516744684d4083b1b8d8b6d2` |
-| 本檔 sha256 | `5c7b95eb6ad7abf3e6d1d7b92c542629bf8d6d8680e9c931d8e7b8510f5fa351` |
+| flow 設定 | `pnr/soc_top/config.json` sha256 `dd4704f57f0d8a894a4eef4a89bb862313bedcf3d40dc8b159b11a894b1c5751` |
+| 本檔 sha256 | `7123916f481e7b6b3b5833e875f15b103726fcccc0b2ec0da93f2518ddd4c6f4` |
 
-## 與 Phase 3 golden 的差異（逐項檢視過）
+## 與 Phase 4 golden 的差異（逐項檢視過，2026-10-05）
+
+- metrics 從 434 個變成 439 個：多了 `route__drc_errors__iter:6`、`:7`、`route__wirelength__iter:6`、`:7`（detailed routing 多跑兩輪，最終 DRC 仍是 0）與 `flow__warnings__count:GRT-0243`（見下）；沒有 metric 消失。
+- 共有的 434 個中 148 個值改變：96 個超出誤差、52 個在誤差內（`check_signoff.py` 報的 101 個不同 = 這 96 個 + 5 個新 key）。原因都是 Phase 3.5 的兩項變更：
+  - SRAM .lib 改用 SPICE 特性化、每個 PVT 一份（ADR-0010），多了 dout0 的 `rising_edge` hold 弧，SRAM 的 instance derate 拿掉。
+  - 週期 42 → 43 ns（使用者決定，ADR-0004 Phase 3.5 補充）。
+- timing：最差 setup 0.313 → 0.384 ns（仍在 min_ss_n40C、SRAM 半週期路徑）；ss 100°C 0.788 → 0.921 ns；tt／ff 約 +0.3 ns（週期）。最差 hold 0.082 → 0.074 ns；ss −40°C 的 hold 0.93 → 0.07–0.29 ns：那個 corner 的 SRAM .lib 是佔位，hold 弧取所有 PVT 最早的值（ff 的 0.64 ns）。
+- cell：standard cell 29,352 → 29,373（+21），面積 237,644 → 237,877 µm²；hold buffer 3452 → 3479（+27，`rdata_q` 前為了新的 hold 弧插的 delay cell）；antenna cell 85 → 86、diode 51 → 48；clock buffer／inverter 不變（531／62）。
+- 功耗 9.451 → 9.241 mW（−2.2%，約 42/43）；IR `ir__drop__worst` 4.04 → 3.95 mV。
+- 繞線：線長 894,480 → 895,243 µm，最長線 619.53 → 616.77 µm，net 22,659 → 22,679。
+- `GRT-0243`（antenna 修補時有一條 net 用 diode 修不掉）是新的警告：修補前 146 個 antenna 違規，jumper 後剩 19 個，插 diode 後的 `CheckAntennas` 與繞線後的檢查都是 0 個違規；signoff 的 3 個 antenna 指標都是 0。
+- `STA-1140`（同一份 .lib 讀兩次）14 → 12：SRAM 不再是 9 個 corner 共用一份 padded.lib。
+- 沒變的：Magic DRC 4,665,810（全部在 SRAM 框內、位置與 SRAM 單獨檢查相同）、KLayout DRC 0、LVS 0、XOR 0、unannotated driver 133、SRAM 位置。
+
+## 與 Phase 3 golden 的差異（Phase 4 時檢視）
 
 - metrics 從 320 個變成 434 個：多的 114 個是新加的 6 個溫度反轉 corner（`*_ss_n40C_1v60`、`*_ff_100C_1v95`）各 19 個；沒有 metric 消失。
 - 127 個值改變，原因都是 Phase 4 的設定變更：
@@ -29,7 +43,9 @@
 
 | run | 與本檔比較 |
 |---|---|
-| Phase 4 第 5 次 harden-soc（commit `e5b7a4b`） | 本檔來源 |
+| Phase 3.5 第 3 次 harden-soc（commit `edb7d63`） | 本檔來源 |
+| Phase 4 的 run（下列） | 與 Phase 4 的 golden 比較；該 golden 見 git 歷史（commit `edb7d63` 以前的本檔） |
+| Phase 4 第 5 次 harden-soc（commit `e5b7a4b`） | Phase 4 golden 的來源 |
 | Phase 4 `make regress` 第 1 次（乾淨 checkout，commit `72e5433`） | 434 個完全相同（沒有用到誤差） |
 | Phase 4 `make regress` 第 2 次（乾淨 checkout，commit `c635ffb`） | 349 個相同、84 個在誤差內、1 個不同：`route__drc_errors__iter:2` 14（golden 11）→ harden-soc FAIL |
 | Phase 4 `make regress` 第 3 次（乾淨 checkout，commit `59c6748`） | 434 個完全相同（LibreLane 遇到一次已知的 GRT-0229，從第 41 步重試後完成）；這次 regress 後來在 gl-soc-powered FAIL（gate-level 牆鐘時限，`dv/gl_soc/README.md` 判定第 4 點） |
@@ -41,4 +57,4 @@ Phase 3 的 golden（320 個 metrics，2026-10-03）與它的可重現性紀錄�
 
 ## 何時更新
 
-升級 LibreLane、PDK、PicoRV32、SRAM 的產生檔（padded.lib、antenna LEF），或修改 `config.json`、`pin_order.cfg`、`*.sdc`、`sta_extra_corner.tcl`、RTL 之後，golden 比對一定會 FAIL。更新步驟與 `signoff/golden/picorv32_core/README.md` 相同：確認 limits 與 `check_soc.py` 全部 PASS、逐項檢視差異、複製 metrics 並更新本表與 sha256、再跑一次確認 PASS。
+升級 LibreLane、PDK、PicoRV32、SRAM 的產生檔（特性化 .lib、antenna LEF），或修改 `config.json`、`pin_order.cfg`、`*.sdc`、`sta_extra_corner.tcl`、RTL 之後，golden 比對一定會 FAIL。更新步驟與 `signoff/golden/picorv32_core/README.md` 相同：確認 limits 與 `check_soc.py` 全部 PASS、逐項檢視差異、複製 metrics 並更新本表與 sha256、再跑一次確認 PASS。
