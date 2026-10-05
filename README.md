@@ -395,7 +395,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 #### flow-regression-reproducibility：一鍵 regression、可重現性與來源追溯
 
 - **名詞**：乾淨 checkout 是從某個 commit 重新取出、沒有任何建置產物的目錄；來源追溯（provenance）是記錄並檢查一個 run 用了哪個 commit、哪版工具與 PDK。
-- **何時用**：建立或執行 `make regress`；在乾淨 checkout 驗證；查一個 run 是怎麼產生的；讓下游步驟拒絕過期或沒 PASS 的 run；長時間 run 期間繼續開發或等待它結束；長 regression 中途因機器負載 FAIL。同樣設定重跑結果不同、golden 該給多少誤差，看 signoff-checker-qualification。
+- **何時用**：建立或執行 `make regress`；在乾淨 checkout 驗證；查一個 run 是怎麼產生的；讓下游步驟拒絕過期或沒 PASS 的 run；長時間 run 期間繼續開發或等待它結束；長 regression 開跑前的快速檢查與預跑；長 regression 中途因機器負載 FAIL。同樣設定重跑結果不同、golden 該給多少誤差，看 signoff-checker-qualification。
 - **重點**：
   - regression 依相依順序一次跑一個 target，第一個 FAIL 就停。開始前工作目錄要乾淨，並拒絕 `make -i`／`-n`；結束時 HEAD 必須和開始時相同。
   - 只有在乾淨 checkout 從頭跑到底才算驗證。開發目錄裡忽略版控的建置產物，會藏住漏宣告的依賴。
@@ -404,7 +404,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - golden 與 commit 的先後：更新 golden 的那次 run 永遠過不了下游檢查；要先 commit 新 golden，再用乾淨 checkout 跑完整 regression 證明它可重現。Makefile 要加 `.NOTPARALLEL:`，否則 `make -j` 時各 target 會互刪 `runs/`。
   - 長 run 期間另開 worktree 開發。用舊 run 測新 checker 時建 dev fixture，結果不能當證據。
   - 等長 run 結束用 PID：`pgrep -f` 會比到等待腳本自己；macOS 的 `pgrep` 裡 `\|` 不是「或」；從 log 判斷結果要比整行開頭（`regress: PASS` 也會比到 regress-rtl 那一行）。
-  - 長 regression 之前，先用 `make py-check` 和 dev fixture 預跑，提早抓到會在中途才出錯的問題。Spotlight 之類的背景負載會拖慢有牆鐘時限的步驟。
+  - 長 regression 之前，先用 `make py-check` 和 dev fixture 預跑，提早抓到會在中途才出錯的問題（未定義的名稱、寫檔前先清空了要讀的檔案；改過的 negative test 也要先單獨跑過）。Spotlight 之類的背景負載會拖慢有牆鐘時限的步驟。
 - **本 repo 實例**：`scripts/regress.py`、`signoff/scripts/provenance.py`、`run_guard.py`。negative test：`neg_regress.py`、`neg_provenance.py`、`neg_run_guard.py`。
 
 #### multicorner-sta：多 corner STA

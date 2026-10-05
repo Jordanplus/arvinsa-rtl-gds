@@ -1,6 +1,6 @@
 ---
 name: flow-regression-reproducibility
-description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發或等待它結束（用 PID）、用舊 run 測新 checker（dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
+description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發或等待它結束（用 PID）、用舊 run 測新 checker（dev fixture），長 regression 開跑前的快速檢查與預跑（`make py-check`、dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
 ---
 
 # 一鍵 regression、可重現性與來源追溯
@@ -43,8 +43,8 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 7. **golden 與 commit 的先後**：更新 golden 的那個 run 一定來自更新前的 commit，所以那個 run 自己永遠不會通過下游檢查。流程是：harden（golden 比對 FAIL、其他檢查 PASS）→ 逐項檢視差異 → commit 新 golden → 乾淨 checkout 跑完整 regression，由它證明新 golden 可重現。
 8. **`make -n` 不是完全不執行**：recipe 裡有 `$(MAKE)` 的那一行在 `-n` 下仍會執行（子 make 繼承 `-n`，只印出指令）。測 dispatch 用的 target 時要確認子 make 確實只有印。
 9. **長 regression 之前，先把會在中途才出錯的東西提前抓**：
-   - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。
-   - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 2 小時的重跑。
+   - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。它也找 `open(f, "w").write(... open(f).read() ...)`：Python 先執行 `open(f, "w")` 把檔案清空，再讀，讀到空字串（Phase 3.5：neg-pnr 的 P17 在 regress 第 19 個 target、約 80 分鐘後才 FAIL）。
+   - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 2 小時的重跑。改過的 negative test 也一樣：Phase 3.5 改寫了 P17 卻沒先跑，乾淨 checkout 的 regress 第 1 次因此 FAIL（「已知陷阱」同一列第 2 次發生）。
    - 預跑時多個步驟同時跑會互相拖慢，有牆鐘時限的步驟（GL 模擬）可能逾時；逾時的要單獨重跑確認（`gate-level-simulation` 規則 6）。
 10. **等長時間 run 結束，用 PID，不用字串比對**：
     - `pgrep -f <字串>` 也會比到等待腳本自己的 shell（它的命令字串含同一個字串），等待永遠不結束，或把多個 PID 交給 `kill`。macOS 的 `pgrep` 用 extended regex，`a\|b` 是字面的 `|`，不是「或」（要寫 `a|b`）。
@@ -56,7 +56,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 陷阱 | 對策 | 出處 |
 |---|---|---|
 | 開發目錄有舊的建置產物，缺依賴的 target 在開發目錄照樣 PASS | 乾淨 checkout 跑；對每個忽略版控的目錄 grep 誰在讀它 | 第二次 `make phase3`（`gl-soc` 沒依賴 `fw`） |
-| 新寫的 negative test 沒單獨跑過就加進 phase target | 先單獨跑完一次 | 第三次 `make phase3`（`neg_gl_soc.py`） |
+| 新寫或改寫的 negative test 沒單獨跑過就加進 phase target | 先單獨跑完一次（規則 9） | 第三次 `make phase3`（`neg_gl_soc.py`）；Phase 3.5 `make regress` 第 1 次（neg-pnr P17） |
 | 來源追溯只比版本字串 | 比內容（規則 3） | Phase 3 獨立審查 |
 | 下游拿過期的 run | `run_guard.py`（規則 4） | Phase 3 獨立審查 |
 | 長 run 中改了檔案，結束時來源追溯 FAIL | 另開 worktree（規則 5） | Phase 4 |
@@ -81,3 +81,4 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 2026-10-04 | Phase 4 `make regress` 第 2 次 | 12/25 PASS 後 harden-soc FAIL（golden 一個中間輪 DRC 數 11 → 14），第 1 次同設定是 434/434 相同 | 已驗證：多執行緒 detailed routing 不可重現，這次波及繞線器中間各輪的 DRC 數 | 給誤差（使用者決定），補 P31，乾淨 checkout 跑第 3 次 | `signoff/golden/soc_top/README.md` |
 | 2026-10-04 | Phase 4 `make regress` 第 3 次 | 16/25 PASS 後 gl-soc-powered FAIL（一支 gate-level 測試超過牆鐘時限）；harden-soc 這次 434/434 與 golden 相同，另有一次已知的 GRT-0229 重試 | 已驗證：Spotlight 負載＋gate-level 時限照 RTL 速度算 | `gl_timeout`，乾淨 checkout 跑第 4 次 | `runs/p4_regress_clean3.log` |
 | 2026-10-05 | Phase 3.5 乾淨 checkout 的 `make regress` | 等待腳本三次出錯：`pgrep -f` 比到自己的 shell、`\|` 沒有「或」的作用、`regress: PASS` 比到 regress-rtl 那一行而提早結束；另有一次背景指令 2 小時到期 | 已驗證（`pgrep -f 'x\|sleep 30'` 找不到 `sleep 30`，`'x|sleep 30'` 找得到） | 規則 10：用 PID 等待，比對整行開頭 | `runs/p35_regress_clean1.log` |
+| 2026-10-05 | Phase 3.5 `make regress` 第 1 次（乾淨 checkout，`38e85cb`） | 18/25 PASS 後 neg-pnr FAIL 32/33：`[FAIL] P17: expected FAIL at case error: RuntimeError('injection point not found: the dout0 rising_edge arc')`；P17 目錄裡複製的 tt .lib 是 0 byte | 已驗證：`open(f, "w").write(edit_once(open(f).read(), ...))` 先清空再讀；`ccc536c` 改寫 P17 後沒有先跑過 | P17 先讀再寫；`make py-check` 加這個寫法的檢查（舊版 neg_pnr.py 第 756 行被抓到、自我測試改錯時 FAIL）；P00＋P17 在 regress 1 的 run 上 2/2；乾淨 checkout 重跑 | `scripts/check_py_names.py`、`pnr/soc_top/neg_pnr.py` |

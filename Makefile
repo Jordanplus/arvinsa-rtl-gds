@@ -69,7 +69,7 @@ help:
 	@echo "                            PicoRV32 alone, provenance-final; logs, summary.md and junit.xml in runs/regress/"
 	@echo "  make gl-soc-powered       L5: the powered netlist (final/pnl) in lockstep with the RTL, cells powered by VPWR/VGND"
 	@echo "  make provenance-final     HEAD and working tree unchanged since harden-soc and harden-core started"
-	@echo "  make py-check             every name a tracked Python file reads is defined in that file (seconds, not at runtime)"
+	@echo "  make py-check             every name a tracked Python file reads is defined in that file, no file emptied before it is read (seconds)"
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
 	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, and stop at a FAIL"
 	@echo "  make harden D=soc_top|picorv32_core   same as harden-soc / harden-core"

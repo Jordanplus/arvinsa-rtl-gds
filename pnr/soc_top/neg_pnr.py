@@ -753,8 +753,9 @@ def p17(run, d):
     char = os.path.join(d, "char")
     shutil.copytree(os.path.join(SRAM_IP, "char"), char)
     f = os.path.join(char, f"{SRAM}__tt_025C_1v80.lib")
-    open(f, "w").write(edit_once(open(f).read(), "timing_type : rising_edge;", "timing_type : falling_edge;",
-                                 "the dout0 rising_edge arc"))
+    new = edit_once(open(f).read(), "timing_type : rising_edge;", "timing_type : falling_edge;",
+                    "the dout0 rising_edge arc")
+    open(f, "w").write(new)
     rc, out = inputs_check(d, "--char-dir", char)
     return inputs_failed(rc, out, "char_lib"), "check_inputs.py char_lib"
 
