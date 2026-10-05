@@ -109,6 +109,7 @@ test = "muldiv"
 sim = "icarus"
 expect_checkers = ["test_ctrl"]
 expect_regex = "(?i)0xbad00104"
+cpus = ["picorv32"]     # the external PCPI divider exists only around PicoRV32
 
 # Unmapped access never answered (soc_bus.v): bus_assert 1000-cycle limit.
 [[bug]]
@@ -291,6 +292,19 @@ test = "irq"
 sim = "icarus"
 expect_checkers = ["test_ctrl"]
 expect_regex = "(?i)0xbad00020"
+cpus = ["picorv32"]
+
+# R22 on Hazard3 (ADR-0011): the interrupt is a level into one flop, not latched, so the
+# one-cycle pulse is never taken (no entry at all); the irq_line checker sees the line
+# low while IRQ_TRIG[0] = 1 in the next cycle.
+[[bug]]
+id = "R22_h3"
+define = "BUG_R22"
+test = "irq"
+sim = "icarus"
+expect_checkers = ["irq_line"]
+expect_regex = "(?i)=0 but IRQ_TRIG\\[0\\]=1"
+cpus = ["hazard3"]
 
 # F16b: memtest without its march C- phase (firmware variant
 # memtest__no_march). Still prints PASS and runs longer than before (the test
@@ -362,3 +376,47 @@ test = "reset_store"
 sim = "icarus"
 expect_checkers = ["coverage"]
 expect_regex = "(?i)applied 0 mid-run reset"
+
+# ---- Hazard3 build only (Phase 5, ADR-0011): the AHB-to-native bridge and TEST_CTRL.FATAL.
+# A halfword store writes the other half of the word (soc_ahb2native.v): memtest byte lanes.
+[[bug]]
+id = "H01"
+define = "BUG_H01"
+test = "memtest"
+sim = "icarus"
+expect_checkers = ["test_ctrl"]
+expect_regex = "(?i)0xbad00040"
+cpus = ["hazard3"]
+
+# The bridge takes the next address phase while a data phase still waits (hready ignored):
+# mem_addr changes during a native-bus transfer.
+[[bug]]
+id = "H02"
+define = "BUG_H02"
+test = "hello"
+sim = "icarus"
+expect_checkers = ["bus_assert"]
+expect_regex = "(?i)changed while mem_valid=1"
+cpus = ["hazard3"]
+
+# A FATAL write does not raise the trap pin (soc_test_ctrl.v): the illegal instruction of
+# neg_fw_illegal then ends in the spinning handler, with no trap and no DONE.
+[[bug]]
+id = "H03"
+define = "BUG_H03"
+test = "neg_fw_illegal"
+sim = "icarus"
+expect_checkers = ["timeout"]
+expect_regex = "(?i)no DONE write within max_cycles"
+cpus = ["hazard3"]
+
+# mem_instr inverted (soc_ahb2native.v): memtest data reads count as fetches in sram_cov.
+[[bug]]
+id = "H04"
+define = "BUG_H04"
+test = "memtest"
+sim = "icarus"
+expect_checkers = ["coverage"]
+expect_regex = "(?i)data reads 0 \\(expected 88\\), fetches 88 \\(expected 0\\)"
+cpus = ["hazard3"]
+

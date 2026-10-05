@@ -40,9 +40,14 @@ Checks (each prints a PASS/FAIL row):
                (duty cycle distortion + half-period jitter for the pulse width, period jitter for
                the period; values from clock_uncertainty.sdc). The SRAM clk0 limits are in its
                characterized .lib (ADR-0010).
-  sram_lib     in every corner of STA_CORNERS, <corner>/sta.log reads exactly one SRAM .lib and it is
-               ip/sram/<macro>/char/<macro>__<pvt>.lib of that corner's PVT (ADR-0010). LibreLane
-               matches the MACROS lib wildcards to corners silently; this row shows what STA used.
+  sram_lib     in every corner of STA_CORNERS, of all the .lib files <corner>/sta.log reads (LibreLane
+               logs them as "Reading cell library", "Reading extra timing library" or "Reading timing
+               library ... for the '<corner>' corner at '<path>'"), exactly one defines the SRAM cell,
+               and its real path is this repo's ip/sram/<macro>/char/<macro>__<pvt>.lib of that
+               corner's PVT (ADR-0010); no line names another corner. LibreLane matches the MACROS lib
+               wildcards to corners silently; this row shows what STA used. Phase 3.5 review: only
+               the first message was read, and only the end of the path compared, so an SRAM .lib
+               from EXTRA_LIBS or another checkout passed.
 Prints `soc-checks: PASS` / `soc-checks: FAIL`; exit code 0 only on PASS. Python stdlib only.
 
 usage: check_soc.py --make-drc-baseline <drc.magic.rpt of the SRAM alone> <out.json>
@@ -55,6 +60,20 @@ import sys
 
 MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
 INST = "sram0"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+LIB_LINE = re.compile(r"^Reading (?:cell|extra timing|timing) library for the '([^']*)' corner at '(.*?)'", re.M)
+_DEFINES = {}
+
+
+def defines_sram(path):
+    """True if the .lib at path defines the SRAM cell, None if it cannot be read."""
+    if path not in _DEFINES:
+        try:
+            text = open(path, encoding="utf8", errors="replace").read()
+            _DEFINES[path] = re.search(r"^\s*cell\s*\(\s*\"?" + re.escape(MACRO) + r"\"?\s*\)", text, re.M) is not None
+        except OSError:
+            _DEFINES[path] = None
+    return _DEFINES[path]
 TIE_HI = ["csb1"]
 TIE_LO = ["clk1"] + [f"addr1[{i}]" for i in range(9)]
 WIDTH = {"wmask0": 4, "addr0": 9, "din0": 32, "dout0": 32, "addr1": 9, "dout1": 32}
@@ -383,12 +402,18 @@ def main(run_dir, config_path, sram_drc):
     for c in corners:
         log = os.path.join(stas[-1], c, "sta.log") if stas else ""
         text = open(log, encoding="utf8", errors="replace").read() if os.path.isfile(log) else None
-        libs = re.findall(r"^Reading cell library for the '" + re.escape(c) + r"' corner at '(.*?)'", text, re.M) \
-            if text is not None else []
-        sram = [l for l in libs if os.path.basename(l).startswith(MACRO)]
-        want = f"/ip/sram/{MACRO}/char/{MACRO}__{c.split('_', 1)[1]}.lib"
-        if text is None or len(sram) != 1 or not sram[0].endswith(want):
-            problems.append(f"{c}: {'no sta.log' if text is None else [os.path.basename(l) for l in sram]}")
+        if text is None:
+            problems.append(f"{c}: no sta.log")
+            continue
+        lines = LIB_LINE.findall(text)
+        other = sorted({cc for cc, _ in lines if cc != c})
+        libs = [p for cc, p in lines if cc == c]
+        unread = [p for p in libs if defines_sram(p) is None]
+        sram = [p for p in libs if defines_sram(p)]
+        want = os.path.realpath(os.path.join(ROOT, "ip", "sram", MACRO, "char", f"{MACRO}__{c.split('_', 1)[1]}.lib"))
+        if other or unread or len(sram) != 1 or os.path.realpath(sram[0]) != want:
+            problems.append(f"{c}: " + (f"lines for corner(s) {other}" if other else f"unreadable {unread}" if unread
+                                        else str([p if os.path.realpath(p) != want else os.path.basename(p) for p in sram])))
     row("sram_lib", bool(corners) and not problems,
         f"{len(corners)} corners, each read only the char .lib of its PVT (ADR-0010)" if corners and not problems
         else f"{len(problems)} corner(s) with the wrong SRAM .lib, e.g. {'; '.join(problems[:2])}" if corners

@@ -1,6 +1,9 @@
 // =============================================================================
 // soc_top.v -- Phase 1 SoC top level (PicoRV32 + 2 KB SRAM + Boot ROM + UART +
 // GPIO + TEST_CTRL). Contract: docs/spec/soc_spec.md sections 3 and 4.
+// CPU: PicoRV32 by default; Hazard3 (rtl/cpu/soc_cpu_hazard3.v) when
+// SOC_CPU_HAZARD3 is defined (Phase 5, ADR-0011). Every Hazard3 difference is
+// under that define, so the PicoRV32 build is the Phase 3.5 RTL unchanged.
 //
 // Hierarchical probe names required by spec section 3.1:
 //   mem_valid/mem_instr/mem_ready/mem_addr/mem_wdata/mem_wstrb/mem_rdata,
@@ -25,7 +28,7 @@ module soc_top (
     input  wire        uart_rx,
     output wire [7:0]  gpio_out,
     input  wire [1:0]  boot_mode,
-    output wire        trap,        // PicoRV32 trap
+    output wire        trap,        // PicoRV32 trap; Hazard3: TEST_CTRL.FATAL written
     // Host write port: host_en=1 holds the CPU in reset and gives SRAM
     // port 0 to the host.
     input  wire        host_en,
@@ -61,6 +64,27 @@ module soc_top (
 `else
     wire        irq_line = irq_test;
 `endif
+`ifdef SOC_CPU_HAZARD3
+    // ------------------------------------------------------------------
+    // Hazard3 (ADR-0011): one level-sensitive IRQ (mip.meip); exceptions go
+    // to the firmware handler, which writes TEST_CTRL.FATAL -> trap.
+    // ------------------------------------------------------------------
+    wire        test_fatal;
+    assign trap = test_fatal;
+
+    soc_cpu_hazard3 u_cpu (
+        .clk       (clk),
+        .resetn    (cpu_resetn),
+        .irq       (irq_line),
+        .mem_valid (mem_valid),
+        .mem_instr (mem_instr),
+        .mem_addr  (mem_addr),
+        .mem_wdata (mem_wdata),
+        .mem_wstrb (mem_wstrb),
+        .mem_ready (mem_ready),
+        .mem_rdata (mem_rdata)
+    );
+`else
     wire [31:0] irq = {31'd0, irq_line} << `SOC_IRQ_TEST;
 
     // Outputs of u_cpu that this SoC does not use (look-ahead bus, PCPI,
@@ -157,6 +181,7 @@ module soc_top (
         .trace_valid  (unused_trace_valid),
         .trace_data   (unused_trace_data)
     );
+`endif
 
     // ------------------------------------------------------------------
     // Bus
@@ -283,6 +308,9 @@ module soc_top (
         .off      (periph_off),
         .wdata    (mem_wdata),
         .rdata    (test_rdata),
+`ifdef SOC_CPU_HAZARD3
+        .fatal    (test_fatal),
+`endif
         .irq_test (irq_test)
     );
 

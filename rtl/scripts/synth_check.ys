@@ -27,4 +27,4 @@ select -assert-count 1 soc_top/c:sram0 soc_top/t:sky130_sram_2kbyte_1rw1r_32x512
 # 3. Netlist sanity: no multiple drivers, undriven used nets, or logic loops.
 check -assert
 
-tee -o runs/rtl/synth/stat.txt stat
+# synth_check.sh then writes the cell statistics (stat) to its output directory.

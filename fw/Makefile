@@ -7,12 +7,27 @@
 #   make -C fw check-bootrom  regenerate into build/ and compare with rtl/bootrom/bootrom.v
 #   make -C fw variants       negative-test bug variants (FW_VARIANTS, BOOTROM_VARIANTS)
 #   make -C fw clean
+#   make -C fw CPU=hazard3 ...  the same for the Hazard3 build (Phase 5, ADR-0011): output in
+#                             build_hazard3/, start_hazard3.S, -DSOC_CPU_HAZARD3, test exc instead of buserr
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
 
 ROOT        := ..
+CPU         ?= picorv32
+ifeq ($(CPU),hazard3)
+B           := build_hazard3
+START       := start_hazard3
+CPU_FLAGS   := -DSOC_CPU_HAZARD3
+MARCH       := rv32imc_zicsr
+else ifeq ($(CPU),picorv32)
 B           := build
+START       := start
+CPU_FLAGS   :=
+MARCH       := rv32imc
+else
+$(error CPU must be picorv32 or hazard3, not $(CPU))
+endif
 PY          ?= python3
 CROSS       ?= riscv64-elf-
 CC          := $(CROSS)gcc
@@ -27,11 +42,11 @@ BOOTROM_V   := $(ROOT)/rtl/bootrom/bootrom.v
 GEN_BOOTROM := $(ROOT)/rtl/bootrom/gen_bootrom.py
 
 # SoC tests (spec §6.1). Libraries: libgcc only (no newlib).
-CFLAGS  := -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles \
+CFLAGS  := -march=$(MARCH) -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles \
            -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections \
-           -MMD -MP -Icommon -I$(B) -I$(PICO_FW)
+           -MMD -MP -Icommon -I$(B) -I$(PICO_FW) $(CPU_FLAGS)
 # The whole image lives in one RWX SRAM region by design, so the RWX-segment warning is off.
-LDFLAGS := -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections \
+LDFLAGS := -march=$(MARCH) -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections \
            -Wl,--no-warn-rwx-segments
 
 # Boot ROM (spec §6.5): plain RV32I, no compressed instructions, no libraries.
@@ -43,7 +58,13 @@ BOOT_LDFLAGS := -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles 
 # regs and unmapped (dv/tests.toml). bootrom_march loads nothing (it runs the
 # boot ROM only), so its target builds the boot ROM image instead.
 TESTS := hello memtest irq muldiv uart_echo neg_fw_hang neg_fw_illegal \
-         boot_uart_hello boot_host_hello regs unmapped uart_burst reset_store counters buserr
+         boot_uart_hello boot_host_hello regs unmapped uart_burst reset_store counters
+# CPU-specific: buserr is the PicoRV32 bus-error IRQ; exc is the Hazard3 exception path.
+ifeq ($(CPU),hazard3)
+TESTS += exc
+else
+TESTS += buserr
+endif
 # Tests that reuse another test's sources (same image, own output names).
 SRC_boot_uart_hello := hello
 SRC_boot_host_hello := hello
@@ -70,7 +91,7 @@ BRDEF_skip_last_word  := BRBUG_SKIP_LAST_WORD
 BRDEF_no_aia_readback := BRBUG_NO_AIA_READBACK
 BRDEF_no_div_write    := BRBUG_NO_DIV_WRITE
 
-COMMON_OBJS := $(B)/obj/common/start.o $(B)/obj/common/fwlib.o
+COMMON_OBJS := $(B)/obj/common/$(START).o $(B)/obj/common/fwlib.o
 BOOTROM_OBJ := $(B)/obj/bootrom/bootrom.o
 
 # Build-flag record. Every generated linker script, object, ELF and size
@@ -145,7 +166,7 @@ $(foreach t,$(TESTS),$(eval $(call TEST_RULES,$(t))))
 # Firmware bug variants: own object directory, so fw/common is compiled with
 # the variant define as well.
 define VARIANT_RULES
-$(1)_VOBJS := $(B)/obj/$(1)/common/start.o $(B)/obj/$(1)/common/fwlib.o \
+$(1)_VOBJS := $(B)/obj/$(1)/common/$(START).o $(B)/obj/$(1)/common/fwlib.o \
               $$(patsubst tests/$$(VSRC_$(1))/%.c,$(B)/obj/$(1)/test/%.o,$$(wildcard tests/$$(VSRC_$(1))/*.c))
 
 $(B)/obj/$(1)/common/%.o: common/%.c $(B)/soc.h $(REBUILD_ON)

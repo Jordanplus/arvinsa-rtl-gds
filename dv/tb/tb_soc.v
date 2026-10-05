@@ -115,7 +115,11 @@ module tb_soc;
     // Probes added by the Phase 1 qualification fixes (dv/README.md; spec 3.1
     // update pending): the CPU test IRQ input, the divider simpleuart really
     // uses, and the SRAM macro port 0 pins.
+`ifdef SOC_CPU_HAZARD3
+    wire        p_irq_test    = dut.u_cpu.irq;      // one IRQ input (ADR-0011)
+`else
     wire        p_irq_test    = dut.u_cpu.irq[`SOC_IRQ_TEST];
+`endif
     wire [31:0] p_uart_div    = dut.u_uart.u_simpleuart.cfg_divider;
     wire        p_sram_csb0   = dut.sram0.csb0;
     wire        p_sram_web0   = dut.sram0.web0;

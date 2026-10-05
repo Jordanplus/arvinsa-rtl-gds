@@ -4,6 +4,10 @@
 //   SOC_TEST_SIG_OFF  : SIG, RW, reset 0.
 //   SOC_TEST_DONE_OFF : DONE, W: PASS magic / FAIL code; R: last value written.
 //   SOC_TEST_IRQ_OFF  : IRQ_TRIG, RW, reset 0; bit 0 drives irq_test.
+//   SOC_TEST_FATAL_OFF: FATAL (Hazard3 build only, SOC_CPU_HAZARD3): RW, reset 0;
+//                       the firmware exception handler writes mcause. Any write
+//                       also sets the sticky fatal output, which drives the trap
+//                       pin of soc_top (Hazard3 has no trap output; ADR-0011).
 // Probe names (spec section 3.1): done_strobe, done_value, sig_value.
 // done_strobe is high for exactly one cycle per DONE write: the cycle right
 // after the rising edge that performs the write (same cycle in which
@@ -13,7 +17,8 @@
 // BUG_R15 (DONE reads back 0), BUG_R16 (partial offset decode: an IRQ_TRIG
 // write also writes SIG), BUG_R20 (irq_test stays high 40 cycles after
 // IRQ_TRIG[0] is cleared), BUG_R22 (irq_test is a one-cycle pulse per
-// IRQ_TRIG write with bit 0 set, not the IRQ_TRIG[0] level).
+// IRQ_TRIG write with bit 0 set, not the IRQ_TRIG[0] level), BUG_H03 (Hazard3
+// build: a FATAL write does not raise the trap pin).
 // =============================================================================
 `timescale 1ns/1ps
 `default_nettype none
@@ -28,6 +33,9 @@ module soc_test_ctrl (
     input  wire [31:0] wdata,
     output wire [31:0] rdata,
     output wire        irq_test     // IRQ_TRIG[0]
+`ifdef SOC_CPU_HAZARD3
+    ,output wire       fatal        // FATAL written since reset
+`endif
 );
 
     localparam [31:0] SIG_OFF  = `SOC_TEST_SIG_OFF;
@@ -37,6 +45,27 @@ module soc_test_ctrl (
     wire sig_hit  = (off == SIG_OFF[3:0]);
     wire done_hit = (off == DONE_OFF[3:0]);
     wire irq_hit  = (off == IRQ_OFF[3:0]);
+`ifdef SOC_CPU_HAZARD3
+    localparam [31:0] FATAL_OFF = `SOC_TEST_FATAL_OFF;
+    wire fatal_hit = (off == FATAL_OFF[3:0]);
+    reg [31:0] fatal_q;
+    reg        fatal_set_q;
+    always @(posedge clk) begin
+        if (!resetn) begin
+            fatal_q     <= 32'h0000_0000;
+            fatal_set_q <= 1'b0;
+        end else if (req & we & fatal_hit) begin
+            fatal_q     <= wdata;
+            fatal_set_q <= 1'b1;
+        end
+    end
+`ifdef BUG_H03
+    assign fatal = 1'b0;
+    wire   unused_bug_h03 = fatal_set_q;
+`else
+    assign fatal = fatal_set_q;
+`endif
+`endif
 
     wire wr      = req & we;
 `ifdef BUG_R16
@@ -134,7 +163,11 @@ module soc_test_ctrl (
 `endif
     assign rdata    = ({32{sig_hit }} & sig_rd )
                     | ({32{done_hit}} & done_rd)
-                    | ({32{irq_hit }} & irq_rd );
+                    | ({32{irq_hit }} & irq_rd )
+`ifdef SOC_CPU_HAZARD3
+                    | ({32{fatal_hit}} & fatal_q)
+`endif
+                    ;
 
     // done_strobe is a testbench probe only (spec section 3.1).
     wire unused_test_ctrl = &{1'b0, done_strobe};

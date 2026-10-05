@@ -61,7 +61,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RUNNER = os.path.join(ROOT, "signoff", "eqy", "run_eqy.py")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
-from run_eqy import instances  # noqa: E402  (same directory as this script)
+from run_eqy import VERDICT, instances  # noqa: E402  (same directory as this script)
 CELL = r"(sky130_fd_sc_hd__\w+)"
 
 
@@ -322,7 +322,7 @@ def main():
     run = os.path.abspath(args.run or os.path.join(ROOT, "runs", args.design))
     out = os.path.abspath(args.out or os.path.join(ROOT, "runs", f"neg_eqy_{args.design}"))
     shutil.rmtree(out, ignore_errors=True)  # only the output directory is removed, before any check
-    errs = guard(run, {"picorv32_core": "harden-core: PASS", "soc_top": "harden-soc: PASS"}[args.design])
+    errs = guard(run, VERDICT[args.design])
     if errs:
         print(f"neg-eqy: FAIL ({'; '.join(errs)})")
         return 1

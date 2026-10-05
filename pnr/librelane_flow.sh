@@ -10,6 +10,18 @@
 # resumed from that step (--from), at most 3 attempts in all. Any other failure is not retried.
 # Each retry is recorded in $OUT/retries.txt. The decision reads the log of the last step directory,
 # not the console: the console wraps lines, so the message is split there.
+# keep_prev_run <dir>...: before a new run, each existing <dir> becomes <dir>.prev and an older
+# <dir>.prev is removed. A rerun with the same tag used to delete the run it replaced, with the
+# evidence of a failed run (Phase 3.5: the first harden-soc's log was lost that way). One level only:
+# a soc_top run is about 4 GB. Checked by make test-flow-retry.
+keep_prev_run() {
+  local d
+  for d in "$@"; do
+    rm -rf "$d.prev"
+    if [ -e "$d" ]; then mv "$d" "$d.prev"; fi
+  done
+}
+
 librelane_flow() {
   local name="$1" config="$2" from="" n last
   flow_attempts=0

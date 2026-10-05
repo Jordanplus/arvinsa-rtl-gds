@@ -42,6 +42,10 @@
 `define SOC_TEST_SIG_OFF     32'h0000_0000
 `define SOC_TEST_DONE_OFF    32'h0000_0004
 `define SOC_TEST_IRQ_OFF     32'h0000_0008
+// Hazard3 build only (SOC_CPU_HAZARD3, ADR-0011): FATAL drives the trap pin (Hazard3 has none);
+// the window is SOC_TEST_SIZE_H3 there. The PicoRV32 build keeps SOC_TEST_SIZE.
+`define SOC_TEST_FATAL_OFF   32'h0000_000C
+`define SOC_TEST_SIZE_H3     32'h0000_0010
 `define SOC_TEST_PASS_MAGIC  32'h600D_C0DE
 // FAIL value = SOC_TEST_FAIL_BASE | code[15:0]
 `define SOC_TEST_FAIL_BASE   32'hBAD0_0000

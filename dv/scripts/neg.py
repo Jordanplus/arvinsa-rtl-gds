@@ -68,13 +68,16 @@ def main(argv=None):
     ap.add_argument("--only", default="", help="comma list of bug ids (default: all)")
     ap.add_argument("-j", "--jobs", type=int, default=dvlib.default_jobs(),
                     help="parallel runs (default %d)" % dvlib.default_jobs())
-    ap.add_argument("--out", default="runs/neg", help="output root (default runs/neg)")
+    ap.add_argument("--cpu", default="picorv32", choices=sorted(dvlib.CPUS), help="CPU build (default picorv32)")
+    ap.add_argument("--out", default=None, help="output root (default runs/neg, runs/neg_<cpu> for another CPU)")
     ap.add_argument("--timeout", type=int, default=None, help="wall-clock limit per run in seconds")
     ap.add_argument("--rtl-f", default=dvlib.RTL_F, help=argparse.SUPPRESS)
     ap.add_argument("--tests-toml", default=dvlib.TESTS_TOML, help=argparse.SUPPRESS)
     ap.add_argument("--bugs-toml", default=dvlib.BUGS_TOML, help=argparse.SUPPRESS)
     ap.add_argument("--fw-dir", default=dvlib.FW_DIR, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.out is None:
+        args.out = "runs/neg" if args.cpu == "picorv32" else "runs/neg_%s" % args.cpu
     if args.jobs < 1:
         print("neg: error: -j must be >= 1", file=sys.stderr)
         return 1
@@ -91,17 +94,21 @@ def main(argv=None):
         print("neg: error: unknown bug id(s): %s (known: %s)" % (", ".join(unknown), ", ".join(bugs)),
               file=sys.stderr)
         return 1
-    ids = [b for b in bugs if not only or b in only]
+    skipped = [b for b in only if not dvlib.applies(bugs[b], args.cpu)]
+    if skipped:
+        print("neg: error: bug(s) %s do not apply to %s" % (", ".join(skipped), args.cpu), file=sys.stderr)
+        return 1
+    ids = [b for b in bugs if (not only or b in only) and dvlib.applies(bugs[b], args.cpu)]
     out = dvlib.repo_path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    print("neg: %d bug(s), jobs=%d" % (len(ids), args.jobs))
+    print("neg: cpu=%s %d bug(s), jobs=%d" % (args.cpu, len(ids), args.jobs))
 
     def one(bid):
         b = bugs[bid]
         r = dvlib.safe_run_test(b["test"], b["sim"], bug_id=bid, out_root=args.out, rtl_f=args.rtl_f,
                            tests_toml=args.tests_toml, bugs_toml=args.bugs_toml,
-                           fw_dir=args.fw_dir, timeout=args.timeout, quiet=True)
+                           fw_dir=args.fw_dir, timeout=args.timeout, quiet=True, cpu=args.cpu)
         caught, matched, reason = judge(b, r)
         print("neg: %-5s %-8s %-15s %-9s %s" % (bid, "CAUGHT" if caught else "ESCAPE", b["test"], b["sim"], reason))
         return {
@@ -118,7 +125,7 @@ def main(argv=None):
 
     caught = sum(1 for r in rows if r["caught"])
     status = "PASS" if rows and caught == len(rows) else "FAIL"
-    summary = {"status": status, "total": len(rows), "caught": caught, "escaped": len(rows) - caught,
+    summary = {"cpu": args.cpu, "status": status, "total": len(rows), "caught": caught, "escaped": len(rows) - caught,
                "wall_time_s": round(time.time() - t0, 2), "bugs": rows}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print("neg: %s  %d/%d caught  (%.1f s)  -> %s"

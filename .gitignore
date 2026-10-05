@@ -3,6 +3,7 @@
 runs/
 sim_build/
 fw/build/
+fw/build_hazard3/
 obj_dir/
 *.vvp
 *.vcd

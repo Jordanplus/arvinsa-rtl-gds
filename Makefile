@@ -10,20 +10,27 @@ SHELL := /bin/bash
 TEST ?= hello
 SIM  ?= icarus
 SIMS ?= icarus,verilator
+# CPU of soc_top for fw, sim, regress-rtl(-smoke), neg-rtl, harden-soc, eqy-soc, gl-soc and their
+# negative tests: picorv32 (default) or hazard3 (Phase 5, ADR-0011). The soc_top LibreLane run of
+# each CPU has its own tag: runs/soc_top (picorv32) and runs/soc_top_hazard3 (pnr/soc_top/run.sh).
+CPU  ?= picorv32
+SOC_TAG = $(if $(filter hazard3,$(CPU)),soc_top_hazard3,soc_top)
 PY   ?= python3
 DRY_RUN ?= 0
 
-.PHONY: help nix-install flow-setup pdk-fetch ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
+.PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
         neg-run-guard gl-soc-powered provenance-final harden regress py-check skill-check neg-regress clean \
-        sram-lib sram-char sram-extract neg-char
+        sram-lib sram-confirm sram-char sram-extract neg-char
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
 	@echo "  make nix-install          install Nix + FOSSi cache (asks for admin password; DRY_RUN=1 to preview)"
 	@echo "  make flow-setup           fetch LibreLane (pinned tag), nix-shell smoke test, download sky130A"
 	@echo "  make pdk-fetch            download sky130A tarballs (parallel, resumable, sha256) and install with ciel"
+	@echo "  make core-hazard3         Hazard3 core: riscv-tests rv32ui/uc/um/mi on the SoC's configuration (needs make xpack-fetch)"
+	@echo "  make xpack-fetch          download the xPack riscv-none-elf-gcc (newlib) into .tools/ (byte ranges in parallel, resumable, sha256)"
 	@echo "  make ci-sram-ref          re-run LibreLane CI test_sram_macro, check signoff items + local golden"
 	@echo ""
 	@echo "Phase 1 targets (see docs/spec/soc_spec.md §8):"
@@ -32,7 +39,7 @@ help:
 	@echo "  make lint                 Verilator lint (L0)"
 	@echo "  make synth-check          local Yosys sanity synthesis"
 	@echo "  make fw                   build firmware + check generated boot ROM"
-	@echo "  make sim TEST=hello SIM=icarus|verilator"
+	@echo "  make sim TEST=hello SIM=icarus|verilator [CPU=picorv32|hazard3]  (CPU also for fw, regress-rtl, neg-rtl)"
 	@echo "  make regress-rtl          all positive tests on Icarus and Verilator (L1b)"
 	@echo "  make regress-rtl-smoke    smoke subset on Icarus"
 	@echo "  make neg-rtl              bug injection (all dv/bugs.toml entries), each must FAIL at its checker"
@@ -56,7 +63,7 @@ help:
 	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
-	@echo "  make neg-pnr              bug injection P00-P32 (STA, PDN, IR, DRC, XOR, placement, inputs, ...), each must FAIL at its checker"
+	@echo "  make neg-pnr              bug injection P00-P36 (STA, PDN, IR, DRC, XOR, placement, inputs, SRAM .lib, ...), each must FAIL at its checker"
 	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
@@ -76,9 +83,10 @@ help:
 	@echo ""
 	@echo "Phase 3.5 targets (SRAM timing from SPICE, ADR-0010, ip/sram/char/README.md; need ngspice):"
 	@echo "  make sram-lib             regenerate the five SRAM .lib from $(SRAM_CHAR)/char.json (seconds)"
-	@echo "  make neg-char             bug injection into the characterization N1-N8, each must be caught (about 40 minutes)"
+	@echo "  make sram-confirm         simulate every setup/hold and clock pulse lane at the .lib values -> confirm.json (about 1 hour)"
+	@echo "  make neg-char             bug injection into the characterization N1-N16, each must be caught (about 40 minutes)"
 	@echo "  make sram-char            ngspice characterization of the SRAM: tt, then the other four PVTs seeded from tt,"
-	@echo "                            into $(SRAM_CHAR)/char.json, then sram-lib (hours; not part of make regress)"
+	@echo "                            into $(SRAM_CHAR)/char.json, then sram-lib and sram-confirm (hours; not part of make regress)"
 	@echo "  make sram-extract         Magic extraction of the SRAM GDS with wire capacitances (about 30 minutes)"
 	@echo ""
 	@echo "  make clean                remove Phase 1 sim/firmware outputs (keeps LibreLane runs)"
@@ -91,6 +99,9 @@ flow-setup:
 
 pdk-fetch:
 	bash env/fetch_pdk.sh
+
+xpack-fetch:
+	bash env/fetch_xpack.sh
 
 ci-sram-ref:
 	bash pnr/ci_sram_ref/run.sh
@@ -108,19 +119,23 @@ synth-check:
 	bash rtl/scripts/synth_check.sh
 
 fw:
-	$(MAKE) -C fw all check-bootrom
+	$(MAKE) -C fw CPU=$(CPU) all check-bootrom
 
 sim: fw
-	$(PY) dv/scripts/run_sim.py --test $(TEST) --sim $(SIM)
+	$(PY) dv/scripts/run_sim.py --test $(TEST) --sim $(SIM) --cpu $(CPU)
 
 regress-rtl: fw
-	$(PY) dv/scripts/regress.py --sims $(SIMS) --suite all
+	$(PY) dv/scripts/regress.py --sims $(SIMS) --suite all --cpu $(CPU)
 
 regress-rtl-smoke: fw
-	$(PY) dv/scripts/regress.py --sims icarus --suite smoke
+	$(PY) dv/scripts/regress.py --sims icarus --suite smoke --cpu $(CPU)
 
 neg-rtl: fw
-	$(PY) dv/scripts/neg.py
+	$(PY) dv/scripts/neg.py --cpu $(CPU)
+
+# Hazard3 core-level ISA regression (Phase 5, ADR-0011): riscv-tests on the SoC's configuration.
+core-hazard3:
+	$(PY) dv/core_hazard3/run.py
 
 core-stock:
 	bash scripts/core_stock.sh
@@ -150,19 +165,19 @@ neg-eqy-core:
 	$(PY) signoff/eqy/neg_eqy.py --design picorv32_core
 
 harden-soc:
-	bash pnr/soc_top/run.sh
+	CPU=$(CPU) bash pnr/soc_top/run.sh
 
 eqy-soc:
-	$(PY) signoff/eqy/run_eqy.py --design soc_top
+	$(PY) signoff/eqy/run_eqy.py --design $(SOC_TAG)
 
 neg-eqy-soc:
-	$(PY) signoff/eqy/neg_eqy.py --design soc_top
+	$(PY) signoff/eqy/neg_eqy.py --design $(SOC_TAG)
 
 gl-soc: fw
-	$(PY) dv/gl_soc/run_gl_soc.py
+	$(PY) dv/gl_soc/run_gl_soc.py --cpu $(CPU)
 
 neg-gl-soc: fw
-	$(PY) dv/gl_soc/neg_gl_soc.py
+	$(PY) dv/gl_soc/neg_gl_soc.py --cpu $(CPU)
 
 neg-pnr:
 	$(PY) pnr/soc_top/neg_pnr.py
@@ -174,7 +189,7 @@ neg-run-guard:
 	$(PY) signoff/scripts/neg_run_guard.py
 
 gl-soc-powered: fw
-	$(PY) dv/gl_soc/run_gl_soc.py --powered
+	$(PY) dv/gl_soc/run_gl_soc.py --cpu $(CPU) --powered
 
 provenance-final:
 	$(PY) signoff/scripts/provenance.py --final runs/soc_top_signoff/provenance.json runs/picorv32_core_signoff/provenance.json
@@ -191,6 +206,9 @@ harden:
 SRAM_CHAR = ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char
 SRAM_PDK_LIB = $${PDK_ROOT:-$$HOME/.ciel}/sky130A/libs.ref/sky130_sram_macros/lib/sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib
 
+sram-confirm:
+	$(PY) ip/sram/char/confirm_char_lib.py $(SRAM_CHAR)/char.json $(SRAM_CHAR)
+
 sram-lib:
 	$(PY) ip/sram/char/gen_char_lib.py $(SRAM_CHAR)/char.json "$(SRAM_PDK_LIB)" $(SRAM_CHAR)
 
@@ -205,6 +223,7 @@ sram-char:
 	$(PY) ip/sram/char/characterize.py $(SRAM_CHAR)/char.json --seed $(SRAM_CHAR)/char.json \
 	  --pvt ss_100C_1v60 ff_n40C_1v95 ss_n40C_1v60 ff_100C_1v95
 	$(MAKE) sram-lib
+	$(MAKE) sram-confirm
 
 # The whole regression (scripts/regress.py lists the targets and their order).
 regress:

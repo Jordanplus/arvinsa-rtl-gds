@@ -2,10 +2,11 @@
 """Positive SoC regression (docs/spec/soc_spec.md 7.4).
 
 Usage:
-    python3 dv/scripts/regress.py --sims icarus,verilator --suite all|smoke [-j N]
+    python3 dv/scripts/regress.py --sims icarus,verilator --suite all|smoke [--cpu picorv32|hazard3] [-j N]
 
 Runs every selected test (negative_only tests excluded) on every simulator in
-parallel, then writes runs/sim/summary.json and runs/sim/junit.xml. Exit code 0
+parallel, then writes runs/sim/summary.json and runs/sim/junit.xml (--cpu hazard3:
+runs/sim_hazard3/; only the tests whose cpus include the CPU, ADR-0011). Exit code 0
 only when at least one test ran and every run is an explicit PASS.
 """
 
@@ -21,10 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dvlib  # noqa: E402
 
 
-def select_tests(tests, suite, only=None):
+def select_tests(tests, suite, only=None, cpu="picorv32"):
     names = []
     for name, t in tests.items():
-        if t["negative_only"]:
+        if t["negative_only"] or not dvlib.applies(t, cpu):
             continue
         if suite == "smoke" and not t["smoke"]:
             continue
@@ -66,13 +67,20 @@ def main(argv=None):
     ap.add_argument("--suite", default="all", choices=("all", "smoke"))
     ap.add_argument("-j", "--jobs", type=int, default=dvlib.default_jobs(),
                     help="parallel runs (default max(1, cpu_count-2) = %d)" % dvlib.default_jobs())
-    ap.add_argument("--out", default="runs/sim", help="output root (default runs/sim)")
+    ap.add_argument("--cpu", default="picorv32", choices=sorted(dvlib.CPUS), help="CPU build (default picorv32)")
+    ap.add_argument("--out", default=None, help="output root (default runs/sim, runs/sim_<cpu> for another CPU)")
     ap.add_argument("--tests", default="", help="comma list: run only these tests of the suite")
     ap.add_argument("--timeout", type=int, default=None, help="wall-clock limit per run in seconds")
     ap.add_argument("--rtl-f", default=dvlib.RTL_F, help=argparse.SUPPRESS)
     ap.add_argument("--tests-toml", default=dvlib.TESTS_TOML, help=argparse.SUPPRESS)
     ap.add_argument("--fw-dir", default=dvlib.FW_DIR, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.out is None:
+        args.out = "runs/sim" if args.cpu == "picorv32" else "runs/sim_%s" % args.cpu
+    if args.rtl_f == dvlib.RTL_F:
+        args.rtl_f = dvlib.CPUS[args.cpu]["rtl_f"]
+    if args.fw_dir == dvlib.FW_DIR:
+        args.fw_dir = dvlib.CPUS[args.cpu]["fw_dir"]
 
     sims = [s for s in args.sims.split(",") if s]
     bad = [s for s in sims if s not in dvlib.SIMS]
@@ -85,7 +93,7 @@ def main(argv=None):
     try:
         tests = dvlib.load_tests(args.tests_toml)
         only = [n for n in args.tests.split(",") if n]
-        names = select_tests(tests, args.suite, only)
+        names = select_tests(tests, args.suite, only, args.cpu)
     except Exception as e:  # OSError, DvError, tomllib.TOMLDecodeError
         print("regress: error: %s" % e, file=sys.stderr)
         return 1
@@ -93,12 +101,12 @@ def main(argv=None):
     out = dvlib.repo_path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    print("regress: suite=%s sims=%s tests=%d jobs=%d" % (args.suite, ",".join(sims), len(names), args.jobs))
+    print("regress: cpu=%s suite=%s sims=%s tests=%d jobs=%d" % (args.cpu, args.suite, ",".join(sims), len(names), args.jobs))
 
     # Compile once per simulator before the parallel runs (cached under runs/sim_build/).
     builds = {}
     with ThreadPoolExecutor(max_workers=len(sims)) as ex:
-        futs = {s: ex.submit(dvlib.build, s, (), args.rtl_f, False) for s in sims}
+        futs = {s: ex.submit(dvlib.build, s, dvlib.CPUS[args.cpu]["defines"], args.rtl_f, False) for s in sims}
         for s, f in futs.items():
             try:
                 builds[s] = f.result()
@@ -116,7 +124,7 @@ def main(argv=None):
         n, s = job
         return dvlib.safe_run_test(n, s, out_root=args.out, rtl_f=args.rtl_f, tests_toml=args.tests_toml,
                               fw_dir=args.fw_dir, timeout=args.timeout, build_result=builds[s],
-                              quiet=False)
+                              quiet=False, cpu=args.cpu)
 
     with ThreadPoolExecutor(max_workers=args.jobs) as ex:
         results = list(ex.map(one, jobs))
@@ -125,7 +133,7 @@ def main(argv=None):
     failed = len(results) - passed
     status = "PASS" if results and failed == 0 else "FAIL"
     summary = {
-        "suite": args.suite, "sims": sims, "jobs": args.jobs, "status": status,
+        "cpu": args.cpu, "suite": args.suite, "sims": sims, "jobs": args.jobs, "status": status,
         "total": len(results), "passed": passed, "failed": failed,
         "wall_time_s": round(time.time() - t0, 2),
         "tools": {s: ["%s %s (%s)" % (n, ver, path) for n, path, ver in dvlib.tool_identity(s)] for s in sims},

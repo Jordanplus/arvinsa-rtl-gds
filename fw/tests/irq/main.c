@@ -29,8 +29,17 @@
 
 #define FAIL_MASK        0x10
 #define FAIL_COUNT       0x20
+#ifdef SOC_CPU_HAZARD3
+/* Hazard3 (ADR-0011): the IRQ is a level through one synchronising flop into mip.meip,
+ * not latched. The handler clears IRQ_TRIG with its first store, many cycles before mret,
+ * so the line is low when the handler returns: exactly 1 entry (measured 2026-10-05: IRQ_TRIG
+ * written at cycle 388, entry 397, cleared 430). 2 entries mean the line did not drop. */
+#define IRQ_MIN_ENTRIES  1u
+#define IRQ_MAX_ENTRIES  1u
+#else
 #define IRQ_MIN_ENTRIES  2u   /* spec §4.8: exactly 2 entries per IRQ_TRIG write */
 #define IRQ_MAX_ENTRIES  2u
+#endif
 /* Each loop iteration is a few instructions (about 15 cycles on PicoRV32),
  * so the window is about 3000 cycles: much longer than the IRQ entry latency
  * (about 100 cycles per entry). */

@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P32).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P39).
 
-usage: neg_pnr.py [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
+usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
 cases compare against it ("real run: none", golden, metrics).
+--cpu (default picorv32; hazard3: Phase 5, ADR-0011) picks the soc_top run of that CPU (default
+runs/soc_top or runs/soc_top_hazard3), its config (pnr/soc_top/config.json or config_hazard3.json),
+limits and golden (signoff/limits/<tag>.toml, signoff/golden/<tag>/), and is passed to
+check_inputs.py. The checkers are the same code for both CPUs.
 
 Each case changes one thing and must FAIL at the expected checker, with the expected message.
 A case that FAILs elsewhere, or does not FAIL, makes neg-pnr FAIL. Cases that need a LibreLane
 step re-run one step on a copy of that step's saved config and input state
-(`python3 -m librelane.steps run`); nothing in <run> is modified. Outputs: runs/neg_pnr/<case>/.
+(`python3 -m librelane.steps run`); nothing in <run> is modified. Outputs: runs/neg_pnr/<case>/
+(--cpu hazard3: runs/neg_pnr_hazard3/<case>/).
 
   step re-runs (the real tools on the real layout)
   P01  signoff SDC + set_clock_uncertainty -setup 30  OpenROAD.STAPostPNR -> Checker.SetupViolations
@@ -60,7 +65,8 @@ step re-run one step on a copy of that step's saved config and input state
        tt_025C_1v80 SRAM .lib
   P32  SRAM .lib copies with the dout0 rising_edge   OpenROAD.STAPostPNR -> Checker.HoldViolations
        arc set to 0 (the read data would change at the clock edge: proves STA checks the hold of
-       the register that captures dout0, which the vendor .lib had no arc for; ADR-0010)
+       the register that captures dout0, which the vendor .lib had no arc for; ADR-0010). Positive
+       control first: unchanged copies of the five .lib give no hold violation (Phase 3.5 review)
   P08  final netlist: sram0 csb1 on a floating net   check_soc.py port1_tieoff
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
@@ -73,11 +79,25 @@ step re-run one step on a copy of that step's saved config and input state
   P14  final netlist: sram0 renamed sram9            check_soc.py macro
   P15  disconnected-pin log: 1 critical pin          check_soc.py disconnected
   P16  config.json: one VERILOG_FILES entry dropped  check_inputs.py rtl_files
-  P17  char .lib (tt): dout0 rising_edge arc turned  check_inputs.py char_lib
-       into a second falling_edge arc
+  P17  char .lib (tt): dout0 rising_edge arc turned  check_inputs.py char_lib, the message is STALE and
+       into a second falling_edge arc                names the tt .lib (an extra file in the directory
+                                                     also FAILs that row; Phase 3.5 review)
   P18  SRAM LEF: one ANTENNAGATEAREA line dropped    check_inputs.py antenna_lef
   P19  config.json: MACROS lib = the PDK TT .lib     check_inputs.py macro_lib
   P20  resolved.json: MACROS lib = the PDK TT .lib   check_inputs.py --resolved
+  P35  config.json: EXTRA_LIBS = the PDK TT SRAM     check_inputs.py other_libs (each variant)
+       .lib; or LIB of ss_n40C plus the ss_100C char .lib
+  P36  resolved.json: EXTRA_LIBS = the PDK TT .lib   check_inputs.py --resolved
+  P33  nom_ss_n40C sta.log: also an extra timing     check_soc.py sram_lib
+       library line for the PDK TT SRAM .lib (the way LibreLane logs EXTRA_LIBS; Phase 3.5 review)
+  P34  nom_tt sta.log: the tt char .lib of another   check_soc.py sram_lib
+       checkout (same file name, other real path)
+  P37  the CPU's config: CLOCK_PERIOD + 1 ns          check_inputs.py cpu_config (a flow setting that
+       differs between config.json and config_hazard3.json; Phase 5)
+  P38  the CPU's config: VERILOG_DEFINES changed      check_inputs.py cpu_config (picorv32: the
+       (picorv32: SOC_CPU_HAZARD3 added; hazard3:    PicoRV32 run would build Hazard3; hazard3: it
+       removed)                                      would build PicoRV32 from the Hazard3 file list)
+  P39  resolved.json: VERILOG_DEFINES changed as P38 check_inputs.py --resolved
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -101,6 +121,9 @@ LL_DIR = os.environ.get("LIBRELANE_DIR", os.path.join(ROOT, ".tools", "librelane
 CHECK_SOC = os.path.join(ROOT, "pnr", "soc_top", "check_soc.py")
 CHECK_SIGNOFF = os.path.join(ROOT, "signoff", "scripts", "check_signoff.py")
 CHECK_INPUTS = os.path.join(ROOT, "pnr", "soc_top", "check_inputs.py")
+# --cpu -> (run tag, config); set_cpu() sets CPU, CONFIG, LIMITS and GOLDEN before the cases run.
+TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
+CPU = "picorv32"
 CONFIG = os.path.join(ROOT, "pnr", "soc_top", "config.json")
 SRAM = "sky130_sram_2kbyte_1rw1r_32x512_8"
 SRAM_IP = os.path.join(ROOT, "ip", "sram", SRAM)
@@ -108,6 +131,15 @@ PDK_TT_LIB = f"pdk_dir::libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
 NUM_RE = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
 LIMITS = os.path.join(ROOT, "signoff", "limits", "soc_top.toml")
 GOLDEN = os.path.join(ROOT, "signoff", "golden", "soc_top", "metrics.json")
+
+
+def set_cpu(cpu):
+    global CPU, CONFIG, LIMITS, GOLDEN
+    tag, config = TAGS[cpu]
+    CPU = cpu
+    CONFIG = os.path.join(ROOT, "pnr", "soc_top", config)
+    LIMITS = os.path.join(ROOT, "signoff", "limits", f"{tag}.toml")
+    GOLDEN = os.path.join(ROOT, "signoff", "golden", tag, "metrics.json")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
 
@@ -470,14 +502,14 @@ def fake_run(run, d, replace, links=None):
     return fr
 
 
-def check_soc(fr, d, run, config=CONFIG):
-    cp = subprocess.run([sys.executable, CHECK_SOC, fr, "--config", config, "--sram-drc", sram_drc_alone(run)],
+def check_soc(fr, d, run, config=None):
+    cp = subprocess.run([sys.executable, CHECK_SOC, fr, "--config", config or CONFIG, "--sram-drc", sram_drc_alone(run)],
                         capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
     return cp.returncode, cp.stdout
 
 
-def soc_case(run, d, row, replace=None, links=None, also=(), config=CONFIG):
+def soc_case(run, d, row, replace=None, links=None, also=(), config=None):
     """check_soc.py on a fake run with one edit: (caught, output). Caught only if the FAIL rows are
     exactly `row` (plus `also`) and the verdict is soc-checks: FAIL."""
     rc, out = check_soc(fake_run(run, d, replace or {}, links), d, run, config)
@@ -506,13 +538,14 @@ def p30(run, d):
     rel, sta = sta_dir_with(run, d, "nom_ff_n40C_1v95",
                             lambda t: edit_once(t, re.escape(f"{SRAM}__ff_n40C_1v95.lib"), wrong, "the ff SRAM .lib in sta.log"))
     ok, out = soc_case(run, d, "sram_lib", links={rel: sta})
-    return ok and f"nom_ff_n40C_1v95: ['{wrong}']" in out, \
+    return ok and re.search(r"nom_ff_n40C_1v95: \['[^']*/" + re.escape(wrong) + r"'\]", out) is not None, \
         "check_soc.py sram_lib: nom_ff_n40C_1v95 read the tt SRAM .lib (only row FAIL, soc-checks: FAIL)"
 
 
 def p32(run, d):
-    """Hold arc of dout0 set to 0 in copies of the five char .lib; the signoff STA must report hold violations."""
-    libs = {}
+    """Hold arc of dout0 set to 0 in copies of the five char .lib; the signoff STA must report hold
+    violations, and must not with unchanged copies (positive control, Phase 3.5 review)."""
+    libs, same = {}, {}
     for key, paths in json.load(open(CONFIG))["MACROS"][SRAM]["lib"].items():
         src = os.path.join(ROOT, paths[0][len("dir::"):])
         text = open(src).read()
@@ -523,10 +556,67 @@ def p32(run, d):
         dst = os.path.join(d, os.path.basename(src))
         open(dst, "w").write(head + body + text[j:])
         libs[key] = [dst]
+        pos = os.path.join(d, "pos")
+        os.makedirs(pos, exist_ok=True)
+        shutil.copy(src, os.path.join(pos, os.path.basename(src)))
+        same[key] = [os.path.join(pos, os.path.basename(src))]
+    rc0, text0 = rerun(run, os.path.join(d, "pos"), "OpenROAD.STAPostPNR", "Checker.HoldViolations",
+                       edit_config=lambda c: c["MACROS"][SRAM].update(lib=same))
+    if rc0 != 0:
+        return False, "positive control: unchanged copies of the .lib must give no hold violation"
     rc, text = rerun(run, d, "OpenROAD.STAPostPNR", "Checker.HoldViolations",
                      edit_config=lambda c: c["MACROS"][SRAM].update(lib=libs))
     ok = rc not in (0, None) and re.search(r"[Hh]old violations found", text) is not None
-    return ok, "Checker.HoldViolations: Hold violations found"
+    return ok, "Checker.HoldViolations: Hold violations found (positive control with unchanged copies: none)"
+
+
+def p33(run, d):
+    """An extra SRAM .lib in one corner's STA, logged the way LibreLane logs EXTRA_LIBS."""
+    res = json.load(open(os.path.join(run, "resolved.json")))
+    extra = res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
+    c = "nom_ss_n40C_1v60"
+    line = f"Reading cell library for the '{c}' corner at '{os.path.join(SRAM_IP, 'char', f'{SRAM}__ss_n40C_1v60.lib')}'"
+    rel, sta = sta_dir_with(run, d, c, lambda t: edit_once(
+        t, "^" + re.escape(line) + r"[^\n]*\n", lambda m: m.group(0)
+        + f"Reading explicitly-specified extra libs for {c}…\nReading extra timing library for the '{c}' corner at '{extra}'…\n",
+        "the ss_n40C SRAM .lib line in sta.log"))
+    ok, out = soc_case(run, d, "sram_lib", links={rel: sta})
+    return ok and f"{c}: [" in out and f"{SRAM}_TT_1p8V_25C.lib" in out, \
+        "check_soc.py sram_lib: nom_ss_n40C_1v60 also read the PDK TT SRAM .lib as an extra library (only row FAIL)"
+
+
+def p34(run, d):
+    """One corner's STA reads an SRAM .lib with the right file name from another checkout."""
+    other = os.path.join(d, "other_checkout", "ip", "sram", SRAM, "char")
+    shutil.copytree(os.path.join(SRAM_IP, "char"), other)
+    c, name = "nom_tt_025C_1v80", f"{SRAM}__tt_025C_1v80.lib"
+    rel, sta = sta_dir_with(run, d, c, lambda t: edit_once(t, re.escape(os.path.join(SRAM_IP, "char", name)),
+                                                           os.path.join(other, name), "the tt SRAM .lib path in sta.log"))
+    ok, out = soc_case(run, d, "sram_lib", links={rel: sta})
+    return ok and os.path.join(other, name) in out, \
+        "check_soc.py sram_lib: nom_tt_025C_1v80 read the tt .lib of another checkout (only row FAIL)"
+
+
+def p35(run, d):
+    """config.json brings another SRAM .lib in through EXTRA_LIBS, or through LIB."""
+    caught = []
+    for name, edit in (("EXTRA_LIBS", lambda c: c.update(EXTRA_LIBS=[PDK_TT_LIB])),
+                       ("LIB", lambda c: c["LIB"]["*_ss_n40C_1v60"].append(f"dir::ip/sram/{SRAM}/char/{SRAM}__ss_100C_1v60.lib"))):
+        sub = os.path.join(d, name)
+        os.makedirs(sub)
+        rc, out = inputs_check(sub, "--config", config_with(sub, edit))
+        caught.append(inputs_failed(rc, out, "other_libs"))
+    return all(caught), "check_inputs.py other_libs (EXTRA_LIBS and LIB variants)"
+
+
+def p36(run, d):
+    """The run's resolved.json has EXTRA_LIBS (an SRAM .lib read in every corner)."""
+    res = json.load(open(os.path.join(run, "resolved.json")))
+    res["EXTRA_LIBS"] = [res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"]
+    p = os.path.join(d, "resolved.json")
+    json.dump(res, open(p, "w"), indent=1)
+    rc, out = inputs_check(d, "--resolved", p)
+    return inputs_failed(rc, out, "resolved"), "check_inputs.py --resolved (EXTRA_LIBS)"
 
 
 def p00(run, d):
@@ -727,7 +817,7 @@ def p15(run, d):
 
 
 def inputs_check(d, *args):
-    cp = subprocess.run([sys.executable, CHECK_INPUTS, *args], capture_output=True, text=True)
+    cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", CPU, *args], capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
     return cp.returncode, cp.stdout
 
@@ -757,7 +847,10 @@ def p17(run, d):
                     "the dout0 rising_edge arc")
     open(f, "w").write(new)
     rc, out = inputs_check(d, "--char-dir", char)
-    return inputs_failed(rc, out, "char_lib"), "check_inputs.py char_lib"
+    line = re.search(r"^  \[FAIL\] char_lib:[^\n]*", out, re.M)
+    ok = inputs_failed(rc, out, "char_lib") and line is not None and "unexpected files" not in line.group(0) \
+        and re.search(r"STALE \S*" + re.escape(os.path.basename(f)), line.group(0)) is not None
+    return ok, "check_inputs.py char_lib: STALE names the edited tt .lib (not another reason, e.g. an extra file)"
 
 
 def p18(run, d):
@@ -787,22 +880,52 @@ def p20(run, d):
     return inputs_failed(rc, out, "resolved"), "check_inputs.py --resolved"
 
 
+def toggle_define(c):
+    """P38/P39 edit: picorv32 gets the Hazard3 define, hazard3 loses it."""
+    if CPU == "picorv32":
+        c["VERILOG_DEFINES"] = ["SOC_CPU_HAZARD3"]
+    else:
+        c.pop("VERILOG_DEFINES")
+
+
+def p37(run, d):
+    rc, out = inputs_check(d, "--config", config_with(d, lambda c: c.update(CLOCK_PERIOD=c["CLOCK_PERIOD"] + 1)))
+    return inputs_failed(rc, out, "cpu_config"), "check_inputs.py cpu_config (CLOCK_PERIOD differs between the configs)"
+
+
+def p38(run, d):
+    rc, out = inputs_check(d, "--config", config_with(d, toggle_define))
+    return inputs_failed(rc, out, "cpu_config"), "check_inputs.py cpu_config (VERILOG_DEFINES)"
+
+
+def p39(run, d):
+    res = json.load(open(os.path.join(run, "resolved.json")))
+    toggle_define(res)
+    p = os.path.join(d, "resolved.json")
+    json.dump(res, open(p, "w"), indent=1)
+    rc, out = inputs_check(d, "--resolved", p)
+    return inputs_failed(rc, out, "resolved"), "check_inputs.py --resolved (VERILOG_DEFINES)"
+
+
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
-         ("P31", p31), ("P32", p32)]
+         ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
+         ("P37", p37), ("P38", p38), ("P39", p39)]
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--run", default=os.path.join(ROOT, "runs", "soc_top"))
-    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--cpu", default="picorv32", choices=sorted(TAGS))
+    ap.add_argument("--run")
+    ap.add_argument("--out")
     ap.add_argument("--cases")
     ap.add_argument("-j", type=int, default=4)
     args = ap.parse_args()
-    run = os.path.abspath(args.run)
-    out = os.path.abspath(args.out)
+    set_cpu(args.cpu)
+    run = os.path.abspath(args.run or os.path.join(ROOT, "runs", TAGS[args.cpu][0]))
+    out = os.path.abspath(args.out or (OUT if args.cpu == "picorv32" else f"{OUT}_{args.cpu}"))
     shutil.rmtree(out, ignore_errors=True)  # only the output directory is removed, before any check
     cases = CASES
     if args.cases:

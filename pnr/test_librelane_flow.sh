@@ -5,6 +5,8 @@
 #   grtother  stops in the same step with another error      -> must not be retried
 #   other     stops in another step                          -> must not be retried
 #   ok        finishes
+# and keep_prev_run (pnr/librelane_flow.sh): an existing run directory becomes <dir>.prev, an older
+# <dir>.prev is removed, and a directory that does not exist leaves nothing behind.
 # Prints `test-flow-retry: PASS n/n` / `test-flow-retry: FAIL ...`; exit code 0 only on PASS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -54,6 +56,15 @@ scenario "grt grt grt" fail 3 2
 scenario "other" fail 1 0
 scenario "grtother" fail 1 0
 scenario "grt other" fail 2 1
+
+total=$((total + 1))
+P="$T/prev"; rm -rf "$P"; mkdir -p "$P/run" "$P/run.prev"; echo new > "$P/run/x"; echo old > "$P/run.prev/x"
+( source pnr/librelane_flow.sh; keep_prev_run "$P/run" "$P/missing" )
+if [ ! -e "$P/run" ] && [ "$(cat "$P/run.prev/x")" = new ] && [ ! -e "$P/missing" ] && [ ! -e "$P/missing.prev" ]; then
+  pass=$((pass + 1)); echo "  [PASS] keep_prev_run: run -> run.prev (older run.prev removed), a missing directory leaves nothing"
+else
+  echo "  [FAIL] keep_prev_run: $(ls -A "$P" | tr '\n' ' ')"
+fi
 rm -rf "$T"
 [ "$pass" = "$total" ] && echo "test-flow-retry: PASS $pass/$total" && exit 0
 echo "test-flow-retry: FAIL $pass/$total"; exit 1

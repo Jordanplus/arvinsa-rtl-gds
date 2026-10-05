@@ -4,9 +4,12 @@
 # Contract: docs/spec/soc_spec.md section 8.
 #   verilator --lint-only -Wall --top-module soc_top rtl/lint/waivers.vlt
 #             -f rtl/rtl.f <SRAM blackbox>
-# Variants: default, -DUSE_POWER_PINS, and every RTL bug injection define.
+# Variants: default, -DUSE_POWER_PINS, and every RTL bug injection define, for the
+# PicoRV32 build (rtl/rtl.f) and the Hazard3 build (rtl/rtl_hazard3.f, -DSOC_CPU_HAZARD3,
+# variant names hazard3[+<define>]; Phase 5, ADR-0011). A bug define is linted on the
+# CPUs its dv/bugs.toml entry applies to (cpus = [...], default both).
 # Any warning or error in any variant -> FAIL (exit 1).
-# RTL-owned files (rtl/soc, rtl/bus, rtl/periph) may not carry any waiver.
+# RTL-owned files (rtl/soc, rtl/bus, rtl/periph, rtl/cpu) may not carry any waiver.
 # Bug injection defines: the single list is dv/bugs.toml (define = "BUG_...").
 # Both directions are checked: every define there has an `ifdef/`ifndef/
 # `elsif in the RTL-owned files, and every BUG_* used in those files has a
@@ -21,15 +24,24 @@ cd "$ROOT"
 
 OUT=runs/rtl/lint
 FILELIST=rtl/rtl.f
+FILELIST_H3=rtl/rtl_hazard3.f
 WAIVERS=rtl/lint/waivers.vlt
 SRAM_BB=ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v
-OWN_SRC="rtl/soc rtl/bus rtl/periph"
+OWN_SRC="rtl/soc rtl/bus rtl/periph rtl/cpu"
 BUGS_TOML=dv/bugs.toml
 BUGS=$( (grep -oE '^[[:space:]]*define[[:space:]]*=[[:space:]]*"BUG_[A-Za-z0-9_]+"' "$BUGS_TOML" || true) \
         | grep -oE 'BUG_[A-Za-z0-9_]+' | sort -u | tr '\n' ' ' || true)
 RTL_BUGS=$( (grep -rhoE '`(ifdef|ifndef|elsif)[[:space:]]+BUG_[A-Za-z0-9_]+' $OWN_SRC || true) \
         | grep -oE 'BUG_[A-Za-z0-9_]+' | sort -u | tr '\n' ' ' || true)
-VARIANTS="default USE_POWER_PINS $BUGS"
+# Bug defines per CPU (dv/bugs.toml cpus), from the DV loader so both read the file the same way.
+bugs_for() {
+    python3 -c 'import sys; sys.path.insert(0, "dv/scripts"); import dvlib
+print(" ".join(sorted({b["define"] for b in dvlib.load_bugs().values() if b["define"] and dvlib.applies(b, sys.argv[1])})))' "$1"
+}
+BUGS_P=$(bugs_for picorv32)
+BUGS_H=$(bugs_for hazard3)
+VARIANTS="default USE_POWER_PINS $BUGS_P hazard3 hazard3+USE_POWER_PINS"
+for b in $BUGS_H; do VARIANTS="$VARIANTS hazard3+$b"; done
 
 if ! command -v verilator >/dev/null 2>&1; then
     echo "LINT: FAIL (verilator not found in PATH)"
@@ -47,7 +59,7 @@ if grep -rn 'lint_off' $OWN_SRC >/dev/null 2>&1; then
     grep -rn 'lint_off' $OWN_SRC | sed 's/^/        /'
     fail=1
 fi
-OWN_WAIVER_RE='^[[:space:]]*lint_off.*rtl/(soc|bus|periph)'
+OWN_WAIVER_RE='^[[:space:]]*lint_off.*rtl/(soc|bus|periph|cpu)'
 if grep -nE "$OWN_WAIVER_RE" "$WAIVERS" >/dev/null 2>&1; then
     echo "  FAIL  policy: $WAIVERS waives an RTL-owned file:"
     grep -nE "$OWN_WAIVER_RE" "$WAIVERS" | sed 's/^/        /'
@@ -77,13 +89,17 @@ echo "lint: bug injection defines (dv/bugs.toml = RTL): $BUGS"
 # 3. Lint every variant.
 for v in $VARIANTS; do
     defs=""
-    if [ "$v" != "default" ]; then
-        defs="-D$v"
-    fi
+    flist="$FILELIST"
+    case "$v" in
+        default) ;;
+        hazard3) defs="-DSOC_CPU_HAZARD3"; flist="$FILELIST_H3" ;;
+        hazard3+*) defs="-DSOC_CPU_HAZARD3 -D${v#hazard3+}"; flist="$FILELIST_H3" ;;
+        *) defs="-D$v" ;;
+    esac
     log="$OUT/$v.log"
     set +e
     verilator --lint-only -Wall --top-module soc_top $defs \
-        "$WAIVERS" -f "$FILELIST" "$SRAM_BB" >"$log" 2>&1
+        "$WAIVERS" -f "$flist" "$SRAM_BB" >"$log" 2>&1
     rc=$?
     set -e
     nwarn=$(grep -c '^%Warning' "$log" || true)

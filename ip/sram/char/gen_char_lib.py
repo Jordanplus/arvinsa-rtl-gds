@@ -33,7 +33,13 @@ value (FLOOR) and the characterized value with a parasitic allowance. For each P
   dout0 max_capacitance                  -> the largest characterized load
   addr0 / wmask0 max_transition          -> INPUT_MAX_TRANSITION
 Port 1 (addr1 csb1 clk1 dout1) keeps the PDK's analytical numbers: the SoC ties it off and STA
-has no clock on clk1. Each kind of change must hit the expected number of places, else FAIL.
+has no clock on clk1. Each kind of change must hit the expected number of places, counted per pin
+and per rise/fall (a total over the five pins let one pin lose its setup arc while another got two),
+else FAIL. Before that, char.json must be sound: each record is the PVT it is filed under (model,
+VDD, temperature of sramchar.PVTS), and every number used is finite, delays and pulses > 0, and each
+search result has pass > fail by at most resolution_ns (a NaN went through max() as the floor).
+gen_char_lib.py --check compares with its own output only; check_char_lib.py recomputes the numbers
+independently.
 A PVT recorded as read_fail (the macro does not read correctly there in simulation) gets a
 PLACEHOLDER .lib (user decision 2026-10-05): the numbers of PLACEHOLDER_FROM[pvt] with the
 operating conditions of the PVT, and as hold arc the earliest change over all characterized PVTs.
@@ -124,6 +130,35 @@ def missing(doc, pvt):
     return out
 
 
+def problems(doc, pvt):
+    """Everything wrong with the record of pvt: another PVT's record, missing results (missing()),
+    or unsound numbers (see the module docstring)."""
+    import math
+    r, out = doc["pvts"][pvt], []
+    if (r.get("pvt"), r.get("model"), r.get("vdd"), r.get("temp")) != (pvt, *sc.PVTS[pvt]):
+        out.append(f"is the record of {r.get('pvt')} ({r.get('model')}, {r.get('vdd')} V, {r.get('temp')} C), "
+                   f"not of {pvt} {sc.PVTS[pvt]}")
+    gaps = missing(doc, pvt)
+    if gaps:
+        return out + [f"lacks {', '.join(gaps[:6])}"]
+    if "read_fail" in r:
+        return out
+    shape = (len(doc["clk_slews_ns"]), len(doc["loads_pf"]))
+    for k in ("settle_max", "depart_min"):
+        t = r["delay"][k]
+        if (len(t), *{len(row) for row in t}) != shape or not all(math.isfinite(x) and x > 0 for row in t for x in row):
+            out.append(f"delay.{k} is not a {shape[0]}x{shape[1]} table of finite numbers > 0")
+    res = doc.get("resolution_ns")
+    for key in ("constraints", "pulse"):
+        for n, v in r[key].items():
+            lo, hi = v.get("fail"), v.get("pass")
+            if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in (lo, hi)) or not hi > lo \
+                    or not isinstance(res, (int, float)) or hi - lo > res + 1e-9 or key == "pulse" and hi <= 0:
+                out.append(f"{key}.{n} fail {lo} / pass {hi} (need finite, pass > fail, pass - fail <= resolution_ns {res}"
+                           + (", pass > 0)" if key == "pulse" else ")"))
+    return out
+
+
 def placeholder(doc, pvt):
     """The record a read_fail PVT's .lib is made from (see the module docstring)."""
     r = json.loads(json.dumps(doc["pvts"][PLACEHOLDER_FROM[pvt]]))
@@ -192,12 +227,12 @@ def transform(src, doc, pvt):
                 for rf in ("rise", "fall"):
                     v = max(FLOOR[sh], cons[f"{name.rstrip('0')}_{sh}_{rf}"]["pass"] + CONSTRAINT_ADD)
                     t = set_values(t, f"{rf}_constraint", const(v, len(slews), len(slews)))
-                hit(f"{kind}")
+                hit(f"{kind}:{name}")
                 return t
             block = re.sub(r"\btiming\s*\(\s*\)\s*\{(?:[^{}]|\{[^{}]*\})*\}", fix, block)
             if name in ("addr0", "wmask0"):
                 block, n = re.subn(r"(max_transition\s*:\s*)" + NUM, lambda m: m.group(1) + fmt(INPUT_MAX_TRANSITION), block)
-                counts["max_transition"] = counts.get("max_transition", 0) + n
+                counts[f"max_transition:{name}"] = counts.get(f"max_transition:{name}", 0) + n
         elif name == "dout0":
             tms = list(re.finditer(r"\btiming\s*\(\s*\)\s*\{", block))
             if len(tms) != 1:
@@ -223,14 +258,15 @@ def transform(src, doc, pvt):
                 kind = re.search(r'timing_type\s*:\s*"?(\w+)"?', t).group(1)
                 if kind == "minimum_period":
                     v = max(FLOOR["minimum_period"], pulse["pulse_period"]["pass"] * PARASITIC)
-                    t = re.sub(r"(rise_constraint\(scalar\)\s*\{\s*values\(\")" + NUM, lambda m: m.group(1) + fmt(v), t)
-                    t = re.sub(r"(fall_constraint\(scalar\)\s*\{\s*values\(\")" + NUM, lambda m: m.group(1) + fmt(v), t)
+                    vals = {"rise": v, "fall": v}
                 elif kind == "min_pulse_width":
-                    hi = max(FLOOR["min_pulse_width"], pulse["pulse_high"]["pass"] * PARASITIC)
-                    lo = max(FLOOR["min_pulse_width"], pulse["pulse_low"]["pass"] * PARASITIC)
-                    t = re.sub(r"(rise_constraint\(scalar\)\s*\{\s*values\(\")" + NUM, lambda m: m.group(1) + fmt(hi), t)
-                    t = re.sub(r"(fall_constraint\(scalar\)\s*\{\s*values\(\")" + NUM, lambda m: m.group(1) + fmt(lo), t)
-                hit(kind)
+                    vals = {"rise": max(FLOOR["min_pulse_width"], pulse["pulse_high"]["pass"] * PARASITIC),
+                            "fall": max(FLOOR["min_pulse_width"], pulse["pulse_low"]["pass"] * PARASITIC)}
+                else:
+                    return t
+                for rf, v in vals.items():
+                    t = sub1(r"(" + rf + r"_constraint\(scalar\)\s*\{\s*values\(\")" + NUM, lambda m: m.group(1) + fmt(v),
+                             t, f"{kind}:{rf}")
                 return t
             block = re.sub(r"\btiming\s*\(\s*\)\s*\{(?:[^{}]|\{[^{}]*\})*\}", fixc, block)
         out.append(src[pos:bm.start()])
@@ -240,8 +276,10 @@ def transform(src, doc, pvt):
     src = "".join(out)
 
     expect = {"library": 1, "operating_conditions": 1, "nom_voltage": 1, "nom_temperature": 1, "voltage_map": 1,
-              "cell_template": 1, "constraint_template": 1, "setup_rising": 5, "hold_rising": 5,
-              "max_transition": 2, "dout0": 1, "max_capacitance": 1, "minimum_period": 1, "min_pulse_width": 1}
+              "cell_template": 1, "constraint_template": 1, "dout0": 1, "max_capacitance": 1,
+              "max_transition:addr0": 1, "max_transition:wmask0": 1}
+    expect.update({f"{k}:{p}": 1 for k in ("setup_rising", "hold_rising") for p in PORT0_INPUTS})
+    expect.update({f"{k}:{rf}": 1 for k in ("minimum_period", "min_pulse_width") for rf in ("rise", "fall")})
     if counts != expect:
         raise SystemExit(f"gen_char_lib: FAIL - {pvt}: change counts {counts} != expected {expect}")
     header = (f"/* GENERATED by ip/sram/char/gen_char_lib.py from the PDK TT .lib (template) and the ngspice\n"
@@ -272,11 +310,11 @@ def main(argv):
     if set(doc["pvts"]) != set(sc.PVTS):
         print(f"gen_char_lib: FAIL - {argv[1]} has PVTs {sorted(doc['pvts'])}, expected exactly {sorted(sc.PVTS)}")
         return 1
-    gaps = {pvt: missing(doc, pvt) for pvt in doc["pvts"]}
-    if any(gaps.values()):
-        for pvt, g in gaps.items():
+    bad = {pvt: problems(doc, pvt) for pvt in doc["pvts"]}
+    if any(bad.values()):
+        for pvt, g in bad.items():
             if g:
-                print(f"gen_char_lib: FAIL - {argv[1]} {pvt} lacks {', '.join(g[:6])}")
+                print(f"gen_char_lib: FAIL - {argv[1]} {pvt} {'; '.join(g)}")
         return 1
     stale = []
     for pvt in doc["pvts"]:

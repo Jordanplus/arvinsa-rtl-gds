@@ -66,7 +66,11 @@ module bus_assert #(
     localparam [31:0] GPIO_BASE = `SOC_GPIO_BASE;
     localparam [31:0] GPIO_SIZE = `SOC_GPIO_SIZE;
     localparam [31:0] TEST_BASE = `SOC_TEST_BASE;
+`ifdef SOC_CPU_HAZARD3
+    localparam [31:0] TEST_SIZE = `SOC_TEST_SIZE_H3;   // + FATAL (ADR-0011)
+`else
     localparam [31:0] TEST_SIZE = `SOC_TEST_SIZE;
+`endif
 
     // Independent full-address decode: a is inside [base, base+size) exactly when
     // (a - base) mod 2^32 < size.

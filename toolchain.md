@@ -1,6 +1,6 @@
 # 工具與版本清單（toolchain）
 
-最後更新：2026-10-04　維護者：專案主控（Claude 與使用者）
+最後更新：2026-10-05　維護者：專案主控（Claude 與使用者）
 
 這份清單記錄本專案用到的每個工具、版本與來源。**釘版的唯一來源是 `env/versions.mk`**，本文件是給人看的說明。
 
@@ -30,6 +30,12 @@
 - **GNU make 3.81**：不支援 `.SHELLFLAGS`、`.ONESHELL`、`$(file ...)`、`undefine`。
 - **bash 3.2**：不支援 associative array（`declare -A`）、`mapfile`／`readarray`、`${var,,}`、`|&`、`coproc`。
 - **riscv64-elf-gcc 無 newlib**：firmware 必須 `-ffreestanding -nostdlib`，只能連結 `libgcc`。
+
+### 1.1 裝在 repo 裡的工具（`.tools/`，不在 PATH 上）
+
+| 工具 | 用途 | 版本 | 安裝 | 驗證 |
+|---|---|---|---|---|
+| xPack riscv-none-elf-gcc | 含 newlib 的 RISC-V 工具鏈：Hazard3 上游測試（riscv-tests、sw_testcases）需要 libc（Phase 5，ADR-0011）；multilib 含 rv32imc／ilp32 | `XPACK_RISCV_VERSION = 15.2.0-1`（GCC 15.2.0），darwin-arm64 壓縮檔 `XPACK_RISCV_SIZE = 401163559` bytes，`XPACK_RISCV_SHA256 = 6588e8351455fad8aca37551f0e5a5543f3346bfa9a837cf03cbd3bdd4989f8f`（與官方 `.sha` 檔、GitHub asset digest 相同） | `make xpack-fetch`（`env/fetch_xpack.sh`：8 段平行、可續傳、比對大小與 sha256 後解壓到 `.tools/xpack-riscv-none-elf-gcc-15.2.0-1/`，約 1.5 GB；下載快取用完即刪） | 2026-10-05：`-march=rv32imc -mabi=ilp32 -specs=nano.specs -specs=nosys.specs` 編譯含 `snprintf` 的程式成功 |
 
 ## 2. RTL-to-GDS flow（Phase 0，2026-10-03 已安裝；`librelane --smoke-test` PASS）
 
@@ -80,7 +86,6 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 | 工具／IP | 階段 | 用途 | 備註 |
 |---|---|---|---|
 | Hazard3 | Phase 5 | 第二顆 RISC-V core | Apache-2.0 |
-| xPack riscv-none-elf-gcc | Phase 5 | 含 newlib 的工具鏈（Hazard3 benchmark） | 有 macOS arm64 原生版 |
 | OpenRAM | Phase 3.5／6 | SRAM 產生與 SPICE characterization | 只支援 x86_64 Linux（Colab 或 Lima VM） |
 | CVC | 可選 | 含 SDF 的 gate-level 模擬 | x86_64 Linux |
 
@@ -88,7 +93,8 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 
 以下各值必須與 `env/versions.mk` 一致：
 `PDK = sky130A`、`STD_CELL_LIBRARY = sky130_fd_sc_hd`、`SRAM_MACRO = sky130_sram_2kbyte_1rw1r_32x512_8`、`RISCV_PREFIX = riscv64-elf-`、
-`VERILATOR_MIN = 5.050`、`ICARUS_MIN = 13.0`、`YOSYS_MIN = 0.69`、`RISCV_GCC_MIN = 16.1`、`PYTHON_MIN = 3.11`。
+`VERILATOR_MIN = 5.050`、`ICARUS_MIN = 13.0`、`YOSYS_MIN = 0.69`、`RISCV_GCC_MIN = 16.1`、`PYTHON_MIN = 3.11`；
+xPack 工具鏈的三個值見 §1.1。
 
 ## 7. 各 regression 實際用到的工具子元件與 override（驗證紀錄）
 

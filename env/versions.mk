@@ -32,3 +32,8 @@ RISCV_GCC_MIN        = 16.1
 PYTHON_MIN           = 3.11
 # ngspice: SRAM macro SPICE characterization (Phase 3.5, ADR-0010); verified on 2026-10-04
 NGSPICE_MIN          = 47
+# xPack RISC-V toolchain with newlib (Phase 5, ADR-0011: Hazard3 upstream tests need libc); make xpack-fetch
+# installs it into .tools/. SHA256 = the release's .sha file and GitHub's asset digest (both checked 2026-10-05).
+XPACK_RISCV_VERSION  = 15.2.0-1
+XPACK_RISCV_SIZE     = 401163559
+XPACK_RISCV_SHA256   = 6588e8351455fad8aca37551f0e5a5543f3346bfa9a837cf03cbd3bdd4989f8f

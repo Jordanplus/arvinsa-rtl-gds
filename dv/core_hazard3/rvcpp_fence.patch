@@ -1,0 +1,17 @@
+--- a/rv_core.cpp	2026-10-05 20:03:50
++++ b/rv_core.cpp	2026-10-05 20:03:50
+@@ -566,6 +566,14 @@
+ 			}
+ 			break;
+ 		}
++
++		case OPC_MISC_MEM:
++			// arvinsa-rtl-gds patch (dv/core_hazard3/rvcpp_fence.patch): upstream rvcpp has no MISC-MEM case,
++			// so fence was illegal and every riscv-tests run diverged at RVTEST_PASS. fence (funct3 0) is a
++			// no-op on one in-order hart; fence.i (funct3 1) stays illegal (EXTENSION_ZIFENCEI = 0).
++			if (funct3 != 0b000)
++				exception_cause = XCAUSE_INSTR_ILLEGAL;
++			break;
+ 
+ 		case OPC_JAL:
+ 			rd_wdata = pc + 4;

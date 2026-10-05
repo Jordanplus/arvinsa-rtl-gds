@@ -28,11 +28,16 @@ by the testbench with 1/0. The cell models then pass every output through a
 power-good primitive, so a cell whose supply pins are not on vccd1/vssd1 drives X and the lockstep
 comparison FAILs. No SDF: Icarus is not a signoff simulator for timing (project-plan.md §7.1).
 
-usage: run_gl_soc.py [--harden-run <dir>] [--netlist <path>] [--out <dir>] [--tests a,b] [-j N] [--powered]
-  --harden-run  LibreLane run of `make harden-soc` (default runs/soc_top)
+usage: run_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--netlist <path>] [--out <dir>] [--tests a,b] [-j N] [--powered]
+  --cpu         CPU of soc_top (default picorv32; hazard3: Phase 5, ADR-0011): the RTL copy is built
+                from that CPU's file list and defines, the firmware from its build directory
+                (dv/scripts/dvlib.py CPUS), and only the tests whose cpus include it run, with its
+                [test.<cpu>] overrides
+  --harden-run  LibreLane run of `make harden-soc` (default runs/soc_top; CPU=hazard3: runs/soc_top_hazard3)
   --netlist     netlist to simulate instead of <harden-run>/final/nl/soc_top.nl.v (negative tests)
-  --out         output directory (default runs/gl_soc, with --powered runs/gl_soc_powered)
-  --tests       comma-separated subset of tests (default: all positive tests)
+  --out         output directory (default runs/gl_soc, with --powered runs/gl_soc_powered; another
+                CPU adds _<cpu>: runs/gl_soc_hazard3, runs/gl_soc_powered_hazard3)
+  --tests       comma-separated subset of tests (default: all positive tests of the CPU)
 Prints `gl-soc: PASS` / `gl-soc: FAIL` (`gl-soc-powered: ...` with --powered); exit code 0 only
 on PASS. Python stdlib only.
 """
@@ -78,18 +83,21 @@ def rename_top(text):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--harden-run", default=str(ROOT / "runs" / "soc_top"))
+    ap.add_argument("--cpu", default="picorv32", choices=sorted(dvlib.CPUS))
+    ap.add_argument("--harden-run")
     ap.add_argument("--netlist")
     ap.add_argument("--out")
     ap.add_argument("--tests")
     ap.add_argument("-j", type=int, default=dvlib.default_jobs())
     ap.add_argument("--powered", action="store_true")
     args = ap.parse_args()
-    harden_run = Path(args.harden_run).resolve()
+    cpu = dvlib.CPUS[args.cpu]
+    suffix = "" if args.cpu == "picorv32" else f"_{args.cpu}"
+    harden_run = Path(args.harden_run or ROOT / "runs" / f"soc_top{suffix}").resolve()
     label = "gl-soc-powered" if args.powered else "gl-soc"
     default_nl = harden_run / "final" / ("pnl/soc_top.pnl.v" if args.powered else "nl/soc_top.nl.v")
     netlist = Path(args.netlist).resolve() if args.netlist else default_nl
-    out = Path(args.out or ROOT / "runs" / ("gl_soc_powered" if args.powered else "gl_soc")).resolve()
+    out = Path(args.out or ROOT / "runs" / (("gl_soc_powered" if args.powered else "gl_soc") + suffix)).resolve()
     flags = GL_FLAGS + (["-DUSE_POWER_PINS"] if args.powered else [])
     t0 = time.time()
 
@@ -112,12 +120,12 @@ def main():
         tests = dvlib.load_tests()
     except (OSError, dvlib.DvError) as e:
         return fail(f"cannot read dv/tests.toml: {e}")
-    names = [n for n, t in tests.items() if not t["negative_only"]]
+    names = [n for n, t in tests.items() if not t["negative_only"] and dvlib.applies(t, args.cpu)]
     if args.tests:
         want = args.tests.split(",")
         unknown = [n for n in want if n not in names]
         if unknown:
-            return fail(f"unknown or negative-only test(s): {', '.join(unknown)}")
+            return fail(f"unknown, negative-only or not for {args.cpu} test(s): {', '.join(unknown)}")
         names = want
 
     out.mkdir(parents=True)
@@ -127,9 +135,10 @@ def main():
     except ValueError as e:
         return fail(str(e))
 
-    print(f"[{label}] netlist {netlist}")
+    print(f"[{label}] cpu {args.cpu}, netlist {netlist}")
     print(f"[{label}] compile tb_soc with the RTL and gate-level SoC (Icarus, {' '.join(flags)})")
-    b = dvlib.build("icarus", extra_files=[LOCKSTEP_V] + [Path(m) for m in cell_models] + [gl_v],
+    b = dvlib.build("icarus", defines=cpu["defines"], rtl_f=cpu["rtl_f"],
+                    extra_files=[LOCKSTEP_V] + [Path(m) for m in cell_models] + [gl_v],
                     extra_flags=flags, variant="glp" if args.powered else "gl")
     if not b.ok:
         return fail(f"compile: {b.message}")
@@ -138,7 +147,8 @@ def main():
 
     def one(name):
         r = dvlib.run_test(name, "icarus", out_root=str(out), build_result=b, quiet=True,
-                           timeout=gl_timeout(tests[name]["max_cycles"]))
+                           rtl_f=cpu["rtl_f"], fw_dir=cpu["fw_dir"], cpu=args.cpu,
+                           timeout=gl_timeout(dvlib.for_cpu(tests[name], args.cpu)["max_cycles"]))
         tbr_path = ROOT / r.get("run_dir", "") / "tb_result.txt"
         tbr = dvlib._parse_tb_result(tbr_path) if tbr_path.is_file() else {}
         problems = []
@@ -162,7 +172,7 @@ def main():
         else:
             print(f"  [PASS] {name}: {r.get('cycles')} cycles, {compares} RTL/GL comparisons, "
                   f"{r.get('wall_time_s')} s")
-    summary = {"netlist": str(netlist), "tests": len(results), "failed": errors,
+    summary = {"cpu": args.cpu, "netlist": str(netlist), "tests": len(results), "failed": errors,
                "wall_time_s": round(time.time() - t0, 1)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     status = "PASS" if errors == 0 and results else "FAIL"

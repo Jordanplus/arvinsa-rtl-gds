@@ -102,7 +102,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 20 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
+`.claude/skills/` 放了 21 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
 
 **Claude 怎麼挑 skill**：每次對話開始時，Claude 只看得到每個 skill 開頭的 `description`，也就是一段「什麼情況用」的說明。判斷和手上的任務相關，才讀整份 `SKILL.md`。所以 `description` 要寫出會遇到的情況與錯誤訊息。這一節是給人看的索引：先用「依情況找 skill」查，再看每個 skill 的說明。
 
@@ -120,7 +120,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
-| 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑前保存失敗的 run | librelane-run-debug | — |
+| 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
 | run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束 | librelane-run-debug | multicorner-sta（corner 太多）、drv-timing-closure（post-GRT 修復的設定、resizer 停不下來）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
@@ -142,11 +142,13 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
 | 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同 | signoff-checker-qualification | flow-regression-reproducibility |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
+| 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面） |
 | 一個 Phase 收尾 | phase-exit-review | — |
 
 ### 在流程中的位置
 
 ```
+換 CPU core ............................ core-migration-hazard3
 RTL：合成、lint ........................ rtl-synthesis-lint
  └ floorplan、macro、IO pin ............ floorplan-congestion、hard-macro-integration
     └ PDN .............................. pdn-ir-drop
@@ -199,17 +201,18 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 | [multicorner-sta](.claude/skills/multicorner-sta/SKILL.md) | 增減 corner、每個 corner 的 hook、只重跑 STA 的 what-if、最小週期 | LibreLane／OpenSTA |
 | [dv-directed-tests](.claude/skills/dv-directed-tests/SKILL.md) | 從漏掉的植入錯誤找缺口，寫 directed 測試補上並證明有效 | 通用；例子是 RISC-V firmware |
 | [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：證據、限制、獨立審查、使用者決定、skill 回寫 | 通用 |
+| [core-migration-hazard3](.claude/skills/core-migration-hazard3/SKILL.md) | 把 CPU 從 PicoRV32 換成 Hazard3（AHB5）：介面、參數、中斷與 reset、驗證資產 | Hazard3 細節；換 core 的檢查方法通用 |
 
 ### 各 skill 說明
 
 #### librelane-run-debug：LibreLane 執行與除錯
 
-- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無、重跑前保存失敗的 run。
+- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無、重跑時保留上一次的 run。
 - **重點**：
   - 單步重跑用 `python3 -m librelane.steps run`，改的是 config 與 state 的複本，原 run 不動。
   - 錯誤要先證明是隨機的（同一份輸入重跑 3–4 次，有過有不過），才能加重試；重試只針對那一個訊息，而且有次數上限。只跑一次就把錯誤歸因到某個設定不可靠：`GRT-0229` 原本被誤認為是某個設定造成的。
   - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。
-  - 重跑前先保存失敗的 run：`run.sh` 開跑前會刪掉同名的 run 目錄，Phase 3.5 第 1 次 harden 的 log 就因此不見，只剩 ADR 的摘要。`run.sh` 的 run tag 寫死，重跑前要自己搬走；`run.sh` 改成自動搬走留到 Phase 5。
+  - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
@@ -251,6 +254,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以 .lib 要每個 PVT 一份（用 SPICE 實測產生，看 openram-macro-characterization）；只有廠商的單一 TT 解析 .lib 時，暫時用一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
   - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
   - 未用的 port 要 tie-off，checker 要檢查實際接的值。
+  - STA 的每個 corner 只能讀到一份 macro .lib：`LIB`、`EXTRA_LIBS` 也會被讀進每個 corner。檢查要打開 STA 讀的每個 .lib 看誰定義了 macro cell，並比完整路徑。
   - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫、以及 ss 1.60 V 室溫時會讀出前一次的值；corner 之間的溫度 STA 看不到，要另外模擬。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
 - **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008／0010。negative test：P08、P09、P14、P16–P20、P30、P32。
@@ -271,9 +275,10 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 新加的 `rising_edge` 弧接進 SoC 後，要有 negative test 證明 STA 真的用到它。
   - .lib 延遲表的負載斜率會被 OpenROAD 當成 driver 強度。讀出穩定時間會隨負載跳動，照實寫進表裡等於 60–140 kΩ 的 driver，`repair_design` 會一直插 buffer。所以每列取負載中的最大延遲（hold 弧取最小），產生後先單步重跑 repair 確認時間正常。
   - 其他 PVT 的結果常在以 tt 為中心的搜尋範圍外：往外一次多測幾點（2 點、最多 3 次）再接著二分，不要整個重新二分（舊做法 ss 的最小週期預估近 20 小時）。
+  - 產生 .lib 的程式本身也要有 checker：另寫一支不 import 它的程式，從量測 JSON 重算每個數字；在 .lib 採用的值上做確認模擬；檢查量測 JSON 的來源與數值、模擬快取是否完整。假的測試資料每格要不同，否則公式錯誤測不出來。
   - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）與 ss 1.60 V 室溫（25°C）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
-- **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N8（`make neg-char`）與 P04、P17、P30、P32。
+- **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N16（`make neg-char`）與 P04、P17、P30、P32–P36。
 
 #### drc-signoff：DRC、GDS 輸出、XOR
 
@@ -450,6 +455,23 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 要放寬門檻或改比對規則時先問使用者，並記錄決定。
   - 收尾時分析本階段的重大任務是否需要新 skill，並逐一對照每個 skill、README 與 `description` 有沒有寫回。
 - **本 repo 實例**：`docs/phase_exit/phase0.md`–`phase4.md`。
+
+#### core-migration-hazard3：把 CPU 換成 Hazard3
+
+- **名詞**：AHB5 是 pipelined 匯流排，一筆傳輸分 address phase 與下一個 cycle 的 data phase；RVFI 是 core 每退休一條指令輸出的紀錄；ISS 是只模擬指令語意的軟體模型，當參考答案。
+- **何時用**：SoC 的 CPU 從 PicoRV32（native bus）換成 Hazard3；選 1port 或 2port wrapper；AHB5 接 1RW 同步 SRAM；設定 Hazard3 的參數；搬移 trap、中斷、reset 相關的測試；建立 core 層級的驗證（上游 riscv-tests、rvcpp 逐指令比對）。
+- **重點**：
+  - 釘 stable 版、submodule 唯讀；參數要用 instance 參數或 `chparam`（不能用 define），而且要在展開階層前設定。
+  - 預設值的陷阱：`CSR_COUNTER` 預設 0、計數器 reset 後是停住的、`EXTENSION_A` 預設開、暫存器堆沒有 reset。
+  - debug、power 相關的 port 都要 tie-off，`dbg_sbus_vld` 一定要 0。
+  - AHB5 的寫入資料晚一個 cycle，OpenRAM SRAM 要在同一個上升緣拿到位址與資料：要轉接器、write buffer 或 wait state。有副作用的周邊只在 `htrans[1] && hready` 那個 cycle 取樣。
+  - 沒有 trap 腳、中斷是 level-sensitive 的標準模型、reset 是非同步的（要同步器）、CPI 小很多：依賴這些的測試與 checker 要重新定義或重量。
+  - 上游測試要 newlib 工具鏈；rvcpp 印的是退休指令 trace，要自己用 RVFI 轉成同格式再逐條比對。
+  - 舊 core 的建置要保持不變：新 core 專用的 RTL 都放在 define 下，再用前置處理後的 RTL 比對證明舊建置一字不差，舊的 golden 就能沿用。
+  - 轉成 native bus 時，AHB 讀取的 `hwdata` 要擋掉（它會變動或是 X）；`mtval` 固定為 0；中斷進入次數與 cycle 數的期望值要依 CPU 分開訂。
+  - core 層級驗證：測試台的設定檔從 SoC 的參數自動產生；上游測試台與 riscv-tests 都在 `runs/` 建置，submodule 不留檔案；rvcpp 要補 `fence`，而且它的 CSR 模型是全功能設定，所以逐指令比對只做 user-level 指令、從測試本體開始。
+- **不在這裡**：SoC 驗證的一般寫法看 dv-directed-tests、gate-level-simulation；SRAM 整合看 hard-macro-integration。
+- **本 repo 實例**：ADR-0011、`rtl/cpu/`、`dv/core_hazard3/`（`make core-hazard3`）、`docs/phase_exit/phase5.md`（Phase 5）。
 
 ### skill 的由來
 

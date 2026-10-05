@@ -288,13 +288,44 @@ def run(deck_text, workdir, timeout=7200):
     with open(os.path.join(workdir, "ngspice.log"), "w") as log:
         rc = subprocess.run(["ngspice", "-b", "deck.sp"], cwd=workdir, stdout=log, stderr=subprocess.STDOUT,
                             timeout=timeout).returncode
-    text = open(os.path.join(workdir, "ngspice.log"), errors="replace").read()
-    errs = [l for l in text.replace("\r", "\n").split("\n")
-            if re.search(r"\berror\b|simulation interrupted|timestep too small|singular", l, re.I)]
+    errs = log_errors(workdir)
     if rc != 0 or errs or not os.path.isfile(wave):
         raise RuntimeError(f"ngspice rc={rc}, {len(errs)} error line(s) {errs[:2]}, wave "
                            f"{'present' if os.path.isfile(wave) else 'missing'}: {workdir}")
-    return read_wave(wave)
+    w = read_wave(wave)
+    end = tran_end(deck_text)
+    if not w["time"] or w["time"][-1] < end - 1e-3:
+        raise RuntimeError(f"ngspice wave ends at {w['time'][-1] if w['time'] else 0:.3f} ns, before the .tran end {end:.3f} ns: {workdir}")
+    return w
+
+
+def log_errors(workdir):
+    """Error lines of <workdir>/ngspice.log (all lines if the log is missing)."""
+    p = os.path.join(workdir, "ngspice.log")
+    if not os.path.isfile(p):
+        return ["ngspice.log missing"]
+    text = open(p, errors="replace").read()
+    return [l for l in text.replace("\r", "\n").split("\n")
+            if re.search(r"\berror\b|simulation interrupted|timestep too small|singular", l, re.I)]
+
+
+def tran_end(deck_text):
+    """Stop time (ns) of the deck's .tran line."""
+    m = re.search(r"^\.tran\s+\S+\s+([\d.]+)n", deck_text, re.M)
+    if not m:
+        raise RuntimeError("deck has no .tran <step> <stop>n line")
+    return float(m.group(1))
+
+
+def cached_wave(workdir, deck_text):
+    """The waveform of an earlier run of this exact deck in workdir, or None. Reused only when that
+    run left a clean ngspice.log and a waveform reaching the .tran stop time: a run that failed
+    part way can leave a partial wave.txt next to the same deck.sp (Phase 3.5 review)."""
+    wave, deck = os.path.join(workdir, "wave.txt"), os.path.join(workdir, "deck.sp")
+    if not (os.path.isfile(wave) and os.path.isfile(deck) and open(deck).read() == deck_text) or log_errors(workdir):
+        return None
+    w = read_wave(wave)
+    return w if w["time"] and w["time"][-1] >= tran_end(deck_text) - 1e-3 else None
 
 
 def read_wave(path):
@@ -352,6 +383,7 @@ def check_reads(seq, w, sample_before=0.05):
     """[(cycle, label, problem)] for every read whose dout0 differs from the expected word just
     before the next rising edge (1 must be >= 0.8 VDD, 0 <= 0.2 VDD)."""
     rise, _ = seq.edges()
+    covers(seq, w, sample_before)
     bad = []
     for k, expect, label in seq.checks:
         t = rise[k + 1] - sample_before
@@ -364,6 +396,15 @@ def check_reads(seq, w, sample_before=0.05):
             bad.append((k, label, f"expected 0x{expect:08x}, wrong bits {' '.join(wrong[:6])}"
                                   f"{' ...' if len(wrong) > 6 else ''}"))
     return bad
+
+
+def covers(seq, w, sample_before=0.05):
+    """Raise unless the waveform reaches the last read check: value_at() past the end of a short
+    waveform returns its last sample, so a truncated wave.txt would pass every later check."""
+    rise, _ = seq.edges()
+    need = max((rise[k + 1] - sample_before for k, _, _ in seq.checks), default=0.0)
+    if not w["time"] or w["time"][-1] < need:
+        raise RuntimeError(f"waveform ends at {w['time'][-1] if w['time'] else 0:.3f} ns, before the read check at {need:.3f} ns")
 
 
 VALID_HI, VALID_LO, DEPART = 0.8, 0.2, 0.1   # fractions of VDD
@@ -396,6 +437,7 @@ def read_timing(seq, w, sample_before=0.05):
               of the previous read stays usable after the edge, i.e. the hold side
     The settle and depart thresholds are stricter than the 50 % of the .lib, on purpose."""
     rise, fall = seq.edges()
+    covers(seq, w, sample_before)
     v = seq.vdd
     reads = {k: e for k, e, _ in seq.checks}
     out = []

@@ -168,7 +168,7 @@ ss −40°C 1.60 V 的延遲模擬中，每次讀取都錯（`char.json` 的 `re
 | 網表修剪 | 修剪對完整網表：bit 31 讀出 1 的 50% 延遲 +2.0% | 同一量測點；用的是早期試跑的 508 顆修剪網表，正式的 1264 顆沒有再比 |
 | 初始條件 | UIC 對直流工作點：+0.5% | 這是替代設定比正式設定大多少，不是正式量法的誤差 |
 | 延遲表推算 | 其他 4 個 PVT 只模擬十字形 5 點，四角用相加推算；在 TT 與 9 點全模擬比，誤差 ≤ 1% | 讀出穩定偏大（保守）；dout 開始變化在 slew 0.05、0.5 ns 的 5 fF 角偏晚 0.5%、1.0%，hold 弧在這兩角偏樂觀，由 × 0.9 涵蓋 |
-| 植入錯誤 N1–N8（`make neg-char`） | N1–N8 8/8 PASS（`ccc536c`，`runs/sram_char/neg_char2.log`，約 22 分鐘）；`3e9b011` 改了表格形狀後 N5–N8 4/4 PASS（`6316ea9` 重跑並保存：`runs/sram_char/neg_char_n5n8_6316ea9.log`） | sense amp 加 100 fF → 穩定時間 +0.72 ns；bitcell 卡住 → 讀出檢查 FAIL；setup 搜尋失效 → 報錯不給數字；網表少一顆 bitcell、JSON 缺 pulse、.lib 被手改、佔位 .lib 的來源也讀取失敗、少一個 PVT → FAIL／STALE（`ip/sram/char/README.md`） |
+| 植入錯誤 N1–N16（`make neg-char`；N9–N16 是 Phase 5 開頭為審查找到的漏洞加的） | N1–N8 8/8 PASS（`ccc536c`，`runs/sram_char/neg_char2.log`，約 22 分鐘）；`3e9b011` 改了表格形狀後 N5–N8 4/4 PASS（`6316ea9` 重跑並保存：`runs/sram_char/neg_char_n5n8_6316ea9.log`） | sense amp 加 100 fF → 穩定時間 +0.72 ns；bitcell 卡住 → 讀出檢查 FAIL；setup 搜尋失效 → 報錯不給數字；網表少一顆 bitcell、JSON 缺 pulse、.lib 被手改、佔位 .lib 的來源也讀取失敗、少一個 PVT → FAIL／STALE（`ip/sram/char/README.md`） |
 | 接進 SoC 的植入錯誤 | P04、P17、P30、P32 | `pnr/soc_top/neg_pnr.py`；結果見 `docs/phase_exit/phase3_5.md` |
 
 ## 已知限制
@@ -186,7 +186,7 @@ ss −40°C 1.60 V 的延遲模擬中，每次讀取都錯（`char.json` 的 `re
 11. **hold 弧的值和週期有關**（獨立審查重播快取的模擬，沒有另外重算）：週期 10 ns 的 tt「讀之後接寫」最早 1.080 ns，等於 .lib 的 1.0808（× 0.9 的餘量用光）；週期 16 ns 的 ss 100°C 讀之後接寫最早 1.999 ns，比 .lib 的 2.4976 早 0.5 ns。特性化用的 20 ns 週期時全部晚於 .lib。SoC 是 43 ns、.lib 的 minimum_period 下限 30 ns，依趨勢落在安全的一側，但 43 ns 沒有直接模擬。週期改短或拿掉下限（Phase 6）時要重新確認。
 12. **dout0 的最小負載低於特性化範圍**：最終版圖最小 3.35 fF，特性化最低 5 fF。依斜率估計 hold 弧最多早 5 ps，在 × 0.9 的餘量內（推算）。
 13. **ss −40°C 的讀取失敗只在 20 ns 週期判定**：機制是 latch 拉不回來（功能問題，不是時間不夠），推測 43 ns 也會失敗，沒有驗證。
-14. **特性化流程的 checker 漏洞**（2026-10-05 獨立審查，`docs/phase_exit/phase3_5.md`「獨立審查」）：`gen_char_lib.py` 的公式、`char.json` 的來源欄位與數值、模擬快取、部分 PVT 失敗時的寫檔都沒有 checker 保護。審查用獨立重算確認這次的 .lib 正確；Phase 5 開頭修（使用者決定）。
+14. **特性化流程的 checker 漏洞**（2026-10-05 獨立審查，`docs/phase_exit/phase3_5.md`「獨立審查」）：`gen_char_lib.py` 的公式、`char.json` 的來源欄位與數值、模擬快取、部分 PVT 失敗時的寫檔都沒有 checker 保護。審查用獨立重算確認這次的 .lib 正確；Phase 5 開頭修（使用者決定）。**Phase 5 開頭已修**：`check_char_lib.py`（獨立重算、來源欄位、`confirm.json`）由 `make harden-soc` 的輸入檢查執行；`confirm_char_lib.py` 在 .lib 採用的值上做確認模擬；`gen_char_lib.py` 檢查紀錄與數值；模擬快取與部分失敗的處理；植入錯誤 N9–N16（`ip/sram/char/README.md`）。
 
 ## 與原計畫不同
 

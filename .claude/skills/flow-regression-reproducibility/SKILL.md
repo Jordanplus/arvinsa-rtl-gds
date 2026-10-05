@@ -43,7 +43,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 7. **golden 與 commit 的先後**：更新 golden 的那個 run 一定來自更新前的 commit，所以那個 run 自己永遠不會通過下游檢查。流程是：harden（golden 比對 FAIL、其他檢查 PASS）→ 逐項檢視差異 → commit 新 golden → 乾淨 checkout 跑完整 regression，由它證明新 golden 可重現。
 8. **`make -n` 不是完全不執行**：recipe 裡有 `$(MAKE)` 的那一行在 `-n` 下仍會執行（子 make 繼承 `-n`，只印出指令）。測 dispatch 用的 target 時要確認子 make 確實只有印。
 9. **長 regression 之前，先把會在中途才出錯的東西提前抓**：
-   - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。它也找 `open(f, "w").write(... open(f).read() ...)`：Python 先執行 `open(f, "w")` 把檔案清空，再讀，讀到空字串（Phase 3.5：neg-pnr 的 P17 在 regress 第 19 個 target、約 80 分鐘後才 FAIL）。
+   - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。它也找「寫檔前先清空」：`open(f, "w").write(... open(f).read() ...)` 先執行 `open(f, "w")` 把檔案清空，再讀，讀到空字串（Phase 3.5：neg-pnr 的 P17 在 regress 第 19 個 target、約 80 分鐘後才 FAIL）。Phase 5 擴大到同一行的任何順序、`with`、`h = open(p, "w")` 之後在 `h.close()` 前又開同一路徑、`file=`、`io.open`；路徑別名、另一種寫法組出的路徑、在 helper 函式裡讀，仍看不到。
    - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 2 小時的重跑。改過的 negative test 也一樣：Phase 3.5 改寫了 P17 卻沒先跑，乾淨 checkout 的 regress 第 1 次因此 FAIL（「已知陷阱」同一列第 2 次發生）。
    - 預跑時多個步驟同時跑會互相拖慢，有牆鐘時限的步驟（GL 模擬）可能逾時；逾時的要單獨重跑確認（`gate-level-simulation` 規則 6）。
 10. **等長時間 run 結束，用 PID，不用字串比對**：

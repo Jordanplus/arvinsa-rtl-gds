@@ -42,6 +42,12 @@
 # 870728, muldiv 17333, bootrom_march 111880; identical on Icarus and
 # Verilator). An intended RTL timing change that makes these tests faster
 # needs a new measurement here.
+#
+# CPUs (Phase 5, ADR-0011): an entry runs on every CPU of dvlib.CPUS unless it has
+# cpus = [...]; a [test.<cpu>] table right after an entry overrides max_cycles,
+# min_cycles, expect_uart or sram_cov for that CPU. Hazard3 min_cycles: about 90% of
+# the DONE cycle measured on the Hazard3 RTL (Icarus, 2026-10-05: memtest 423477,
+# muldiv 10460, bootrom_march 62626); Hazard3 needs fewer cycles per instruction.
 
 [[test]]
 name = "hello"
@@ -74,6 +80,8 @@ expect_gpio = [0xB0]
 uart_in = ""
 smoke = true
 negative_only = false
+[test.hazard3]
+min_cycles = 381000
 
 [[test]]
 name = "irq"
@@ -99,6 +107,8 @@ expect_gpio = [0xB0]
 uart_in = ""
 smoke = false
 negative_only = false
+[test.hazard3]
+min_cycles = 9400
 
 [[test]]
 name = "uart_echo"
@@ -132,6 +142,8 @@ expect_gpio = [0xB1, 0xA5]
 uart_in = ""
 smoke = true
 negative_only = false
+[test.hazard3]
+min_cycles = 56400
 
 [[test]]
 name = "boot_uart_hello"
@@ -337,3 +349,20 @@ expect_gpio = [0xB0]
 uart_in = ""
 smoke = false
 negative_only = false
+cpus = ["picorv32"]
+
+# The exception path of Hazard3 (fw/tests/exc/main.c, ADR-0011): misaligned lw and sw,
+# ecall, ebreak and an illegal instruction each enter the trap handler once with the
+# right mcause (and mtval for the misaligned accesses); the Hazard3 counterpart of buserr.
+[[test]]
+name = "exc"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "exc PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0]
+uart_in = ""
+smoke = false
+negative_only = false
+cpus = ["hazard3"]

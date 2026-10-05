@@ -54,15 +54,15 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 類型 | 例子 | 出處 |
 |---|---|---|
 | 工具靜默略過某些情況 | EQY：gate 端某 bit 是常數時只記一行 `found constant gate bit` 就不證明；輸出被植入卡 0 時，15136 個分區全部證明通過 | `neg_eqy.py wdata3_stuck0`，`signoff/eqy/README.md` |
-| 工具的檢查範圍比名稱小 | PSM（power grid checker）只查電源網路自己的 shape 連不連通，不查 macro 電源 pin；LibreLane 的 filtered unannotated 只認頂層 port；`check_soc.py sram_lib` 只認 `Reading cell library` 一種 log 訊息、只比路徑結尾，經 `EXTRA_LIBS` 多讀一份 SRAM .lib 看不到，`check_inputs.py` 也只看 MACROS 不看 `LIB`／`EXTRA_LIBS` | P05；`filter_unannotated.py` 70–85 行；Phase 3.5 審查（未修） |
+| 工具的檢查範圍比名稱小 | PSM（power grid checker）只查電源網路自己的 shape 連不連通，不查 macro 電源 pin；LibreLane 的 filtered unannotated 只認頂層 port；`check_soc.py sram_lib` 只認 `Reading cell library` 一種 log 訊息、只比路徑結尾，經 `EXTRA_LIBS` 多讀一份 SRAM .lib 看不到，`check_inputs.py` 也只看 MACROS 不看 `LIB`／`EXTRA_LIBS` | P05；`filter_unannotated.py` 70–85 行；Phase 3.5 審查，Phase 5 開頭修：收集三種讀 .lib 的訊息、打開檔案看誰定義了 macro cell、解開 symlink 比完整路徑（P33–P36） |
 | 植入沒有生效 | `PDN_CONNECT_MACROS_TO_GRID=false` 產生的電源網路與原本逐字相同；`unset_output_delay` 不加 `-clock` 什麼都沒刪，加了 `-clock` 之後路徑消失、但 check_setup 仍當作有 output delay | P05 第一版、P13 第一、二版、N6 第一版（要替換的字串在新 .lib 裡已不存在）、P17 Phase 3.5 版（檔案在讀之前就被 `open(f, "w")` 清空；植入點檢查 `edit_once` 因此報錯，而不是什麼都沒改就判 PASS） |
 | 說明與程式不符 | P10 的說明寫「KLayout 與 Magic DRC 都會 FAIL」，程式只斷言 KLayout | P10 第一版 |
 | 比對的文字被輸出格式拆開 | LibreLane console 折行，`GRT-0229 ... usage=65534` 分在兩行，單行 regex 永遠對不到，重試永遠不會發生 | `pnr/librelane_flow.sh` 第一版；用模擬的 nix-shell 測 7 種情境（`make test-flow-retry`） |
 | 下游只查部分判定 | `run_eqy.py`、`run_gl_soc.py` 只看 `signoff.txt`，不看 soc 專用檢查、輸入一致性 | Phase 3 收尾自查 |
-| 工具快取了舊資料 | 換 LEF 後重跑 `CheckAntennas`，讀的仍是 ODB 裡的舊 antenna 資料；特性化的模擬快取不確認上次 ngspice 成功，波形太短時讀取一律判對 | P06 第一版；Phase 3.5 審查（未修） |
+| 工具快取了舊資料 | 換 LEF 後重跑 `CheckAntennas`，讀的仍是 ODB 裡的舊 antenna 資料；特性化的模擬快取不確認上次 ngspice 成功，波形太短時讀取一律判對 | P06 第一版；Phase 3.5 審查，Phase 5 開頭修（N15） |
 | 比對粒度太粗 | `check_soc.py magic_drc` 在 SRAM 外框內只比規則種類，多一個同種類的錯誤照樣 PASS | Phase 3 獨立審查（假報告實驗） |
 | 前處理把要檢查的東西抹掉 | EQY 的 `sat` strategy 先 `formalff -clk2ff`，所有 flip-flop 變成同一個隱含 clock；flip-flop 的 CLK 改接反相 clock，EQY 與「只比 cell 種類」的結構比對都 PASS | Phase 4 審查；`run_eqy.py` clock_sources、`neg_eqy.py flop_clk_inverted` |
-| 只看「在不在」，不看大小或位置 | IR 電壓源只檢查點在 strap 上：大小改成 2000 µm（等於整條 strap 理想供電）或移到 strap 中間都 PASS；`char.json` 只檢查 PVT 名稱齊全，某個 PVT 的紀錄換成 tt 的資料照樣 PASS（hold 弧樂觀 0.4 ns） | Phase 4 審查；P27、P28；Phase 3.5 審查（未修） |
+| 只看「在不在」，不看大小或位置 | IR 電壓源只檢查點在 strap 上：大小改成 2000 µm（等於整條 strap 理想供電）或移到 strap 中間都 PASS；`char.json` 只檢查 PVT 名稱齊全，某個 PVT 的紀錄換成 tt 的資料照樣 PASS（hold 弧樂觀 0.4 ns） | Phase 4 審查；P27、P28；Phase 3.5 審查，Phase 5 開頭修（N9） |
 | 總和允許負項 | `[max_sum]` VDD 19 mV + GND −15 mV = 4 mV 判 PASS | Phase 4 審查；P29 |
 | 容許值套到不需要的類別 | DRC 位置比對的 100 nm 對 30 種規則都放寬，實測只有 2 種需要；li.3 看不到的面積從 0.9% 變 6.5% | Phase 4 審查；`check_soc.py DRC_POS_TOL_RULES` |
 | 摘要列永遠 PASS | golden 比對的摘要列不扣掉不符的 key，236 列 FAIL 時仍印 `[PASS] golden 434 metrics: 429 identical` | Phase 4 文件審查；`check_signoff.py` |
@@ -76,10 +76,10 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 覆蓋不到的功能 | GL 模擬只看得到 firmware 用到的功能（`rdcycleh`、bus-error IRQ 漏掉） | Phase 2 限制 7；Phase 4 用 `counters`、`buserr` 補 |
 | 工具報的名稱與植入點的名稱不同 | EQY 報合成網表的名稱，最終網表在 flip-flop 與 port 之間多了好幾級 buffer；只比植入的 instance 會誤判「不在植入點」 | Phase 4 `neg_eqy.py` 位置檢查（走過 buffer 鏈） |
 | 判定只看一半的量 | LibreLane 的 `ir__drop__worst` 只有 VDD；20 mV 的預算是 VDD 降壓 + GND 抬升 | Phase 4 IR 研究 |
-| 產生器的公式沒有獨立驗證 | `gen_char_lib.py` 由 `char.json` 產生 .lib：`--check` 只比「同一支程式的輸出」，公式寫錯時 .lib 與 JSON 照樣一致；N5–N8 的測試資料每格相同、又被下限蓋過，取最大與取最小弄反、少乘 1.6 都 PASS。要用不 import 產生器的獨立重算，或每格不同、高過下限的測試資料 | Phase 3.5 獨立審查（未修，Phase 5 開頭修） |
-| 斷言分不出 FAIL 的原因 | P17 只看 `char_lib` 列 FAIL：char 目錄多一個 `.DS_Store` 也 FAIL，判定照樣成立；N8 斷言的 PVT 名稱一定出現在「expected exactly」那串清單裡 | Phase 3.5 獨立審查（未修） |
-| 非有限的數值被比較吞掉 | `char.json` 的 setup 是 NaN 時，`max(下限, nan)` 默默變成下限；hold 弧寫出 `nan` 的 .lib 也被接受 | Phase 3.5 獨立審查（未修） |
-| 失敗時留下新舊混合的輸出 | 特性化有一個 PVT 失敗、印 FAIL，`char.json` 已經寫入其他 PVT 的新結果，失敗的 PVT 留舊紀錄，之後照樣產生 5 份 .lib | Phase 3.5 獨立審查（未修） |
+| 產生器的公式沒有獨立驗證 | `gen_char_lib.py` 由 `char.json` 產生 .lib：`--check` 只比「同一支程式的輸出」，公式寫錯時 .lib 與 JSON 照樣一致；N5–N8 的測試資料每格相同、又被下限蓋過，取最大與取最小弄反、少乘 1.6 都 PASS。要用不 import 產生器的獨立重算，或每格不同、高過下限的測試資料 | Phase 3.5 獨立審查；Phase 5 開頭修：`check_char_lib.py`，改壞公式的產生器 M1–M5 都要 FAIL（N12） |
+| 斷言分不出 FAIL 的原因 | P17 只看 `char_lib` 列 FAIL：char 目錄多一個 `.DS_Store` 也 FAIL，判定照樣成立；N8 斷言的 PVT 名稱一定出現在「expected exactly」那串清單裡 | Phase 3.5 獨立審查；Phase 5 開頭修：斷言訊息內容（P17 要 STALE 並指名檔案、N8 解析缺的是哪一個），沒有 positive control 的補上（P32） |
+| 非有限的數值被比較吞掉 | `char.json` 的 setup 是 NaN 時，`max(下限, nan)` 默默變成下限；hold 弧寫出 `nan` 的 .lib 也被接受 | Phase 3.5 獨立審查；Phase 5 開頭修（N11） |
+| 失敗時留下新舊混合的輸出 | 特性化有一個 PVT 失敗、印 FAIL，`char.json` 已經寫入其他 PVT 的新結果，失敗的 PVT 留舊紀錄，之後照樣產生 5 份 .lib | Phase 3.5 獨立審查；Phase 5 開頭修：有失敗就不寫檔（N16） |
 | 被測的模型本身太樂觀 | IR 用「所有 pin 形狀都是理想電源」，算出 0.3 mV，任何門檻都會 PASS | Phase 4 IR 研究（`pdn-ir-drop` 規則 10） |
 
 ## 用完後
@@ -107,3 +107,4 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 2026-10-04 | Phase 4 獨立審查（checker 漏洞，agent） | 10 項：clock 接線沒人檢查、IR 電壓源大小與位置、provenance symlink、regress 開頭沒記 HEAD、`make -i`、P21／P23 只看第一個問題、neg-eqy 位置範圍太寬、`[max_sum]` 負項、DRC 容許值太寬、py-check 不看跨檔名稱 | 已驗證（審查者用 python 小實驗與程式碼；主控重讀程式確認） | 除了 run_guard 不查工作目錄（regress 已由 provenance-final 擋）與 py-check 跨檔（記為限制）都修正並加 negative test | `docs/phase_exit/phase4.md` 獨立審查一節 |
 | 2026-10-04 | Phase 4 `make regress` 第 2 次（乾淨 checkout，`c635ffb`） | harden-soc FAIL：`[FAIL] golden route__drc_errors__iter:2: run=14 expected=11`；其他 433 個在誤差內或相同，signoff 全部 PASS | 已驗證：第 45 步輸入逐 byte 相同，多執行緒繞線在 antenna 修補後的重繞分歧；這組中間數字被錯列為「必須完全相同」 | 使用者決定給 ±100（兩個設計），最終 DRC 數仍完全相同；P31（規則 5） | `signoff/golden/soc_top/README.md` 可重現性 |
 | 2026-10-05 | Phase 3.5 `neg_char.py` N6 | 手改 .lib 的植入改成新餘量後什麼都沒改到（要替換的 `2.7500` 已不在 .lib 裡），`--check` 判沒有過期，N6 FAIL | 已驗證：植入沒有檢查替換次數 | 改成編輯 `timing_type : rising_edge;` 並斷言替換次數；N1–N6 6/6 PASS（「植入沒有生效」一列） | `ip/sram/char/neg_char.py` |
+| 2026-10-05 | Phase 5 開頭：修 Phase 3.5 審查的 12 個漏洞 | 每個漏洞補 negative test：neg-char N9–N16、neg-pnr P33–P36，P17 斷言收緊、P32 加 positive control、py-check 自我測試 11 段；新案例先在修正前的 checker 上確認抓不到 | 已驗證 | 漏洞類型表的「（未修）」改成修法與案例；修 `check_soc.py` 時寫錯的訊息（字串接 list）讓 P30 FAIL，被既有的案例抓到 | `docs/phase_exit/phase5.md` |

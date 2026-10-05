@@ -58,6 +58,14 @@ TESTS_TOML = "dv/tests.toml"
 BUGS_TOML = "dv/bugs.toml"
 WHITELIST = "dv/log_whitelist.txt"
 FW_DIR = "fw/build"
+# CPU builds (Phase 5, ADR-0011): the RTL file list, the firmware build directory and the
+# define of each. PicoRV32 is the default; tests.toml / bugs.toml entries may name the CPUs
+# they apply to (cpus = [...]) and a test may override some fields per CPU ([test.<cpu>]).
+CPUS = {
+    "picorv32": {"rtl_f": "rtl/rtl.f", "fw_dir": "fw/build", "defines": ()},
+    "hazard3": {"rtl_f": "rtl/rtl_hazard3.f", "fw_dir": "fw/build_hazard3", "defines": ("SOC_CPU_HAZARD3",)},
+}
+CPU_OVERRIDES = ("max_cycles", "min_cycles", "expect_uart", "sram_cov")
 SIM_BUILD = "runs/sim_build"
 BOOTROM_V = "rtl/bootrom/bootrom.v"
 TOP = "tb_soc"
@@ -156,11 +164,11 @@ _TEST_FIELDS = {
     "name", "load", "boot_mode", "max_cycles", "expect_uart", "sig_rule",
     "expect_gpio", "uart_in", "smoke", "negative_only", "fw",
     "min_cycles", "loader_frame", "expect_unmapped",
-    "sram_cov", "min_uart_stalls", "reset_on_store",
-}
+    "sram_cov", "min_uart_stalls", "reset_on_store", "cpus",
+} | set(CPUS)
 _TEST_REQUIRED = ("name", "load", "boot_mode", "max_cycles", "sig_rule")
 _BUG_FIELDS = {"id", "define", "test", "sim", "expect_checkers", "expect_regex"}
-_BUG_OPTIONAL = {"exclusive", "expect_gpio", "fw", "bootrom"}
+_BUG_OPTIONAL = {"exclusive", "expect_gpio", "fw", "bootrom", "cpus"}
 
 
 def _is_int(v):
@@ -289,6 +297,16 @@ def load_tests(path=TESTS_TOML):
             if t["sig_rule"] == "none":
                 raise DvError("%s: a positive test (negative_only = false) needs a sig_rule other than none"
                               % where)
+        if "cpus" in t and (not isinstance(t["cpus"], list) or not t["cpus"] or set(t["cpus"]) - set(CPUS)):
+            raise DvError("%s: cpus must be a non-empty list of %s" % (where, sorted(CPUS)))
+        for c in CPUS:
+            if c in t:
+                o = t[c]
+                if not isinstance(o, dict) or set(o) - set(CPU_OVERRIDES):
+                    raise DvError("%s: [%s] may only override %s" % (where, c, ", ".join(CPU_OVERRIDES)))
+                if c not in t.get("cpus", list(CPUS)):
+                    raise DvError("%s: overrides for %s, which is not in cpus" % (where, c))
+                for_cpu(dict(t), c, where)
         tt = dict(t)
         tt.setdefault("uart_in", "")
         tt.setdefault("smoke", False)
@@ -299,6 +317,27 @@ def load_tests(path=TESTS_TOML):
     if not tests:
         raise DvError("%s: no [[test]] entries" % rel(p))
     return tests
+
+
+def for_cpu(t, cpu, where=None):
+    """The test as it runs on cpu: the [test.<cpu>] overrides applied, re-checked."""
+    where = where or "test %s" % t.get("name")
+    tt = {k: v for k, v in t.items() if k not in CPUS}
+    tt.update(t.get(cpu, {}))
+    if not _is_int(tt["max_cycles"]) or tt["max_cycles"] <= 0:
+        raise DvError("%s (%s): max_cycles must be a positive integer" % (where, cpu))
+    if "min_cycles" in tt and (not _is_int(tt["min_cycles"]) or not 0 < tt["min_cycles"] < tt["max_cycles"]):
+        raise DvError("%s (%s): min_cycles must be an integer with 0 < min_cycles < max_cycles" % (where, cpu))
+    if "expect_uart" in tt and not isinstance(tt["expect_uart"], str):
+        raise DvError("%s (%s): expect_uart must be a string" % (where, cpu))
+    if "sram_cov" in tt:
+        _check_sram_cov("%s (%s)" % (where, cpu), tt)
+    return tt
+
+
+def applies(entry, cpu):
+    """True if a tests.toml / bugs.toml entry applies to cpu (no cpus field: every CPU)."""
+    return cpu in entry.get("cpus", list(CPUS))
 
 
 def load_bugs(path=BUGS_TOML, tests=None):
@@ -328,6 +367,10 @@ def load_bugs(path=BUGS_TOML, tests=None):
             raise DvError("%s: bad define %r" % (where, b["define"]))
         if tests is not None and b["test"] not in tests:
             raise DvError("%s: unknown test %r" % (where, b["test"]))
+        if "cpus" in b and (not isinstance(b["cpus"], list) or not b["cpus"] or set(b["cpus"]) - set(CPUS)):
+            raise DvError("%s: cpus must be a non-empty list of %s" % (where, sorted(CPUS)))
+        if tests is not None and set(b.get("cpus", list(CPUS))) - set(tests[b["test"]].get("cpus", list(CPUS))):
+            raise DvError("%s: test %s does not run on every CPU of the bug" % (where, b["test"]))
         if b["sim"] not in SIMS:
             raise DvError("%s: sim %r not in %s" % (where, b["sim"], SIMS))
         ec = b["expect_checkers"]
@@ -803,7 +846,7 @@ def default_timeout(max_cycles):
 def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=False,
              rtl_f=RTL_F, tests_toml=TESTS_TOML, bugs_toml=BUGS_TOML, fw_dir=FW_DIR,
              extra_plusargs=(), max_cycles=None, timeout=None, build_result=None,
-             quiet=False):
+             quiet=False, cpu="picorv32"):
     """Run one test on one simulator and write <out>/<sim>/<test>[__<bug>]/result.json.
 
     Returns the result dict. status is "PASS" only with explicit evidence
@@ -830,12 +873,17 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
         return result
 
     # ---- configuration ----
-    if (sim not in SIMS or not NAME_RE.match(test_name or "")
+    if (sim not in SIMS or cpu not in CPUS or not NAME_RE.match(test_name or "")
             or (bug_id is not None and not NAME_RE.match(bug_id))):
         run_dir = repo_path(out_root) / "invalid"
-        v.fail("sim_error", "bad simulator, test or bug name: sim=%r test=%r bug=%r (simulators: %s)"
-               % (sim, test_name, bug_id, "|".join(SIMS)))
+        v.fail("sim_error", "bad simulator, CPU, test or bug name: sim=%r cpu=%r test=%r bug=%r (simulators: %s, CPUs: %s)"
+               % (sim, cpu, test_name, bug_id, "|".join(SIMS), "|".join(CPUS)))
         return finish()
+    result["cpu"] = cpu
+    if rtl_f == RTL_F:
+        rtl_f = CPUS[cpu]["rtl_f"]
+    if fw_dir == FW_DIR:
+        fw_dir = CPUS[cpu]["fw_dir"]
     if run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
@@ -844,13 +892,17 @@ def run_test(test_name, sim, bug_id=None, out_root="runs/sim", trace=False, vcd=
         tests = load_tests(tests_toml)
         if test_name not in tests:
             raise DvError("unknown test %r (not in %s)" % (test_name, rel(repo_path(tests_toml))))
-        t = dict(tests[test_name])
-        defines = []
+        if not applies(tests[test_name], cpu):
+            raise DvError("test %s does not run on %s (cpus = %s)" % (test_name, cpu, tests[test_name]["cpus"]))
+        t = for_cpu(tests[test_name], cpu)
+        defines = list(CPUS[cpu]["defines"])
         if bug_id is not None:
             bugs = load_bugs(bugs_toml, tests)
             if bug_id not in bugs:
                 raise DvError("unknown bug %r (not in %s)" % (bug_id, rel(repo_path(bugs_toml))))
             bug = bugs[bug_id]
+            if not applies(bug, cpu):
+                raise DvError("bug %s does not apply to %s (cpus = %s)" % (bug_id, cpu, bug["cpus"]))
             if bug["define"]:
                 defines.append(bug["define"])
             # Firmware / boot ROM bug variants (fw/README.md): another image, or

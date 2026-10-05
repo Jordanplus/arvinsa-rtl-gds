@@ -91,7 +91,11 @@ module soc_bus (
     localparam [31:0] GPIO_BASE = `SOC_GPIO_BASE;
     localparam [31:0] GPIO_SIZE = `SOC_GPIO_SIZE;
     localparam [31:0] TEST_BASE = `SOC_TEST_BASE;
+`ifdef SOC_CPU_HAZARD3
+    localparam [31:0] TEST_SIZE = `SOC_TEST_SIZE_H3;     // + FATAL (ADR-0011)
+`else
     localparam [31:0] TEST_SIZE = `SOC_TEST_SIZE;
+`endif
 
     // Offset into each window; (addr - base) < size is an exact range check
     // (an address below base wraps to a large unsigned offset).

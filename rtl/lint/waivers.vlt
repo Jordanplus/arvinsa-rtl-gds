@@ -25,3 +25,34 @@ lint_off -rule UNUSEDSIGNAL -file "*third_party/picorv32/picosoc/simpleuart.v"
 // inputs are never read and its outputs are never driven.
 lint_off -rule UNUSEDSIGNAL -file "*ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
 lint_off -rule UNDRIVEN     -file "*ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
+
+// Hazard3 core (third_party, read-only submodule, tag v1.1.1; Phase 5, ADR-0011): only unused
+// parameters (its shared .vh headers declare every opcode, CSR address and configuration
+// option) and unused signals (bits of buses that this RV32IMC configuration does not read).
+// Release notes: lint-clean with Verilator's default warnings; these come from -Wall.
+// UNUSEDPARAM is waived on the files that include the headers (hazard3_config.vh, hazard3_ops.vh,
+// hazard3_width_const.vh, rv_opcodes.vh): Verilator 5.050 applies a waiver to a header's warnings
+// by the including file, a waiver on the header itself has no effect (checked 2026-10-05).
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_csr.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_core.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_cpu_1port.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/arith/hazard3_alu.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/arith/hazard3_branchcmp.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/arith/hazard3_mul_fast.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/arith/hazard3_muldiv_seq.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/arith/hazard3_shift_barrel.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_decode.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_frontend.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_instr_decompress.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_irq_ctrl.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_pmp.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_power_ctrl.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_regfile_1w2r.v"
+lint_off -rule UNUSEDPARAM  -file "*third_party/hazard3/hdl/hazard3_triggers.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/arith/hazard3_alu.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/arith/hazard3_branchcmp.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/hazard3_core.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/hazard3_csr.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/hazard3_frontend.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/hazard3_instr_decompress.v"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/hazard3/hdl/hazard3_regfile_1w2r.v"

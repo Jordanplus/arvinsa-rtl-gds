@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住、重跑前保存失敗的 run（`run.sh` 會刪掉同名 run），或錯誤時有時無（例如 `GRT-0229`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -22,9 +22,9 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
    - 有的過、有的不過，才算隨機；再比較通過的幾次輸出是否完全相同。
    - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 的 GRT-0229，同一份輸入 2/4 中止）。其他失敗一律不重試。重試的判斷本身也要測：`make test-flow-retry` 用模擬的 nix-shell 跑 7 種情境（只有 GRT-0229 才重試、最多 2 次、其他錯誤不重試）。
    - 反過來說，**只跑一次就把錯誤歸因到某個設定，是不可靠的**：GRT-0229 原本被歸因到 `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH`（soc_explore3 只跑了一次），後來發現不設也有一半機率出現。結論是「某設定造成某錯誤」之前，同一設定至少跑兩次，或單步重跑確認。
-6. **重跑之前先保存失敗的 run**：`pnr/soc_top/run.sh`、`pnr/picorv32_core/run.sh` 開跑前會 `rm -rf` 同名的 run 目錄與 `_signoff` 輸出目錄，所以重跑會刪掉上一次 run 的全部證據（log、報告、ODB）。Phase 3.5 第 1 次 harden-soc（`RepairDesignPostGPL` 75 分鐘後異常結束）的 run 目錄就在第 2 次開跑時被刪，只剩 ADR-0010 的摘要。
-   - `run.sh` 的 run tag 寫死（`TAG=soc_top`），所以重跑前要自己把失敗的 run 搬走（`mv runs/soc_top runs/soc_top_fail<N>`，`runs/soc_top_signoff` 一起搬）；要引用的數字先寫進 ADR 或 phase_exit 文件。
-   - 待做：Phase 5 開頭把 `run.sh` 改成搬走而不是刪除，並用乾淨 checkout 的 regress 驗證（使用者 2026-10-05 同意延後，避免 Phase 3.5 的 regress 重跑）。
+6. **重跑會覆蓋上一次的 run，失敗的證據要保留**：同一個 run tag 重跑時，舊做法 `rm -rf` 整個 run 目錄與 `_signoff` 輸出目錄。Phase 3.5 第 1 次 harden-soc（`RepairDesignPostGPL` 75 分鐘後異常結束）的 run 就在第 2 次開跑時被刪，只剩 ADR-0010 的摘要。
+   - Phase 5 起 `pnr/*/run.sh` 用 `keep_prev_run`（`pnr/librelane_flow.sh`）把上一次的 run 搬成 `<dir>.prev`，更舊的 `.prev` 刪掉（只留一層：一次 soc_top run 約 4 GB）；`make test-flow-retry` 有這個情境。
+   - 連跑兩次以上才會遇到的事（例如要比較三次 run），自己先把 `.prev` 改名保存；要引用的數字先寫進 ADR 或 phase_exit 文件。
 
 ## 已知陷阱
 
@@ -64,3 +64,4 @@ soc_top 全 flow 約 20–30 分鐘（正式 run 實測 18 與 28 分；Magic �
 | 2026-10-03 | `make phase3` 第一次（乾淨 worktree，commit 654c303） | `OpenROAD.RepairDesignPostGRT failed ... [GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200` | 已驗證：隨機（第 39 步以前的 DEF 與 golden run 逐 byte 相同；同一份 `state_in.json` 單步重跑 4 次 2 次中止）。推測：global router 在 clk pin 的 GCell（pin 在 die 下緣，clk net 用 CTS NDR）用量計算有 bug | 有上限的重試（`pnr/librelane_flow.sh`）；更正 explore3 的錯誤歸因 | `runs/p3_phase3_clean.log`、`docs/notes/grt0229_repro.md` |
 | 2026-10-05 | Phase 3.5 harden-soc 第 1 次 | `RepairDesignPostGPL` 的 step log 74 分鐘沒有更新，看起來像卡住；結束時才一次寫出進度表（其實停在第 9000 個 driver） | 已驗證：OpenROAD 經 LibreLane 執行時輸出有緩衝；macOS `sample <pid>` 看到一直在 `repairNetWire`／`insertBufferBeforeLoads` | 判斷是否卡住：`ps` 看 CPU 時間有沒有增加、`sample` 看 call stack，再用單步重跑（規則 3）比較不同輸入；原因見 `openram-macro-characterization` 規則 14 | ADR-0010 |
 | 2026-10-05 | Phase 3.5 harden-soc 第 2 次 | 要回頭查第 1 次（`RepairDesignPostGPL` 異常結束）的 log，`runs/soc_top` 已是第 2 次的內容 | 已驗證：`pnr/soc_top/run.sh` 開跑前 `rm -rf "$RUN_DIR" "$OUT"` | 規則 6；需要的數字已寫進 ADR-0010；`run.sh` 改成搬走留到 Phase 5 | `pnr/soc_top/run.sh` 第 47 行 |
+| 2026-10-05 | Phase 5 開頭 | `run.sh` 改成 `keep_prev_run`：上一次的 run 變成 `runs/<tag>.prev` | 已驗證（`make test-flow-retry` 8/8，含這個情境） | 規則 6 | `pnr/librelane_flow.sh` |

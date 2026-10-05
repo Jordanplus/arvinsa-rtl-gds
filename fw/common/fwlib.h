@@ -18,6 +18,15 @@
 /* Written by the IRQ entry in start.S. */
 extern volatile uint32_t irq_count;
 extern volatile uint32_t irq_pending_mask;
+#ifdef SOC_CPU_HAZARD3
+/* Hazard3 (start_hazard3.S): with exc_resume != 0 an exception is recorded and the faulting
+ * instruction skipped; otherwise it writes TEST_CTRL.FATAL (trap pin) and stops. */
+extern volatile uint32_t exc_resume;
+extern volatile uint32_t exc_count;
+extern volatile uint32_t exc_cause;
+extern volatile uint32_t exc_tval;
+#define TEST_FATAL_REG REG32(SOC_TEST_BASE + SOC_TEST_FATAL_OFF)
+#endif
 
 /* Linker symbols (fw/common/link.ld); use their addresses only. */
 extern uint32_t _free_start[];
@@ -31,7 +40,8 @@ void     uart_puts_burst(const char *s);  /* same, DATA writes back to back (UAR
 int      uart_getc(void);                 /* blocking receive, returns 0..255 */
 void     uart_puthex(uint32_t v);         /* send 8 upper-case hex digits */
 uint32_t uart_crc32(void);                /* zlib.crc32() of every byte sent so far */
-uint32_t irq_setmask(uint32_t mask);      /* PicoRV32 maskirq (1 = masked); returns old mask */
+uint32_t irq_setmask(uint32_t mask);      /* PicoRV32 maskirq (1 = masked); returns old mask.
+                                            Hazard3: bit SOC_IRQ_TEST only (start_hazard3.S) */
 
 void test_pass(void) __attribute__((noreturn));           /* SIG = CRC32, DONE = PASS */
 void test_fail(uint32_t code) __attribute__((noreturn));  /* DONE = FAIL_BASE | code[15:0] */

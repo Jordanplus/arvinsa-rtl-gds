@@ -23,6 +23,8 @@ def main(argv=None):
     ap.add_argument("--test", required=True, help="test name from dv/tests.toml")
     ap.add_argument("--sim", required=True, choices=dvlib.SIMS)
     ap.add_argument("--bug", default=None, help="bug id from dv/bugs.toml (adds its define)")
+    ap.add_argument("--cpu", default="picorv32", choices=sorted(dvlib.CPUS),
+                    help="CPU build (default picorv32; hazard3: rtl/rtl_hazard3.f, fw/build_hazard3)")
     ap.add_argument("--out", default="runs/sim", help="output root (default runs/sim)")
     ap.add_argument("--trace", action="store_true", help="write trace.log (bus handshakes)")
     ap.add_argument("--vcd", action="store_true", help="write wave.vcd")
@@ -41,7 +43,7 @@ def main(argv=None):
         args.test, args.sim, bug_id=args.bug, out_root=args.out, trace=args.trace,
         vcd=args.vcd, rtl_f=args.rtl_f, tests_toml=args.tests_toml,
         bugs_toml=args.bugs_toml, fw_dir=args.fw_dir, extra_plusargs=args.plusarg,
-        max_cycles=args.max_cycles, timeout=args.timeout)
+        max_cycles=args.max_cycles, timeout=args.timeout, cpu=args.cpu)
     return 0 if result["status"] == "PASS" else 1
 
 

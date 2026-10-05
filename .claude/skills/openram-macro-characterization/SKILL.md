@@ -1,6 +1,6 @@
 ---
 name: openram-macro-characterization
-description: SRAM macro（OpenRAM 產生的預建 macro 或自產 macro）的時序要用 SPICE 實測、產生多 corner 的 .lib 時使用：判斷廠商 .lib 是不是解析模型、macro 在低溫或 ss 低電壓（室溫也會）讀出前一次的值（sense amp 沒有預充電、column mux 只有 NMOS）與不能動的 corner 怎麼給佔位 .lib、換上新 .lib 後 repair_design 跑很久或異常結束（延遲表的負載斜率）、用 ngspice 量 clk→dout 延遲與 dout 在上升緣後被拉回的時間、setup/hold、最小週期與 pulse width（搜尋範圍不涵蓋真值時怎麼往外找）、網表修剪與模擬步長怎麼驗證、從 GDS 萃取寄生電容（Magic）、OpenRAM 自己特性化的缺陷、量測結果怎麼寫成 .lib 並用植入錯誤證明量得對，以及 ngspice 讀大網表很慢、bus 節點名稱報 bad v() syntax、萃取網表報 singular matrix 或 Timestep too small 這類問題。macro 怎麼放進設計看 hard-macro-integration，餘量怎麼定看 signoff-criteria。Use for SPICE characterization of SRAM macros (ngspice + sky130), per-corner Liberty generation, netlist trimming, parasitic extraction and OpenRAM characterizer pitfalls.
+description: SRAM macro（OpenRAM 產生的預建 macro 或自產 macro）的時序要用 SPICE 實測、產生多 corner 的 .lib 時使用：判斷廠商 .lib 是不是解析模型、macro 在低溫或 ss 低電壓（室溫也會）讀出前一次的值（sense amp 沒有預充電、column mux 只有 NMOS）與不能動的 corner 怎麼給佔位 .lib、換上新 .lib 後 repair_design 跑很久或異常結束（延遲表的負載斜率）、用 ngspice 量 clk→dout 延遲與 dout 在上升緣後被拉回的時間、setup/hold、最小週期與 pulse width（搜尋範圍不涵蓋真值時怎麼往外找）、網表修剪與模擬步長怎麼驗證、從 GDS 萃取寄生電容（Magic）、OpenRAM 自己特性化的缺陷、量測結果怎麼寫成 .lib 並用植入錯誤證明量得對（含不 import 產生器的獨立重算、在 .lib 採用值上的確認模擬、模擬快取與量測 JSON 的檢查），以及 ngspice 讀大網表很慢、bus 節點名稱報 bad v() syntax、萃取網表報 singular matrix 或 Timestep too small 這類問題。macro 怎麼放進設計看 hard-macro-integration，餘量怎麼定看 signoff-criteria。Use for SPICE characterization of SRAM macros (ngspice + sky130), per-corner Liberty generation, netlist trimming, parasitic extraction and OpenRAM characterizer pitfalls.
 ---
 
 # SRAM macro 的 SPICE 特性化與 .lib
@@ -70,12 +70,19 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
     - 舊做法每往外移一次範圍就從頭二分 6 輪（每輪約 50 分鐘，約 5 小時）；ss 的最小週期若往外移 3 次，將近 20 小時。
     - 現在的做法：二分縮到解析度後，某一側（FAIL 或 PASS）還沒看到，就在那一側一次模擬 `EXTEND_POINTS`（2）個點、涵蓋一個初始寬度，最多 `MAX_EXTEND`（3）次，仍看不到就報錯；看到之後在最近的 FAIL 與 PASS 之間接著二分。結果不單調（大的值 FAIL、小的值 PASS）也報錯。clock 的高、低電位時間不探測到 `PULSE_FLOOR`（0.4 ns）以下。
     - 改搜尋法之前，先用假的模擬器（給定真值的函式）比對新舊版：範圍內的探測點完全相同，所以已跑完的模擬可以直接沿用。
+16. **產生 .lib 的程式本身也要有 checker，而且要獨立於它**（2026-10-05 獨立審查找到 9 個漏洞，Phase 5 開頭修；`ip/sram/char/`）：
+    - `--check` 只比「同一支程式的輸出」，公式寫錯（取最大與取最小弄反、少乘係數）照樣一致。另寫一支不 import 產生器的程式，從量測 JSON 重算 .lib 的每個數字再比對（`check_char_lib.py`），用改壞公式的產生器（M1–M5）證明抓得到（N12）。
+    - 測試用的假資料每格要不同、部分高過下限：每格相同又全被下限蓋過時，公式錯誤產生的 .lib 一模一樣（N5–N8 原本的 `fake_doc`）。
+    - 量測 JSON 是 regress 不會重跑的信任起點：檢查每筆紀錄是它的 PVT、數值有限且 pass > fail 不超過解析度（NaN 經 `max()` 會變成下限），以及來源欄位（網表 sha256、PDK 版本、ngspice 版本、修剪數、步長與搜尋設定，N9–N11）。
+    - 二分搜尋只在探到的點檢查單調：最後要在 .lib 採用的值上各跑一次確認模擬，全部讀寫正確（`confirm_char_lib.py` → `confirm.json`，N14）。
+    - 模擬快取：只有 log 沒有錯誤、波形涵蓋到 `.tran` 結束時間才重用；讀出檢查的時間點超過波形結尾要報錯（`value_at` 超過結尾會回傳最後一個值，N15）。
+    - 有 PVT 失敗就不寫量測 JSON，避免新舊紀錄混合（N16）。
+    - 範本替換的次數要每支 pin、每個 rise／fall 分開數（N13）。
 
 ## 待補
 
 - 寄生：萃取網表無法收斂（經驗紀錄 2026-10-05），寄生的影響目前只有「換上萃取 bitcell」的估計；Phase 6 用 OpenRAM 環境再量。
 - 其他 PVT 的步長與修剪誤差只在 TT 驗證過。
-- 特性化流程的 checker 漏洞（2026-10-05 獨立審查，Phase 5 開頭修）：`gen_char_lib.py` 的公式沒有獨立驗證（N5–N8 的測試資料每格相同、又被下限蓋過，取最大與取最小弄反也 PASS）；`char.json` 的 PVT 紀錄互換、來源欄位（網表 sha256、PDK、ngspice 版本、修剪數）、NaN 與 pass < fail 都沒有檢查；模擬快取不確認上次 ngspice 成功、波形太短時讀取判對；部分 PVT 失敗時 `char.json` 留下新舊混合的紀錄；二分搜尋只在探到的點檢查單調，最終 .lib 採用的值沒有再模擬確認。
 - hold 弧的值和週期有關（週期 10–16 ns 時「讀之後接寫」比 .lib 早變化），.lib 只對週期 ≥ 20 ns 量過（ADR-0010 已知限制 11）。
 - Phase 6：在 x86 Linux 用 OpenRAM 自產 macro 時的規則。
 
@@ -105,3 +112,4 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
 | 2026-10-05 | Phase 3.5 最終版圖的 what-if | dout0 transition 用 0.5 ns（使用者決定）；改成電路圖量到的值後，SRAM 半週期路徑 slack：ss −40°C 用 tt 量到的 1.3 ns（這個 PVT 讀取失敗、沒有量測）時 +0.38 → +0.03，ss 100°C 3.15 ns 時 +0.92 → +0.17 | 已驗證（OpenSTA 只換 .lib） | 記入 ADR-0010 已知限制 5；macro 輸出 transition 這種沒有把握的假設，要用 what-if 量出它對 slack 的影響 | ADR-0010 |
 | 2026-10-05 | Phase 3.5 非 tt 的 PVT | ss、ff 的最小 pulse 寬度與週期都在以 tt 為中心的搜尋範圍外；舊版每往外移一次就從頭二分 6 輪，預估 ss 的最小週期要近 20 小時 | 已驗證（假模擬器比對新舊版：範圍內探測點相同） | 規則 15：往外一次測 2 點，最多 3 次；ss 100°C、ff −40°C、ff 100°C 用新版重開，沿用已跑完的模擬 | `ip/sram/char/characterize.py`、`ip/sram/char/README.md` |
 | 2026-10-05 | Phase 3.5 獨立審查（兩個 agent） | 文件：ss 25°C 1.60 V 的讀取失敗漏列（和 1.80 V 混在一起）、寄生數字（+42%）重算是 +45–48%、「誤差都偏保守」不成立（hold 弧兩角偏樂觀 ≤ 1%）、`max_capacitance` 0.02756 → 0.05 pF 沒寫；checker：12 個漏洞，其中 9 個在特性化流程（見「待補」） | 已驗證（波形重算、獨立重算 5 份 .lib、改壞的輸入實際跑 checker） | 文件更正；規則 11、13 補充；漏洞列為已知限制，Phase 5 開頭修（使用者決定）；獨立重算確認這次的 .lib 正確 | `docs/phase_exit/phase3_5.md`「獨立審查」 |
+| 2026-10-05 | Phase 5 開頭：修 Phase 3.5 審查的特性化漏洞 | 9 個漏洞（見規則 16） | 已驗證：每個新植入錯誤在修正前的程式上抓不到、修正後抓到（N9、N11、N13、N15、N16；N12 的 5 種公式錯誤全部抓到）；新的 `check_char_lib.py` 對現有 5 份 .lib PASS | 規則 16；`make sram-confirm` | `ip/sram/char/README.md` |

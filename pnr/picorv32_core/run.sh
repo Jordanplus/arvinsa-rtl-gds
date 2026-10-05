@@ -39,8 +39,9 @@ if [ ! -d "$LL_DIR/.git" ]; then
   exit 1
 fi
 
-# Only these two run directories are removed.
-rm -rf "$RUN_DIR" "$OUT"
+# The previous run of this tag is kept as $RUN_DIR.prev and $OUT.prev (keep_prev_run).
+source pnr/librelane_flow.sh
+keep_prev_run "$RUN_DIR" "$OUT"
 mkdir -p "$OUT"
 
 echo "harden-core: source tracking (committed working tree, pinned LibreLane and PDK)"
@@ -54,7 +55,6 @@ python3 pnr/picorv32_core/cpu_params.py | tee "$OUT/cpu_params.txt"
 grep -q '^cpu-params: PASS$' "$OUT/cpu_params.txt"
 
 echo "harden-core: running LibreLane Classic flow on picorv32 (about 12-15 minutes on this machine); full log: $RUN_DIR/flow.log"
-source pnr/librelane_flow.sh
 librelane_flow harden-core "$ROOT/pnr/picorv32_core/config.json"
 [ "$flow_attempts" -gt 1 ] && echo "harden-core: LibreLane needed $flow_attempts attempts (known GRT-0229 retry, see $OUT/retries.txt)"
 (cd "$LL_DIR" && nix-shell --run "python3 -m librelane.state latest '$RUN_DIR' --extract-metrics-to '$OUT/metrics.json'") \

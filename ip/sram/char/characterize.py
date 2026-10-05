@@ -23,8 +23,9 @@ placeholder .lib for it (ADR-0010).
 The netlist is the PDK's (schematic) or the Magic extraction of the PDK GDS (extracted, see
 extract_sram.sh), trimmed to rows/columns 0 and 127 (sramchar.trim_*).
 Adds the PVTs to <out.json> (with the settings, tool versions and netlist hash; a file made with
-other settings is refused unless --fresh) and keeps every simulation under --work (default
-runs/sram_char/<netlist>/), where an unchanged deck is not simulated again.
+other settings is refused unless --fresh) only when every requested PVT finished, and keeps every
+simulation under --work (default runs/sram_char/<netlist>/), where an unchanged deck whose earlier
+run left a clean log and a complete waveform is not simulated again.
 Prints `characterize: PASS ...` or `characterize: FAIL ...`; exit 0 only on PASS.
 """
 import argparse
@@ -204,10 +205,9 @@ class Runner:
     def submit(self, seq, name):
         d = os.path.join(self.work, seq.pvt, name)
         deck = seq.deck(self.netlist, TSTEP, TMAX)
-        cached = os.path.join(d, "wave.txt")
-        if os.path.isfile(cached) and os.path.isfile(os.path.join(d, "deck.sp")) \
-                and open(os.path.join(d, "deck.sp")).read() == deck:
-            return self.pool.submit(sc.read_wave, cached)          # same deck already simulated
+        w = sc.cached_wave(d, deck)                                 # same deck already simulated, cleanly
+        if w is not None:
+            return self.pool.submit(lambda: w)
         self.n += 1
         return self.pool.submit(sc.run, deck, d)
 
@@ -439,6 +439,9 @@ def main():
     for p, r in results.items():
         r["seed"] = a.seed and os.path.relpath(os.path.abspath(a.seed), sc.ROOT)
         r["date"] = datetime.date.today().isoformat()
+    if errors:      # write nothing: a partly updated file would mix new and old PVTs (Phase 3.5 review);
+        print("characterize: FAIL " + "; ".join(errors) + f" ({a.out} not changed; finished simulations stay cached)")
+        return 1
     pvts = {}
     if os.path.isfile(a.out) and not a.fresh:
         old = json.load(open(a.out))
@@ -451,9 +454,6 @@ def main():
     with open(a.out, "w") as f:
         json.dump(dict(meta, pvts={p: pvts[p] for p in sc.PVTS if p in pvts}), f, indent=1)
         f.write("\n")
-    if errors:
-        print("characterize: FAIL " + "; ".join(errors))
-        return 1
     nf = [p for p, r in results.items() if "read_fail" in r]
     print(f"characterize: PASS {len(results)} PVT(s), {runner.n} simulations -> {a.out}"
           + (f"; the macro does not read correctly at {', '.join(nf)} (recorded as read_fail)" if nf else ""))
