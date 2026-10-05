@@ -1,6 +1,6 @@
 ---
 name: signoff-checker-qualification
-description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同，或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用；附已知的 checker 漏洞類型表，新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
+description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同，或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表，新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
 ---
 
 # Checker 設計、golden 與 testbench qualification
@@ -54,15 +54,15 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 類型 | 例子 | 出處 |
 |---|---|---|
 | 工具靜默略過某些情況 | EQY：gate 端某 bit 是常數時只記一行 `found constant gate bit` 就不證明；輸出被植入卡 0 時，15136 個分區全部證明通過 | `neg_eqy.py wdata3_stuck0`，`signoff/eqy/README.md` |
-| 工具的檢查範圍比名稱小 | PSM（power grid checker）只查電源網路自己的 shape 連不連通，不查 macro 電源 pin；LibreLane 的 filtered unannotated 只認頂層 port | P05；`filter_unannotated.py` 70–85 行 |
+| 工具的檢查範圍比名稱小 | PSM（power grid checker）只查電源網路自己的 shape 連不連通，不查 macro 電源 pin；LibreLane 的 filtered unannotated 只認頂層 port；`check_soc.py sram_lib` 只認 `Reading cell library` 一種 log 訊息、只比路徑結尾，經 `EXTRA_LIBS` 多讀一份 SRAM .lib 看不到，`check_inputs.py` 也只看 MACROS 不看 `LIB`／`EXTRA_LIBS` | P05；`filter_unannotated.py` 70–85 行；Phase 3.5 審查（未修） |
 | 植入沒有生效 | `PDN_CONNECT_MACROS_TO_GRID=false` 產生的電源網路與原本逐字相同；`unset_output_delay` 不加 `-clock` 什麼都沒刪，加了 `-clock` 之後路徑消失、但 check_setup 仍當作有 output delay | P05 第一版、P13 第一、二版、N6 第一版（要替換的字串在新 .lib 裡已不存在）、P17 Phase 3.5 版（檔案在讀之前就被 `open(f, "w")` 清空；植入點檢查 `edit_once` 因此報錯，而不是什麼都沒改就判 PASS） |
 | 說明與程式不符 | P10 的說明寫「KLayout 與 Magic DRC 都會 FAIL」，程式只斷言 KLayout | P10 第一版 |
 | 比對的文字被輸出格式拆開 | LibreLane console 折行，`GRT-0229 ... usage=65534` 分在兩行，單行 regex 永遠對不到，重試永遠不會發生 | `pnr/librelane_flow.sh` 第一版；用模擬的 nix-shell 測 7 種情境（`make test-flow-retry`） |
 | 下游只查部分判定 | `run_eqy.py`、`run_gl_soc.py` 只看 `signoff.txt`，不看 soc 專用檢查、輸入一致性 | Phase 3 收尾自查 |
-| 工具快取了舊資料 | 換 LEF 後重跑 `CheckAntennas`，讀的仍是 ODB 裡的舊 antenna 資料 | P06 第一版 |
+| 工具快取了舊資料 | 換 LEF 後重跑 `CheckAntennas`，讀的仍是 ODB 裡的舊 antenna 資料；特性化的模擬快取不確認上次 ngspice 成功，波形太短時讀取一律判對 | P06 第一版；Phase 3.5 審查（未修） |
 | 比對粒度太粗 | `check_soc.py magic_drc` 在 SRAM 外框內只比規則種類，多一個同種類的錯誤照樣 PASS | Phase 3 獨立審查（假報告實驗） |
 | 前處理把要檢查的東西抹掉 | EQY 的 `sat` strategy 先 `formalff -clk2ff`，所有 flip-flop 變成同一個隱含 clock；flip-flop 的 CLK 改接反相 clock，EQY 與「只比 cell 種類」的結構比對都 PASS | Phase 4 審查；`run_eqy.py` clock_sources、`neg_eqy.py flop_clk_inverted` |
-| 只看「在不在」，不看大小或位置 | IR 電壓源只檢查點在 strap 上：大小改成 2000 µm（等於整條 strap 理想供電）或移到 strap 中間都 PASS | Phase 4 審查；P27、P28 |
+| 只看「在不在」，不看大小或位置 | IR 電壓源只檢查點在 strap 上：大小改成 2000 µm（等於整條 strap 理想供電）或移到 strap 中間都 PASS；`char.json` 只檢查 PVT 名稱齊全，某個 PVT 的紀錄換成 tt 的資料照樣 PASS（hold 弧樂觀 0.4 ns） | Phase 4 審查；P27、P28；Phase 3.5 審查（未修） |
 | 總和允許負項 | `[max_sum]` VDD 19 mV + GND −15 mV = 4 mV 判 PASS | Phase 4 審查；P29 |
 | 容許值套到不需要的類別 | DRC 位置比對的 100 nm 對 30 種規則都放寬，實測只有 2 種需要；li.3 看不到的面積從 0.9% 變 6.5% | Phase 4 審查；`check_soc.py DRC_POS_TOL_RULES` |
 | 摘要列永遠 PASS | golden 比對的摘要列不扣掉不符的 key，236 列 FAIL 時仍印 `[PASS] golden 434 metrics: 429 identical` | Phase 4 文件審查；`check_signoff.py` |
@@ -76,6 +76,10 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 覆蓋不到的功能 | GL 模擬只看得到 firmware 用到的功能（`rdcycleh`、bus-error IRQ 漏掉） | Phase 2 限制 7；Phase 4 用 `counters`、`buserr` 補 |
 | 工具報的名稱與植入點的名稱不同 | EQY 報合成網表的名稱，最終網表在 flip-flop 與 port 之間多了好幾級 buffer；只比植入的 instance 會誤判「不在植入點」 | Phase 4 `neg_eqy.py` 位置檢查（走過 buffer 鏈） |
 | 判定只看一半的量 | LibreLane 的 `ir__drop__worst` 只有 VDD；20 mV 的預算是 VDD 降壓 + GND 抬升 | Phase 4 IR 研究 |
+| 產生器的公式沒有獨立驗證 | `gen_char_lib.py` 由 `char.json` 產生 .lib：`--check` 只比「同一支程式的輸出」，公式寫錯時 .lib 與 JSON 照樣一致；N5–N8 的測試資料每格相同、又被下限蓋過，取最大與取最小弄反、少乘 1.6 都 PASS。要用不 import 產生器的獨立重算，或每格不同、高過下限的測試資料 | Phase 3.5 獨立審查（未修，Phase 5 開頭修） |
+| 斷言分不出 FAIL 的原因 | P17 只看 `char_lib` 列 FAIL：char 目錄多一個 `.DS_Store` 也 FAIL，判定照樣成立；N8 斷言的 PVT 名稱一定出現在「expected exactly」那串清單裡 | Phase 3.5 獨立審查（未修） |
+| 非有限的數值被比較吞掉 | `char.json` 的 setup 是 NaN 時，`max(下限, nan)` 默默變成下限；hold 弧寫出 `nan` 的 .lib 也被接受 | Phase 3.5 獨立審查（未修） |
+| 失敗時留下新舊混合的輸出 | 特性化有一個 PVT 失敗、印 FAIL，`char.json` 已經寫入其他 PVT 的新結果，失敗的 PVT 留舊紀錄，之後照樣產生 5 份 .lib | Phase 3.5 獨立審查（未修） |
 | 被測的模型本身太樂觀 | IR 用「所有 pin 形狀都是理想電源」，算出 0.3 mV，任何門檻都會 PASS | Phase 4 IR 研究（`pdn-ir-drop` 規則 10） |
 
 ## 用完後

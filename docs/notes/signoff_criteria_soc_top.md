@@ -22,7 +22,7 @@
 | 半週期路徑的 duty cycle | STA 假設 50% | **缺口**：最緊的路徑就是半週期路徑（見下方第 1 點） | **Phase 4 已做**：半週期路徑用下降緣→上升緣的 uncertainty 加上 DCD 預算（假設 45/55%）；negative test P24（D = 60%）、P25（預算改 60%）都必須 FAIL。數值待 Phase 7 |
 | min pulse width、minimum period | 沒有檢查；SRAM padded.lib 規定 12 ns／30 ns | **缺口** | **Phase 4 已做**：`sta_extra_corner.tcl` 每個 corner 輸出 `report_check_types -min_pulse_width -min_period`，`check_soc.py pulse_width` 要求 slack ≥ DCD + 半週期 jitter（pulse width）與 period jitter（period）；negative test P22、P23 |
 | fmax | `clock.rpt` 的 `period_min` 25.4 ns | **不能用**：它排除半週期路徑；週期 32 ns 時 setup 已經 FAIL | 最小週期改從半週期路徑反推，nom_ss 約 32.8 ns（推算） |
-| OCV | flat ±5%，cell、net、clock、data 全部套用 | OK（sky130 沒有更好的資料） | SRAM 的 instance derate 取代了 ±5%：ss 是 1.5 倍，不是 1.5 × 1.05。**使用者決定（2026-10-04）：改成 1.575／0.665**。**Phase 4 已做**（`sta_extra_corner.tcl`，ADR-0007 補充） |
+| OCV | flat ±5%，cell、net、clock、data 全部套用 | OK（sky130 沒有更好的資料） | SRAM 的 instance derate 取代了 ±5%：ss 是 1.5 倍，不是 1.5 × 1.05。**使用者決定（2026-10-04）：改成 1.575／0.665**。**Phase 4 已做**（`sta_extra_corner.tcl`，ADR-0007 補充）。**Phase 3.5 起**：SRAM 改成每個 PVT 一份特性化 .lib，不再有 instance derate，±5% OCV 直接套到 SRAM（ADR-0010） |
 | PVT corner | 9 個（tt／ss／ff × min／nom／max RC） | **缺口**：溫度反轉。1.60 V 下多數 cell 低溫反而比較慢（dfxtp_1 CLK→Q：ss_n40C 比 ss_100C 慢 11%），PDK 有 `ss_n40C_1v60`、`ff_100C_1v95` 但沒用 | **Phase 4 已做**：`config.json` 的 `STA_CORNERS` 加這兩個 PVT，共 15 個 corner，signoff 與大部分 PnR step 都用；resizer 只看原本 9 個（`RSZ_CORNERS`，15 個全給時 `RepairDesignPostGRT` 跑不完） |
 | IR drop 上限 | 90 mV（5% VDD，`project-plan.md` §7.2，沒有推導）；實測 0.306 mV | **不一致**：ss corner 是 1.60 V，Caravel 最低供電 1.62 V，只隱含 20 mV 的預算。IR 真的到 90 mV 時，STA 的 ss 結果就不保守 | **使用者決定（2026-10-04）：上限改成 20 mV**。**Phase 4 已做**（`signoff/limits/soc_top.toml`、`picorv32_core.toml`；P07 在 VDD 降壓與 GND 抬升各植入 11 mV，合計 22 mV 必須 FAIL）。用最大電阻的 RC corner 與真實電壓源位置重算：見 Phase 4 exit review |
 | IR 數字本身 | nom_tt 的電流與 RC；電壓源是 PDN 的所有 pin 形狀 | 偏樂觀：0.3 mV 只代表「上層供電理想時，block 內 rail 的壓降」 | 報告寫明這個範圍；粗估單端供電時約 8 mV（推論） |
@@ -31,7 +31,7 @@
 | max transition | 0.75 ns，9 corner 違規 0 | OK | `docs/decisions/0009` 有兩處描述與 .lib 不符，已更正 |
 | clock net 的 slew | 沒有另外限制；ss 下 clk port 0.59 ns | 小缺口 | `-clock_path` 在 propagated clock 下無效，要另寫 checker（Phase 4，可選） |
 | max cap | 0.2 pF；ss 的 pin 上限比 tt 小約 37% | OK（9 corner 都判） | — |
-| SRAM pin 的限制 | `dout0` max_capacitance 0.02756 pF、min 0.0017225 pF；輸入 max_transition 0.5 ns（padded.lib 36） | 這些也是假設值（ADR-0007） | Phase 3.5／6 特性化後校正 |
+| SRAM pin 的限制 | `dout0` max_capacitance 0.02756 pF、min 0.0017225 pF；輸入 max_transition 0.5 ns（padded.lib 36） | 這些也是假設值（ADR-0007） | **Phase 3.5 已做**：`dout0` max_capacitance 改成特性化過的最大負載 0.05 pF（最終版圖 `dout0[1]` 0.031 pF）；min_capacitance 沿用 1.72 fF，低於特性化最低的 5 fF（實際最小 3.35 fF，ADR-0010 已知限制 12）；輸入 max_transition 仍沿用 |
 | hold 的 margin | Phase 3：resizer 修到 0.100 ns，signoff 剩 0.032 ns | 餘量小。router 的變動若超過 golden 誤差（±0.01 ns）就可能變負 | 考慮 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.15（推論，需實跑看面積代價）。**Phase 4 已做**：改成 0.3 ns（hold 在新 corner 變負，見 `pnr/soc_top/README.md`），42 ns 時 signoff 剩 +0.082 ns，hold buffer 多 984 顆 |
 | nom_tt setup ≥ 4 ns（週期 10%） | `soc_top.toml` [min] | **沒有作用**：ss 的延遲是 tt 的 1.4–1.9 倍，「ss ≥ 0」一定比它嚴（推算） | **使用者決定（2026-10-04）：降為只報告、不判 FAIL**；餘量改放在 uncertainty 並列出成分。**Phase 4 已做**（兩個 limits 檔的 `[info]`） |
 | power grid EM | 沒有分析；總電流 < 5 mA | 風險低（推論），但沒有 checker | 用 `analyze_power_grid -enable_em` 輸出電流後比對 tech LEF（Phase 4，可選） |

@@ -17,7 +17,7 @@
 ## Phase 3.5 補充（2026-10-05）：soc_top 改 43 ns
 
 - Phase 3.5 換上 SPICE 特性化的 SRAM .lib（ADR-0010），多了一條 dout0 的 `rising_edge` hold 弧：資料在 clock 上升緣後 0.64 ns（ff，× 0.9）就開始變化。
-- post-CTS 的 hold 修復有 0.3 ns 額外餘量（`PL_RESIZER_HOLD_SLACK_MARGIN`），為了這條弧在 `rdata_q` 前插了一顆 delay cell（`dlygate4sd3`，ss −40°C 約 1.17 ns）。不插的話 ff 的 hold 仍有約 +0.18 ns。
+- post-CTS 的 hold 修復有 0.3 ns 額外餘量（`PL_RESIZER_HOLD_SLACK_MARGIN`），為了這條弧在每個 `rdata_q` 的 D 前各插了一顆 delay cell（`dlygate4sd3`，ss −40°C 約 1.17 ns）。推算不插的話 ff 的 hold 仍有約 +0.18 ns（hold slack 減 delay cell 延遲，沒有拿掉 cell 重跑）。
 - 這顆 cell 也在 SRAM 讀出的半週期路徑上：42 ns 時 min_ss_n40C 的 setup 差 0.066 ns（Phase 3.5 第 2 次 `make harden-soc`，commit `3e9b011`），ss 100°C 從 +0.79 降到 +0.47 ns。
 - 使用者決定（2026-10-05）：soc_top 改 **43 ns**，不動任何檢查或餘量。另兩個選項沒有採用：把 resizer 的 hold 餘量降到 0.15 ns（全域設定，Phase 4 是因為 SRAM 輸入 pin 的 hold 才調到 0.3）；ss −40°C 的 SRAM 路徑不判 setup（放寬檢查）。
 - picorv32_core 維持 40 ns；模擬的 testbench clock 不變（同上一節）。

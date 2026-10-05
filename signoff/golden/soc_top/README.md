@@ -20,11 +20,11 @@
   - SRAM .lib 改用 SPICE 特性化、每個 PVT 一份（ADR-0010），多了 dout0 的 `rising_edge` hold 弧，SRAM 的 instance derate 拿掉。
   - 週期 42 → 43 ns（使用者決定，ADR-0004 Phase 3.5 補充）。
 - timing：最差 setup 0.313 → 0.384 ns（仍在 min_ss_n40C、SRAM 半週期路徑）；ss 100°C 0.788 → 0.921 ns；tt／ff 約 +0.3 ns（週期）。最差 hold 0.082 → 0.074 ns；ss −40°C 的 hold 0.93 → 0.07–0.29 ns：那個 corner 的 SRAM .lib 是佔位，hold 弧取所有 PVT 最早的值（ff 的 0.64 ns）。
-- cell：standard cell 29,352 → 29,373（+21），面積 237,644 → 237,877 µm²；hold buffer 3452 → 3479（+27，`rdata_q` 前為了新的 hold 弧插的 delay cell）；antenna cell 85 → 86、diode 51 → 48；clock buffer／inverter 不變（531／62）。
+- cell：standard cell 29,352 → 29,373（+21），面積 237,644 → 237,877 µm²；hold buffer 3452 → 3479（淨 +27。32 個 `rdata_q` 的 D 前各有一顆 `dlygate4sd3`，是為了新的 hold 弧插的；淨增比 32 少，表示別處少了幾顆或 Phase 4 已有一部分，Phase 4 的網表已不在，無法確認）；antenna cell 85 → 86、diode 51 → 48；clock buffer／inverter 不變（531／62）。
 - 功耗 9.451 → 9.241 mW（−2.2%，約 42/43）；IR `ir__drop__worst` 4.04 → 3.95 mV。
 - 繞線：線長 894,480 → 895,243 µm，最長線 619.53 → 616.77 µm，net 22,659 → 22,679。
 - `GRT-0243`（antenna 修補時有一條 net 用 diode 修不掉）是新的警告：修補前 146 個 antenna 違規，jumper 後剩 19 個，插 diode 後的 `CheckAntennas` 與繞線後的檢查都是 0 個違規；signoff 的 3 個 antenna 指標都是 0。
-- `STA-1140`（同一份 .lib 讀兩次）14 → 12：SRAM 不再是 9 個 corner 共用一份 padded.lib。
+- `STA-1140`（同一份 .lib 讀兩次）14 → 12：推測是因為 SRAM 不再是 9 個 corner 共用一份 padded.lib（數字已核對，原因沒有驗證）。
 - 沒變的：Magic DRC 4,665,810（全部在 SRAM 框內、位置與 SRAM 單獨檢查相同）、KLayout DRC 0、LVS 0、XOR 0、unannotated driver 133、SRAM 位置。
 
 ## 與 Phase 3 golden 的差異（Phase 4 時檢視）

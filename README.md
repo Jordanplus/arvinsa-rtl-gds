@@ -217,7 +217,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - golden 的誤差依「這個數字是哪一步產生的」分類，不要等出過差異才給。不可重現那一步（多執行緒 detailed routing）之後算出來的數字分三類：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差；繞線器中間各輪的 DRC 數這類中間過程數字給大誤差（等於不比數值）；計數、面積、最終 DRC、LVS 一律完全相同。
   - 每個 checker 至少要有一個植入錯誤，加一個沒植入時必須 PASS 的對照。斷言寫成「FAIL 的列剛好是這幾列」，而且要看全部問題，不能只看第一個。
   - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
-  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置。新 checker 要逐條對照。
+  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因。新 checker 要逐條對照。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂
@@ -244,7 +244,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以 .lib 要每個 PVT 一份（用 SPICE 實測產生，看 openram-macro-characterization）；只有廠商的單一 TT 解析 .lib 時，暫時用一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
   - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
   - 未用的 port 要 tie-off，checker 要檢查實際接的值。
-  - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫會讀出前一次的值。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
+  - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫、以及 ss 1.60 V 室溫時會讀出前一次的值；corner 之間的溫度 STA 看不到，要另外模擬。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
 - **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008／0010。negative test：P08、P09、P14、P16–P20、P30、P32。
 
@@ -260,11 +260,11 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - OpenRAM SRAM 的 dout 在上升緣後約 1 ns 就開始變化，廠商 .lib 沒有這條時序弧，STA 不會檢查接收端的 hold；新 .lib 要加上。
   - setup/hold 要在整顆 macro 上量：內部 clock buffer 讓 setup 變負、hold 變大，只量 DFF 的 hold 少算約 0.3 ns。
   - Magic 沒設 `PDK_ROOT` 時會 exit 0 但沒有輸出，要檢查輸出檔。萃取網表的基板網路 VSUBS 與被修剪 cell 的儲存節點會浮接（singular matrix），要接地；處理後仍有暫態不收斂的問題未解決。
-  - 量測方法先驗證誤差（步長、修剪、初始條件、延遲表推算，都要偏保守），再用植入錯誤證明腳本量得對；植入的字串要先確認找得到、改到預期的次數，否則植入什麼都沒做，測不到要測的東西。
+  - 量測方法先驗證誤差（步長、修剪、初始條件、延遲表推算，都要偏保守；方向要對 .lib 實際用的那個量判斷，hold 弧和延遲的方向相反），再用植入錯誤證明腳本量得對；植入的字串要先確認找得到、改到預期的次數，否則植入什麼都沒做，測不到要測的東西。
   - 新加的 `rising_edge` 弧接進 SoC 後，要有 negative test 證明 STA 真的用到它。
   - .lib 延遲表的負載斜率會被 OpenROAD 當成 driver 強度。讀出穩定時間會隨負載跳動，照實寫進表裡等於 60–140 kΩ 的 driver，`repair_design` 會一直插 buffer。所以每列取負載中的最大延遲（hold 弧取最小），產生後先單步重跑 repair 確認時間正常。
   - 其他 PVT 的結果常在以 tt 為中心的搜尋範圍外：往外一次多測幾點（2 點、最多 3 次）再接著二分，不要整個重新二分（舊做法 ss 的最小週期預估近 20 小時）。
-  - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
+  - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）與 ss 1.60 V 室溫（25°C）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
 - **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N8（`make neg-char`）與 P04、P17、P30、P32。
 
@@ -371,11 +371,12 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 
 #### signoff-criteria：signoff 條件的推導
 
-- **何時用**：決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
+- **何時用**：決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up、macro SPICE 特性化值的餘量；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
 - **重點**：
   - 每個條件都要回答四件事：防什麼、數值怎麼算、預設值出自哪裡、工具有沒有分析。LibreLane 的預設值多半是沿用的常數，沒有成分說明。
   - 推導前要先有的輸入：clock 來源、供電範圍、溫度、外部介面時序。沒有就寫「假設」。
   - IO delay 的 `-min` 不能直接設 0，要和上層的 clock latency 一起建模，否則會出現大量假的 hold 違規。
+  - macro 的 SPICE 特性化值要加上模型沒涵蓋的部分（寄生、量測誤差、mismatch）：延遲乘比例、setup/hold 加固定值、輸出最早變化的時間乘小於 1 的係數，再和既有保守值取較嚴者。
   - 推導出來的條件要寫進 flow 變成 checker，每個都要有植入錯誤的案例（附 soc_top 的實作範本）。
   - 一組已驗證的工具行為，例如：指定邊緣的 uncertainty 會取代一般值、instance derate 會取代 global、fmax 報告排除半週期路徑、OpenSTA 沒有 SI 分析。
   - 每次 signoff 都要列出「不分析的項目」，寫出各用哪一筆 margin 涵蓋。

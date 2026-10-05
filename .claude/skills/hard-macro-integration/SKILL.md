@@ -1,6 +1,6 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner 不能動時的佔位 .lib、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner（或 corner 之間的溫度）不能動時的佔位 .lib 與下線風險、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
 ---
 
 # Hard macro 整合
@@ -22,7 +22,7 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
 2. **擺放**：macro 位置、halo、IO pin 與壅塞的規則在 `floorplan-congestion`；這裡只檢查 `MACROS.instances` 的座標與方向和 floorplan 決定一致（`check_soc.py placement`）。
 3. **未用的 port**：輸入接 tie cell（RTL 直接寫常數，合成會產生 `conb_1`）；輸出接 RTL 具名 wire，就不算斷線。checker 要檢查實際的 tie 值（`check_soc.py port1_tieoff`）。
 4. **電源**：`VDD_NETS`／`GND_NETS` 與 macro 電源 pin 同名；`PDN_MACRO_CONNECTIONS`；實體連接靠 LVS 驗證（`lvs-signoff`、`pdn-ir-drop`）。
-5. **macro 在每個 STA corner 都要先證明功能正確**：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫讀出前一次的值（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
+5. **macro 在每個 STA corner 都要先證明功能正確**：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫、以及 ss 1.60 V 室溫時讀出前一次的值；STA corner 之間的溫度（例如 25°C）STA 看不到，要另外模擬（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
 6. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
 
 ## negative test

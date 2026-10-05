@@ -1,6 +1,6 @@
 ---
 name: signoff-criteria
-description: 決定或檢討 signoff 條件的數值與依據時使用：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI（crosstalk）、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use when deriving or reviewing signoff limits and margins (uncertainty, derate, corners, IR/EM/SI budgets, PDK rules) for sky130 + LibreLane/OpenROAD.
+description: 決定或檢討 signoff 條件的數值與依據時使用：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use when deriving or reviewing signoff limits and margins (uncertainty, derate, corners, IR/EM/SI budgets, PDK rules) for sky130 + LibreLane/OpenROAD.
 ---
 
 # Signoff 條件怎麼推導
@@ -120,6 +120,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | max transition／cap | 有效上限是 SDC 與 .lib 取較小者，而且每個 corner 不同（規則 9）；目的是讓延遲查表落在特性化範圍內 | 0.75 ns 是設計上的保守值，放寬要寫 ADR |
 | max fanout | sky130 .lib 沒有 max_fanout，所以這不是物理限制，是實作輔助 | signoff 以 slew 與 cap 為主 |
 | resizer 的 slack margin | margin =（post-CTS 估計 − signoff 結果）的實測差距 × 安全係數 | 這是實作手段，不能拿來代替 signoff 的餘量 |
+| macro 的 SPICE 特性化值 | 實測值加上模型沒涵蓋的部分：走線寄生（用萃取的局部電路試驗量比例）、步長／修剪／初始條件的誤差（方向要對 .lib 用的那個量判斷）、mismatch。延遲類乘比例，setup/hold 加固定值，「輸出最早開始變化」乘小於 1 的係數；再和既有的保守值比，取較嚴者當下限。soc_top：× 1.6（萃取 bitcell 試驗讀出穩定 +45–48%）、+0.1 ns、padded.lib 當下限、hold 弧 × 0.9（ADR-0010） | 沒有 Monte Carlo 與周邊走線寄生時，寫明這兩項只靠係數與下限涵蓋；係數只在一個 PVT 驗證過也要寫明（`openram-macro-characterization` 規則 11） |
 | 「典型 corner 的 slack ≥ 週期 X%」這類規則 | 只有在 slow corner 對 typical 的延遲比 r < T_avail / (T_avail − X) 時，才會比「slow corner ≥ 0」更嚴；std cell 的 r 約 1.9，所以通常沒有作用 | 餘量放在最慢的 corner，並逐項列出它涵蓋什麼 |
 
 ### 電源與可靠度

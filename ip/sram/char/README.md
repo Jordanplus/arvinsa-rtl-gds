@@ -9,7 +9,7 @@
 | `sramchar.py` | 共用：網表修剪、測試序列（`Seq`）與 deck、執行 ngspice、波形量測、讀出檢查 |
 | `characterize.py` | 量測主程式：延遲表、setup/hold、最小週期與 pulse width，結果併入 `char.json` |
 | `gen_char_lib.py` | 由 `char.json` 和 PDK 的 TT .lib（當格式範本）產生 5 份 .lib；`--check` 檢查是否過期 |
-| `neg_char.py` | 特性化本身的植入錯誤 N1–N6 |
+| `neg_char.py` | 特性化本身的植入錯誤 N1–N8 |
 | `extract_sram.py` | 用 Magic 從 GDS 萃取含走線電容的網表（寄生的影響比較用） |
 | `../sky130_sram_2kbyte_1rw1r_32x512_8/char/` | 進版控的結果：`char.json` 與 5 份 `<macro>__<pvt>.lib` |
 
