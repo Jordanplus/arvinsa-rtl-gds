@@ -1,6 +1,6 @@
 ---
 name: openram-macro-characterization
-description: SRAM macro（OpenRAM 產生的預建 macro 或自產 macro）的時序要用 SPICE 實測、產生多 corner 的 .lib 時使用：判斷廠商 .lib 是不是解析模型、macro 在低溫讀出前一次的值（sense amp 沒有預充電、column mux 只有 NMOS）與不能動的 corner 怎麼給佔位 .lib、換上新 .lib 後 repair_design 跑很久或異常結束（延遲表的負載斜率）、用 ngspice 量 clk→dout 延遲與 dout 在上升緣後被拉回的時間、setup/hold、最小週期與 pulse width、網表修剪與模擬步長怎麼驗證、從 GDS 萃取寄生電容（Magic）、OpenRAM 自己特性化的缺陷、量測結果怎麼寫成 .lib 並用植入錯誤證明量得對，以及 ngspice 讀大網表很慢、bus 節點名稱報 bad v() syntax、萃取網表報 singular matrix 或 Timestep too small 這類問題。macro 怎麼放進設計看 hard-macro-integration，餘量怎麼定看 signoff-criteria。Use for SPICE characterization of SRAM macros (ngspice + sky130), per-corner Liberty generation, netlist trimming, parasitic extraction and OpenRAM characterizer pitfalls.
+description: SRAM macro（OpenRAM 產生的預建 macro 或自產 macro）的時序要用 SPICE 實測、產生多 corner 的 .lib 時使用：判斷廠商 .lib 是不是解析模型、macro 在低溫讀出前一次的值（sense amp 沒有預充電、column mux 只有 NMOS）與不能動的 corner 怎麼給佔位 .lib、換上新 .lib 後 repair_design 跑很久或異常結束（延遲表的負載斜率）、用 ngspice 量 clk→dout 延遲與 dout 在上升緣後被拉回的時間、setup/hold、最小週期與 pulse width（搜尋範圍不涵蓋真值時怎麼往外找）、網表修剪與模擬步長怎麼驗證、從 GDS 萃取寄生電容（Magic）、OpenRAM 自己特性化的缺陷、量測結果怎麼寫成 .lib 並用植入錯誤證明量得對，以及 ngspice 讀大網表很慢、bus 節點名稱報 bad v() syntax、萃取網表報 singular matrix 或 Timestep too small 這類問題。macro 怎麼放進設計看 hard-macro-integration，餘量怎麼定看 signoff-criteria。Use for SPICE characterization of SRAM macros (ngspice + sky130), per-corner Liberty generation, netlist trimming, parasitic extraction and OpenRAM characterizer pitfalls.
 ---
 
 # SRAM macro 的 SPICE 特性化與 .lib
@@ -63,6 +63,11 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
     - 讀出穩定時間是 dout 進入有效電壓範圍的時刻，不是 RC 延遲，會隨負載跳動（ss 100°C 5 → 20 fF 跳 1.3 ns）。直接寫進表裡，等於 60–140 kΩ 的 driver。
     - 這樣的表讓 `repair_design` 一直在輸出 net 上插 buffer：同一份輸入單步重跑，卡在第 9000 個 driver 之後；加大輸出 pin 的 `max_transition` 沒用；表在負載方向攤平後 52–98 秒完成。
     - 做法：每列（clock slew）取負載中的最大延遲、hold 弧取最小值，`max_capacitance` 設成特性化過的最大負載。產生 .lib 後先用單步重跑 `OpenROAD.RepairDesignPostGPL` 確認時間正常，再跑完整流程（`librelane-run-debug` 規則 3）。
+15. **搜尋範圍不涵蓋真值時，往外一次多測幾點，不要整個重新二分**（`ip/sram/char/characterize.py` 的 `bisect`）：
+    - 其他 PVT 的搜尋以 tt 結果為中心，但 ss 的高、低電位時間與週期比 tt 大 1 ns 以上，ff 的低電位時間與週期小 1 ns 以上，都在範圍外。
+    - 舊做法每往外移一次範圍就從頭二分 6 輪（每輪約 50 分鐘，約 5 小時）；ss 的最小週期若往外移 3 次，將近 20 小時。
+    - 現在的做法：二分縮到解析度後，某一側（FAIL 或 PASS）還沒看到，就在那一側一次模擬 `EXTEND_POINTS`（2）個點、涵蓋一個初始寬度，最多 `MAX_EXTEND`（3）次，仍看不到就報錯；看到之後在最近的 FAIL 與 PASS 之間接著二分。結果不單調（大的值 FAIL、小的值 PASS）也報錯。clock 的高、低電位時間不探測到 `PULSE_FLOOR`（0.4 ns）以下。
+    - 改搜尋法之前，先用假的模擬器（給定真值的函式）比對新舊版：範圍內的探測點完全相同，所以已跑完的模擬可以直接沿用。
 
 ## 待補
 
@@ -94,3 +99,4 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
 | 2026-10-05 | Phase 3.5 ss −40°C | 延遲模擬每次讀取都錯；tt −40°C、ss −40°C 到 1.95 V 都讀成前一次的值 | 已驗證（修剪網表，量 bit 0 的 column mux 輸出與 sense amp 內部節點）：sense amp 沒有預充電、column mux 只有 NMOS（規則 13）；完整網表在 ss −40°C 1.70 V 失敗的讀取與節點電壓相同（不是修剪造成） | 使用者決定：ss −40°C 用佔位 .lib，列為頭號下線風險，Phase 6 修正 | ADR-0010 |
 | 2026-10-05 | Phase 3.5 harden-soc 第 1 次（`ccc536c`） | `OpenROAD.RepairDesignPostGPL` 75 分鐘後 `failed with an unexpected error`（Phase 4 同一步 44 秒） | 已驗證（單步重跑 4 種 .lib）：dout0 延遲表的負載斜率等於 60–140 kΩ 的 driver | 規則 14：負載方向取最大值 | ADR-0010 |
 | 2026-10-05 | Phase 3.5 最終版圖的 what-if | dout0 transition 用 0.5 ns（使用者決定）；改成電路圖量到的值後，SRAM 半週期路徑 slack：ss −40°C 1.3 ns 時 +0.38 → +0.03，ss 100°C 3.15 ns 時 +0.92 → +0.17 | 已驗證（OpenSTA 只換 .lib） | 記入 ADR-0010 已知限制 5；macro 輸出 transition 這種沒有把握的假設，要用 what-if 量出它對 slack 的影響 | ADR-0010 |
+| 2026-10-05 | Phase 3.5 非 tt 的 PVT | ss、ff 的最小 pulse 寬度與週期都在以 tt 為中心的搜尋範圍外；舊版每往外移一次就從頭二分 6 輪，預估 ss 的最小週期要近 20 小時 | 已驗證（假模擬器比對新舊版：範圍內探測點相同） | 規則 15：往外一次測 2 點，最多 3 次；ss 100°C、ff −40°C、ff 100°C 用新版重開，沿用已跑完的模擬 | `ip/sram/char/characterize.py`、`ip/sram/char/README.md` |

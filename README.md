@@ -113,8 +113,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
-| 要跑 LibreLane、從中間 step 接續、只重跑一個 step | librelane-run-debug | — |
-| run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束 | librelane-run-debug | multicorner-sta（corner 太多）、drv-timing-closure（post-GRT 修復的設定） |
+| 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑前保存失敗的 run | librelane-run-debug | — |
+| run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束 | librelane-run-debug | multicorner-sta（corner 太多）、drv-timing-closure（post-GRT 修復的設定、resizer 停不下來）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
 | 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
@@ -134,7 +134,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
 | 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同 | signoff-checker-qualification | flow-regression-reproducibility |
-| 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發 | flow-regression-reproducibility | signoff-checker-qualification |
+| 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
 | 一個 Phase 收尾 | phase-exit-review | — |
 
 ### 在流程中的位置
@@ -197,11 +197,12 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 
 #### librelane-run-debug：LibreLane 執行與除錯
 
-- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無。
+- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無、重跑前保存失敗的 run。
 - **重點**：
   - 單步重跑用 `python3 -m librelane.steps run`，改的是 config 與 state 的複本，原 run 不動。
   - 錯誤要先證明是隨機的（同一份輸入重跑 3–4 次，有過有不過），才能加重試；重試只針對那一個訊息，而且有次數上限。只跑一次就把錯誤歸因到某個設定不可靠：`GRT-0229` 原本被誤認為是某個設定造成的。
   - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。
+  - 重跑前先保存失敗的 run：`run.sh` 開跑前會刪掉同名的 run 目錄，Phase 3.5 第 1 次 harden 的 log 就因此不見，只剩 ADR 的摘要。`run.sh` 的 run tag 寫死，重跑前要自己搬走；`run.sh` 改成自動搬走留到 Phase 5。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
@@ -222,11 +223,12 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 #### drv-timing-closure：時序與 DRV 收斂
 
 - **名詞**：DRV（design rule violation，電性規則違規）指 max slew（訊號轉換太慢）、max cap（負載電容太大）、max fanout（一條線接太多負載）。
-- **何時用**：多 corner STA 有 setup／hold 違規或 DRV 違規；要調 resizer、長線修復、cell 排除、繞線前的寄生估計。
+- **何時用**：多 corner STA 有 setup／hold 違規或 DRV 違規；要調 resizer、長線修復、cell 排除、繞線前的寄生估計；resizer 跑很久停不下來。
 - **重點**：
   - LibreLane 對 sky130 預設只在 tt 判 setup FAIL，slew／cap 不判；先把四個 `*_VIOLATION_CORNERS` 都設 `["*"]`。
   - DRV 收斂清單，依實際有效的順序：排除延遲 cell、設 `LAYERS_RC`、開 post-GRT 修復、長線切段；剩下少數違規先查是不是繞路。
   - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。
+  - resizer 停不下來時，查 corner 數，也查 macro 的 .lib：延遲表的負載斜率太大，會被當成很弱的 driver，一直插 buffer。換上新的 macro .lib 先單步重跑 `RepairDesignPostGPL` 確認時間正常。
   - macro 的 .lib 要每個 PVT 一份，resizer 才看得到 macro 在慢 corner 的延遲；只靠 STA hook 加 derate 時，PnR 看不到。OpenRAM SRAM 的 .lib 要有 dout 在上升緣後開始變化的時序弧，STA 才會檢查接收 flop 的 hold。
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
@@ -261,6 +263,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 量測方法先驗證誤差（步長、修剪、初始條件、延遲表推算，都要偏保守），再用植入錯誤證明腳本量得對；植入的字串要先確認找得到、改到預期的次數，否則植入什麼都沒做，測不到要測的東西。
   - 新加的 `rising_edge` 弧接進 SoC 後，要有 negative test 證明 STA 真的用到它。
   - .lib 延遲表的負載斜率會被 OpenROAD 當成 driver 強度。讀出穩定時間會隨負載跳動，照實寫進表裡等於 60–140 kΩ 的 driver，`repair_design` 會一直插 buffer。所以每列取負載中的最大延遲（hold 弧取最小），產生後先單步重跑 repair 確認時間正常。
+  - 其他 PVT 的結果常在以 tt 為中心的搜尋範圍外：往外一次多測幾點（2 點、最多 3 次）再接著二分，不要整個重新二分（舊做法 ss 的最小週期預估近 20 小時）。
   - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
 - **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N8（`make neg-char`）與 P04、P17、P30、P32。
@@ -392,7 +395,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 #### flow-regression-reproducibility：一鍵 regression、可重現性與來源追溯
 
 - **名詞**：乾淨 checkout 是從某個 commit 重新取出、沒有任何建置產物的目錄；來源追溯（provenance）是記錄並檢查一個 run 用了哪個 commit、哪版工具與 PDK。
-- **何時用**：建立或執行 `make regress`；在乾淨 checkout 驗證；查一個 run 是怎麼產生的；讓下游步驟拒絕過期或沒 PASS 的 run；長時間 run 期間繼續開發；長 regression 中途因機器負載 FAIL。同樣設定重跑結果不同、golden 該給多少誤差，看 signoff-checker-qualification。
+- **何時用**：建立或執行 `make regress`；在乾淨 checkout 驗證；查一個 run 是怎麼產生的；讓下游步驟拒絕過期或沒 PASS 的 run；長時間 run 期間繼續開發或等待它結束；長 regression 中途因機器負載 FAIL。同樣設定重跑結果不同、golden 該給多少誤差，看 signoff-checker-qualification。
 - **重點**：
   - regression 依相依順序一次跑一個 target，第一個 FAIL 就停。開始前工作目錄要乾淨，並拒絕 `make -i`／`-n`；結束時 HEAD 必須和開始時相同。
   - 只有在乾淨 checkout 從頭跑到底才算驗證。開發目錄裡忽略版控的建置產物，會藏住漏宣告的依賴。
@@ -400,6 +403,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 下游步驟要確認 run 是 PASS，而且來自目前的 commit。
   - golden 與 commit 的先後：更新 golden 的那次 run 永遠過不了下游檢查；要先 commit 新 golden，再用乾淨 checkout 跑完整 regression 證明它可重現。Makefile 要加 `.NOTPARALLEL:`，否則 `make -j` 時各 target 會互刪 `runs/`。
   - 長 run 期間另開 worktree 開發。用舊 run 測新 checker 時建 dev fixture，結果不能當證據。
+  - 等長 run 結束用 PID：`pgrep -f` 會比到等待腳本自己；macOS 的 `pgrep` 裡 `\|` 不是「或」；從 log 判斷結果要比整行開頭（`regress: PASS` 也會比到 regress-rtl 那一行）。
   - 長 regression 之前，先用 `make py-check` 和 dev fixture 預跑，提早抓到會在中途才出錯的問題。Spotlight 之類的背景負載會拖慢有牆鐘時限的步驟。
 - **本 repo 實例**：`scripts/regress.py`、`signoff/scripts/provenance.py`、`run_guard.py`。negative test：`neg_regress.py`、`neg_provenance.py`、`neg_run_guard.py`。
 

@@ -1,6 +1,6 @@
 ---
 name: flow-regression-reproducibility
-description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發、用舊 run 測新 checker（dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
+description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發或等待它結束（用 PID）、用舊 run 測新 checker（dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
 ---
 
 # 一鍵 regression、可重現性與來源追溯
@@ -46,6 +46,10 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - Python 只在執行到那一行時才報 `NameError`。重構時改了函式名稱，漏改的呼叫要等那個案例跑到才 FAIL（Phase 4：neg-pnr 的 P11 在 20 分鐘後才 FAIL）。`make py-check`（`scripts/check_py_names.py`）在幾秒內找出「讀到但檔案內沒定義的名稱」，排在 `make regress` 第 2 個 target，也在 `make smoke` 裡。
    - 改過的下游步驟先在 dev fixture（規則 6）上全部跑一次，再開始乾淨 checkout 的長 run；這次預跑找到 P11，省掉一次約 2 小時的重跑。
    - 預跑時多個步驟同時跑會互相拖慢，有牆鐘時限的步驟（GL 模擬）可能逾時；逾時的要單獨重跑確認（`gate-level-simulation` 規則 6）。
+10. **等長時間 run 結束，用 PID，不用字串比對**：
+    - `pgrep -f <字串>` 也會比到等待腳本自己的 shell（它的命令字串含同一個字串），等待永遠不結束，或把多個 PID 交給 `kill`。macOS 的 `pgrep` 用 extended regex，`a\|b` 是字面的 `|`，不是「或」（要寫 `a|b`）。
+    - 從 log 判斷結果時比對整行的開頭：`regress: PASS` 也會比到 `[regress] regress-rtl: PASS ... regress: PASS 30/30` 那一行，要比 `regress: PASS <n>/<n>` 或 `^\[regress\] <target>: `。
+    - 做法：開跑時記下 PID（`$!`），`while ps -p <pid> >/dev/null; do sleep 60; done`，結束後再讀 log 的總結行。Claude Code 的背景指令有時限（最長 2 小時），超過就以同一個 PID 重新等待，不要重開 run。
 
 ## 已知陷阱
 
@@ -76,3 +80,4 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 2026-10-04 | Phase 4 預跑（dev fixture） | `[FAIL] P11: expected FAIL at case error: NameError("name 'gds_add_met2' is not defined")`，`neg-pnr: FAIL 26/27` | 已驗證：`gds_add_met2` 改成 `gds_add_box` 時漏改 P11 | 改呼叫；新增 `make py-check`，對修正前的檔案確認會 FAIL；單獨重跑 P11 PASS | `runs/dev5_neg_pnr.log` |
 | 2026-10-04 | Phase 4 `make regress` 第 2 次 | 12/25 PASS 後 harden-soc FAIL（golden 一個中間輪 DRC 數 11 → 14），第 1 次同設定是 434/434 相同 | 已驗證：多執行緒 detailed routing 不可重現，這次波及繞線器中間各輪的 DRC 數 | 給誤差（使用者決定），補 P31，乾淨 checkout 跑第 3 次 | `signoff/golden/soc_top/README.md` |
 | 2026-10-04 | Phase 4 `make regress` 第 3 次 | 16/25 PASS 後 gl-soc-powered FAIL（一支 gate-level 測試超過牆鐘時限）；harden-soc 這次 434/434 與 golden 相同，另有一次已知的 GRT-0229 重試 | 已驗證：Spotlight 負載＋gate-level 時限照 RTL 速度算 | `gl_timeout`，乾淨 checkout 跑第 4 次 | `runs/p4_regress_clean3.log` |
+| 2026-10-05 | Phase 3.5 乾淨 checkout 的 `make regress` | 等待腳本三次出錯：`pgrep -f` 比到自己的 shell、`\|` 沒有「或」的作用、`regress: PASS` 比到 regress-rtl 那一行而提早結束；另有一次背景指令 2 小時到期 | 已驗證（`pgrep -f 'x\|sleep 30'` 找不到 `sleep 30`，`'x|sleep 30'` 找得到） | 規則 10：用 PID 等待，比對整行開頭 | `runs/p35_regress_clean1.log` |

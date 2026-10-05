@@ -1,6 +1,6 @@
 ---
 name: drv-timing-closure
-description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補、hold 餘量，以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
+description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補、hold 餘量、resizer（`repair_design`）停不下來（corner 太多、macro .lib 的負載斜率），以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
 ---
 
 # 時序與 DRV 收斂（多 corner）
@@ -29,6 +29,9 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
    - setup：`PL_RESIZER_SETUP_SLACK_MARGIN` 設 0.6 ns（預設 0.05）。SRAM 半週期路徑在 resizer 看得到的 ss_100C 有 +0.09～+0.17 ns，resizer 不會修；signoff 在 ss_n40C 卻是 −0.24～−0.41 ns。第 4 次 harden（40 ns）加了這個餘量仍差 0.42 ns，最後是週期改 42 ns 才通過（使用者決定）。
    - slew：`pnr.sdc` 的 `set_max_transition` 設 0.70 ns，signoff 維持 0.75 ns。ss_n40C 的 transition 比 ss_100C 慢約 25%，第 4 次 harden 有一條 data net 在那裡到 0.766 ns。
    - 這是補償，不是證明：設計變大或時序更緊時可能不夠（`docs/phase_exit/phase4.md` 已知限制 4）。數字見 `pnr/soc_top/README.md` 的設定表。
+10. **resizer 停不下來時，除了 corner 數（規則 8），也要查 macro 的 .lib**：Phase 3.5 換上 SPICE 特性化的 SRAM .lib 後，`OpenROAD.RepairDesignPostGPL` 75 分鐘後異常結束（Phase 4 同一步 44 秒）。原因是 dout0 延遲表的負載斜率等於 60–140 kΩ 的 driver，`repair_design` 一直在 dout0 的 net 上插 buffer；.lib 改法看 `openram-macro-characterization` 規則 14。
+    - 排查：拿同一份 `state_in.json` 單步重跑（`librelane-run-debug` 規則 3），一次只換一個輸入（`RSZ_CORNERS`、macro 的 .lib、`max_transition`），比較時間。
+    - 換上任何新的 macro .lib，先單步重跑 `RepairDesignPostGPL` 確認時間和以前同一級，再跑完整流程。
 
 ## 退回過的做法
 
@@ -39,6 +42,7 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
 | `GRT_DESIGN_REPAIR_MAX_SLEW_PCT` 50 | post-GRT 修復單執行緒 26 分鐘以上不結束 | soc_explore6 |
 | `DESIGN_REPAIR_MAX_WIRE_LENGTH` 120 µm | 同上，13 分鐘以上不結束 | soc_explore8 |
 | `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH` 400 µm | 結果與不設完全相同（GRT 估計時那些線還沒那麼長） | soc_explore9 |
+| 加大 SRAM 輸出 pin 的 `max_transition`（以為 slew 違規讓 `repair_design` 停不下來） | 單步重跑一樣卡住；原因是延遲表的負載斜率（規則 10） | Phase 3.5，ADR-0010 |
 | `CTS_MAX_CAP` | 沒有作用（CTS 後 DEF 逐 byte 相同） | Phase 2 試跑 #7 |
 
 ## 已知限制
