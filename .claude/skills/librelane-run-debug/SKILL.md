@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -19,6 +19,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
    - 要改工具本身的指令（加除錯輸出、在指令前後插 Tcl）時，把這一步匯出成不經 LibreLane 的 script：在一個空目錄放 `config.json`、`state_in.json` 的複本，在 nix-shell 裡 `python3 -m librelane.steps eject -c config.json -i state_in.json -o run.sh`。得到設好環境變數的 `run.sh` 與 LibreLane Tcl 的複本 `scripts/`；改複本、在 nix-shell 裡執行 `run.sh`，輸入讀原 run（唯讀），輸出寫在這個目錄（Phase 5，`docs/notes/repair_design_loop.md`）。
    - 用 `script -q /dev/null ./run.sh` 執行，輸出才不會被緩衝；可能失控的實驗（修復停不下來）一定要另外監看記憶體，超過上限自動停（下方已知陷阱）。
 4. **metrics**：`python3 -m librelane.state latest <run dir> --extract-metrics-to <json>`。DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner（max_ff），不是 nom_tt（Phase 2 exit review）。
+   - state 的 metrics 會一路沿用：每一步只更新自己寫出的 key，沒寫的 key 保留前面步驟的值。所以 flow 中途某一步 `state_out.json` 裡的數字，不一定是那一步量的（Phase 5：第 38 步 `STAMidPNR` 只量 nom_tt，state 裡的 nom_ss_n40C −15.5 ns 是第 12 步 `STAPrePNR` 留下的，`multicorner-sta` 規則 7）。要知道某一步自己量到什麼，看該步目錄的 `or_metrics_out.json`；最終結果看 `final/metrics.json`。
 5. **隨機失敗要先證明是隨機的**：
    - 某一步失敗、但同樣設定之前跑過沒事時，拿失敗那次的 `state_in.json` 單步重跑至少 3–4 次。
    - 有的過、有的不過，才算隨機；再比較通過的幾次輸出是否完全相同。
@@ -45,6 +46,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 | 同上，起因是 corner 變多：resizer 看 15 個 corner（加了溫度反轉）時 `RepairDesignPostGRT` 35 分鐘以上不結束 | 停掉後拿同一份 `state_in.json` 單步重跑、只改 `RSZ_CORNERS` 回 9 個 → 58 秒，確認原因後才改 config（`multicorner-sta` 規則 3） | Phase 4 第 1 次 harden-soc |
 | 診斷「是不是卡住」：log 有緩衝，看不到進度 | `ps -o cputime` 看 CPU 時間是否持續增加；記憶體看 physical footprint（下一列）；macOS `sample <pid> 2` 看 call stack 卡在哪個函式 | Phase 4（看到每加一顆 buffer 就做一次增量 global routing） |
 | 某一步跑很久、CPU 使用率只有三四成：可能不是在算，而是記憶體失控、大部分時間在等 swap。`ps` 的 RSS 只算還留在實體記憶體的部分，會嚴重低估（Phase 5：RSS 418 MB，physical footprint 92.9 GB） | 看 `vmmap --summary <pid>` 的 Physical footprint 或 `top -l 1 -pid <pid> -stats mem`，再看 `sysctl vm.swapusage`。footprint 遠超過實體記憶體、swap 接近用滿就立刻停掉（整台機器的其他工作也會被拖慢）。重現時用單步重跑加記憶體上限與時間上限。Phase 5 的原因是 resizer 的無窮迴圈（`drv-timing-closure` 規則 10），其他幾次「修復不結束」推測同類（經驗紀錄） | Phase 5 第 1 次 harden-soc，`docs/notes/repair_design_loop.md` |
+| `[INFO RSZ-0032] Inserted N hold buffers.` 的 N 不是這一步插的總數：hold 修復進度表的 Buffers 欄中途會從 2624 掉回 2，最後只剩幾顆 | 數輸出網表裡 `hold<N>` 開頭的 instance，和上一步的網表比較 | Phase 5 第 2 次 harden：log 寫 11，`ResizerTimingPostCTS` 前後網表 0 → 2700 |
 | 停掉一個 run 時誤殺別的程序 | 用 `ps -eo pid,pgid,command` 找這個 run 的 process group，`kill -TERM -<pgid>` 只停那一組 | Phase 4（同時有 agent 在跑 openroad） |
 
 ## 時間預估（Apple Silicon，10 核）
@@ -69,3 +71,4 @@ soc_top 全 flow 約 20–30 分鐘（正式 run 實測 18 與 28 分；Magic �
 | 2026-10-05 | Phase 3.5 harden-soc 第 2 次 | 要回頭查第 1 次（`RepairDesignPostGPL` 異常結束）的 log，`runs/soc_top` 已是第 2 次的內容 | 已驗證：`pnr/soc_top/run.sh` 開跑前 `rm -rf "$RUN_DIR" "$OUT"` | 規則 6；需要的數字已寫進 ADR-0010；`run.sh` 改成搬走留到 Phase 5 | `pnr/soc_top/run.sh` 第 47 行 |
 | 2026-10-05 | Phase 5 開頭 | `run.sh` 改成 `keep_prev_run`：上一次的 run 變成 `runs/<tag>.prev` | 已驗證（`make test-flow-retry` 8/8，含這個情境） | 規則 6 | `pnr/librelane_flow.sh` |
 | 2026-10-05／06 | Phase 5 第 1 次 harden-soc（Hazard3，`../arvinsa-rtl-gds-p5h3`） | `OpenROAD.RepairDesignPostGPL failed with an unexpected error`：跑約 108 分鐘（process_stats 1:47:50）、physical footprint 92.9 GB、swap 28.0／28.7 GB，手動停止；`ps` 的 RSS 只有 418 MB（後三個數字是前一個 session 的 `vmmap`／`sysctl`／`ps` 輸出，run 目錄沒存） | 已驗證：resizer 在一條 net 上無限插 buffer（`drv-timing-closure` 規則 10）；`eject` 後加 `set_debug_level RSZ repair_net 1` 與 4 GB 上限，66 秒就重現並找到那條 net | 規則 3（`eject`）；已知陷阱（記憶體失控、RSS 低估）。推測：soc_explore6、8 與 Phase 4 第 1 次 harden 的「不結束」也是同一類，當時沒看記憶體 | `docs/notes/repair_design_loop.md` |
+| 2026-10-06 | Phase 5 第 2 次 harden-soc（Hazard3，`2251c4a`） | 分析 ss_n40C setup 違規時，第 38 步 `state_out.json` 顯示 nom_ss_n40C −15.5 ns、nom_ss_100C −1.89 ns，和前一步 resizer 的 `RSZ-0098 No setup violations found` 矛盾 | 已驗證：`STAMidPNR` 只量 `DEFAULT_CORNER`（該步 log 只讀 nom_tt 的 .lib，`or_metrics_out.json` 只有 nom_tt），state 裡 ss 的值是第 12 步 `STAPrePNR` 寫的、沿用到第 55 步 | 規則 4；量繞線前的其他 corner 用 `multicorner-sta` 規則 8（`eject` 後換成自己的 Tcl） | `runs/soc_top_hazard3/38-openroad-stamidpnr-2/`（`../arvinsa-rtl-gds-p5h3`） |

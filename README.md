@@ -127,6 +127,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
 | 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
+| signoff 才在 resizer 看不到的 corner 出現 setup 違規；繞線前想看某個 corner 的 slack | drv-timing-closure（規則 9、11：用別的 corner 加餘量代替，長路徑會漏） | multicorner-sta（規則 8：繞線前怎麼量；規則 7：flow 中途 state 的 metrics 可能是舊值） |
 | 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
 | 要定 clock uncertainty、derate、corner、IR 上限、max transition 這類數值 | signoff-criteria | timing-constraints-sdc（寫進 SDC）、pdn-ir-drop（IR） |
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
@@ -218,7 +219,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 要在某一步的工具指令裡加除錯輸出時，用 `python3 -m librelane.steps eject` 把那一步匯出成獨立 script 再改；可能失控的實驗要加記憶體上限自動停。
   - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
-  - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。
+  - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。state 的 metrics 會沿用前面步驟的值，flow 中途 `state_out.json` 的數字不一定是那一步量的，要看該步的 `or_metrics_out.json`。log 的 `RSZ-0032 Inserted N hold buffers` 不是總數，要數網表。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
 - **本 repo 實例**：`pnr/*/run.sh`、`pnr/librelane_flow.sh`（GRT-0229 重試，negative test `make test-flow-retry`）、`pnr/soc_top/neg_pnr.py` 的 `rerun()`。
 
@@ -241,9 +242,9 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **重點**：
   - LibreLane 對 sky130 預設只在 tt 判 setup FAIL，slew／cap 不判；先把四個 `*_VIOLATION_CORNERS` 都設 `["*"]`。
   - DRV 收斂清單，依實際有效的順序：排除延遲 cell、設 `LAYERS_RC`、開 post-GRT 修復、長線切段；剩下少數違規先查是不是繞路。
-  - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。
+  - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。Phase 5 證實 setup 的補償對長路徑不夠：corner 之間的延遲差和路徑長度成比例，Hazard3 一條長路徑在 ss_100C 有 +1.48 ns，signoff 在 ss_n40C 卻是 −4.16 ns。換 CPU 或改週期後，繞線前就要量一次只給 signoff 看的 corner。
   - resizer 停不下來、記憶體一直漲：OpenROAD 的 `repair_design` 修 driver 的 slew 時，可能把它換成更弱的尺寸（Phase 5：`a2111oi_2` 被換成 `a2111oi_1`）；換完若弱到連一顆最小 buffer 的輸入電容都推不動，長線修復會在同一位置無限插 buffer（Phase 5 單步重跑確認）。PDK 的 `no_synth.cells` 只擋合成，resizer 照樣會用裡面的弱 `_1`。slew 餘量越大、resizer 的 corner 越慢，會出事的 cell 越多。用除錯輸出找出那條 net；本 repo 把 `a2111oi_1` 加進 `EXTRA_EXCLUDED_CELLS`（ADR-0012），並在 harden 前用 .lib 查表檢查 resizer 可用的每個 cell（`pnr/check_weak_cells.py`）。macro 的 .lib 也曾讓這一步停不下來，換上新的先單步重跑確認時間。
-  - 修哪個 corner 的違規，就用那個 corner 的資料判斷修法的影響。工具不一定做到：OpenROAD resizer 在 ss 100°C 抓到違規，卻用第一個讀進來的 tt .lib 挑尺寸（只改讀取順序，挑的尺寸就不同）。所以修完要在違規的 corner 確認被改的 cell 真的變好；換工具、升版或改 corner 設定時，用「只改 library 讀取順序或預設 corner」的對照實驗確認工具有沒有看對 corner。這條寫成規則而不只寫在腳本，是為了換工具或流程時也會重新驗證。
+  - 修哪個 corner 的違規，就用那個 corner 的資料判斷修法的影響。工具不一定做到：OpenROAD resizer 在 ss 100°C 抓到違規，卻用第一個讀進來的 tt .lib 挑尺寸（只改讀取順序，挑的尺寸就不同）。所以修完要在違規的 corner 確認被改的 cell 真的變好；換工具、升版或改 corner 設定時，用「只改 library 讀取順序或預設 corner」的對照實驗確認工具有沒有看對 corner。這條寫成規則而不只寫在腳本，是為了換工具或流程時也會重新驗證。流程設定也會讓工具看不到違規的 corner：用另一個 corner 加餘量代替，就是沒有用違規那個 corner 的資料。
   - macro 的 .lib 要每個 PVT 一份，resizer 才看得到 macro 在慢 corner 的延遲；只靠 STA hook 加 derate 時，PnR 看不到。OpenRAM SRAM 的 .lib 要有 dout 在上升緣後開始變化的時序弧，STA 才會檢查接收 flop 的 hold。
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
@@ -428,14 +429,14 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 #### multicorner-sta：多 corner STA
 
 - **名詞**：PVT corner 是製程、電壓、溫度的組合（例如 `ss_n40C_1v60`）；RC corner 是繞線寄生的 min／nom／max。
-- **何時用**：增減 corner、設定每個 corner 都會執行的 hook、只重跑 STA 做 what-if（改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期、corner 變多後 PnR 變慢。
+- **何時用**：增減 corner、設定每個 corner 都會執行的 hook、只重跑 STA 做 what-if（改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期、繞線前量 resizer 看不到的 corner、corner 變多後 PnR 變慢。
 - **重點**：
   - 在 config 設 `LIB` 會取代 LibreLane 的整組 corner 預設，相關的三個變數要一起設；新 corner 的名稱要符合寄生與萃取規則的萬用字元，先跑只做 lint 的 run 看 `resolved.json` 確認。
-  - resizer、CTS、其他 step 與 signoff STA，各自讀不同的 corner 變數。設定了用哪組 corner，也不代表演算法每個決策都看了那些 corner（resizer 換尺寸只看第一個讀入的 .lib，見 drv-timing-closure 規則 11）。
-  - 15 個 corner 會讓 post-GRT 修復停不下來，所以 resizer 維持原本的 9 個，新加的 corner 只在 signoff 判定。
+  - resizer、CTS、其他 step 與 signoff STA，各自讀不同的 corner 變數。`PNR_CORNERS` 沒設時只用 `DEFAULT_CORNER`（LibreLane 的變數說明寫成用 `STA_CORNERS`，和程式不符），所以 placement、global routing 與 PnR 中途的 STA 只看 nom_tt。設定了用哪組 corner，也不代表演算法每個決策都看了那些 corner（resizer 換尺寸只看第一個讀入的 .lib，見 drv-timing-closure 規則 11）。
+  - 15 個 corner 會讓 post-GRT 修復停不下來，所以 resizer 維持原本的 9 個，新加的 corner 只在 signoff 判定。這個做法的 setup 部分 Phase 5 證實不夠（長路徑會漏），只給 signoff 看的 corner 要在繞線前量一次：把一個 resizer step 匯出（`eject`）、`RSZ_CORNERS` 加上那個 corner，換成自己的 Tcl 用 `worst_slack -corner` 量。
   - what-if 的正式證據要用 LibreLane 單步重跑全部 corner；單一 corner 的 `sta` 腳本只能當探索。
   - 最小週期要從關鍵路徑推，不能用 `report_clock_min_period`（它排除半週期路徑）。
-  - PnR 中途的 STA 報上千個違規，不代表 signoff 有問題。
+  - PnR 中途的 STA（`STAMidPNR`）只看預設 corner；flow 中途 state 裡其他 corner 的 metrics 是 placement 前那一步留下的舊值，不能拿來判斷。決策看 signoff STA。
 - **本 repo 實例**：`pnr/soc_top/config.json`、`sta_extra_corner.tcl`。negative test：P01–P04、P22–P25、P30。
 
 #### dv-directed-tests：directed 測試補驗證缺口
