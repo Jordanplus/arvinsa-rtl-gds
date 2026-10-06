@@ -407,7 +407,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
     - 第二部分由 Claude 依 skill 判讀 criteria 合不合理，寫 `runs/<tag>_signoff/criteria_review.md`（有沒有被執行、合不合理、學習三節）。專案的 Stop hook（`.claude/hooks/require_criteria_review.py`）沒看到就不讓 Claude 回報。
     - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；依據不成立的 criterion 提給使用者決定，不自己改。
   - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號。
-- **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P48（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
+- **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P49（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
 
 #### rtl-synthesis-lint：合成與 lint
 

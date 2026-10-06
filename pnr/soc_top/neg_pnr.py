@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P48).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P49).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -119,6 +119,8 @@ step re-run one step on a copy of that step's saved config and input state
        directory of the max corner
   P48  <run>_signoff without soc_checks.txt (check_soc.py did not run, as before Phase 5 when
        LibreLane failed)                              review_criteria.py checkers_ran
+  P49  ResizerTimingPostGRT log without the         review_criteria.py uncertainty (the repair
+       clock_uncertainty.sdc line (ADR-0014)         step after global routing must see it too)
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -1055,13 +1057,27 @@ def p48(run, d):
     return review_case(run, d, "checkers_ran", out_drop=["soc_checks.txt"])
 
 
+def p49(run, d):
+    try:
+        sd = step_dir(run, "OpenROAD.ResizerTimingPostGRT")
+    except FileNotFoundError:
+        return False, "no ResizerTimingPostGRT step in the run (run made before ADR-0014?)"
+    logs = [lg for lg in glob.glob(os.path.join(sd, "**", "*.log"), recursive=True)
+            if "clock_uncertainty.sdc:" in open(lg, errors="replace").read()]
+    if not logs:
+        return False, f"no clock_uncertainty.sdc line in the logs of {os.path.relpath(sd, run)}"
+    edits = {os.path.relpath(lg, run): "".join(ln for ln in open(lg, errors="replace").read().splitlines(True)
+                                               if "clock_uncertainty.sdc:" not in ln) for lg in logs}
+    return review_case(run, d, "uncertainty", run_replace=edits)
+
+
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
-         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48)]
+         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49)]
 
 
 def main():

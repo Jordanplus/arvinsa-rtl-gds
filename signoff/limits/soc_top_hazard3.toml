@@ -36,13 +36,14 @@
 "design__max_cap_violation__count" = 0
 "design__max_fanout_violation__count" = 0
 # Drivers without extracted parasitics (STA report_parasitic_annotation), all of them driving no
-# routed wire. 133 = 90 CTS dummy-load (clkload*) outputs + 32 unused SRAM read-port outputs
-# (sram0/dout1[31:0], connected to the RTL wires unused_sram_dout1) + 11 unused tie-cell outputs
-# (11 conb_1: 10 use LO and leave HI open, 1 uses HI and leaves LO open). Checked in
-# runs/soc_top/*-openroad-stapostpnr/*/checks.rpt (same list in every corner). Any other
-# unannotated driver changes the count and FAILs. (Phase 3: 134 with 91 dummy loads; the Phase 4
-# clock tree has one fewer, re-checked 2026-10-04.)
-"timing__unannotated_net__count" = 133
+# routed wire. Re-derived for Hazard3 (2026-10-07, harden 5 at 3a28d54; the value 133 copied from
+# soc_top.toml was the PicoRV32 layout): 125 = 81 CTS dummy-load (clkload*) outputs + 32 unused SRAM
+# read-port outputs (sram0/dout1[31:0], connected to the RTL wires unused_sram_dout1) + 12 unused
+# tie-cell outputs (12 conb_1: 11 use LO and leave HI open, 1 uses HI and leaves LO open). Checked
+# in runs/soc_top_hazard3/*-openroad-stapostpnr/*/filter_unannotated.log (125 in all 15 corners).
+# Same structure as PicoRV32 (133 = 90 + 32 + 11); the clock tree and the tie cells differ. Any
+# other unannotated driver changes the count and FAILs.
+"timing__unannotated_net__count" = 125
 "timing__unannotated_net_filtered__count" = 0
 
 # §7.2 also asked for "nom_tt setup worst slack >= 10 % of the clock period" (4 ns). Removed

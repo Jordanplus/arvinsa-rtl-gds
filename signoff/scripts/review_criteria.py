@@ -15,17 +15,20 @@ config_hazard3.json (the same tags as pnr/soc_top/run.sh). Rows, each PASS or FA
   uncertainty      the line clock_uncertainty.sdc prints (tclsh runs the run's
                    pnr/soc_top/clock_uncertainty.sdc with the resolved CLOCK_PERIOD) is in the log
                    of every timing step (STAPrePNR, GlobalPlacement, RepairDesignPostGPL, CTS,
-                   ResizerTimingPostCTS, GlobalRouting, RepairDesignPostGRT) and in the sta.log of
-                   every signoff corner
+                   ResizerTimingPostCTS, GlobalRouting, RepairDesignPostGRT, and ResizerTimingPostGRT
+                   when RUN_POST_GRT_RESIZER_TIMING is on) and in the sta.log of every signoff corner
   signoff_corners  the signoff STA (STAPostPNR) has one directory per STA_CORNERS entry, no more
   checkers_ran     <out> has the verdict line of check_signoff.py (signoff.txt), check_soc.py
                    (soc_checks.txt), check_inputs.py --resolved (inputs_resolved.txt) and
                    provenance.py --verify (provenance_end.txt): PASS or FAIL, but present (a
                    LibreLane FAIL must not skip them)
 Then [INFO] rows with the numbers the second part needs (are the criteria reasonable; Claude
-reads them with the skill and writes <out>/criteria_review.md): resizer margins against the gap
-between the post-CTS repair and signoff, hold and repair buffers, the worst setup path by
-category, the clock skew metric without the hold uncertainty (skill rule 4), the SDC slew limits.
+reads them with the skill and writes <out>/criteria_review.md): where each resizer timing repair
+(ResizerTimingPostCTS, ResizerTimingPostGRT) ended and the gap from the last one to signoff
+against its margin, hold and repair buffers, the worst setup path by category with its launch and
+capture clock edges and the uncertainty it got, the worst half-cycle setup path (a falling edge
+to a rising edge or back; it carries the duty cycle distortion budget), the clock skew metric
+without the hold uncertainty (skill rule 4), the SDC slew limits.
 Prints `criteria-review: PASS` / `criteria-review: FAIL` last; exit code 0 only on PASS.
 Python stdlib and tclsh.
 """
@@ -41,7 +44,16 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
 TIMING_STEPS = ["OpenROAD.STAPrePNR", "OpenROAD.GlobalPlacement", "OpenROAD.RepairDesignPostGPL", "OpenROAD.CTS",
-                "OpenROAD.ResizerTimingPostCTS", "OpenROAD.GlobalRouting", "OpenROAD.RepairDesignPostGRT"]
+                "OpenROAD.ResizerTimingPostCTS", "OpenROAD.GlobalRouting", "OpenROAD.RepairDesignPostGRT",
+                "OpenROAD.ResizerTimingPostGRT"]
+# Steps that only run when a flag is on: (flag, LibreLane default).
+OPTIONAL_STEPS = {"OpenROAD.RepairDesignPostGRT": ("RUN_POST_GRT_DESIGN_REPAIR", True),
+                  "OpenROAD.ResizerTimingPostGRT": ("RUN_POST_GRT_RESIZER_TIMING", False)}
+# Resizer timing repairs in flow order: (step, parasitics, setup margin, hold margin).
+REPAIRS = [("OpenROAD.ResizerTimingPostCTS", "placement parasitics", "PL_RESIZER_SETUP_SLACK_MARGIN",
+            "PL_RESIZER_HOLD_SLACK_MARGIN"),
+           ("OpenROAD.ResizerTimingPostGRT", "global routing parasitics", "GRT_RESIZER_SETUP_SLACK_MARGIN",
+            "GRT_RESIZER_HOLD_SLACK_MARGIN")]
 VERDICTS = {"signoff.txt": "signoff", "soc_checks.txt": "soc-checks", "inputs_resolved.txt": "soc-inputs",
             "provenance_end.txt": "provenance"}
 REPAIR_RE = re.compile(r"^(wire|fanout|load_slew|max_length|split|rebuffer)\d+$")
@@ -124,16 +136,44 @@ def resizer_final(log):
     return setup, hold
 
 
+def path_edges(p):
+    """Launch and capture clock edges of one path of an OpenSTA report, [(time, clock, rise|fall)],
+    and the uncertainty it got (positive ns; None if the path has none)."""
+    edges = [(float(t), c, e) for t, c, e in
+             re.findall(r"^\s*(-?\d+\.\d+)\s+-?\d+\.\d+\s+clock (\S+) \((rise|fall) edge\)", p, re.M)]
+    unc = re.search(r"^\s*(-?\d+\.\d+)\s+-?\d+\.\d+\s+(?:inter-clock |clock )?uncertainty", p, re.M)
+    return edges[:2], abs(float(unc.group(1))) if unc else None
+
+
+def half_cycle(edges):
+    return len(edges) == 2 and edges[0][2] != edges[1][2]
+
+
+def worst_half_cycle(rpt):
+    """First (worst, the report is sorted by slack) half-cycle path of an OpenSTA max.rpt:
+    (start, end, slack, uncertainty) or None, and the number of paths looked at."""
+    paths = open(rpt, errors="replace").read().split("Startpoint:")[1:]
+    for i, p in enumerate(paths):
+        edges, unc = path_edges(p)
+        if half_cycle(edges):
+            slack = re.search(r"(-?\d+\.\d+)\s+slack", p)
+            return (p.split()[0], re.search(r"Endpoint: (\S+)", p).group(1),
+                    float(slack.group(1)) if slack else None, unc), i + 1
+    return None, len(paths)
+
+
 def path_by_category(rpt):
     """Worst path of an OpenSTA max.rpt: delay per category (launch clock, clk->Q, logic, repair
-    buffers, hold buffers, interconnect), the start and end points and the slack."""
+    buffers, hold buffers, interconnect), the start and end points, the slack, the launch and
+    capture clock edges and the uncertainty."""
     text = open(rpt, errors="replace").read()
     if "Startpoint:" not in text:
         return None
-    p = text.split("Startpoint:", 1)[1]
+    p = text.split("Startpoint:", 2)[1]
     start = p.split()[0]
     end = re.search(r"Endpoint: (\S+)", p).group(1)
     slack = re.search(r"(-?\d+\.\d+)\s+slack", p)
+    edges, unc = path_edges(p)
     data = p.split("data arrival time", 1)[0]
     cats, in_clock = {}, True
     for ln in data.splitlines():
@@ -158,7 +198,7 @@ def path_by_category(rpt):
             k = "logic"
         n, d = cats.get(k, (0, 0.0))
         cats[k] = (n + (1 if out_pin else 0), d + delay)
-    return start, end, float(slack.group(1)) if slack else None, cats
+    return start, end, float(slack.group(1)) if slack else None, cats, edges, unc
 
 
 def netlist_buffers(nl):
@@ -224,11 +264,12 @@ def main():
     if line is None:
         row("uncertainty", False, err)
     else:
-        missing = []
+        missing, n_timing = [], 0
         for sid in TIMING_STEPS:
             dirs = step_dirs(run, sid)
-            if sid == "OpenROAD.RepairDesignPostGRT" and not res.get("RUN_POST_GRT_DESIGN_REPAIR", True):
+            if sid in OPTIONAL_STEPS and not res.get(*OPTIONAL_STEPS[sid]):
                 continue
+            n_timing += 1
             if not dirs:
                 missing.append(f"{sid} (no step)")
             elif not any(has_line(lg, line) for d in dirs for lg in glob.glob(os.path.join(d, "**", "*.log"), recursive=True)):
@@ -237,7 +278,7 @@ def main():
         missing += [f"signoff {os.path.basename(os.path.dirname(lg))}" for lg in corner_logs if not has_line(lg, line)]
         if not corner_logs:
             missing.append("signoff STA (no corner sta.log)")
-        row("uncertainty", not missing, f"'{line}' in {len(TIMING_STEPS)} timing steps and {len(corner_logs)} signoff corners"
+        row("uncertainty", not missing, f"'{line}' in {n_timing} timing steps and {len(corner_logs)} signoff corners"
             if not missing else f"'{line}' missing in: {', '.join(missing)}")
 
     want = set(res.get("STA_CORNERS") or [])
@@ -264,18 +305,25 @@ def main():
     setups = [(v[0], c) for c, v in ws.items() if isinstance(v[0], (int, float))]
     holds = [(v[1], c) for c, v in ws.items() if isinstance(v[1], (int, float))]
     rtc = (step_dirs(run, "OpenROAD.ResizerTimingPostCTS") or [None])[-1]
-    s_fin, h_fin = resizer_final(next(iter(glob.glob(os.path.join(rtc, "*.log"))), None) if rtc else None)
-    if setups and s_fin is not None:
-        w, c = min(setups)
-        info(f"setup: ResizerTimingPostCTS ended its setup repair at WNS {s_fin:+.3f} ns (RSZ_CORNERS, placement "
-             f"parasitics); signoff worst {w:+.3f} ns ({c}); gap {s_fin - w:.3f} ns vs PL_RESIZER_SETUP_SLACK_MARGIN "
-             f"{res.get('PL_RESIZER_SETUP_SLACK_MARGIN')} ns")
-    if s_fin is None:
-        info("setup: ResizerTimingPostCTS has no setup repair table (no setup violation in RSZ_CORNERS after CTS)")
-    if holds and h_fin is not None:
-        w, c = min(holds)
-        info(f"hold: ResizerTimingPostCTS ended its hold repair at WNS {h_fin:+.3f} ns; signoff worst {w:+.3f} ns ({c}); "
-             f"gap {h_fin - w:.3f} ns vs PL_RESIZER_HOLD_SLACK_MARGIN {res.get('PL_RESIZER_HOLD_SLACK_MARGIN')} ns")
+    repairs = []   # (step, parasitics, setup margin key, hold margin key, setup final, hold final)
+    for sid, para, s_key, h_key in REPAIRS:
+        d = (step_dirs(run, sid) or [None])[-1]
+        if d:
+            fin = resizer_final(next(iter(glob.glob(os.path.join(d, "*.log"))), None))
+            repairs.append((sid.split(".")[1], para, s_key, h_key) + fin)
+    for kind, worst, idx, key_idx in (("setup", setups, 4, 2), ("hold", holds, 5, 3)):
+        if not repairs:
+            info(f"{kind}: no resizer timing repair step in the run")
+            continue
+        ends = "; ".join(f"{r[0]} ended its {kind} repair at WNS {r[idx]:+.3f} ns ({r[1]})" if r[idx] is not None
+                         else f"{r[0]} has no {kind} repair table (no {kind} violation in RSZ_CORNERS)" for r in repairs)
+        last = [r for r in repairs if r[idx] is not None]
+        if worst and last:
+            w, c = min(worst)
+            r = last[-1]
+            ends += (f"; signoff worst {w:+.3f} ns ({c}); gap from the last {kind} repair ({r[0]}) {r[idx] - w:.3f} ns vs "
+                     f"{r[key_idx]} {res.get(r[key_idx])} ns")
+        info(f"{kind}: {ends}")
     viol = [c for c in corners if isinstance(m.get(f"timing__setup_vio__count__corner:{c}"), int)
             and m.get(f"timing__setup_vio__count__corner:{c}") > 0]
     if setups:
@@ -294,11 +342,30 @@ def main():
         rpt = os.path.join(sta, worst_c, "max.rpt") if sta and worst_c else ""
         r = path_by_category(rpt) if os.path.isfile(rpt) else None
         if r:
-            start, end, slack, cats = r
+            start, end, slack, cats, edges, unc = r
             total = sum(d for _, d in cats.values())
-            info(f"worst setup path ({worst_c}) {start} -> {end}, slack {slack}: " + ", ".join(
+            how = (f"launched at the {edges[0][2]} edge ({edges[0][0]:.2f} ns), captured at the {edges[1][2]} edge "
+                   f"({edges[1][0]:.2f} ns){', a half-cycle path' if half_cycle(edges) else ''}, uncertainty "
+                   + (f"{unc:.3f} ns" if unc is not None else "none") if len(edges) == 2 else "clock edges not found")
+            info(f"worst setup path ({worst_c}) {start} -> {end}, slack {slack}, {how}: " + ", ".join(
                 f"{k} {d:.2f} ns ({n} cells)" if k not in ("interconnect", "launch clock") else f"{k} {d:.2f} ns"
-                for k, (n, d) in sorted(cats.items(), key=lambda x: -x[1][1])) + f"; arrival {total:.2f} ns")
+                for k, (n, d) in sorted(cats.items(), key=lambda x: -x[1][1])) + f"; arrival {total:.2f} ns after the launch edge")
+    hc, looked = [], 0
+    for c in corners:
+        rpt = os.path.join(sta, c, "max.rpt") if sta else ""
+        if os.path.isfile(rpt):
+            h, n = worst_half_cycle(rpt)
+            looked += n
+            if h and h[2] is not None:
+                hc.append((h[2], c) + h)
+    dcd = re.search(r"duty cycle distortion (\d+(?:\.\d+)?)", line or "")
+    if hc:
+        slack, c, start, end, _, unc = min(hc)
+        info(f"worst half-cycle setup path ({c}) {start} -> {end}, slack {slack:+.3f} ns, uncertainty "
+             + (f"{unc:.3f} ns" if unc is not None else "none") + (f" of which duty cycle distortion {float(dcd.group(1)):.3f} ns"
+                                                                 if dcd else ""))
+    elif sta:
+        info(f"no half-cycle setup path in the {looked} paths of the signoff max.rpt files")
     unc = re.search(r"hold (\d+(?:\.\d+)?)", line or "")
     for c in ("nom_ff_n40C_1v95", "nom_ss_n40C_1v60"):
         sk = m.get(f"clock__skew__worst_hold__corner:{c}")

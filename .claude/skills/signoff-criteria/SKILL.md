@@ -158,13 +158,13 @@ harden 跑完、回報結果之前，一定要做這個檢查，PASS 或 FAIL �
 
 ### 第一部分：有沒有被執行（腳本，`signoff/scripts/review_criteria.py`）
 
-`pnr/soc_top/run.sh` 每次都會跑，LibreLane FAIL 也照跑，結果寫進 `runs/<tag>_signoff/criteria_review.txt`。harden 要判 PASS，這支也必須 PASS。每一項都有 negative test（`neg_pnr.py` P43–P48）。
+`pnr/soc_top/run.sh` 每次都會跑，LibreLane FAIL 也照跑，結果寫進 `runs/<tag>_signoff/criteria_review.txt`。harden 要判 PASS，這支也必須 PASS。每一項都有 negative test（`neg_pnr.py` P43–P49）。
 
 | 檢查項 | 檢查內容 |
 |---|---|
 | `config_applied` | config 的每個設定在 `resolved.json` 裡值都一樣 |
 | `step_config` | 每個步驟的 `config.json` 都收到同樣的值 |
-| `uncertainty` | `clock_uncertainty.sdc` 印出的那一行（用 `tclsh` 執行 SDC 算出預期值）出現在每個時序步驟與每個 signoff corner |
+| `uncertainty` | `clock_uncertainty.sdc` 印出的那一行（用 `tclsh` 執行 SDC 算出預期值）出現在每個時序步驟（開了 `RUN_POST_GRT_RESIZER_TIMING` 時包含 `ResizerTimingPostGRT`）與每個 signoff corner |
 | `signoff_corners` | signoff STA 的 corner 目錄等於 `STA_CORNERS` |
 | `checkers_ran` | `check_signoff.py`、`check_soc.py`、`check_inputs.py --resolved`、`provenance.py --verify` 都留下結果行 |
 
@@ -177,11 +177,11 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 - 引用 `criteria_review.txt` 最後一行（`criteria-review: PASS` 或 `FAIL`）。
 - `## 有沒有被執行`：第一部分每個 FAIL 的原因；各 checker 的 FAIL 列，逐條說明是設計問題還是 criteria 本身的問題；「不分析的項目清單」這次有沒有寫。
 - `## 合不合理`：每個自訂的 criterion 與餘量一列，欄位是「criterion｜當初的依據（出處）｜這次的實測｜判斷」。判斷只能是三種：依據仍成立、依據不成立、資料不足。至少要有這幾列：
-  - resizer 的 setup／hold 餘量 vs.「post-CTS 修完到 signoff」的實測差距（本檔「resizer 的 slack margin」一列）；
+  - resizer 的 setup／hold 餘量 vs.「最後一次修復修完到 signoff」的實測差距（本檔「resizer 的 slack margin」一列）。最後一次修復是 `ResizerTimingPostCTS`，開了 `RUN_POST_GRT_RESIZER_TIMING` 時是 `ResizerTimingPostGRT`（它沒有修 hold 時，hold 仍看 post-CTS）；腳本的 INFO 列兩個都印，差距用最後一個算；
   - hold 餘量的代價（hold buffer 數量與面積）；
   - slew 上限與 slew 餘量 vs. 當初要解決的問題、關鍵路徑上修復 buffer 的比例；
   - corner 清單：最差的是哪個 corner，溫度反轉還成不成立；
-  - uncertainty 的每個成分：假設值是否還是假設、DCD 預算 vs. 半週期路徑的 slack；
+  - uncertainty 的每個成分：假設值是否還是假設、DCD 預算 vs. 半週期路徑的 slack（腳本的 INFO 列印出最差的半週期路徑與它扣的 uncertainty，最差路徑那一列也標出送出與接收的 clock 邊緣）；
   - skew：metric 換算成名目值（規則 4）；
   - 上限檔（`signoff/limits/<tag>.toml`）裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）是不是為這顆設計推導的，還是從別的設計抄來的。
 - `## 學習`：
@@ -210,4 +210,4 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 | 2026-10-04 | soc_top Phase 4 | uncertainty 成分、DCD、pulse width、溫度反轉 corner、derate×OCV、IR 預算全部實作 | 已驗證（單 corner `sta` 實驗：半週期路徑 slack 0.83 ns；pulse width slack 7.95 ns） | 「實作範本」一節 | `docs/notes/signoff_criteria_soc_top.md` |
 | 2026-10-04 | soc_top IR 研究 | LibreLane 的 IR 是「所有 pin 理想」且只看 VDD；換成一側供電 + VDD/GND 合計後 8.2 mV（最壞組合 11.5 mV） | 已驗證（agent 單步重跑 16 種組合） | IR 預算改判合計；`pdn-ir-drop` 規則 4、10、11 | `docs/notes/ir_worst_case_soc_top.md` |
 | 2026-10-07 | Phase 5 Hazard3 第 4 次 harden（`1292ca4`，44 ns）的第一次 criteria 檢查 | ① LibreLane FAIL 時 `run.sh` 直接結束，第 2–4 次 harden 的 `check_signoff.py`、`check_soc.py` 都沒跑；② `soc_top_hazard3.toml` 的 `timing__unannotated_net__count` 133 是 PicoRV32 的組成，Hazard3 是 125（81 clkload + 32 `sram0/dout1` + 12 tie）；③ `PL_RESIZER_SETUP_SLACK_MARGIN` 0.1 ns，實測 post-CTS 到 signoff 差距 1.243 ns | 已驗證（①讀 `run.sh` 79–81 行；②數 `checks.rpt` 的 unannotated driver；③`review_criteria.py` 的數字） | ①`run.sh` 改成照跑 checker，加 `review_criteria.py`（P43–P48）與 Stop hook；②③提給使用者 | `runs/soc_top_hazard3_signoff/criteria_review.md`（p5h3 worktree） |
-| 2026-10-07 | Phase 5 Hazard3 第 5 次 harden（`3a28d54`）的 criteria 檢查 | `review_criteria.py` 的兩個缺口：① setup 差距只拿 `ResizerTimingPostCTS` 的修完值比 signoff，開了 `RUN_POST_GRT_RESIZER_TIMING` 後印出「差距 −0.418」，沒有意義；② 最差路徑的 INFO 印「arrival 21.81 ns」，是從下降緣算起，看不出是半週期路徑，也沒印扣掉的 2.45 ns | 已驗證（對照 `ResizerTimingPostGRT` 的 log 與 signoff STA 報告） | 提給使用者：腳本改成報最後一次修復的差距，並標出送出端的邊緣與套用的 uncertainty | p5h3 worktree `runs/soc_top_hazard3_signoff/criteria_review.md` |
+| 2026-10-07 | Phase 5 Hazard3 第 5 次 harden（`3a28d54`）的 criteria 檢查 | `review_criteria.py` 的兩個缺口：① setup 差距只拿 `ResizerTimingPostCTS` 的修完值比 signoff，開了 `RUN_POST_GRT_RESIZER_TIMING` 後印出「差距 −0.418」，沒有意義；② 最差路徑的 INFO 印「arrival 21.81 ns」，是從下降緣算起，看不出是半週期路徑，也沒印扣掉的 2.45 ns | 已驗證（對照 `ResizerTimingPostGRT` 的 log 與 signoff STA 報告） | 已修（使用者 2026-10-07 決定）：INFO 列印出每次修復的修完值、用最後一次算差距；最差路徑標出送出與接收的 clock 邊緣與 uncertainty；另印最差的半週期路徑；`uncertainty` 檢查涵蓋 `ResizerTimingPostGRT`（negative test P49）。用新腳本看三個 run，兩個 CPU 的最差 setup 都在 SRAM 半週期路徑上（knowledge 檔） | p5h3 worktree `runs/soc_top_hazard3_signoff/criteria_review.md` |

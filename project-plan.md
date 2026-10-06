@@ -369,7 +369,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | P10 | signoff | 在 GDS 加一個 met2 最小寬度違規 | `Checker.MagicDRC`／`KLayoutDRC` |
 | P11 | signoff | 只改 KLayout 那份 GDS | `Checker.XOR` |
 | P12 | 合成 | 讓某個輸出變常數 | cell count／FF 數下限 checker |
-| P43–P48 | criteria 檢查 | positive control；config 的設定沒進 run；某 step 沒收到設定；某 signoff corner 沒套 uncertainty；少一個 signoff corner；`check_soc.py` 沒跑 | `review_criteria.py` 對應的那一列（`pnr/soc_top/neg_pnr.py`） |
+| P43–P49 | criteria 檢查 | positive control；config 的設定沒進 run；某 step 沒收到設定；某 signoff corner 沒套 uncertainty；少一個 signoff corner；`check_soc.py` 沒跑；繞線後的 setup 修復（`ResizerTimingPostGRT`）沒套 uncertainty | `review_criteria.py` 對應的那一列（`pnr/soc_top/neg_pnr.py`） |
 
 不採用「`CLOCK_PERIOD` 設 2 ns」：FAIL 位置不確定（resizer 跑很久、slew/cap 先爆、甚至 crash）且耗時，改用 P01。
 

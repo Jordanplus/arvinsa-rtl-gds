@@ -76,7 +76,8 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-07 | soc_top Hazard3 第 5 次（`3a28d54`，開 `RUN_POST_GRT_RESIZER_TIMING`） | 44 ns | `ResizerTimingPostGRT` 修完 → signoff 最差 setup | +0.002 → +0.530 ns（min_ss_n40C）；這一步拿掉 12 顆 buffer、放大 54 個 cell，不新增 buffer。與實驗 A 完全相同 | `GRT_RESIZER_SETUP_SLACK_MARGIN` 預設 0.025 ns 足夠（第 2 次觀察） | `runs/soc_top_hazard3_signoff/criteria_review.md`（p5h3 worktree） |
 | 2026-10-07 | 同上 | 44 ns | post-CTS hold 修完 → signoff 最差 hold | +0.275 → +0.107 ns（差 0.168） | `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 足夠 | 同上 |
 | 2026-10-07 | 同上 | 44 ns | 最差 setup 路徑（min_ss_n40C） | 半週期路徑：`sram0` 下降緣送出，clk→dout0 15.76 ns、hold buffer 1.44 ns、邏輯 0.83 ns；扣 2.45 ns uncertainty（DCD 2.2）；送出端 clock 比接收端晚 0.67 ns（SRAM clock 前 9 顆 delay buffer） | 44 ns 的餘量取決於 DCD 預算（duty cycle 55% 的假設） | 同上；`runs/soc_top_hazard3/57-openroad-stapostpnr/min_ss_n40C_1v60/max.rpt`（p5h3 worktree） |
-| 2026-10-07 | 同上 | 44 ns | `sram_dout0` 上的 hold buffer | 32 條各 1 顆 `dlygate4sd3_1`（PicoRV32 版 0 顆）；經過它的 hold slack min_ff_n40C +0.679 ns。來源是 ADR-0010 的 `rising_edge` hold 弧 | hold 餘量的代價會落在半週期路徑上 | 同上 |
+| 2026-10-07 | 同上 | 44 ns | `sram_dout0` 上的 hold buffer | 32 條各直接接 1 顆 `dlygate4sd3_1`（PicoRV32 版插在 mux 之後、flop 的 D 之前，最差路徑上 1.17 ns）；經過它的 hold slack min_ff_n40C +0.679 ns。來源是 ADR-0010 的 `rising_edge` hold 弧 | hold 餘量的代價會落在半週期路徑上 | 同上 |
+| 2026-10-07 | 半週期路徑（`sram0` 下降緣送出 → flop 上升緣）的最差 setup slack，三個 run 比較（`review_criteria.py` 新的 INFO 列） | 43／44 ns | PicoRV32（`runs/soc_top`，43 ns，DCD 2.15）+0.384 ns，也是全晶片最差路徑；Hazard3 第 4 次（44 ns，DCD 2.2）+0.552；第 5 次 +0.530 | 兩個 CPU 的最差 setup 都落在 SRAM 讀出的半週期路徑上（第 4 次因為長路徑違規才不是）；兩次 Hazard3 run 之間只差 0.02 ns，比一般路徑穩定。DCD 預算是這顆 SoC 週期的主要限制之一 | `review_criteria.py` 對三個 run 的輸出 |
 
 ## 待確認（推測，不能當規則用）
 
