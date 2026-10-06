@@ -73,6 +73,10 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-07 | 同上（繞線前估計） | 44 ns | flop 之間 clock latency（ss_n40C，第 1 到第 99 百分位） | 3.82–4.02 ns（約 0.2 ns）；SRAM `clk0` 2.87 ns，早 1.1 ns；ff_n40C 早 0.24 ns | skew 不是這條 setup 違規的主因（只佔 0.07 ns） | `runs/p5_h3_exp_wirelength/lat.log`（本機） |
 | 2026-10-07 | 同上（單步實驗，第 32–37 步） | 44 ns | `DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 → 0 或 600 µm | 長線 buffer 79 → 0 顆，ss_n40C setup −0.161 → −0.255 ns（在 run 之間的浮動內） | 長線上限不是路徑上 buffer 多的原因 | `drv-timing-closure` 經驗紀錄 |
 | 2026-10-07 | soc_top Hazard3 實驗 A（第 4 次 run 第 43 步之後接續，開 `RUN_POST_GRT_RESIZER_TIMING`） | 44 ns | `ResizerTimingPostGRT` 修完（global routing 寄生估計）→ signoff 最差 setup | +0.002 → +0.530 ns（signoff 比估計好 0.53；CTS 後估計則是比 signoff 好 1.24） | 繞線後 setup 修復的餘量（`GRT_RESIZER_SETUP_SLACK_MARGIN` 預設 0.025 ns 已足夠）；`PL_RESIZER_SETUP_SLACK_MARGIN` 不必加大 | `runs/p5_h3_exp_postgrt_slew/`（本機） |
+| 2026-10-07 | soc_top Hazard3 第 5 次（`3a28d54`，開 `RUN_POST_GRT_RESIZER_TIMING`） | 44 ns | `ResizerTimingPostGRT` 修完 → signoff 最差 setup | +0.002 → +0.530 ns（min_ss_n40C）；這一步拿掉 12 顆 buffer、放大 54 個 cell，不新增 buffer。與實驗 A 完全相同 | `GRT_RESIZER_SETUP_SLACK_MARGIN` 預設 0.025 ns 足夠（第 2 次觀察） | `runs/soc_top_hazard3_signoff/criteria_review.md`（p5h3 worktree） |
+| 2026-10-07 | 同上 | 44 ns | post-CTS hold 修完 → signoff 最差 hold | +0.275 → +0.107 ns（差 0.168） | `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 足夠 | 同上 |
+| 2026-10-07 | 同上 | 44 ns | 最差 setup 路徑（min_ss_n40C） | 半週期路徑：`sram0` 下降緣送出，clk→dout0 15.76 ns、hold buffer 1.44 ns、邏輯 0.83 ns；扣 2.45 ns uncertainty（DCD 2.2）；送出端 clock 比接收端晚 0.67 ns（SRAM clock 前 9 顆 delay buffer） | 44 ns 的餘量取決於 DCD 預算（duty cycle 55% 的假設） | 同上；`runs/soc_top_hazard3/57-openroad-stapostpnr/min_ss_n40C_1v60/max.rpt`（p5h3 worktree） |
+| 2026-10-07 | 同上 | 44 ns | `sram_dout0` 上的 hold buffer | 32 條各 1 顆 `dlygate4sd3_1`（PicoRV32 版 0 顆）；經過它的 hold slack min_ff_n40C +0.679 ns。來源是 ADR-0010 的 `rising_edge` hold 弧 | hold 餘量的代價會落在半週期路徑上 | 同上 |
 
 ## 待確認（推測，不能當規則用）
 

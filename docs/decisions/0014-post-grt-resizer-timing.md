@@ -1,6 +1,6 @@
 # ADR-0014：global routing 後再修一次 setup（`RUN_POST_GRT_RESIZER_TIMING`）
 
-- 狀態：已採用（2026-10-07，使用者決定），等 Hazard3 第 5 次 harden 確認
+- 狀態：已採用（2026-10-07，使用者決定）；Hazard3 第 5 次 harden 已確認（2026-10-07）
 - 背景：ADR-0013 之後，Hazard3 版第 3 次 harden（43 ns）只剩 max_ss_n40C setup −0.381 ns，週期改成 44 ns（ADR-0004 Phase 5 補充）。第 4 次 harden（44 ns）反而變差：max_ss_n40C −1.131 ns（22 條）、nom_ss_n40C −0.187 ns。
 
 ## 原因（已驗證）
@@ -41,12 +41,19 @@
 - 兩個 CPU 的 PnR 結果都會改變。PicoRV32 版本來就要重跑，並更新 `signoff/golden/soc_top/`。
 - LibreLane 說明這個步驟是實驗性的，可能卡住或跑很久（`librelane/flows/classic.py` 159–163 行）。實驗中只花 1 分 49 秒，正式 harden 仍會監看記憶體與時間。
 
+## 結果：Hazard3 第 5 次 harden（`3a28d54`，2026-10-07）
+
+- 完整 harden（含 GDS、Magic／KLayout DRC、LVS 與 repo 的 checker）：setup 15 個 corner 都 PASS，最差 +0.530 ns（min_ss_n40C）；hold 最差 +0.107 ns；slew、cap、繞線 DRC、LVS 都是 0；`check_soc.py`、`check_inputs.py --resolved`、`provenance.py` PASS。
+- `ResizerTimingPostGRT` 的結果與實驗 A 完全相同（拿掉 12 顆 buffer、放大 54 個 cell、不新增 buffer），記憶體最高約 1.65 GB。
+- `check_signoff.py` 剩 2 列 FAIL，都不是時序問題：`timing__unannotated_net__count` 的上限是從 PicoRV32 抄來的（Hazard3 是 125），以及 Hazard3 的 golden 還沒建立。
+- 最差路徑變成 SRAM 下降緣送出的半週期路徑，餘量取決於 duty cycle 55% 的假設（DCD 2.2 ns），見 `criteria_review.md`。
+
 ## 限制
 
-- 實驗只跑到 signoff STA，GDS、Magic DRC、LVS 與 repo 的 checker 要等正式 harden 確認。
-- 只有一次實驗，餘量（+0.530 ns）會隨 run 浮動。
+- 第 5 次 harden 從頭跑，但前 43 步的設定與第 4 次相同，placement 也相同（結果與實驗 A 一模一樣），等於只有一組 placement 的資料；餘量（+0.530 ns）會隨 run 浮動。PicoRV32 版重跑時再多一組資料。
+- 已知限制（使用者 2026-10-07 決定先不做實驗，Phase 5 exit review 要列入）：32 條 `sram_dout0` 各有 1 顆 hold buffer（`dlygate4sd3_1`），是 ADR-0010 的上升緣 hold 檢查需要的；它在最差的半週期路徑上佔 1.44 ns（ss_n40C）。換較小的延遲 cell 或降低這 32 條的 hold 餘量能拿回多少，等 Phase 7 有 Caravel 的 clock 規格（決定 DCD 預算）後再評估。
 
 ## 出處
 
-- `runs/p5_h3_harden4.log`；`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/criteria_review.md`
+- `runs/p5_h3_harden4.log`、`runs/p5_h3_harden5.log`；`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff.prev/criteria_review.md`（第 4 次）、`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/criteria_review.md`（第 5 次）
 - skill `drv-timing-closure` 經驗紀錄（第 4 次 harden、實驗 A、B）；`signoff-criteria` 的 knowledge 檔「實測校準資料」
