@@ -1,6 +1,6 @@
 ---
 name: drv-timing-closure
-description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補、hold 餘量、resizer（`repair_design`）停不下來（corner 太多、macro .lib 的負載斜率），以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
+description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補、hold 餘量、resizer（`repair_design`、`RepairDesignPostGPL`、`RepairDesignPostGRT`）停不下來或記憶體一直漲到幾十 GB、只報 failed with an unexpected error（推最小負載 slew 就超過上限的弱 cell，resizer 還會自己換成更弱的 `_1` 例如 `a2111oi_1`，合成禁用的 cell 它照樣用；slew 餘量太大、corner 太多、macro .lib 的負載斜率；怎麼找出是哪條 net、harden 前的弱 cell 檢查），修某個 corner 的違規時要用那個 corner 的資料判斷修法（工具可能只看第一個讀入的 .lib；換工具或升版時怎麼驗證），以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
 ---
 
 # 時序與 DRV 收斂（多 corner）
@@ -15,7 +15,7 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
 2. **DRV 收斂清單（依實際有效的順序）**
    1. `EXTRA_EXCLUDED_CELLS` 排除 `clkdlybuf4s25_1/_2`、`clkdlybuf4s50_1/_2`：PDK 排除清單漏了，resizer 會拿延遲 cell 當一般 buffer。
    2. `LAYERS_RC`：沒設時繞線前的電容估計只有實際的一半（0.08 vs 0.178 fF/µm）；值取自 `pdk_compat.py` 262–296 行。
-   3. `RUN_POST_GRT_DESIGN_REPAIR = true`，`GRT_DESIGN_REPAIR_MAX_SLEW_PCT` 30–40（50 會讓這步跑不完，見已知陷阱）。
+   3. `RUN_POST_GRT_DESIGN_REPAIR = true`，`GRT_DESIGN_REPAIR_MAX_SLEW_PCT` 30–40（50 會讓這步跑不完，見「退回過的做法」；餘量越大，越多弱 cell 會讓修復進入無窮迴圈，見規則 10）。
    4. `DESIGN_REPAIR_MAX_SLEW_PCT` 30（預設 20）。
    5. `DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 µm：大面積或細長 L 形 logic 區的長線；同時減少 antenna diode（soc_explore2 → 4：slew 50 → 20、diode 224 → 61、fanout 7 → 0）。
    6. 殘留的少數違規若是繞路：降低 `PL_TARGET_DENSITY_PCT`（soc_top：68% → 55%，16 → 0，見 `floorplan-congestion`）。
@@ -29,9 +29,25 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
    - setup：`PL_RESIZER_SETUP_SLACK_MARGIN` 設 0.6 ns（預設 0.05）。SRAM 半週期路徑在 resizer 看得到的 ss_100C 有 +0.09～+0.17 ns，resizer 不會修；signoff 在 ss_n40C 卻是 −0.24～−0.41 ns。第 4 次 harden（40 ns）加了這個餘量仍差 0.42 ns，最後是週期改 42 ns 才通過（使用者決定）。
    - slew：`pnr.sdc` 的 `set_max_transition` 設 0.70 ns，signoff 維持 0.75 ns。ss_n40C 的 transition 比 ss_100C 慢約 25%，第 4 次 harden 有一條 data net 在那裡到 0.766 ns。
    - 這是補償，不是證明：設計變大或時序更緊時可能不夠（`docs/phase_exit/phase4.md` 已知限制 4）。數字見 `pnr/soc_top/README.md` 的設定表。
-10. **resizer 停不下來時，除了 corner 數（規則 8），也要查 macro 的 .lib**：Phase 3.5 換上 SPICE 特性化的 SRAM .lib 後，`OpenROAD.RepairDesignPostGPL` 75 分鐘後異常結束（同一步正常約 40 秒）。原因是 dout0 時序表的負載斜率等於 60–140 kΩ 的 driver：延遲表與 hold 弧表一起攤平後就正常（沒有分開測哪一張），`repair_design` 推測是一直在 dout0 的 net 上插 buffer；.lib 改法看 `openram-macro-characterization` 規則 14。
-    - 排查：拿同一份 `state_in.json` 單步重跑（`librelane-run-debug` 規則 3），一次只換一個輸入（`RSZ_CORNERS`、macro 的 .lib、`max_transition`），比較時間。
-    - 換上任何新的 macro .lib，先單步重跑 `RepairDesignPostGPL` 確認時間和以前同一級，再跑完整流程。
+10. **resizer 停不下來、記憶體一直漲：找出被換成太弱的尺寸、連一顆 buffer 都推不動的 driver**（Phase 5 單步重跑確認，OpenROAD `dcf36133`；證據與數字：`docs/notes/repair_design_loop.md`）
+    - 機制：`repair_design` 遇到 driver 本身 slew 違規，先換尺寸（`repairDriverSlew`）：只要有尺寸被評為不違規，就挑其中面積最小的。**評估候選尺寸用的是第一個讀進來的 .lib，不是發生違規的 corner**（LibreLane 依 Tcl 陣列順序讀，這裡是 tt；實驗 D 只改讀取順序，挑的尺寸就從 `_1` 變 `_4`），所以在慢 corner 違規時可能換成比原本更弱的尺寸。仍違規時，改用「driver slew 剛好等於上限時能推多少電容」當這條 net 的電容上限（`RepairDesign.cc` 1107–1115 行）。長線修復的迴圈（1490 行起）每次的切段長度是 `max((電容上限 − 下游電容) / 單位線電容, 0)`（1527–1528 行），插完 buffer 後下游電容就是那顆 buffer 的輸入電容；所以電容上限不大於插入的 buffer 的輸入電容時，切段永遠是 0，在同一位置一直插下去，迴圈沒有「插了沒改善就停」的保護，每插一顆就多一份 RC 網路，記憶體無上限地漲（這個門檻由程式推得，和兩次單步重跑的結果一致）。這裡的 slew 上限是 max transition ×（1 − `DESIGN_REPAIR_MAX_SLEW_PCT` 或 `GRT_DESIGN_REPAIR_MAX_SLEW_PCT`）。
+    - Phase 5 的例子：合成出的 `a2111oi_2`（四顆 PMOS 串聯）在 ss 100°C 推一個 `_2` 輸入是 0.509 ns，略超過 0.70 ×（1 − 30%）= 0.49 ns；resizer 把它換成 `a2111oi_1`（0.704 ns），電容上限只剩 0.002 pF，不大於它插的 `clkbuf_1` 的輸入電容（約 0.0021 pF）。只禁止 resizer 用 `a2111oi_1`，它就保留 `_2`，電容上限約 0.005 pF，插一顆 buffer 修好。
+    - **合成禁用不等於 resizer 禁用**：sky130 的 `no_synth.cells` 只擋合成，PnR 只排除 `drc_exclude.cells` 與 `EXTRA_EXCLUDED_CELLS`，所以 `a2111oi_1`、`nor4_1`、`o41ai_1` 這類最弱的 `_1` 仍會被 resizer 換上（PicoRV32 版的 golden 網表就有）。`no_synth.cells` 也包含 clock buffer、hold 用的 delay cell、decap、diode，不能整份套到 PnR；要排除的弱 cell 用下面的「預防」逐個算出來。
+    - macro 的 .lib 也曾讓這一步停不下來：Phase 3.5 的 SRAM dout0 延遲表負載斜率等於 60–140 kΩ 的 driver，攤平後正常（.lib 改法看 `openram-macro-characterization` 規則 14）。是不是同一個迴圈當時沒有確認（經驗紀錄）。換上任何新的 macro .lib，先單步重跑 `RepairDesignPostGPL` 確認時間和以前同一級，再跑完整流程。
+    - 症狀：進度表停在某個 driver 數；CPU 使用率低、physical footprint 一直漲、swap 增加（`ps` 的 RSS 會低估，見 `librelane-run-debug` 已知陷阱）；`sample` 看到 `repairNetWire → makeRepeater → resizeToTargetSlew → estimateWireParasiticSteiner`；最後只報 `failed with an unexpected error`。
+    - 找出是哪條 net：把這一步匯出成獨立 script（`librelane-run-debug` 規則 3 的 `eject`），在 `repair_design` 前加 `set_debug_level RSZ repair_net 1`，最後一行 `repair net <driver pin>` 就是卡住的 driver；等級 3 會看到 `split length=0.0` 與同一個座標一直重複，`load_slew` 與 `r_drvr` 可看出換尺寸後的 driver。一定要加記憶體上限自動停。
+    - 確認：在單步重跑裡只禁止那個弱尺寸（`set_dont_use [get_lib_cells */<cell>]`），能在正常時間跑完就確認了。跳過那條 net（`set_dont_touch [get_nets <net>]`）或調小 slew 餘量也會跑完，但只能確認「是這條 net」，看不出是換尺寸造成的；而且跳過的 net 違規還在，net 名稱也會隨合成改變。
+    - 修正方向（影響所有用同一份 flow 設定的設計，交使用者決定）：把會讓迴圈出不來的弱 cell 加進 `EXTRA_EXCLUDED_CELLS`（合成與 resizer 都不用），或調小 slew 餘量。本 repo 採前者：soc_top 排除 `a2111oi_1`（ADR-0012）。
+    - 預防：harden 前用 .lib 查表，在 resizer 的每個 corner、兩個修復步驟各自的餘量下，算每個 resizer 可用的 cell（不只允許合成的）推「resizer 最小 buffer 的輸入電容」（sky130 `clkbuf_1` 約 0.0021 pF）時的輸出 slew，超過扣掉餘量的上限就要排除。本 repo：`pnr/check_weak_cells.py`，由 `check_inputs.py` 在 harden 前（`weak_cells`）與 flow 跑完後用 `resolved.json`（`weak_cells_run`）執行，植入錯誤 P40–P42。改 slew 餘量、加 resizer corner、換 cell library 時它會列出新的弱 cell。這是必要條件、不是充分條件（PicoRV32 版有一顆被換成 `a2111oi_1` 卻沒進迴圈，原因沒查），檢查的負載與 buffer 選擇是依 OpenROAD `dcf36133` 推得，換工具或升版要依規則 11 重新確認。
+    - 排查其他原因：拿同一份 `state_in.json` 單步重跑（`librelane-run-debug` 規則 3），一次只換一個輸入（`RSZ_CORNERS`、macro 的 .lib、slew 餘量），比較時間與記憶體。
+11. **修哪個 corner 的違規，就用那個 corner 的資料判斷修法的影響**（使用者 2026-10-06；換工具、升版、改流程時也適用，所以寫成規則而不只寫在腳本：腳本只擋住這一版工具已知會出事的情況）
+    - 實例（已驗證，`docs/notes/repair_design_loop.md` 實驗 D）：OpenROAD resizer 在 ss 100°C 抓到 driver 的 slew 違規，卻用第一個讀進來的 .lib（tt）評估候選尺寸，挑到 ss 下更弱的 `a2111oi_1`；只把讀取順序改成 ss 先讀，它就改挑 `a2111oi_4`。違規的 corner、上限、負載都是 ss 的，只有「換了會怎樣」是拿 tt 算。
+    - 自己分析、手動 ECO、寫腳本時：查表、估 slew／delay、比較換 cell 前後，都用違規那個 corner 的 .lib 與 `report_checks -corner <corner>`。不要拿 tt、`DEFAULT_CORNER` 或「第一個讀進來的 .lib」的數字代替。回報修法時寫明數字來自哪個 corner。
+    - 工具不會自動保證：多 corner 的工具通常有一份預設或 link 用的 library，演算法的某些步驟可能只看它；「step 設定了用哪些 corner」（`multicorner-sta` 規則 2）不代表每個決策都看了那些 corner。所以：
+      1. 每個修復步驟之後，在違規的 corner 確認被改過的 cell 真的變好：同一個 corner 的修前修後 slew／slack，不要只看整體違規數。
+      2. 換工具、升版、或改 corner 與 library 設定時，做一次對照實驗：同一份輸入，只改 library 的讀取順序或預設 corner。結果改變，就表示有決策沒看對應的 corner，要找出是哪一步，並加獨立的檢查。
+      3. 已知工具會用錯 corner 的地方，加獨立檢查擋住後果（本 repo：規則 10 的弱 cell 檢查），不要只靠工具。
+    - 不要用改工具內部的讀取順序來「修正」：LibreLane 沒有設定可以控制，改它的 Tcl 會讓來源追溯 FAIL；實驗 D 也顯示整體修復結果會大幅改變（resize 711 對 406 顆），等於重新收斂。
 
 ## 退回過的做法
 
@@ -55,7 +71,7 @@ detailed routing 之後才出現的 slew 違規，LibreLane Classic flow 沒有�
 
 ## negative test（單步重跑 `OpenROAD.STAPostPNR` + 對應 checker，`pnr/soc_top/neg_pnr.py`）
 
-P01 setup uncertainty 30 ns → `Checker.SetupViolations`；P02 hold uncertainty 5 ns → `Checker.HoldViolations`；P03 signoff SDC 加 `set_max_transition 0.05` → `Checker.MaxSlewViolations`（P01–P03 都從 run 實際用的 signoff SDC 開始改，否則 signoff.sdc 的設定會蓋掉植入）；P04 SRAM derate 10 → setup FAIL 且 hook 有印出 derate。
+P01 setup uncertainty 30 ns → `Checker.SetupViolations`；P02 hold uncertainty 5 ns → `Checker.HoldViolations`；P03 signoff SDC 加 `set_max_transition 0.05` → `Checker.MaxSlewViolations`（P01–P03 都從 run 實際用的 signoff SDC 開始改，否則 signoff.sdc 的設定會蓋掉植入）；P04 SRAM derate 10 → setup FAIL 且 hook 有印出 derate。P40 設定拿掉 `a2111oi_1` 的排除 → `check_inputs.py` 的 `weak_cells` FAIL 並點名它；P41 placement 後的 slew 餘量改 50% → `weak_cells` FAIL（10 種 cell）；P42 `resolved.json` 拿掉 `a2111oi_1` → `weak_cells_run` FAIL。
 
 ## 用完後
 
@@ -72,3 +88,4 @@ P01 setup uncertainty 30 ns → `Checker.SetupViolations`；P02 hold uncertainty
 | 2026-10-03 | `make phase3` 第一次 | `RepairDesignPostGRT` 隨機 GRT-0229（同一份輸入 2/4） | 已驗證隨機；機制推測見 `librelane-run-debug` | 更正「退回過的做法」表中 explore3 的歸因 | `pnr/soc_top/README.md` 已知限制 4 |
 | 2026-10-04 | Phase 4 第 4、5 次 harden-soc | 第 4 次（40 ns，hold 餘裕 0.3、setup 餘裕 0.6）：hold 通過，ss_n40C 的 setup 仍差 0.42 ns、8 個 max slew 違規 | 推測：resizer 只看 9 個 corner，看不到 ss_n40C（沒有保留 resizer 的 log 可以確認） | 第 5 次：42 ns（使用者決定）、PnR max transition 0.70 ns、clock pin 線切段，15 個 corner 全部 PASS（規則 7、9） | `docs/phase_exit/phase4.md` 收斂過程 |
 | 2026-10-05 | Phase 3.5 第 2 次 harden-soc（42 ns，SPICE 特性化的 SRAM .lib） | min_ss_n40C setup −0.066 ns（Phase 4 +0.31）：SRAM 半週期路徑在每個 `rdata_q` 的 D 前多一顆 `dlygate4sd3`（ss −40°C 1.17 ns） | 已驗證（OpenSTA 各 corner 的 hold 報告）：新的 dout0 `rising_edge` hold 弧加上 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3，post-CTS hold 修復插了 delay cell。推算（hold slack 減 delay cell 延遲，沒有拿掉 cell 重跑）：不插時 ff 的 hold 仍有約 +0.18 ns | 使用者決定週期 43 ns（ADR-0004 Phase 3.5 補充）；macro 多了 hold 弧時，先查它會不會讓 hold 修復在半週期路徑上插 cell | ADR-0004、ADR-0010 |
+| 2026-10-05／06 | Phase 5 第 1 次 harden-soc（Hazard3，`4461661`，`../arvinsa-rtl-gds-p5h3`） | `OpenROAD.RepairDesignPostGPL failed with an unexpected error`：約 108 分鐘、physical footprint 92.9 GB（機器 24 GB），停在第 7000 個 driver 之後（PicoRV32 版同一步 43 秒、590 MB） | 已驗證（單步重跑＋除錯輸出）：`a2111oi_2`（UART 邏輯）推 2.6 µm 線與一個 `nand2_2` 輸入，ss 100°C slew 0.509 > 0.49 ns；resizer 換成 `a2111oi_1`（0.704 ns），推算的電容上限 0.002 pF 不大於它插的 `clkbuf_1` 的輸入電容（約 0.0021 pF），`repairNetWire` 在同一點無限插 `clkbuf_1`。只禁止 `a2111oi_1`：22 秒、約 420 MB；跳過這條 net：21 秒；餘量 30→20%：16 秒。挑 `_1` 是因為候選尺寸用第一個讀進來的 tt .lib 評估（已驗證：先讀 ss 的 .lib 時改挑 `_4`，正常完成）。推測：Phase 3 soc_explore6（餘量 50%）、Phase 3.5 SRAM .lib、Phase 4 的 15 個 corner 三次停不下來是同一機制（當時沒記記憶體與 net，無法確認） | 規則 10、11；PicoRV32 版的 `_11460_` 也在第 41 步被換成 `a2111oi_1` 卻沒進迴圈（原因未查）。使用者決定（2026-10-06）：soc_top 兩份設定排除 `a2111oi_1`、加弱 cell 檢查（ADR-0012）；`picorv32_core` 不改 | `docs/notes/repair_design_loop.md` |

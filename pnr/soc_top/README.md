@@ -6,13 +6,27 @@
 
 | 檢查 | 程式 | PASS 條件 |
 |---|---|---|
-| 輸入一致 | `check_inputs.py` | `config.json` 的 RTL 檔案清單 = `rtl/rtl.f`；SRAM 的 5 份 .lib（ADR-0010，由 `ip/sram/char/gen_char_lib.py` 從 `char.json` 與釘版 PDK 產生）與 SRAM LEF（ADR-0008）是最新版本；`MACROS` 的每個 PVT 用自己那份 .lib，並用這個 LEF。flow 跑完後再比對 run 實際用的（`resolved.json`） |
+| 輸入一致 | `check_inputs.py` | `config.json` 的 RTL 檔案清單 = `rtl/rtl.f`；SRAM 的 5 份 .lib（ADR-0010，由 `ip/sram/char/gen_char_lib.py` 從 `char.json` 與釘版 PDK 產生）與 SRAM LEF（ADR-0008）是最新版本；`MACROS` 的每個 PVT 用自己那份 .lib，並用這個 LEF；resizer 可用的 cell 在 resizer 的每個 corner 都推得動一顆最小 buffer（`weak_cells`，`pnr/check_weak_cells.py`，ADR-0012）。flow 跑完後再比對 run 實際用的（`resolved.json`） |
 | LibreLane 內建 checker | flow 本身 | lint、合成、routing DRC、KLayout DRC、LVS、XOR、15 個 corner 的 setup／hold／max slew／max cap；任何一項 FAIL 時 flow 就中止。Magic DRC 例外，見下一列與「設定與理由」 |
 | soc 專用 | `sram_drc_alone.py` + `check_soc.py` | SRAM 只有一顆、名稱 `sram0`；最終 DEF 中 `sram0` 是 FIXED，座標與方向等於 `config.json`；port 1 有 tie-off（`csb1` 接 tie-high，`clk1`、`addr1[8:0]` 接 tie-low）；沒有任何斷線 pin；`check_setup` 在 `STA_CORNERS` 的每個 corner 只有預期的 `sram0/clk1`；min pulse width 與 min period 的 slack ≥ duty cycle 與 jitter 的預算（Phase 4）；每個 corner 的 STA 只讀了它那個 PVT 的 SRAM .lib（`sram_lib`，Phase 3.5）；IR 的電壓源每條 met5 strap 剛好一點，大小不超過 strap 寬度，位置在 strap 左端（`ir_sources`，Phase 4）；Magic DRC（完整 GDS）在 SRAM 外框之外是 0，框內**每一個**違規都在 SRAM 單獨檢查時同規則違規的位置（Phase 4；只有 li.5 與 diff/tap.9 容許 0.1 µm，這兩條規則在乾淨的 run 中量到最多凸出 85 nm；SRAM 單獨的報告每次 harden 重新產生，規則數量與 `signoff/waivers/soc_top/sram_magic_drc_baseline.json` 相同） |
 | 來源追溯 | `signoff/scripts/provenance.py`（flow 開始前與結束後各一次） | 工作目錄已全部 commit（含未追蹤檔）、submodule 在記錄的 commit、LibreLane 與 PDK 是 `env/versions.mk` 釘的版本、LibreLane clone 沒有改過的檔、PDK 6 個目錄的內容與 `env/pdk_content.sha256` 相同（Phase 4）；結束時 HEAD 不變，`resolved.json` 實際用的版本也對、讀的 PDK 檔都在檢查過的目錄裡（`project-plan.md` §7.2）。不乾淨時 flow 照跑、整體判 FAIL |
 | signoff metrics | `signoff/scripts/check_signoff.py` + `signoff/limits/soc_top.toml` | 見該檔：各種違規數 = 0、15 個 corner 的 setup／hold slack ≥ 0 且 < 43 ns、IR drop ≤ 20 mV（Phase 4，使用者決定）；nom_tt setup 只報告；所有 metrics 與 golden（`signoff/golden/soc_top/`）相同，只有 detailed routing 造成微小差異的族群有明確的小誤差 |
 
-全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案，而且 run 是從目前的 commit 產生的（`signoff/scripts/run_guard.py`）：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`／`gl-soc-powered`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-gl-soc`（網表植入錯誤，lockstep 必須抓到）、`make neg-pnr`（PnR 與 checker 的 negative test P00–P36，`neg_pnr.py`）。
+全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案，而且 run 是從目前的 commit 產生的（`signoff/scripts/run_guard.py`）：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`／`gl-soc-powered`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-gl-soc`（網表植入錯誤，lockstep 必須抓到）、`make neg-pnr`（PnR 與 checker 的 negative test P00–P42，`neg_pnr.py`）。
+
+## Hazard3 版（Phase 5，ADR-0011）
+
+`make harden-soc CPU=hazard3` 用同一個 `run.sh` harden CPU 換成 Hazard3 的 soc_top。run 的 tag 是 `soc_top_hazard3`（`runs/soc_top_hazard3/`、`runs/soc_top_hazard3_signoff/`），與 PicoRV32 版（`runs/soc_top/`）並存。
+
+| 項目 | PicoRV32（`CPU=picorv32`，預設） | Hazard3（`CPU=hazard3`） |
+|---|---|---|
+| flow 設定 | `config.json` | `config_hazard3.json` |
+| RTL 檔案清單 | `rtl/rtl.f` | `rtl/rtl_hazard3.f` |
+| limits／golden | `signoff/limits/soc_top.toml`、`signoff/golden/soc_top/` | `signoff/limits/soc_top_hazard3.toml`、`signoff/golden/soc_top_hazard3/` |
+
+- **flow 設定只差 design 層**（`project-plan.md` §8 Phase 5 的 exit criteria）：`config_hazard3.json` 是 `config.json` 的副本，只差三個 key：RTL 檔案清單（`VERILOG_FILES`）、include 路徑（`VERILOG_INCLUDE_DIRS`，多了 `third_party/hazard3/hdl`）、define（`VERILOG_DEFINES = ["SOC_CPU_HAZARD3"]`）。註解 key（`//` 開頭）不算。
+- **怎麼保證**：`check_inputs.py` 的 `cpu_config` 列比對兩份設定，其他任何 key 不同就 FAIL（negative test P37），define 不對也 FAIL（P38）；flow 跑完 `--resolved` 再確認 run 實際用的檔案清單、include 路徑與 define（P39）。兩個 CPU 的 harden 都檢查這一列，所以改 flow 設定時兩份要一起改，否則下一次不論哪個 CPU 的 harden 都 FAIL。
+- **後續步驟**：`make eqy-soc`、`neg-eqy-soc`、`gl-soc`、`gl-soc-powered`、`neg-gl-soc`、`neg-pnr` 都加 `CPU=hazard3`。`neg-pnr` 的 checker 是同一份程式，`--cpu` 只換 run、設定、limits 與 golden。
 
 ## 名詞
 
@@ -46,7 +60,8 @@
 | `DESIGN_REPAIR_MAX_SLEW_PCT`、`GRT_DESIGN_REPAIR_MAX_SLEW_PCT` | 30、40 | 兩次修復預留的 slew 餘裕（預設 20 與 10，Phase 2 用 20 與 30）。GRT 後用 30 時，detailed routing 之後還有 5 條線在 ss corner 超標（0.755–0.932 ns），因為繞線後萃取的負載比 global routing 的估計大。用 50 時這次修復單執行緒跑了 26 分鐘以上還沒結束（soc_explore6，停掉）；40 約 1 分鐘 |
 | `PL_TARGET_DENSITY_PCT` | 55 | global placement 的目標密度。LibreLane 自動算出 68%，但 L 形 logic 區整體只用約一半，cell 擠在 SRAM 左下角的轉角，那裡的線大幅繞路（正式 run 1：端點相距 117 µm、繞線 353 µm，ss slew 1.42 ns）。55%（soc_explore10）時 9 個 corner 的 slew／cap／fanout 都是 0 |
 | `PNR_SDC_FILE`、`SIGNOFF_SDC_FILE` | `pnr.sdc`（max fanout 8）、`signoff.sdc`（= LibreLane `base.sdc`） | antenna repair 在 resizer 修完 fanout 之後才加 diode，diode 也算負載，所以 PnR 先修到 8（ADR-0009）。signoff 用原本的 0.75 ns 與 fanout 10；一定要明確設 `SIGNOFF_SDC_FILE`，沒設時 signoff STA 會改讀 `PNR_SDC_FILE`（實測：sta.log 讀的是 pnr.sdc）。曾經把 signoff 放寬到 1.0 ns，找到密度這個根因後撤回 |
-| `EXTRA_EXCLUDED_CELLS`、`CTS_SINK_CLUSTERING_SIZE`、`LAYERS_RC`、`RUN_POST_GRT_DESIGN_REPAIR`、`CTS_DISTANCE_BETWEEN_BUFFERS` | 與 Phase 2 相同 | 同一個 standard cell library 的問題，理由見 `pnr/picorv32_core/README.md` |
+| `EXTRA_EXCLUDED_CELLS` | Phase 2 的 4 個延遲 cell，加 `a2111oi_1`（Phase 5） | 延遲 cell 同 Phase 2（`pnr/picorv32_core/README.md`）。`a2111oi_1`：resizer 用 tt 的表判斷換尺寸，在 ss 100°C 違規時把 `a2111oi_2` 換成它，它推不動一顆 `clkbuf_1`，`RepairDesignPostGPL` 因此在同一點無限插 buffer（記憶體 92.9 GB）。PDK 的 `no_synth.cells` 只擋合成。`check_inputs.py` 的 `weak_cells` 列檢查 resizer 可用的每個 cell（P40–P42）；ADR-0012、`docs/notes/repair_design_loop.md` |
+| `CTS_SINK_CLUSTERING_SIZE`、`LAYERS_RC`、`RUN_POST_GRT_DESIGN_REPAIR`、`CTS_DISTANCE_BETWEEN_BUFFERS` | 與 Phase 2 相同 | 同一個 standard cell library 的問題，理由見 `pnr/picorv32_core/README.md` |
 | （不用）`RUN_HEURISTIC_DIODE_INSERTION` | — | 規劃 §6.4 的選項之一。它對整個設計所有超過 90 µm 的線加 diode（10231 顆），之後 global routing 反覆跑壅塞迭代超過 10 分鐘，停掉。改用 antenna LEF（ADR-0008） |
 
 ## 試跑紀錄（2026-10-03）

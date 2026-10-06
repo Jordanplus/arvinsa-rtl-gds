@@ -76,7 +76,7 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
 
 ## 待補
 
-- Phase 5 尚未完成的部分：PnR 與時序收斂、gate-level 模擬與 EQY 的差異。
+- Phase 5 尚未完成的部分：PnR 與時序收斂、gate-level 模擬與 EQY 的差異。第一次 harden 卡在 placement 後的修復（經驗紀錄最後一列），修正方式待使用者決定。
 - 2port（指令從 SRAM port 1 讀）：port 1 要先特性化，pin 在 macro 上邊與右邊（本 repo 的 floorplan 下面對 die 邊緣），可能要重擺 macro。
 - riscv-arch-test（`riscof` + `spike`）與 formal（`test/formal/`，要 `sby` 與 SMT solver）在本機還沒跑過。
 
@@ -92,5 +92,6 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
 |---|---|---|---|---|---|
 | 2026-10-05 | Phase 5 前置調查（Hazard3 `v1.1.1` clone，本機實驗） | `sw_testcases/hellow` 編不過（`#include <stdio.h>`）；Yosys `chparam` 放在 `hierarchy` 之後 `check -assert` 報 `core_haddr_d` 沒有 driver | 已驗證：Homebrew 工具鏈沒有 newlib；參數要在展開階層前設定 | 規則 2、11；Phase 5 裝 xPack 工具鏈（使用者決定） | ADR-0011 |
 | 2026-10-05 | Phase 5：Hazard3 版 SoC 第一次 RTL 模擬 | `bus_assert` FAIL：`addr/wdata/wstrb changed while mem_valid=1`（讀取時 wdata 變成 X 或亂變） | 已驗證：AHB 讀取時 hwdata 沒有驅動 | 規則 16：讀取時 mem_wdata = 0；之後 hello PASS | `rtl/cpu/soc_ahb2native.v` |
-| 2026-10-05 | Phase 5：Hazard3 版 DV | `exc` FAIL 0x30（mtval 不是位址）；`irq` FAIL 0x20（進入 1 次不是 2 次）；memtest／muldiv／bootrom_march 早於 min_cycles；S01、M01 在 Hazard3 上漏網 | 已驗證：mtval 固定為 0；中斷是準位且只進 1 次；CPI 較小；變體映像用了 PicoRV32 的 start.o | 規則 14、18、19；Hazard3 regression 30/30；第一次完整植入錯誤 29/33，修正後重跑漏網與新增的 7 個全部抓到（全部重跑待做） | `dv/tests.toml`、`dv/bugs.toml` |
+| 2026-10-05 | Phase 5：Hazard3 版 DV | `exc` FAIL 0x30（mtval 不是位址）；`irq` FAIL 0x20（進入 1 次不是 2 次）；memtest／muldiv／bootrom_march 早於 min_cycles；S01、M01 在 Hazard3 上漏網 | 已驗證：mtval 固定為 0；中斷是準位且只進 1 次；CPI 較小；變體映像用了 PicoRV32 的 start.o | 規則 14、18、19；Hazard3 regression 30/30；第一次完整植入錯誤 29/33，修正後重跑漏網與新增的 7 個全部抓到；全部重跑：Hazard3 36/36、PicoRV32 33/33（2026-10-05） | `dv/tests.toml`、`dv/bugs.toml`、`runs/neg_hazard3/summary.json` |
 | 2026-10-05 | Phase 5：core 層級驗證（`make core-hazard3`） | rvcpp 在每支 riscv-tests 結尾 timeout；套修補後仍在初始化的 `pmpaddr0` 處與 RTL 岔開；比對 `intr` 旗標 FAIL；結尾長度差 1 | 已驗證：rvcpp 沒有 fence、CSR 模型是全功能設定、`rvfi_intr` 含 exception、pipeline 尾端 | 規則 20；riscv-tests 65/65、不支援 2 支照預期 FAIL、EXTENSION_M=0 植入錯誤 8/8、逐指令比對 48/48（13,881 條） | `dv/core_hazard3/` |
+| 2026-10-05／06 | Phase 5：第一次 `make harden-soc CPU=hazard3`（`4461661`） | `OpenROAD.RepairDesignPostGPL failed with an unexpected error`，約 108 分鐘、記憶體 92.9 GB（PicoRV32 版同一步 43 秒） | 已驗證：卡住的不是 CPU 的邏輯，是 RTL 沒改的 UART（`simpleuart.v` 的 `send_divcnt` 比較，兩版共用同一個檔案、不在 `SOC_CPU_HAZARD3` 下）：整顆 SoC 重新合成後，它的比較邏輯用了一顆 `a2111oi_2`，在 ss 100°C 略超過修復的 slew 上限；resizer 把它換成更弱的 `a2111oi_1`，接著進入無窮迴圈（`drv-timing-closure` 規則 10）。兩版的弱 cell 數也不同（`a2111oi_2` 1 → 2、`o41ai_2` 1 → 0） | 換 core 後第一次 harden 前，先對新的合成網表做規則 10 的弱 cell 檢查；修正方式待使用者決定 | `docs/notes/repair_design_loop.md` |

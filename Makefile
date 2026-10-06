@@ -21,7 +21,7 @@ DRY_RUN ?= 0
 .PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
-        neg-run-guard gl-soc-powered provenance-final harden regress py-check skill-check neg-regress clean \
+        neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress clean \
         sram-lib sram-confirm sram-char sram-extract neg-char
 
 help:
@@ -29,7 +29,6 @@ help:
 	@echo "  make nix-install          install Nix + FOSSi cache (asks for admin password; DRY_RUN=1 to preview)"
 	@echo "  make flow-setup           fetch LibreLane (pinned tag), nix-shell smoke test, download sky130A"
 	@echo "  make pdk-fetch            download sky130A tarballs (parallel, resumable, sha256) and install with ciel"
-	@echo "  make core-hazard3         Hazard3 core: riscv-tests rv32ui/uc/um/mi on the SoC's configuration (needs make xpack-fetch)"
 	@echo "  make xpack-fetch          download the xPack riscv-none-elf-gcc (newlib) into .tools/ (byte ranges in parallel, resumable, sha256)"
 	@echo "  make ci-sram-ref          re-run LibreLane CI test_sram_macro, check signoff items + local golden"
 	@echo ""
@@ -63,7 +62,7 @@ help:
 	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
-	@echo "  make neg-pnr              bug injection P00-P36 (STA, PDN, IR, DRC, XOR, placement, inputs, SRAM .lib, ...), each must FAIL at its checker"
+	@echo "  make neg-pnr              bug injection P00-P42 (STA, PDN, IR, DRC, XOR, placement, inputs, SRAM .lib, weak cells, ...), each must FAIL at its checker"
 	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
@@ -71,15 +70,26 @@ help:
 	@echo "                            gl-soc neg-gl-soc neg-pnr harden-core eqy-core neg-eqy-core); needs a committed working tree"
 	@echo ""
 	@echo "Phase 4 targets (signoff closure, see docs/phase_exit/phase4.md):"
-	@echo "  make regress              EVERYTHING in one command, in order, stops at the first FAIL (about 2.5 hours):"
-	@echo "                            Phase 1 RTL checks, flow checkers, soc_top (harden, EQY, GL, L5, negative tests),"
-	@echo "                            PicoRV32 alone, provenance-final; logs, summary.md and junit.xml in runs/regress/"
+	@echo "  make regress-picorv32     EVERYTHING for the PicoRV32 SoC in one command, in order, stops at the first FAIL (about"
+	@echo "                            2.5 hours): Phase 1 RTL checks, flow checkers, soc_top (harden, EQY, GL, L5, negative"
+	@echo "                            tests), PicoRV32 alone, provenance-final; logs, summary.md, junit.xml in runs/regress_picorv32/"
+	@echo "                            (it was make regress until Phase 5)"
 	@echo "  make gl-soc-powered       L5: the powered netlist (final/pnl) in lockstep with the RTL, cells powered by VPWR/VGND"
-	@echo "  make provenance-final     HEAD and working tree unchanged since harden-soc and harden-core started"
+	@echo "  make provenance-final     HEAD and working tree unchanged since the harden runs of CPU started"
+	@echo "                            (hazard3: harden-soc; picorv32: harden-soc and harden-core)"
 	@echo "  make py-check             every name a tracked Python file reads is defined in that file, no file emptied before it is read (seconds)"
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
 	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, and stop at a FAIL"
-	@echo "  make harden D=soc_top|picorv32_core   same as harden-soc / harden-core"
+	@echo "  make harden D=soc_top|soc_top_hazard3|picorv32_core   same as harden-soc CPU=picorv32 / CPU=hazard3 / harden-core"
+	@echo ""
+	@echo "Phase 5 targets (Hazard3 replaces PicoRV32 as the main CPU, docs/decisions/0011-hazard3-integration.md):"
+	@echo "  make regress              EVERYTHING for the Hazard3 SoC in one command, in order, stops at the first FAIL:"
+	@echo "                            RTL checks, core-hazard3, flow checkers, soc_top with Hazard3 (harden, EQY, GL, L5,"
+	@echo "                            negative tests), provenance-final; logs, summary.md and junit.xml in runs/regress/"
+	@echo "  make core-hazard3         Hazard3 core: riscv-tests rv32ui/uc/um/mi on the SoC's configuration, and an"
+	@echo "                            instruction-by-instruction comparison with the rvcpp ISS (needs make xpack-fetch)"
+	@echo "  CPU=hazard3               for fw, sim, regress-rtl, neg-rtl, synth-check, harden-soc, eqy-soc, neg-eqy-soc,"
+	@echo "                            gl-soc, gl-soc-powered, neg-gl-soc, neg-pnr, provenance-final (run tag soc_top_hazard3)"
 	@echo ""
 	@echo "Phase 3.5 targets (SRAM timing from SPICE, ADR-0010, ip/sram/char/README.md; need ngspice):"
 	@echo "  make sram-lib             regenerate the five SRAM .lib from $(SRAM_CHAR)/char.json (seconds)"
@@ -116,7 +126,7 @@ lint:
 	bash rtl/scripts/lint.sh
 
 synth-check:
-	bash rtl/scripts/synth_check.sh
+	CPU=$(CPU) bash rtl/scripts/synth_check.sh
 
 fw:
 	$(MAKE) -C fw CPU=$(CPU) all check-bootrom
@@ -180,7 +190,7 @@ neg-gl-soc: fw
 	$(PY) dv/gl_soc/neg_gl_soc.py --cpu $(CPU)
 
 neg-pnr:
-	$(PY) pnr/soc_top/neg_pnr.py
+	$(PY) pnr/soc_top/neg_pnr.py --cpu $(CPU)
 
 neg-provenance:
 	$(PY) signoff/scripts/neg_provenance.py
@@ -191,15 +201,19 @@ neg-run-guard:
 gl-soc-powered: fw
 	$(PY) dv/gl_soc/run_gl_soc.py --cpu $(CPU) --powered
 
+# The harden runs of this CPU's regression: soc_top_hazard3 (hazard3), soc_top and picorv32_core (picorv32).
+PROV_RECORDS = $(if $(filter hazard3,$(CPU)),runs/soc_top_hazard3_signoff/provenance.json,runs/soc_top_signoff/provenance.json runs/picorv32_core_signoff/provenance.json)
+
 provenance-final:
-	$(PY) signoff/scripts/provenance.py --final runs/soc_top_signoff/provenance.json runs/picorv32_core_signoff/provenance.json
+	$(PY) signoff/scripts/provenance.py --final $(PROV_RECORDS)
 
 # project-plan.md §7.5 `make harden D=<design>`; the run tag stays the design name (runs/<design>), and
 # the commit of a run is in runs/<design>_signoff/provenance.json, which every later step compares
 # with HEAD (signoff/scripts/run_guard.py), instead of a tag per git sha.
 harden:
-	@case "$(D)" in soc_top) $(MAKE) harden-soc ;; picorv32_core) $(MAKE) harden-core ;; \
-	  *) echo "harden: FAIL - D must be soc_top or picorv32_core (got '$(D)')"; exit 1 ;; esac
+	@case "$(D)" in soc_top) $(MAKE) harden-soc CPU=picorv32 ;; soc_top_hazard3) $(MAKE) harden-soc CPU=hazard3 ;; \
+	  picorv32_core) $(MAKE) harden-core ;; \
+	  *) echo "harden: FAIL - D must be soc_top, soc_top_hazard3 or picorv32_core (got '$(D)')"; exit 1 ;; esac
 
 # SRAM SPICE characterization (Phase 3.5, ADR-0010). char.json and the five .lib are committed;
 # make harden-soc checks the .lib against char.json (pnr/soc_top/check_inputs.py char_lib).
@@ -227,7 +241,10 @@ sram-char:
 
 # The whole regression (scripts/regress.py lists the targets and their order).
 regress:
-	$(PY) scripts/regress.py
+	$(PY) scripts/regress.py --cpu hazard3
+
+regress-picorv32:
+	$(PY) scripts/regress.py --cpu picorv32
 
 py-check:
 	$(PY) scripts/check_py_names.py

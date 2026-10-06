@@ -13,3 +13,4 @@
 | [0009](0009-signoff-max-transition.md) | PnR 的 max fanout 用 8；signoff max transition 放寬到 1.0 ns 的決定已撤回（改用 placement 密度 55% 解決） | 2026-10-03 |
 | [0010](0010-sram-spice-characterization.md) | SRAM macro 的時序改用本機 ngspice 實測 PDK 附的網表；每個 PVT 一份 .lib，以 0007 的數值為下限，新增 dout0 的 hold 時序弧（Phase 3.5） | 2026-10-04 |
 | [0011](0011-hazard3-integration.md) | Phase 5 把 CPU 換成 Hazard3：hazard3_cpu_1port＋AHB 轉 native bus 轉接器、RV32IMC＋計數器、riscv-tests＋RVFI 對 rvcpp 逐指令比對、PicoRV32 版移到 regress-picorv32 | 2026-10-05 |
+| [0012](0012-resizer-weak-cell-exclusion.md) | resizer 不准用推不動一顆 buffer 的弱 cell：soc_top 排除 `a2111oi_1`，harden 前用 .lib 查表檢查（`check_weak_cells.py`） | 2026-10-06 |

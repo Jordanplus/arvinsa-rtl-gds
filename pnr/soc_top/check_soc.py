@@ -2,6 +2,7 @@
 """soc_top-specific physical checks on a LibreLane run (project-plan.md §5.1, §6.4, §7.2).
 
 usage: check_soc.py <LibreLane run dir> --sram-drc <drc.magic.rpt of the SRAM alone> [--config pnr/soc_top/config.json]
+       (run.sh passes the config of its CPU: config.json for PicoRV32, config_hazard3.json for Hazard3)
 
 Checks (each prints a PASS/FAIL row):
   macro        the final netlist has exactly one SRAM macro instance, named sram0

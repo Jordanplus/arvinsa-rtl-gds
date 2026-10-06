@@ -15,7 +15,7 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與
 ## 規則（已驗證）
 
 1. **在 design config 設 `LIB` 會取代 LibreLane 對 sky130 的整組 STA 預設**（`librelane/config/pdk_compat.py`：只有沒設 `LIB` 時才產生 `LIB`、`STA_CORNERS`、`DEFAULT_CORNER`、`TIMING_VIOLATION_CORNERS`）。所以加 corner 時三個要一起設，而且 5 個 PVT 全部列出。確認方式：`--only Verilator.Lint` 跑幾秒，看 `runs/<tag>/resolved.json`。新 corner 名稱要符合 `LAYERS_RC`（`*tt*`、`*ss*`、`*ff*`）與 RCX 規則（`nom_*`、`min_*`、`max_*`）的萬用字元。
-2. **哪個 step 用哪組 corner**（`librelane/steps/openroad.py`）：resizer 類 step 用 `RSZ_CORNERS`（沒設就用 `STA_CORNERS`），CTS 用 `CTS_CORNERS`，其他 OpenROAD step 用 `PNR_CORNERS`，signoff STA 用 `STA_CORNERS`。只設 `PNR_CORNERS` 管不到 resizer。
+2. **哪個 step 用哪組 corner**（`librelane/steps/openroad.py`）：resizer 類 step 用 `RSZ_CORNERS`（沒設就用 `STA_CORNERS`），CTS 用 `CTS_CORNERS`，其他 OpenROAD step 用 `PNR_CORNERS`，signoff STA 用 `STA_CORNERS`。只設 `PNR_CORNERS` 管不到 resizer。設定了用哪組 corner，也不代表演算法的每個決策都看了那些 corner：OpenROAD resizer 換尺寸時只用第一個讀進來的 .lib 評估（Phase 5 實驗 D），修違規要用對應 corner 的資料判斷，見 `drv-timing-closure` 規則 11。
 3. **corner 變多，PnR 會變慢，post-GRT 修復可能停不下來**：
    - 9 → 15 個 corner 時，多數 step 慢 1.6–2 倍。
    - `OpenROAD.RepairDesignPostGRT` 卻從 31 秒變成 35 分鐘以上沒結束。同一份輸入 state 只把 resizer 改回 9 個 corner 單步重跑，58 秒完成；9 個再加 1 個 `max_ss_n40C` 也是 4 分鐘以上不結束（`docs/phase_exit/phase4.md` 收斂過程第 1 次）。

@@ -2,7 +2,9 @@
 """make neg-gl-soc: bug injection into the soc_top final netlist; `make gl-soc` must FAIL on each,
 because the RTL/GL lockstep comparison (dv/monitors/gl_lockstep.v) sees a difference.
 
-usage: neg_gl_soc.py [--harden-run <dir>] [--out <dir>] [--cases a,b]   (defaults runs/soc_top, runs/neg_gl_soc, all)
+usage: neg_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--out <dir>] [--cases a,b]
+       (defaults picorv32, runs/soc_top, runs/neg_gl_soc, all; --cpu hazard3: runs/soc_top_hazard3,
+       runs/neg_gl_soc_hazard3, and run_gl_soc.py gets --cpu hazard3)
 The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now).
 
 Each case edits a copy of the final netlist (each edit must match exactly one place) and runs
@@ -24,6 +26,11 @@ compile error or some other failure).
   buserr_irq_stuck0     flip-flop u_cpu.irq_pending[2] D tied to 0 (bus-error IRQ) test buserr
   L5 (powered netlist final/pnl, run_gl_soc.py --powered):
   host_rdata7_unpowered the buffer that drives port host_rdata[7] gets VPWR on vssd1   test hello
+  --cpu hazard3 (Phase 5): the three PicoRV32 flip-flop cases are replaced by their Hazard3
+  counterparts (signoff/eqy/neg_eqy.py soc_top_hazard3):
+  mcycleh13_stuck1      flip-flop u_cpu...csr_u.mcycleh[13] D tied to 1 (rdcycleh)      test counters
+  minstreth8_stuck1     flip-flop u_cpu...csr_u.minstreth[8] D tied to 1 (rdinstreth)   test counters
+  irq0_stuck0           flip-flop u_cpu...csr_u.irq[0] D tied to 0 (external IRQ)        test irq
 Prints `neg-gl-soc: PASS n/n caught` / `neg-gl-soc: FAIL ...`; exit code 0 only on PASS.
 """
 import argparse
@@ -53,15 +60,31 @@ def unpowered(port):
 
 TESTS = ["hello", "irq", "muldiv", "uart_echo", "bootrom_march", "boot_uart_hello", "boot_host_hello",
          "regs", "unmapped", "uart_burst", "reset_store"]
+# Flip-flop cases inside the CPU: (name, edit, tests, powered)
+CPU_CASES = {
+    "picorv32": [
+        ("count_cycle45_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.count_cycle[45] ", 1), ["counters"], False),
+        ("count_instr40_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.count_instr[40] ", 1), ["counters"], False),
+        ("buserr_irq_stuck0", lambda t: neg_eqy.flop_d_const(r"\u_cpu.irq_pending[2] ", 0), ["buserr"], False),
+    ],
+    "hazard3": [
+        ("mcycleh13_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.u_core.core.csr_u.mcycleh[13] ", 1), ["counters"], False),
+        ("minstreth8_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.u_core.core.csr_u.minstreth[8] ", 1), ["counters"], False),
+        ("irq0_stuck0", lambda t: neg_eqy.flop_d_const(r"\u_cpu.u_core.core.csr_u.irq[0] ", 0), ["irq"], False),
+    ],
+}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--harden-run", default=os.path.join(ROOT, "runs", "soc_top"))
-    ap.add_argument("--out", default=os.path.join(ROOT, "runs", "neg_gl_soc"))
+    ap.add_argument("--cpu", default="picorv32", choices=sorted(CPU_CASES))
+    ap.add_argument("--harden-run")
+    ap.add_argument("--out")
     ap.add_argument("--cases", help="comma-separated subset of cases")
     args = ap.parse_args()
-    harden_run, OUT = os.path.abspath(args.harden_run), os.path.abspath(args.out)
+    suffix = "" if args.cpu == "picorv32" else f"_{args.cpu}"
+    harden_run = os.path.abspath(args.harden_run or os.path.join(ROOT, "runs", f"soc_top{suffix}"))
+    OUT = os.path.abspath(args.out or os.path.join(ROOT, "runs", f"neg_gl_soc{suffix}"))
     netlist = os.path.join(harden_run, "final", "nl", "soc_top.nl.v")
     shutil.rmtree(OUT, ignore_errors=True)  # only the output directory is removed, before any check
     errs = guard(harden_run, "harden-soc: PASS")
@@ -87,7 +110,7 @@ def main():
         edited = os.path.join(d, "soc_top.pnl.v" if powered else "soc_top.nl.v")
         open(edited, "w", encoding="utf8").write(new)
         verdict = "gl-soc-powered: FAIL" if powered else "gl-soc: FAIL"
-        cp = subprocess.run([sys.executable, RUNNER, "--harden-run", harden_run, "--netlist", edited,
+        cp = subprocess.run([sys.executable, RUNNER, "--cpu", args.cpu, "--harden-run", harden_run, "--netlist", edited,
                              "--out", os.path.join(d, "gl"), "--tests", ",".join(tests)] + (["--powered"] if powered else []),
                             capture_output=True, text=True)
         open(os.path.join(d, "run.log"), "w").write(cp.stdout + cp.stderr)
@@ -101,12 +124,7 @@ def main():
     if len(cases) != len(GL_CASES):
         print(f"neg-gl-soc: FAIL (cases {GL_CASES} not all found in neg_eqy.py)")
         return 1
-    cases += [
-        ("count_cycle45_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.count_cycle[45] ", 1), ["counters"], False),
-        ("count_instr40_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.count_instr[40] ", 1), ["counters"], False),
-        ("buserr_irq_stuck0", lambda t: neg_eqy.flop_d_const(r"\u_cpu.irq_pending[2] ", 0), ["buserr"], False),
-        ("host_rdata7_unpowered", lambda t: unpowered("host_rdata[7]"), ["hello"], True),
-    ]
+    cases += CPU_CASES[args.cpu] + [("host_rdata7_unpowered", lambda t: unpowered("host_rdata[7]"), ["hello"], True)]
     if args.cases:
         want = args.cases.split(",")
         if set(want) - {c[0] for c in cases}:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P39).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P42).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -98,6 +98,14 @@ step re-run one step on a copy of that step's saved config and input state
        (picorv32: SOC_CPU_HAZARD3 added; hazard3:    PicoRV32 run would build Hazard3; hazard3: it
        removed)                                      would build PicoRV32 from the Hazard3 file list)
   P39  resolved.json: VERILOG_DEFINES changed as P38 check_inputs.py --resolved
+  P40  the CPU's config: a2111oi_1 dropped from       check_inputs.py weak_cells, naming a2111oi_1 (the
+       EXTRA_EXCLUDED_CELLS                          resizer could again pick a size that cannot drive
+                                                     one buffer in ss_100C; Phase 5,
+                                                     docs/notes/repair_design_loop.md)
+  P41  the CPU's config: DESIGN_REPAIR_MAX_SLEW_PCT   check_inputs.py weak_cells, RepairDesignPostGPL row
+       50 (Phase 3 soc_explore6 used 50 after GRT)   (a larger margin makes more cells too weak)
+  P42  resolved.json: a2111oi_1 dropped as P40        check_inputs.py --resolved weak_cells_run
+       (each case first checks that the edit removed or changed something)
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -907,12 +915,59 @@ def p39(run, d):
     return inputs_failed(rc, out, "resolved"), "check_inputs.py --resolved (VERILOG_DEFINES)"
 
 
+WEAK = "sky130_fd_sc_hd__a2111oi_1"
+
+
+def drop_weak(c):
+    """P40/P42 edit: a2111oi_1 out of EXTRA_EXCLUDED_CELLS; False if it was not there."""
+    cells = c.get("EXTRA_EXCLUDED_CELLS") or []
+    if WEAK not in cells:
+        return False
+    c["EXTRA_EXCLUDED_CELLS"] = [x for x in cells if x != WEAK]
+    return True
+
+
+def weak_fail_line(out, row):
+    m = re.search(rf"^  \[FAIL\] {row}:[^\n]*", out, re.M)
+    return m.group(0) if m else ""
+
+
+def p40(run, d):
+    found = []
+    rc, out = inputs_check(d, "--config", config_with(d, lambda c: found.append(drop_weak(c))))
+    line = weak_fail_line(out, "weak_cells")
+    if found != [True]:
+        return False, f"{WEAK} is not in EXTRA_EXCLUDED_CELLS of {os.path.basename(CONFIG)} (nothing to drop)"
+    return inputs_failed(rc, out, "weak_cells") and "a2111oi_1/Y" in line, \
+        "check_inputs.py weak_cells names a2111oi_1/Y"
+
+
+def p41(run, d):
+    rc, out = inputs_check(d, "--config", config_with(d, lambda c: c.update(DESIGN_REPAIR_MAX_SLEW_PCT=50)))
+    line = weak_fail_line(out, "weak_cells")
+    return inputs_failed(rc, out, "weak_cells") and "RepairDesignPostGPL ss_100C_1v60" in line and "50%" in line, \
+        "check_inputs.py weak_cells: RepairDesignPostGPL ss_100C_1v60 at 50%"
+
+
+def p42(run, d):
+    res = json.load(open(os.path.join(run, "resolved.json")))
+    if not drop_weak(res):
+        return False, f"{WEAK} is not in the run's resolved EXTRA_EXCLUDED_CELLS (run made before the fix?)"
+    p = os.path.join(d, "resolved.json")
+    json.dump(res, open(p, "w"), indent=1)
+    rc, out = inputs_check(d, "--resolved", p)
+    line = weak_fail_line(out, "weak_cells_run")
+    return inputs_failed(rc, out, "weak_cells_run") and "a2111oi_1/Y" in line and \
+        re.search(r"^  \[PASS\] weak_cells:", out, re.M) is not None, \
+        "check_inputs.py --resolved weak_cells_run names a2111oi_1/Y (weak_cells on the config still PASS)"
+
+
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
-         ("P37", p37), ("P38", p38), ("P39", p39)]
+         ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42)]
 
 
 def main():

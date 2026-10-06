@@ -32,9 +32,14 @@ Checks:
   other_libs  config.json LIB maps each PVT to its sky130_fd_sc_hd .lib only, and EXTRA_LIBS is unset:
               LibreLane reads both into every STA corner, so another SRAM .lib there would be timed
               next to (or instead of) the characterized one (Phase 3.5 review)
+  weak_cells  pnr/check_weak_cells.py on the CPU's config: no cell the resizer may use drives one
+              buffer above the slew limit of a design-repair step in a resizer corner (otherwise
+              repair_design can insert buffers at one point forever; Phase 5, a2111oi_1,
+              docs/notes/repair_design_loop.md)
 With --resolved, also checks that the run used these VERILOG_FILES, VERILOG_INCLUDE_DIRS and
 VERILOG_DEFINES, these .lib (MACROS, and LIB = the sky130_fd_sc_hd .lib of the pinned PDK, no
-EXTRA_LIBS) and that LEF (resolved.json paths are absolute).
+EXTRA_LIBS) and that LEF (resolved.json paths are absolute), and runs check_weak_cells.py on
+resolved.json (weak_cells_run: the exclusions, corners, margins and SDC the run really used).
 Prints `soc-inputs: PASS` / `soc-inputs: FAIL`; exit code 0 only on PASS. Python stdlib only.
 """
 import argparse
@@ -59,6 +64,7 @@ PVTS = ("tt_025C_1v80", "ss_100C_1v60", "ff_n40C_1v95", "ss_n40C_1v60", "ff_100C
 def char_lib(d, pvt):
     return os.path.join(d, f"{MACRO}__{pvt}.lib")
 ANT_LEF = os.path.join(IP, f"{MACRO}.lef")
+WEAK_CELLS = os.path.join(ROOT, "pnr", "check_weak_cells.py")
 
 
 def pin(name):
@@ -155,7 +161,19 @@ def main(argv):
         f"LIB = the sky130_fd_sc_hd .lib of each PVT, EXTRA_LIBS unset" if cfg.get("LIB") == want_std and not cfg.get("EXTRA_LIBS")
         else f"LIB = {cfg.get('LIB')}, EXTRA_LIBS = {cfg.get('EXTRA_LIBS')}")
 
+    pdk_dir = os.path.join(os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel")), pin("PDK"))
+
+    def weak_cells(name, cfg_path):
+        cp = subprocess.run([sys.executable, WEAK_CELLS, cfg_path, "--pdk-dir", pdk_dir], capture_output=True, text=True)
+        bad = re.findall(r"^  \[FAIL\] ([^\n]*)", cp.stdout, re.M)
+        row(name, cp.returncode == 0 and cp.stdout.rstrip().endswith("weak-cells: PASS"),
+            f"check_weak_cells.py PASS on {os.path.basename(cfg_path)} ({cp.stdout.count(chr(10) + '  [PASS] ') + cp.stdout.startswith('  [PASS] ')} step x PVT rows)"
+            if cp.returncode == 0 else f"check_weak_cells.py FAIL: {'; '.join(bad) or cp.stderr.strip()[-300:]}")
+
+    weak_cells("weak_cells", args.config or config)
+
     if args.resolved:
+        weak_cells("weak_cells_run", args.resolved)
         res = json.load(open(args.resolved, encoding="utf8"))
         rfiles = [os.path.normpath(p) for p in res.get("VERILOG_FILES", [])]
         rlib = res.get("MACROS", {}).get(MACRO, {}).get("lib", {})

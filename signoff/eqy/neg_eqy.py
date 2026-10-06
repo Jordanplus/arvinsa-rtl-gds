@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bug injection into a final netlist; signoff/eqy/run_eqy.py must FAIL on each case.
 
-usage: neg_eqy.py --design picorv32_core|soc_top [--run <dir>] [--out <dir>] [-j N]
+usage: neg_eqy.py --design picorv32_core|soc_top|soc_top_hazard3 [--run <dir>] [--out <dir>] [-j N]
 The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now);
 run_eqy.py checks it again for every case.
 
@@ -45,6 +45,15 @@ Cases (the same kinds of error as the Phase 2 GL qualification, docs/phase_exit/
     mux_swap              as for picorv32_core
     nand2_to_nor2         as for picorv32_core
     flop_q_inverted, flop_async_reset, flop_clk_inverted   as for picorv32_core
+  soc_top_hazard3 (soc_top with Hazard3, Phase 5): the soc_top cases, plus the Hazard3
+  counterparts of the picorv32_core flip-flop cases and one for its asynchronous reset
+    mcycleh13_stuck1      flip-flop u_cpu...csr_u.mcycleh[13] D tied to 1 (rdcycleh)
+    minstreth8_stuck1     flip-flop u_cpu...csr_u.minstreth[8] D tied to 1 (rdinstreth)
+    irq0_stuck0           flip-flop u_cpu...csr_u.irq[0] (the registered external IRQ) D tied to 0
+    reset_b_tied1         first dfrtp flip-flop (by instance name) gets RESET_B = 1'b1: it never
+                          resets. The sequential cell check compares cell functions only (dfrtp
+                          stays dfrtp) and the clock check only clock pins, so the proof must catch
+                          it (async2sync turns the reset into logic before the D input)
 Prints `neg-eqy: PASS n/n caught` / `neg-eqy: FAIL ...`; exit code 0 only on PASS.
 """
 import argparse
@@ -81,10 +90,20 @@ def buf_inverted(port):
 
 
 def flop_d_const(q_name, value):
-    """dfxtp flip-flop whose Q is net <q_name>: its D becomes the constant <value>."""
-    rx = re.compile(r"(sky130_fd_sc_hd__df\w+ \S+ \(\.CLK\([^)]*\),\s*\.D\()[^)]*(\),\s*\.Q\("
+    """Flip-flop (df*, also with an asynchronous RESET_B or SET_B) whose Q is net <q_name>: its D
+    becomes the constant <value>."""
+    rx = re.compile(r"(sky130_fd_sc_hd__df\w+ \S+ \(\.CLK\([^)]*\),\s*\.D\()[^)]*(\),(?:\s*\.(?:RESET_B|SET_B)\([^)]*\),)?\s*\.Q\("
                     + re.escape(q_name) + r"\s*\)\);)")
     return rx, lambda m: f"{m.group(1)}1'b{value}{m.group(2)}"
+
+
+def flop_reset_tied1(text):
+    """First dfrtp flip-flop (sorted by instance name) whose RESET_B is a net: RESET_B becomes 1'b1."""
+    cands = sorted(re.findall(r"sky130_fd_sc_hd__dfrtp_\d+ (\S+) \(\.CLK\([^)]*\),\s*\.D\([^)]*\),\s*\.RESET_B\([^1)][^)]*\)", text))
+    if not cands:
+        return re.compile(r"(?!x)x"), None
+    rx = re.compile(r"(sky130_fd_sc_hd__dfrtp_\d+ " + re.escape(cands[0]) + r" \(\.CLK\([^)]*\),\s*\.D\([^)]*\),\s*\.RESET_B\()[^)]*(\))")
+    return rx, lambda m: f"{m.group(1)}1'b1{m.group(2)}"
 
 
 def mux_swap(text):
@@ -277,6 +296,12 @@ CASES = {
         ("flop_clk_inverted", flop_clk_inverted),
     ],
 }
+CASES["soc_top_hazard3"] = CASES["soc_top"] + [
+    ("mcycleh13_stuck1", lambda t: flop_d_const(r"\u_cpu.u_core.core.csr_u.mcycleh[13] ", 1)),
+    ("minstreth8_stuck1", lambda t: flop_d_const(r"\u_cpu.u_core.core.csr_u.minstreth[8] ", 1)),
+    ("irq0_stuck0", lambda t: flop_d_const(r"\u_cpu.u_core.core.csr_u.irq[0] ", 0)),
+    ("reset_b_tied1", flop_reset_tied1),
+]
 
 # Cases whose edit points a pin at a new net: (instance it belongs to, pin, inverter cell, new net).
 # edit() drives the new net from the pin's original net through that inverter (instance <net>_cell).

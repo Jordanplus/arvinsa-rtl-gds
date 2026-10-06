@@ -430,6 +430,10 @@ def main():
     sc.ensure_ngspice()
     work = os.path.abspath(a.work)
     os.makedirs(work, exist_ok=True)
+    # Made once before the cases start: they run in parallel threads, and a case that found the file
+    # while another was still writing it read half a netlist (Phase 5, a fresh --work stopped with
+    # "no .subckt ..."; earlier runs reused a work directory that already had it).
+    trimmed(work)
     names = a.only.split(",")
     with ThreadPoolExecutor(len(names)) as ex:
         res = dict(zip(names, ex.map(lambda n: CASES[n](work), names)))

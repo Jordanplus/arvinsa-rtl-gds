@@ -192,12 +192,13 @@
     "ERROR_ON_MAGIC_DRC": false,
     "//PRIMARY_GDSII_STREAMOUT_TOOL": "Final GDS from KLayout. Magic's GDS of this design has 13 top cells: it places the SRAM through renamed copies of its sub-cells (T2_*) and also writes the 160 original sub-cells unreferenced, so KLayout.Render failed with 'The layout has multiple top cells'. The KLayout GDS has one top cell (soc_top) and all 161 SRAM cells are reachable from it. Magic still streams out; KLayout.XOR compares the two. See README.md.",
     "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout",
-    "//EXTRA_EXCLUDED_CELLS": "Same as Phase 2 (pnr/picorv32_core/README.md): the PDK exclude list does not exclude the clkdlybuf4s25/50 delay cells, and the resizer used them as general buffers.",
+    "//EXTRA_EXCLUDED_CELLS": "Same as Phase 2 (pnr/picorv32_core/README.md): the PDK exclude list does not exclude the clkdlybuf4s25/50 delay cells, and the resizer used them as general buffers. a2111oi_1 (Phase 5, user decision 2026-10-06): the resizer resized an a2111oi_2 with an ss_100C slew violation to a2111oi_1 (it judges sizes with the first .lib read, tt), which cannot drive one clkbuf_1 within 0.49 ns in ss_100C, and RepairDesignPostGPL then inserted buffers at one point forever (92.9 GB). no_synth.cells keeps it out of synthesis only. pnr/check_weak_cells.py (check_inputs.py weak_cells) checks every cell the resizer may use; docs/notes/repair_design_loop.md.",
     "EXTRA_EXCLUDED_CELLS": [
         "sky130_fd_sc_hd__clkdlybuf4s25_1",
         "sky130_fd_sc_hd__clkdlybuf4s25_2",
         "sky130_fd_sc_hd__clkdlybuf4s50_1",
-        "sky130_fd_sc_hd__clkdlybuf4s50_2"
+        "sky130_fd_sc_hd__clkdlybuf4s50_2",
+        "sky130_fd_sc_hd__a2111oi_1"
     ],
     "//CTS_SINK_CLUSTERING_SIZE": "Same as Phase 2 (pnr/picorv32_core/README.md): keeps CTS leaf fanout within MAX_FANOUT_CONSTRAINT 10.",
     "CTS_SINK_CLUSTERING_SIZE": 8,

@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-05）：Phase 0–4 與 Phase 3.5 完成，下一步 Phase 5（換 Hazard3）。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-05）：Phase 0–4 與 Phase 3.5 完成，Phase 5（換 Hazard3）進行中。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -44,11 +44,13 @@ make smoke         # 環境檢查、Python 名稱檢查、lint、firmware、RTL 
 make phase1        # Phase 1 完整檢查（約 4 分鐘）
 make phase2        # Phase 2 完整檢查：LibreLane harden + GL regression（約 24 分鐘，需要 flow 環境）
 make phase3        # Phase 3 完整檢查：SoC 與 core 的 harden、EQY、GL 模擬與全部植入錯誤（約 91 分鐘，需要 flow 環境）
-make regress       # 全部檢查一次跑完（Phase 1–4，依序執行、第一個 FAIL 就停；約 2–2.5 小時，需要 flow 環境）
+make regress       # Hazard3 版 SoC 的全部檢查一次跑完（Phase 5 起的主要設計；依序執行、第一個 FAIL 就停；需要 flow 環境）
+make regress-picorv32  # PicoRV32 版 SoC 的全部檢查（Phase 1–4 的 make regress，約 2–2.5 小時）
 ```
 
-`make regress` 的結果在 `runs/regress/`：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
-它會先刪掉 `runs/regress/`，並由每個 harden 步驟重新產生自己的 run；下游步驟只接受同一個 commit 產生、且 PASS 的 run。
+`make regress` 的結果在 `runs/regress/`（`make regress-picorv32` 在 `runs/regress_picorv32/`）：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
+個別 target 用 `CPU=picorv32`（預設）或 `CPU=hazard3` 選 SoC 的 CPU，例如 `make harden-soc CPU=hazard3`（run 在 `runs/soc_top_hazard3/`）。
+它會先刪掉自己的結果目錄，並由每個 harden 步驟重新產生自己的 run；下游步驟只接受同一個 commit 產生、且 PASS 的 run。
 工作目錄有未提交的修改時，來源追溯（provenance）會判 FAIL，所以請在乾淨的 checkout 上執行。
 
 第一次在新機器上建 flow 環境的步驟見 [env/setup.md](env/setup.md)。
@@ -85,7 +87,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 3 | 整合預建 SRAM macro | 完成（2026-10-04） |
 | 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 完成（2026-10-05） |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
-| 5 | 換成 Hazard3 | 未開始 |
+| 5 | 換成 Hazard3 | 進行中 |
 | 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 未開始 |
 | 7 | （可選）chip-level 整合，例如 ChipFoundry Caravel | 未開始 |
 
@@ -121,9 +123,10 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
 | 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
-| run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束 | librelane-run-debug | multicorner-sta（corner 太多）、drv-timing-closure（post-GRT 修復的設定、resizer 停不下來）、openram-macro-characterization（macro .lib 的負載斜率） |
+| run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
+| 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
 | 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
 | 要定 clock uncertainty、derate、corner、IR 上限、max transition 這類數值 | signoff-criteria | timing-constraints-sdc（寫進 SDC）、pdn-ir-drop（IR） |
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
@@ -211,7 +214,8 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **重點**：
   - 單步重跑用 `python3 -m librelane.steps run`，改的是 config 與 state 的複本，原 run 不動。
   - 錯誤要先證明是隨機的（同一份輸入重跑 3–4 次，有過有不過），才能加重試；重試只針對那一個訊息，而且有次數上限。只跑一次就把錯誤歸因到某個設定不可靠：`GRT-0229` 原本被誤認為是某個設定造成的。
-  - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。
+  - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。記憶體要看 physical footprint，`ps` 的 RSS 不算被換到 swap 的部分，會嚴重低估；CPU 使用率低、swap 一直增加，就是記憶體失控，要馬上停（Phase 5 一個 step 用到 92.9 GB，機器只有 24 GB）。
+  - 要在某一步的工具指令裡加除錯輸出時，用 `python3 -m librelane.steps eject` 把那一步匯出成獨立 script 再改；可能失控的實驗要加記憶體上限自動停。
   - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。
@@ -238,13 +242,14 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - LibreLane 對 sky130 預設只在 tt 判 setup FAIL，slew／cap 不判；先把四個 `*_VIOLATION_CORNERS` 都設 `["*"]`。
   - DRV 收斂清單，依實際有效的順序：排除延遲 cell、設 `LAYERS_RC`、開 post-GRT 修復、長線切段；剩下少數違規先查是不是繞路。
   - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。
-  - resizer 停不下來時，查 corner 數，也查 macro 的 .lib：延遲表的負載斜率太大，會被當成很弱的 driver，一直插 buffer。換上新的 macro .lib 先單步重跑 `RepairDesignPostGPL` 確認時間正常。
+  - resizer 停不下來、記憶體一直漲：OpenROAD 的 `repair_design` 修 driver 的 slew 時，可能把它換成更弱的尺寸（Phase 5：`a2111oi_2` 被換成 `a2111oi_1`）；換完若弱到連一顆最小 buffer 的輸入電容都推不動，長線修復會在同一位置無限插 buffer（Phase 5 單步重跑確認）。PDK 的 `no_synth.cells` 只擋合成，resizer 照樣會用裡面的弱 `_1`。slew 餘量越大、resizer 的 corner 越慢，會出事的 cell 越多。用除錯輸出找出那條 net；本 repo 把 `a2111oi_1` 加進 `EXTRA_EXCLUDED_CELLS`（ADR-0012），並在 harden 前用 .lib 查表檢查 resizer 可用的每個 cell（`pnr/check_weak_cells.py`）。macro 的 .lib 也曾讓這一步停不下來，換上新的先單步重跑確認時間。
+  - 修哪個 corner 的違規，就用那個 corner 的資料判斷修法的影響。工具不一定做到：OpenROAD resizer 在 ss 100°C 抓到違規，卻用第一個讀進來的 tt .lib 挑尺寸（只改讀取順序，挑的尺寸就不同）。所以修完要在違規的 corner 確認被改的 cell 真的變好；換工具、升版或改 corner 設定時，用「只改 library 讀取順序或預設 corner」的對照實驗確認工具有沒有看對 corner。這條寫成規則而不只寫在腳本，是為了換工具或流程時也會重新驗證。
   - macro 的 .lib 要每個 PVT 一份，resizer 才看得到 macro 在慢 corner 的延遲；只靠 STA hook 加 derate 時，PnR 看不到。OpenRAM SRAM 的 .lib 要有 dout 在上升緣後開始變化的時序弧，STA 才會檢查接收 flop 的 hold。
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
   - 附「退回過的做法」表，避免再試沒用的設定。
 - **不在這裡**：SDC 寫法看 timing-constraints-sdc；corner 設定看 multicorner-sta；clock tree 看 cts-clock-tree；數值怎麼定看 signoff-criteria。
-- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010。negative test：P01–P04、P32。
+- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010、ADR-0012、`pnr/check_weak_cells.py`、`docs/notes/repair_design_loop.md`。negative test：P01–P04、P32、P40–P42。
 
 #### hard-macro-integration：hard macro 整合
 
@@ -426,7 +431,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **何時用**：增減 corner、設定每個 corner 都會執行的 hook、只重跑 STA 做 what-if（改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期、corner 變多後 PnR 變慢。
 - **重點**：
   - 在 config 設 `LIB` 會取代 LibreLane 的整組 corner 預設，相關的三個變數要一起設；新 corner 的名稱要符合寄生與萃取規則的萬用字元，先跑只做 lint 的 run 看 `resolved.json` 確認。
-  - resizer、CTS、其他 step 與 signoff STA，各自讀不同的 corner 變數。
+  - resizer、CTS、其他 step 與 signoff STA，各自讀不同的 corner 變數。設定了用哪組 corner，也不代表演算法每個決策都看了那些 corner（resizer 換尺寸只看第一個讀入的 .lib，見 drv-timing-closure 規則 11）。
   - 15 個 corner 會讓 post-GRT 修復停不下來，所以 resizer 維持原本的 9 個，新加的 corner 只在 signoff 判定。
   - what-if 的正式證據要用 LibreLane 單步重跑全部 corner；單一 corner 的 `sta` 腳本只能當探索。
   - 最小週期要從關鍵路徑推，不能用 `report_clock_min_period`（它排除半週期路徑）。
