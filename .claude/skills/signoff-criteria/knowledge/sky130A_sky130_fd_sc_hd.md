@@ -72,6 +72,7 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-07 | 同上 | 44 ns | 最差 setup 路徑的組成（max_ss_n40C） | 修復 buffer 22.3 ns（64 顆）、邏輯 20.6 ns（30 顆）；路徑 Manhattan 長約 4.5 mm（晶片 1.0 × 0.8 mm） | slew 上限（`pnr.sdc` `set_max_transition 0.70`、`DESIGN_REPAIR_MAX_SLEW_PCT` 30）是否過嚴：待實驗 | 同上；`drv-timing-closure` 經驗紀錄 |
 | 2026-10-07 | 同上（繞線前估計） | 44 ns | flop 之間 clock latency（ss_n40C，第 1 到第 99 百分位） | 3.82–4.02 ns（約 0.2 ns）；SRAM `clk0` 2.87 ns，早 1.1 ns；ff_n40C 早 0.24 ns | skew 不是這條 setup 違規的主因（只佔 0.07 ns） | `runs/p5_h3_exp_wirelength/lat.log`（本機） |
 | 2026-10-07 | 同上（單步實驗，第 32–37 步） | 44 ns | `DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 → 0 或 600 µm | 長線 buffer 79 → 0 顆，ss_n40C setup −0.161 → −0.255 ns（在 run 之間的浮動內） | 長線上限不是路徑上 buffer 多的原因 | `drv-timing-closure` 經驗紀錄 |
+| 2026-10-07 | soc_top Hazard3 實驗 A（第 4 次 run 第 43 步之後接續，開 `RUN_POST_GRT_RESIZER_TIMING`） | 44 ns | `ResizerTimingPostGRT` 修完（global routing 寄生估計）→ signoff 最差 setup | +0.002 → +0.530 ns（signoff 比估計好 0.53；CTS 後估計則是比 signoff 好 1.24） | 繞線後 setup 修復的餘量（`GRT_RESIZER_SETUP_SLACK_MARGIN` 預設 0.025 ns 已足夠）；`PL_RESIZER_SETUP_SLACK_MARGIN` 不必加大 | `runs/p5_h3_exp_postgrt_slew/`（本機） |
 
 ## 待確認（推測，不能當規則用）
 

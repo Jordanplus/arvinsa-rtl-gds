@@ -15,3 +15,4 @@
 | [0011](0011-hazard3-integration.md) | Phase 5 把 CPU 換成 Hazard3：hazard3_cpu_1port＋AHB 轉 native bus 轉接器、RV32IMC＋計數器、riscv-tests＋RVFI 對 rvcpp 逐指令比對、PicoRV32 版移到 regress-picorv32 | 2026-10-05 |
 | [0012](0012-resizer-weak-cell-exclusion.md) | resizer 不准用推不動一顆 buffer 的弱 cell：soc_top 排除 `a2111oi_1`，harden 前用 .lib 查表檢查（`check_weak_cells.py`） | 2026-10-06 |
 | [0013](0013-resizer-sees-ss-n40c.md) | resizer 也看溫度反轉的 ss_n40C（不再用 ss_100C 的 0.6 ns 餘量代替），setup 餘量改 0.1 ns，排除 ss_n40C 下的 6 種弱 cell | 2026-10-07 |
+| [0014](0014-post-grt-resizer-timing.md) | global routing 後再修一次 setup（`RUN_POST_GRT_RESIZER_TIMING`）：CTS 後的估計比 signoff 樂觀 1.24 ns，餘量調大又會擋住 hold 修復；週期維持 44 ns | 2026-10-07 |

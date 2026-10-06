@@ -294,6 +294,8 @@
     },
     "//RUN_POST_GRT_DESIGN_REPAIR": "Same as Phase 2 (pnr/picorv32_core/README.md): repairs slew/cap again after global routing.",
     "RUN_POST_GRT_DESIGN_REPAIR": true,
+    "//RUN_POST_GRT_RESIZER_TIMING": "Also re-repair setup after global routing with the global-route parasitics (OpenROAD.ResizerTimingPostGRT, LibreLane default false, 'experimental'; margins GRT_RESIZER_*_SLACK_MARGIN at their defaults 0.025 / 0.05 ns). ADR-0014 (user decision 2026-10-07): the post-CTS estimate was 1.24 ns more optimistic than signoff on the long Hazard3 paths at max_ss_n40C (harden 4: repair ended +0.112 ns, signoff -1.131 ns). Experiment from harden 4 after step 43 with only this switched on: signoff worst setup +0.530 ns (max_ss_n40C +0.636), hold +0.107 ns, slew/cap/fanout/route DRC/antenna 0; the step took 1 min 49 s.",
+    "RUN_POST_GRT_RESIZER_TIMING": true,
     "//GRT_DESIGN_REPAIR_MAX_SLEW_PCT": "Slew margin of the repair after global routing (Phase 2: 30). Here 30 left 20 max-slew violations in the ss corners on 5 nets (run soc_explore4: 0.755-0.932 ns, 144-496 um long, driven by small cells), because the extracted wires after detailed routing load them more than the global-routing estimate. 50 made this repair run for more than 26 minutes on one thread without finishing (soc_explore6, stopped); 40 finishes in about a minute. See README.md.",
     "GRT_DESIGN_REPAIR_MAX_SLEW_PCT": 40,
     "//DESIGN_REPAIR_MAX_SLEW_PCT": "Slew margin of the repair after global placement (default 20), raised for the same reason. See README.md.",
