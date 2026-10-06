@@ -72,9 +72,9 @@ names = [
 ]
 setup_ws_min = 0.0
 hold_ws_min = 0.0
-# One clock period (43 ns, CLOCK_PERIOD): a huge or infinite slack means no constrained path
+# One clock period (44 ns, CLOCK_PERIOD): a huge or infinite slack means no constrained path
 # (e.g. a lost clock) -> FAIL.
-slack_max = 43.0
+slack_max = 44.0
 
 [golden_tolerance]
 # The detailed router is not deterministic (measured in Phase 2, signoff/golden/picorv32_core/README.md;

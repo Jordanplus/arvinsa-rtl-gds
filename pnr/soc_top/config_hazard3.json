@@ -46,8 +46,8 @@
         "SOC_CPU_HAZARD3"
     ],
     "CLOCK_PORT": "clk",
-    "//CLOCK_PERIOD": "43 ns (user decision 2026-10-05, ADR-0004 Phase 3.5 addendum; was 42 ns from 2026-10-04 and 40 ns before). With the characterized SRAM .lib (ADR-0010) the new dout0 hold arc makes the post-CTS hold repair (0.3 ns margin) put a delay cell before rdata_q, and the sram0 dout0 half-cycle path missed setup by 0.066 ns at min_ss_n40C at 42 ns.",
-    "CLOCK_PERIOD": 43,
+    "//CLOCK_PERIOD": "44 ns (user decision 2026-10-07, ADR-0004 Phase 5 addendum: with ADR-0013 the Hazard3 SoC still missed setup at max_ss_n40C by 0.381 ns, alu.funct7_32b -> regs.rdata1, harden-soc 3 at d00214d). 43 ns from 2026-10-05 (ADR-0004 Phase 3.5 addendum), 42 ns from 2026-10-04, 40 ns before. With the characterized SRAM .lib (ADR-0010) the new dout0 hold arc makes the post-CTS hold repair (0.3 ns margin) put a delay cell before rdata_q, and the sram0 dout0 half-cycle path missed setup by 0.066 ns at min_ss_n40C at 42 ns.",
+    "CLOCK_PERIOD": 44,
     "//FP_SIZING": "DIE_AREA from docs/decisions/0006-soc-die-area.md.",
     "FP_SIZING": "absolute",
     "DIE_AREA": [

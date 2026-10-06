@@ -21,3 +21,9 @@
 - 這顆 cell 也在 SRAM 讀出的半週期路徑上：42 ns 時 min_ss_n40C 的 setup 差 0.066 ns（Phase 3.5 第 2 次 `make harden-soc`，commit `3e9b011`），ss 100°C 從 +0.79 降到 +0.47 ns。
 - 使用者決定（2026-10-05）：soc_top 改 **43 ns**，不動任何檢查或餘量。另兩個選項沒有採用：把 resizer 的 hold 餘量降到 0.15 ns（全域設定，Phase 4 是因為 SRAM 輸入 pin 的 hold 才調到 0.3）；ss −40°C 的 SRAM 路徑不判 setup（放寬檢查）。
 - picorv32_core 維持 40 ns；模擬的 testbench clock 不變（同上一節）。
+
+## Phase 5 補充（2026-10-07）：soc_top 改 44 ns
+
+- Phase 5 把 CPU 換成 Hazard3（ADR-0011）。resizer 原本只看 9 個 corner，第 2 次 `make harden-soc CPU=hazard3` 在 ss_n40C 差 4.16 ns（乘除法單元到 register file 的長路徑）；ADR-0013 讓 resizer 也看 ss_n40C 之後，第 3 次（commit `d00214d`）只剩 max_ss_n40C 差 0.381 ns（9 條，TNS −1.40 ns；nom +0.129、min +0.076），起點是 ALU 的控制暫存器 `alu.funct7_32b[6]`，終點是 register file 讀出暫存器 `regs.rdata1[*]`，最差那條在終點前有 1 顆 hold buffer（ss_n40C 約 1.2 ns）。
+- 使用者決定（2026-10-07）：soc_top 改 **44 ns**（約 22.7 MHz），不動其他檢查或餘量。另一個選項沒有採用：不改週期、再調 resizer 的 setup 餘量（0.6 ns 時 hold 修復被擋住，ADR-0013 實驗 1，結果不確定）。
+- 兩份 config（PicoRV32、Hazard3）共用週期，`signoff/limits/soc_top*.toml` 的 `slack_max` 跟著改；半週期路徑的 duty cycle 預算隨 `CLOCK_PERIOD` 自動變成 2.20 ns。picorv32_core 維持 40 ns；模擬的 testbench clock 不變。
