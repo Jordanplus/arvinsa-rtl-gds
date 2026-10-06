@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/require_criteria_review.py\"",
+            "timeout": 20,
+            "statusMessage": "檢查 harden 後的 signoff criteria 檢查是否完成…"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -333,6 +333,13 @@ Verilator 是 2-state 看不到 X：X 敏感的 GL smoke 用 Icarus；長測試�
 | 擺放 | 從 DEF 抓 `sram0` 的 (x, y, orient) 與 config 比對，不可漂移 |
 | signoff | `magic__drc_error__count` = 0（abstract）；full-GDS DRC 依 §6.3 baseline；`design__lvs_error__count` = 0；XOR = baseline |
 | 來源追溯 | 每次 run 記錄 git sha、LibreLane 版本、PDK hash；signoff run 時工作目錄有未提交修改即 FAIL |
+| criteria 有沒有被執行（2026-10-07 起） | `signoff/scripts/review_criteria.py`：config 的每個設定都進了 `resolved.json` 與各 step、`clock_uncertainty.sdc` 的值出現在每個時序 step 與 signoff corner、signoff corner = `STA_CORNERS`、上面各 checker 都留下結果行。LibreLane FAIL 時 checker 照跑，harden PASS 也要它 PASS |
+
+**每次 harden 後的 criteria 檢查**（2026-10-07 使用者決定）：PASS 或 FAIL 都要做，分兩部分。
+1. 上表最後一列（腳本）。
+2. Claude 依 skill `signoff-criteria` 判讀每個自訂 criterion 的依據在這次 run 是否仍成立，寫 `runs/<tag>_signoff/criteria_review.md`（有沒有被執行、合不合理、學習）。學到的數字寫進依製程分類的 `.claude/skills/signoff-criteria/knowledge/<製程>.md`；依據不成立的 criterion 提給使用者決定。
+
+專案的 Claude Code Stop hook（`.claude/hooks/require_criteria_review.py`，`make test-review-hook`）沒看到第 2 部分，就不讓 Claude 回報 harden 結果。
 
 ### 7.3 Negative test（bug injection）矩陣
 原則：每一列必須「在**預期的** checker FAIL，且訊息符合 regex」才算該 negative test PASS；FAIL 在別處視為 negative test 本身 FAIL。
@@ -362,6 +369,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | P10 | signoff | 在 GDS 加一個 met2 最小寬度違規 | `Checker.MagicDRC`／`KLayoutDRC` |
 | P11 | signoff | 只改 KLayout 那份 GDS | `Checker.XOR` |
 | P12 | 合成 | 讓某個輸出變常數 | cell count／FF 數下限 checker |
+| P43–P48 | criteria 檢查 | positive control；config 的設定沒進 run；某 step 沒收到設定；某 signoff corner 沒套 uncertainty；少一個 signoff corner；`check_soc.py` 沒跑 | `review_criteria.py` 對應的那一列（`pnr/soc_top/neg_pnr.py`） |
 
 不採用「`CLOCK_PERIOD` 設 2 ns」：FAIL 位置不確定（resizer 跑很久、slew/cap 先爆、甚至 crash）且耗時，改用 P01。
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P42).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P48).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -106,6 +106,19 @@ step re-run one step on a copy of that step's saved config and input state
        50 (Phase 3 soc_explore6 used 50 after GRT)   (a larger margin makes more cells too weak)
   P42  resolved.json: a2111oi_1 dropped as P40        check_inputs.py --resolved weak_cells_run
        (each case first checks that the edit removed or changed something)
+  signoff criteria review (signoff/scripts/review_criteria.py on a copy of the run and of
+  <run>_signoff made of symlinks, except the edited file; skill signoff-criteria, Phase 5)
+  P43  positive control: no edit                     criteria-review: PASS (no FAIL row)
+  P44  the CPU's config: PL_RESIZER_SETUP_SLACK_      review_criteria.py config_applied (the run
+       MARGIN + 0.5 ns                               did not use the setting the config has)
+  P45  ResizerTimingPostCTS config.json: the three   review_criteria.py step_config (the step did
+       ss_n40C corners dropped from RSZ_CORNERS      not receive the resolved value)
+  P46  max_ss_n40C_1v60 sta.log of the signoff STA    review_criteria.py uncertainty
+       without the clock_uncertainty.sdc line
+  P47  the signoff STA without the ff_100C_1v95       review_criteria.py signoff_corners
+       directory of the max corner
+  P48  <run>_signoff without soc_checks.txt (check_soc.py did not run, as before Phase 5 when
+       LibreLane failed)                              review_criteria.py checkers_ran
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -129,6 +142,7 @@ LL_DIR = os.environ.get("LIBRELANE_DIR", os.path.join(ROOT, ".tools", "librelane
 CHECK_SOC = os.path.join(ROOT, "pnr", "soc_top", "check_soc.py")
 CHECK_SIGNOFF = os.path.join(ROOT, "signoff", "scripts", "check_signoff.py")
 CHECK_INPUTS = os.path.join(ROOT, "pnr", "soc_top", "check_inputs.py")
+REVIEW = os.path.join(ROOT, "signoff", "scripts", "review_criteria.py")
 # --cpu -> (run tag, config); set_cpu() sets CPU, CONFIG, LIMITS and GOLDEN before the cases run.
 TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
 CPU = "picorv32"
@@ -962,12 +976,92 @@ def p42(run, d):
         "check_inputs.py --resolved weak_cells_run names a2111oi_1/Y (weak_cells on the config still PASS)"
 
 
+def mirror(src, dst, replace=None, drop=()):
+    """dst looks like src: symlinks, except the relative paths in `replace` ({path: new text}),
+    written as edited copies, and those in `drop`, left out. Returns dst."""
+    replace, drop = replace or {}, set(drop)
+    edits = set(replace) | drop
+
+    def walk(rel):
+        here = os.path.join(dst, rel)
+        os.makedirs(here, exist_ok=True)
+        for name in sorted(os.listdir(os.path.join(src, rel))):
+            r = os.path.normpath(os.path.join(rel, name))
+            if r in drop:
+                continue
+            if r in replace:
+                open(os.path.join(here, name), "w").write(replace[r])
+            elif any(e.startswith(r + os.sep) for e in edits):
+                walk(r)
+            else:
+                os.symlink(os.path.join(src, r), os.path.join(here, name))
+    walk(".")
+    return dst
+
+
+def review_case(run, d, row, run_replace=None, run_drop=(), out_drop=(), config=None):
+    """review_criteria.py on mirrored copies of the run and <run>_signoff: (caught, expect). Caught
+    only if the FAIL rows are exactly `row` and the verdict is criteria-review: FAIL (row None: the
+    positive control, no FAIL row and criteria-review: PASS)."""
+    fr = mirror(run, os.path.join(d, "run"), run_replace, run_drop)
+    fo = mirror(run.rstrip("/") + "_signoff", os.path.join(d, "out"), drop=out_drop)
+    cp = subprocess.run([sys.executable, REVIEW, "--cpu", CPU, "--run", fr, "--out", fo, "--config", config or CONFIG],
+                        capture_output=True, text=True)
+    open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
+    failed = set(re.findall(r"^  \[FAIL\] (\w+):", cp.stdout, re.M))
+    if row is None:
+        return cp.returncode == 0 and not failed and "criteria-review: PASS" in cp.stdout, "criteria-review: PASS"
+    return cp.returncode != 0 and failed == {row} and "criteria-review: FAIL" in cp.stdout, f"review_criteria.py {row}"
+
+
+def p43(run, d):
+    return review_case(run, d, None)
+
+
+def p44(run, d):
+    return review_case(run, d, "config_applied", config=config_with(
+        d, lambda c: c.update(PL_RESIZER_SETUP_SLACK_MARGIN=c["PL_RESIZER_SETUP_SLACK_MARGIN"] + 0.5)))
+
+
+def p45(run, d):
+    rel = os.path.join(os.path.relpath(step_dir(run, "OpenROAD.ResizerTimingPostCTS"), run), "config.json")
+    cfg = json.load(open(os.path.join(run, rel)))
+    kept = [c for c in cfg["RSZ_CORNERS"] if "ss_n40C" not in c]
+    if len(kept) == len(cfg["RSZ_CORNERS"]):
+        return False, "no ss_n40C corner in the step's RSZ_CORNERS (run made before ADR-0013?)"
+    cfg["RSZ_CORNERS"] = kept
+    return review_case(run, d, "step_config", run_replace={rel: json.dumps(cfg, indent=1)})
+
+
+def p46(run, d):
+    rel = os.path.join(os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run), "max_ss_n40C_1v60", "sta.log")
+    text = open(os.path.join(run, rel), errors="replace").read()
+    new = "".join(ln for ln in text.splitlines(True) if "clock_uncertainty.sdc:" not in ln)
+    if new == text:
+        return False, f"no clock_uncertainty.sdc line in {rel}"
+    return review_case(run, d, "uncertainty", run_replace={rel: new})
+
+
+def p47(run, d):
+    rel = os.path.join(os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run), "max_ff_100C_1v95")
+    if not os.path.isdir(os.path.join(run, rel)):
+        return False, f"no {rel} in the run"
+    return review_case(run, d, "signoff_corners", run_drop=[rel])
+
+
+def p48(run, d):
+    if not os.path.isfile(os.path.join(run.rstrip("/") + "_signoff", "soc_checks.txt")):
+        return False, "no soc_checks.txt in the run's signoff directory"
+    return review_case(run, d, "checkers_ran", out_drop=["soc_checks.txt"])
+
+
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
-         ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42)]
+         ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
+         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48)]
 
 
 def main():

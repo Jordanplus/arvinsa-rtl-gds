@@ -12,3 +12,4 @@
 6. Phase 0 的環境建置不做成 skill。
 7. 進入 Phase 3.5／6（OpenRAM 自產 SRAM 與特性化）、Phase 5（換 Hazard3）、Phase 7（Caravel 下線預檢）時，先建立對應的 skill（`openram-macro-characterization`、`core-migration-hazard3`、`tapeout-precheck-caravel`），再開始工作。`openram-macro-characterization` 已在 Phase 3.5 開始時建立，Phase 6 沿用並補上 OpenRAM 自產的規則；`core-migration-hazard3` 已在 Phase 5 開始時建立。
 8. 這個 repo 也是使用者其他 IC 專案沿用的流程來源（使用者 2026-10-04：開新專案時請 Claude Code 或 Codex「使用 arvinsa-rtl-gds 這個 repo 的流程」）。在別的專案用到這裡的 skill，通用的新經驗寫回這裡的 `SKILL.md` 與 README（規則 5），不要把 skill 複製到新專案；只屬於新設計的數字留在新專案。Codex 從 `AGENTS.md` 進來，它只指回本檔與 README，不另寫規則。
+9. 每次 harden 跑完（PASS 或 FAIL），回報結果之前，先照 `signoff-criteria` 的「每次 harden 後的檢查」做：讀 `runs/<tag>_signoff/criteria_review.txt`，寫 `criteria_review.md`（有沒有被執行、合不合理、學習），學到的數字寫進該製程的 knowledge 檔（使用者 2026-10-07）。Claude Code 由專案的 Stop hook（`.claude/hooks/require_criteria_review.py`）強制；Codex 沒有 hook，照本條自行遵守。

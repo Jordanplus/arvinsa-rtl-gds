@@ -1,6 +1,6 @@
 # ADR-0013：resizer 也看溫度反轉的 ss_n40C corner，setup 餘量改回 0.1 ns
 
-- 狀態：已採用（2026-10-07，使用者決定），等 Hazard3 版 harden 的結果確認
+- 狀態：已採用（2026-10-07，使用者決定）；Hazard3 第 3 次 harden 確認效果，剩 0.381 ns 由週期 44 ns 處理（ADR-0004）
 - 背景：Phase 5 第 2 次 `make harden-soc CPU=hazard3`（commit `2251c4a`，修好 ADR-0012 的記憶體失控之後）跑完，但 signoff setup 在 ss_n40C_1v60 FAIL。
 
 ## 原因（已驗證）
@@ -40,12 +40,20 @@
 - Hazard3 與 PicoRV32 兩版的合成與 PnR 結果都會改變。PicoRV32 版本來就要重跑，並更新 `signoff/golden/soc_top/`（ADR-0012 的影響一節）。
 - resizer 多看 3 個 corner，PnR 會變慢（單步實驗的 post-CTS 修復 68 → 189 秒）。Phase 4 時 15 個 corner 讓繞線後的修復停不下來，推測是 ADR-0012 的弱 cell 迴圈（未確認），所以這次跑 harden 時監看記憶體與時間。
 
+## 結果：Hazard3 第 3 次 harden（commit `d00214d`，週期 43 ns）
+
+- 跑完約 33 分鐘。三個修復步驟：56 秒／558 MiB、6 分 15 秒／834 MiB、41 秒／1 GiB，沒有記憶體或時間問題。
+- signoff 只剩 `max_ss_n40C_1v60` setup −0.381 ns（9 個 endpoint，TNS −1.40 ns）；`nom_ss_n40C_1v60` +0.129、`min_ss_n40C_1v60` +0.076 ns。第 2 次是 81 條、最差 −4.158 ns。
+- hold 最差 +0.107 ns；slew、cap、LVS、antenna、繞線 DRC 都是 0；Magic DRC 4,665,810 和 golden 相同。stdcell 30,404 顆。
+- 剩下的最差路徑：`alu.funct7_32b[6]` → `regs.rdata1[17]`，終點前有 1 顆 hold buffer（`hold10171`，約 1.2 ns）。
+- 使用者決定週期 43 → 44 ns（2026-10-07，ADR-0004 Phase 5 補充），commit `1292ca4`。
+
 ## 限制
 
-- 實驗的數字是繞線前的估計。這個決定要等 Hazard3 版 harden 的 signoff 結果確認；如果 ss_n40C 仍有少量 setup 違規，下一步再由使用者決定（例如週期，ADR-0004）。
+- 實驗的數字是繞線前的估計，繞線後由第 3 次 harden 的 signoff 確認（上一節）。
 - SRAM 在 ss_n40C 讀取會失敗（ADR-0010），它在這個 corner 的時序弧是佔位值，所以 SRAM 路徑在 ss_n40C 的 setup 與 hold 結果只代表佔位值。
 
 ## 出處
 
-- `runs/p5_h3_harden2.log`；`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3/56-openroad-stapostpnr/max_ss_n40C_1v60/`
+- `runs/p5_h3_harden2.log`、`runs/p5_h3_harden3.log`；`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3/56-openroad-stapostpnr/max_ss_n40C_1v60/`
 - skill `multicorner-sta` 規則 2、3、7、8；`drv-timing-closure` 規則 9、11 與經驗紀錄

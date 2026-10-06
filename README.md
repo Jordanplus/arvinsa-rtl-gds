@@ -99,6 +99,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **Signoff 門檻**：多個 STA corner 的 setup 與 hold 全部 PASS：PicoRV32 單獨 harden 是 9 個（tt／ss／ff 三種 library corner × 三種繞線寄生 RC），soc_top 另加兩個溫度反轉的 PVT，共 15 個，
   另有 DRC、LVS、antenna、IR drop 等 metrics 門檻。
 - **Bug injection**：刻意植入錯誤，確認對應的 checker 確實會 FAIL，避免 checker 永遠 PASS 卻抓不到問題。
+- **每次 harden 後檢查 signoff criteria**：`review_criteria.py` 確認自己訂的條件這次真的有生效（LibreLane FAIL 時 checker 也照跑），再由 Claude 依 skill `signoff-criteria` 判讀條件合不合理，寫 `runs/<tag>_signoff/criteria_review.md`。專案的 Claude Code Stop hook 沒看到這份檢查，就不讓 Claude 回報 harden 結果。
 
 細節見 project-plan.md 第 6、7 章。
 
@@ -114,6 +115,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - 每個 `SKILL.md` 結尾有「經驗紀錄」表。每次做完該任務，就把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。
 - 同一個現象出現兩次以上，或根因已經用實驗確認，才從紀錄搬進規則本文。
 - 這顆設計的具體數字（設定理由、試跑紀錄）留在 repo 文件；skill 只放可以帶到下一顆設計的規則，和指向 repo 文件的連結。
+- 製程相關的知識依製程分類：`signoff-criteria/knowledge/<製程>.md` 累積 PDK 事實與每次 harden 量到的校準資料，下一顆同製程設計用它來定 criteria。
 - skill 的規則、陷阱或適用範圍有改，同一個 commit 就要更新本節該 skill 的說明，以及該 `SKILL.md` 的 `description`。`make skill-check` 會檢查格式與索引是否齊全，但內容是否一致仍要人檢查。
 
 規則見 [CLAUDE.md](CLAUDE.md)。Phase 0 的環境建置不做成 skill。
@@ -128,6 +130,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
 | 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
 | signoff 才在 resizer 看不到的 corner 出現 setup 違規；繞線前想看某個 corner 的 slack | drv-timing-closure（規則 9、11：用別的 corner 加餘量代替，長路徑會漏） | multicorner-sta（規則 8：繞線前怎麼量；規則 7：flow 中途 state 的 metrics 可能是舊值） |
+| harden 跑完（PASS 或 FAIL）、要回報結果前；自己訂的 signoff criteria 有沒有生效、還合不合理；Stop hook 說要寫 `criteria_review.md` | signoff-criteria（每次 harden 後的檢查；knowledge 檔依製程分類） | drv-timing-closure（修法）、multicorner-sta（corner） |
 | 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
 | 要定 clock uncertainty、derate、corner、IR 上限、max transition 這類數值 | signoff-criteria | timing-constraints-sdc（寫進 SDC）、pdn-ir-drop（IR） |
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
@@ -172,6 +175,7 @@ RTL：合成、lint ........................ rtl-synthesis-lint
 PnR 各步驟用的 SDC 與 corner .......... timing-constraints-sdc、multicorner-sta
 
 signoff 條件的數值從哪來 ............... signoff-criteria
+每次 harden 後檢查 criteria ............. signoff-criteria（Stop hook 強制）
 macro 的時序模型（.lib）從哪來 ......... openram-macro-characterization
 貫穿全程 ............................... librelane-run-debug（執行與除錯）
                                          signoff-checker-qualification（checker、golden、植入錯誤）
@@ -199,7 +203,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 | [gate-level-simulation](.claude/skills/gate-level-simulation/SKILL.md) | 網表模擬、RTL 與網表 lockstep、X、帶電源網表、時限 | Icarus＋sky130 模型；lockstep 方法通用 |
 | [floorplan-congestion](.claude/skills/floorplan-congestion/SKILL.md) | die 尺寸、macro 位置、IO pin、placement 密度、壅塞與繞路 | OpenROAD；格點是 sky130 |
 | [timing-constraints-sdc](.claude/skills/timing-constraints-sdc/SKILL.md) | SDC 時序約束、PnR 與 signoff 約束分開、未受約束路徑 | OpenSTA／LibreLane |
-| [signoff-criteria](.claude/skills/signoff-criteria/SKILL.md) | signoff 條件的數值怎麼推導，工具沒分析的項目怎麼補 | 推導方法通用；預設值是 sky130＋LibreLane |
+| [signoff-criteria](.claude/skills/signoff-criteria/SKILL.md) | signoff 條件的數值怎麼推導，工具沒分析的項目怎麼補；每次 harden 後檢查 criteria 有沒有被執行、合不合理 | 推導與檢查方法通用；製程知識依製程分類（目前 sky130＋LibreLane） |
 | [rtl-synthesis-lint](.claude/skills/rtl-synthesis-lint/SKILL.md) | Yosys 合成設定、狀態機重新編碼、lint、latch | Yosys／LibreLane |
 | [flow-regression-reproducibility](.claude/skills/flow-regression-reproducibility/SKILL.md) | 一鍵 regression、乾淨 checkout、來源追溯、長 run 期間怎麼開發 | 方法通用；實作是 LibreLane／Nix |
 | [multicorner-sta](.claude/skills/multicorner-sta/SKILL.md) | 增減 corner、每個 corner 的 hook、只重跑 STA 的 what-if、最小週期 | LibreLane／OpenSTA |
@@ -387,9 +391,9 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 半週期路徑（一個 clock edge 送出、相反 edge 接收）要算 duty cycle。PnR 與 signoff 共用的約束放在同一個檔。
 - **本 repo 實例**：`pnr/soc_top/pnr.sdc`、`signoff.sdc`、`clock_uncertainty.sdc`。negative test：P01–P03、P13、P22–P25。
 
-#### signoff-criteria：signoff 條件的推導
+#### signoff-criteria：signoff 條件的推導與每次 harden 後的檢查
 
-- **何時用**：決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up、macro SPICE 特性化值的餘量；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
+- **何時用**：每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）；決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up、macro SPICE 特性化值的餘量；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
 - **重點**：
   - 每個條件都要回答四件事：防什麼、數值怎麼算、預設值出自哪裡、工具有沒有分析。LibreLane 的預設值多半是沿用的常數，沒有成分說明。
   - 推導前要先有的輸入：clock 來源、供電範圍、溫度、外部介面時序。沒有就寫「假設」。
@@ -398,7 +402,12 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 推導出來的條件要寫進 flow 變成 checker，每個都要有植入錯誤的案例（附 soc_top 的實作範本）。
   - 一組已驗證的工具行為，例如：指定邊緣的 uncertainty 會取代一般值、instance derate 會取代 global、fmax 報告排除半週期路徑、OpenSTA 沒有 SI 分析。
   - 每次 signoff 都要列出「不分析的項目」，寫出各用哪一筆 margin 涵蓋。
-- **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`。
+  - **每次 harden 後的檢查**（使用者 2026-10-07 要求）：
+    - 第一部分由 `signoff/scripts/review_criteria.py` 檢查 criteria 有沒有被執行：config 每個設定都進了 run、uncertainty 出現在每個時序步驟與 signoff corner、corner 齊全、repo 的 checker 都跑了。`pnr/soc_top/run.sh` 每次都跑它，LibreLane FAIL 也照跑；harden 要 PASS，它也必須 PASS。
+    - 第二部分由 Claude 依 skill 判讀 criteria 合不合理，寫 `runs/<tag>_signoff/criteria_review.md`（有沒有被執行、合不合理、學習三節）。專案的 Stop hook（`.claude/hooks/require_criteria_review.py`）沒看到就不讓 Claude 回報。
+    - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；依據不成立的 criterion 提給使用者決定，不自己改。
+  - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號。
+- **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P48（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
 
 #### rtl-synthesis-lint：合成與 lint
 

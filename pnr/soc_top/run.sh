@@ -17,6 +17,11 @@
 #                                        STA check_setup, min pulse width and period, Magic DRC
 #                                        inside the SRAM only where the SRAM alone has it
 #   5. check_inputs.py --resolved      : the run really used rtl/rtl.f, the SRAM .lib and the antenna LEF
+#   7. signoff/scripts/review_criteria.py: the signoff criteria were applied (every config setting in
+#                                        resolved.json and the steps, the clock uncertainty in every
+#                                        timing step and signoff corner, the checkers above ran), plus
+#                                        the numbers for Claude's review with skill signoff-criteria
+#   Steps 3-7 also run when LibreLane fails (the verdict is then FAIL).
 #   0/6. signoff/scripts/provenance.py : before and after the run: committed working tree, pinned
 #                                        LibreLane and PDK (project-plan.md §7.2)
 # Checker outputs go to runs/<tag>_signoff/; the verdict line is also written to result.txt, which
@@ -75,17 +80,19 @@ librelane_flow harden-soc "$CONFIG"
 (cd "$LL_DIR" && nix-shell --run "python3 -m librelane.state latest '$RUN_DIR' --extract-metrics-to '$OUT/metrics.json'") \
   > "$OUT/extract.log" 2>&1 || true
 
+# A LibreLane FAIL (e.g. a setup violation found by the signoff STA at the end) does not skip the
+# checkers: they run on what the flow produced, so every signoff criterion is checked in every run
+# (Phase 5: three Hazard3 runs failed in LibreLane and none of the checkers below ran).
 if [ "$flow_rc" != 0 ]; then
-  echo "harden-soc: FAIL - LibreLane exited with $flow_rc; see $OUT/console.log"
+  echo "harden-soc: LibreLane exited with $flow_rc (the verdict will be FAIL); see $OUT/console.log"
   tail -20 "$OUT/console.log"
-  exit 1
+  echo "harden-soc: the checkers still run on what the flow produced"
 fi
-if [ ! -s "$OUT/metrics.json" ]; then
-  echo "harden-soc: FAIL - no metrics extracted; see $OUT/extract.log"
-  exit 1
+if [ -s "$OUT/metrics.json" ]; then
+  python3 signoff/scripts/check_signoff.py "$OUT/metrics.json" "$LIMITS" "$GOLDEN" | tee "$OUT/signoff.txt" || true
+else
+  echo "signoff: FAIL - no metrics extracted; see $OUT/extract.log" | tee "$OUT/signoff.txt"
 fi
-
-python3 signoff/scripts/check_signoff.py "$OUT/metrics.json" "$LIMITS" "$GOLDEN" | tee "$OUT/signoff.txt" || true
 python3 pnr/soc_top/sram_drc_alone.py "$RUN_DIR" "$OUT/sram_drc_alone" | tee "$OUT/sram_drc_alone.txt" || true
 python3 pnr/soc_top/check_soc.py "$RUN_DIR" --sram-drc "$OUT/sram_drc_alone/step/reports/drc.magic.rpt" --config "$CONFIG" | tee "$OUT/soc_checks.txt" || true
 python3 pnr/soc_top/check_inputs.py --cpu "$CPU" --resolved "$RUN_DIR/resolved.json" > "$OUT/inputs_resolved.txt" 2>&1 || true
@@ -93,8 +100,12 @@ tail -1 "$OUT/inputs_resolved.txt"
 python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \
   > "$OUT/provenance_end.txt" 2>&1 || true
 tail -1 "$OUT/provenance_end.txt"
-if grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^soc-checks: PASS$' "$OUT/soc_checks.txt" \
-   && grep -q '^soc-inputs: PASS$' "$OUT/inputs_resolved.txt" \
+# Signoff criteria review, part 1 (were the criteria applied); part 2 is Claude's review with skill
+# signoff-criteria in $OUT/criteria_review.md (.claude/hooks/require_criteria_review.py asks for it).
+python3 signoff/scripts/review_criteria.py --cpu "$CPU" --run "$RUN_DIR" --out "$OUT" --config "$CONFIG" \
+  | tee "$OUT/criteria_review.txt" || true
+if [ "$flow_rc" = 0 ] && grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^soc-checks: PASS$' "$OUT/soc_checks.txt" \
+   && grep -q '^soc-inputs: PASS$' "$OUT/inputs_resolved.txt" && grep -q '^criteria-review: PASS$' "$OUT/criteria_review.txt" \
    && grep -q '^provenance: PASS$' "$OUT/provenance.txt" && grep -q '^provenance: PASS$' "$OUT/provenance_end.txt"; then
   echo "harden-soc: PASS" | tee "$OUT/result.txt"
 else

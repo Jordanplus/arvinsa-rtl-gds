@@ -1,6 +1,6 @@
 ---
 name: signoff-criteria
-description: 決定或檢討 signoff 條件的數值與依據時使用：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use when deriving or reviewing signoff limits and margins (uncertainty, derate, corners, IR/EM/SI budgets, PDK rules) for sky130 + LibreLane/OpenROAD.
+description: 兩種情況使用。一、每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）：檢查自己訂的 signoff criteria 有沒有被執行（`review_criteria.py` 的 criteria_review.txt）、合不合理（寫 criteria_review.md；Stop hook 沒看到就擋下回報），再把實測數字寫進依製程分類的 knowledge 檔（knowledge/sky130A_sky130_fd_sc_hd.md）。二、決定或檢討 signoff 條件的數值與依據：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、IR drop 預算、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use after every harden run (were the signoff criteria applied, are they still reasonable, per-PDK knowledge base) and when deriving or reviewing signoff limits and margins for sky130 + LibreLane/OpenROAD.
 ---
 
 # Signoff 條件怎麼推導
@@ -14,6 +14,8 @@ description: 決定或檢討 signoff 條件的數值與依據時使用：clock u
 LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有成分說明。所以「用預設值」不等於「條件合理」。
 
 本 repo 實例：`docs/notes/signoff_criteria_soc_top.md`（soc_top 逐項的數字、缺口與建議動作）。
+
+製程知識依製程分類放在 [knowledge/](knowledge/README.md)：一個製程一個檔案（例如 `knowledge/sky130A_sky130_fd_sc_hd.md`），內容是 PDK 的事實與每次 harden 量到的校準資料。本檔只放和製程無關的方法。
 
 相關 skill：
 - SDC 寫法：`timing-constraints-sdc`
@@ -47,17 +49,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 ## 已驗證的工具行為（LibreLane 3.0.14、OpenSTA 857316ff、OpenROAD dcf36133）
 
 1. **signoff STA 的引擎**是獨立的 `sta` binary，不是 openroad 內建的 OpenSTA（`librelane/steps/openroad.py` 第 579 行；`.tools/librelane/nix/opensta.nix` 第 20–21 行，`sta -version` 為 2.7.0 加上 LibreLane patch）。驗證約束行為的實驗要在這支 binary 上做。
-2. **LibreLane 對 sky130 的預設**（`librelane/config/pdk_compat.py`、`librelane/scripts/base.sdc`、PDK `libs.tech/openlane/sky130_fd_sc_hd/config.tcl`）：
-
-   | 項目 | 值 | 說明 |
-   |---|---|---|
-   | clock uncertainty | 0.25 ns，setup 與 hold 同值 | pdk_compat 327–328；base.sdc 65–66；沿用 OpenLane 1 的常數，沒有成分說明 |
-   | clock transition | 0.15 ns | 只在 ideal clock 時使用；signoff（propagated clock）不使用，改用實際算出的 slew |
-   | timing derate | early 0.95、late 1.05，套用到 cell、net、clock 與 data path 全部 | base.sdc 71–73；這是唯一的 OCV 建模 |
-   | IO delay | 週期 × 20%，input 與 output 都是，min = max | base.sdc 19–20、44–45 |
-   | 輸入驅動／輸出負載 | `inv_2/Y`／33.442 fF（= inv_16 的 A pin） | PDK config 27–31 |
-   | max transition／cap／fanout | 0.75 ns／0.2 pF／10 | PDK config 62–64 |
-   | 哪些 corner 判 FAIL | setup 只判 `*tt*`；hold 判全部 corner（`checker.py` 第 683 行）；max slew、max cap 預設都不判 | 要全部判 FAIL 就把四個 `*_VIOLATION_CORNERS` 都設 `["*"]` |
+2. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S2：LibreLane 對 sky130 的預設）
 
 3. **uncertainty 在 propagated clock 下照樣套用**。指定邊緣的 inter-clock uncertainty（`-fall_from clk -rise_to clk`）會**取代**一般的值，不是相加（OpenSTA `search/PathEnd.cc` 364–381）。實測：設 1.0 ns 後 slack 少了 0.75 ns，也就是 1.0 − 0.25。
 4. **clock skew 的 metric 不是 skew 的真值**：`clock__skew__worst_*` 與 `report_clock_skew` 都含 uncertainty，也含 ±5% derate。要看名目的 skew，得扣掉 uncertainty，再把 launch 端除以 1.05、capture 端除以 0.95。
@@ -70,12 +62,12 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 7. **`set_max_transition -clock_path` 在 propagated clock 下不會作用**：OpenSTA `search/CheckSlews.cc` 第 272 行用 `isIdealClock` 判斷 clock pin。實測：`-clock_path 0.05` 時 0 筆違規；`-data_path 0.05` 時連 clock buffer 的 pin 都被列進來。所以要另外限制 clock slew，得寫 checker 逐一看 clock net 的 pin。
 8. **`report_clock_min_period`（fmax）不能當 signoff 依據**：它只看 rise→rise 與 fall→fall 的路徑（OpenSTA `search/Sta.cc` 第 3604 行），會排除半週期路徑，也不看 .lib 的 `minimum_period`。實測：週期 32 ns 時 setup 已經 −0.42 ns，報告仍說 `period_min = 25.41`。最小週期要從半週期路徑反推。
 9. **`set_max_transition` 的有效上限**：取 SDC、pin 的 `max_transition`、輸出 pin 的 `default_max_transition` 三者中最嚴的（`CheckSlews.cc`）。`max_capacitance` 也一樣取 SDC 與 pin 中較小的（`CheckCapacitances.cc`），而 pin 的上限每個 corner 不同：sky130 的 ss 比 tt 小約 37%。
-10. **sky130_fd_sc_hd .lib 的量測與特性化範圍**：slew 的量測門檻是 20%–80%（tt.lib 157–160）。多數延遲表的輸入 slew 只到 1.5 ns，整份 tt.lib 只有 18 張表到 5 ns（buf_8／12／16）。`default_max_transition` 為 1.5 ns。PDK 的 0.75 ns 是 1.5 的一半，這個關係是推論，沒有出處。
+10. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S10：sky130_fd_sc_hd .lib 的量測與特性化範圍）
 11. **OpenSTA 沒有 SI 分析**：
     - read_spef 把 coupling cap 乘上 factor（預設 1.0）後接地，也就是當作鄰線不動（`parasitics/Parasitics.tcl` 50、72–73）。
     - 維護者在 issue #99 表示 SI「has not been started」；PDK 附的 ccsnoise .lib 不會被使用。
     - **用全域 coupling factor 做邊界分析不保證悲觀**：factor 2.0 也會拖慢 capture clock，實測 setup 反而變好 0.11 ns。clock 與 data 要分開處理。
-12. **sky130 只能用 flat derate**：三份 .lib 都沒有 ocv／sigma／LVF 表。本版 OpenSTA 也沒有 LVF（3.0.1 之後才有）。AOCV、POCV 都不適用。
+12. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S12：sky130 只能用 flat derate）
 13. **IR drop**（LibreLane `irdrop.tcl`、OpenROAD PSM）：
     - 只做 static。
     - 電流用 nom_tt 的 SPEF 加上 OpenSTA 的預設 activity，電壓取 lib 的 1.8 V。
@@ -83,26 +75,11 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
     - 沒給 `-vsrc` 檔時，PDN 的所有 pin 形狀都當成理想電壓源（`ir_solver.cpp` 507–527）。
     - `set_pdnsim_inst_power` 是**疊加**在 STA 功耗之上（844–878 行兩段都是 `+=`）：要模擬功耗變成 k 倍，給 (k−1)×P。
 14. **EM**：tech LEF 有每層的 DC／AC 電流密度上限（例如 met1 2.8／6.1 mA/µm）。PSM 用 `analyze_power_grid -enable_em -em_outfile` 可以輸出每段電源線的電流，但 LibreLane 沒有開，也沒有任何工具比對。signal net 的 EM 沒有任何開源工具分析。
-15. **KLayout 的 sky130 DRC deck**（`sky130A_mr.drc`）：
-    - 沒有 latch-up（LU）、`nwell.4`、density、antenna 規則。
-    - nsdm／psdm 的寬度、間距、包覆規則只有 `sram_exclude=true` 時才跑（557–633、639–729 行），LibreLane 沒有開，所以這些只由 Magic 檢查。
-    - LibreLane 傳的 `floating_metal`、`topcell`、`threads` 和 deck 讀的變數名對不上（`$floating_met`、`$top_cell`、`$thr`），所以浮接金屬檢查開不起來。
-    - 結論：「KLayout DRC = 0」不代表 latch-up、density、antenna 合格。
-16. **latch-up**：
-    - SkyWater 的預設規則是 tap 到 diffusion 6 µm。只有 `areaid.lowTapDensity`（81/14）覆蓋、且距 padframe ≥ 50 µm 的區域，才能用 15 µm（skywater-pdk `rules/layers.html`）。
-    - Magic 寫 GDS 時會自動產生 81/14，KLayout 的 GDS 沒有。
-    - `FP_TAPCELL_DIST 13` 的意思是每列 tap 間距 2 × 13 µm，相鄰列錯開半格，最壞約 13 µm。
-17. **metal density**：
-    - Classic flow 不插 metal fill，也不檢查 density。`FillInsertion` 只放 standard cell filler 與 decap。
-    - 下限 35%（met5 45%）只寫在 PDK 的 Magic `check_density.py` 裡。
-    - ChipFoundry 的 cf-precheck 只檢查上限（`met_min_ca_density.lydrc`）。
-    - slotting（m1–m4 .11／.12）與 m*.13 是銅製程專用規則，sky130 是鋁後段，不適用。
-18. **antenna**：
-    - OpenROAD 的比值與 tech LEF 一致。
-    - Magic 的 via1 參數比較嚴（3＋18×A，tech LEF 與 SkyWater 是 6＋36×A；`sky130A.tech` 第 5087 行）。
-    - `diode_2` 本身帶 `ANTENNAGATEAREA` 0.4347，OpenROAD 會把它加進閘極面積。
-    - OpenROAD 不讀 `ANTENNAPARTIALMETAL*AREA`，所以 macro 階層之間的 antenna 只能靠 port diode。
-19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resolved.json` 為 None），clock 實際走 met1／met2。要讓 clock 走粗金屬，必須在專案 config 明確設定。
+15. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S15：KLayout 的 sky130 DRC deck）
+16. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S16：latch-up）
+17. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S17：metal density）
+18. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S18：antenna）
+19. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S19：PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效）
 
 ## 各條件的推導方法
 
@@ -173,11 +150,55 @@ SI（delta delay 與 glitch）、dynamic IR、signal EM、aging、ESD、density 
 - IR 上限：把 metric 改大，或放大 PDN pitch，必須 FAIL。
 - IO：拿掉某個 port 的 delay，必須出現 unconstrained 警告。
 
+## 每次 harden 後的檢查（使用者 2026-10-07 要求）
+
+harden 跑完、回報結果之前，一定要做這個檢查，PASS 或 FAIL 都要做。它回答兩個問題：自己訂的 criteria 這次**有沒有被執行**，以及它們**合不合理**。檢查完再把學到的寫回去。
+
+為什麼：Phase 5 的 Hazard3 版連續三次 LibreLane FAIL，`pnr/soc_top/run.sh` 在 LibreLane FAIL 時直接結束，repo 自己的 checker（上限檔、`check_soc.py`）三次都沒跑，沒有人發現。另外 `PL_RESIZER_SETUP_SLACK_MARGIN` 0.1 ns 違反本檔「resizer 的 slack margin」一列的推導方法：實測的繞線前到 signoff 差距是 1.2 ns。
+
+### 第一部分：有沒有被執行（腳本，`signoff/scripts/review_criteria.py`）
+
+`pnr/soc_top/run.sh` 每次都會跑，LibreLane FAIL 也照跑，結果寫進 `runs/<tag>_signoff/criteria_review.txt`。harden 要判 PASS，這支也必須 PASS。每一項都有 negative test（`neg_pnr.py` P43–P48）。
+
+| 檢查項 | 檢查內容 |
+|---|---|
+| `config_applied` | config 的每個設定在 `resolved.json` 裡值都一樣 |
+| `step_config` | 每個步驟的 `config.json` 都收到同樣的值 |
+| `uncertainty` | `clock_uncertainty.sdc` 印出的那一行（用 `tclsh` 執行 SDC 算出預期值）出現在每個時序步驟與每個 signoff corner |
+| `signoff_corners` | signoff STA 的 corner 目錄等於 `STA_CORNERS` |
+| `checkers_ran` | `check_signoff.py`、`check_soc.py`、`check_inputs.py --resolved`、`provenance.py --verify` 都留下結果行 |
+
+FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只重跑。
+
+### 第二部分：合不合理（Claude 依本 skill 判讀）
+
+讀 `criteria_review.txt` 的 `[INFO]` 列、各 checker 的輸出，以及該製程的 knowledge 檔，寫 `runs/<tag>_signoff/criteria_review.md`。檔案要包含以下內容，Stop hook（`.claude/hooks/require_criteria_review.py`，`make test-review-hook`）會檢查，沒有就不能回報：
+
+- 引用 `criteria_review.txt` 最後一行（`criteria-review: PASS` 或 `FAIL`）。
+- `## 有沒有被執行`：第一部分每個 FAIL 的原因；各 checker 的 FAIL 列，逐條說明是設計問題還是 criteria 本身的問題；「不分析的項目清單」這次有沒有寫。
+- `## 合不合理`：每個自訂的 criterion 與餘量一列，欄位是「criterion｜當初的依據（出處）｜這次的實測｜判斷」。判斷只能是三種：依據仍成立、依據不成立、資料不足。至少要有這幾列：
+  - resizer 的 setup／hold 餘量 vs.「post-CTS 修完到 signoff」的實測差距（本檔「resizer 的 slack margin」一列）；
+  - hold 餘量的代價（hold buffer 數量與面積）；
+  - slew 上限與 slew 餘量 vs. 當初要解決的問題、關鍵路徑上修復 buffer 的比例；
+  - corner 清單：最差的是哪個 corner，溫度反轉還成不成立；
+  - uncertainty 的每個成分：假設值是否還是假設、DCD 預算 vs. 半週期路徑的 slack；
+  - skew：metric 換算成名目值（規則 4）；
+  - 上限檔（`signoff/limits/<tag>.toml`）裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）是不是為這顆設計推導的，還是從別的設計抄來的。
+- `## 學習`：
+  - 新量到的數字追加到 `knowledge/<製程>.md` 的「實測校準資料」；
+  - 新的工具行為寫進本檔的經驗紀錄；
+  - 依據不成立的 criterion，寫成提案給使用者決定（決定後寫 ADR），不要自己改。
+
+判斷的原則：
+- 「依據不成立」不等於要立刻改數字。要先找出原因，同一個現象出現兩次以上或用實驗確認後，才改規則或設定（CLAUDE.md 規則 3）。
+- 第二部分的數字是一次 run 的實測。和 knowledge 檔裡的舊資料比對，差很多時，要先查是設計不同還是 flow 變了。
+
 ## 用完後
 
 1. 本次的推導結果寫進該設計的 repo 文件（本 repo：`docs/notes/signoff_criteria_<design>.md`），不寫進本 skill。
+   製程的事實與校準資料寫進 `knowledge/<製程>.md`。
 2. 新發現的工具行為寫進「經驗紀錄」；用實驗確認過的，搬進「已驗證的工具行為」。
-3. LibreLane、OpenROAD、OpenSTA 或 PDK 升版時，逐條重新確認規則 1–19 的行號與行為。
+3. LibreLane、OpenROAD、OpenSTA 或 PDK 升版時，逐條重新確認規則 1–19 與 knowledge 檔 S 開頭各條的行號與行為。
 
 ## 經驗紀錄
 
@@ -188,3 +209,4 @@ SI（delta delay 與 glitch）、dynamic IR、signal EM、aging、ESD、density 
 | 2026-10-03 | 同上 | 調查 agent 的 22 項論述中有部分錯誤：把 skew metric 當真值、`-clock_path` 的建議無效、全域 coupling factor 當上界、hold 預設的判 FAIL corner 寫錯 | 已驗證：獨立核對 agent 實測推翻 | 本 skill 只收錄核對過的結論 | workflow `signoff-criteria-research` |
 | 2026-10-04 | soc_top Phase 4 | uncertainty 成分、DCD、pulse width、溫度反轉 corner、derate×OCV、IR 預算全部實作 | 已驗證（單 corner `sta` 實驗：半週期路徑 slack 0.83 ns；pulse width slack 7.95 ns） | 「實作範本」一節 | `docs/notes/signoff_criteria_soc_top.md` |
 | 2026-10-04 | soc_top IR 研究 | LibreLane 的 IR 是「所有 pin 理想」且只看 VDD；換成一側供電 + VDD/GND 合計後 8.2 mV（最壞組合 11.5 mV） | 已驗證（agent 單步重跑 16 種組合） | IR 預算改判合計；`pdn-ir-drop` 規則 4、10、11 | `docs/notes/ir_worst_case_soc_top.md` |
+| 2026-10-07 | Phase 5 Hazard3 第 4 次 harden（`1292ca4`，44 ns）的第一次 criteria 檢查 | ① LibreLane FAIL 時 `run.sh` 直接結束，第 2–4 次 harden 的 `check_signoff.py`、`check_soc.py` 都沒跑；② `soc_top_hazard3.toml` 的 `timing__unannotated_net__count` 133 是 PicoRV32 的組成，Hazard3 是 125（81 clkload + 32 `sram0/dout1` + 12 tie）；③ `PL_RESIZER_SETUP_SLACK_MARGIN` 0.1 ns，實測 post-CTS 到 signoff 差距 1.243 ns | 已驗證（①讀 `run.sh` 79–81 行；②數 `checks.rpt` 的 unannotated driver；③`review_criteria.py` 的數字） | ①`run.sh` 改成照跑 checker，加 `review_criteria.py`（P43–P48）與 Stop hook；②③提給使用者 | `runs/soc_top_hazard3_signoff/criteria_review.md`（p5h3 worktree） |
