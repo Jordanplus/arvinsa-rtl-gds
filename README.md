@@ -114,6 +114,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 **經驗怎麼累積**：
 - 每個 `SKILL.md` 結尾有「經驗紀錄」表。每次做完該任務，就把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。
 - 同一個現象出現兩次以上，或根因已經用實驗確認，才從紀錄搬進規則本文。
+- skill 的重要任務是防工具的缺陷（使用者 2026-10-07，`CLAUDE.md` 規則 10）：確認過的工具缺陷，要寫出症狀（確切的訊息）、怎麼發現、怎麼繞過，以及能抓到它再次出現的 checker 或 negative test；防護不能綁在 step 名稱、log 措辭這類 flow 會變的東西上。
 - 這顆設計的具體數字（設定理由、試跑紀錄）留在 repo 文件；skill 只放可以帶到下一顆設計的規則，和指向 repo 文件的連結。
 - 製程相關的知識依製程分類：`signoff-criteria/knowledge/<製程>.md` 累積 PDK 事實與每次 harden 量到的校準資料，下一顆同製程設計用它來定 criteria。
 - skill 的規則、陷阱或適用範圍有改，同一個 commit 就要更新本節該 skill 的說明，以及該 `SKILL.md` 的 `description`。`make skill-check` 會檢查格式與索引是否齊全，但內容是否一致仍要人檢查。
