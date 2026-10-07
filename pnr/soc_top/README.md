@@ -91,8 +91,9 @@
 1. SRAM 的時序數字是工程假設（ADR-0007），不是特性化結果。
 2. Magic 的 SRAM 內部 DRC 數量無法和 SRAM 單獨檢查的數量直接比較：同一個錯誤在 soc_top 裡被切成不同的框（單獨 5,579,161 個、soc_top 內 4,665,810 個，30 種規則相同）。Phase 3 因此只比規則種類；Phase 4 改成逐一比位置（`check_soc.py` 的 `drc_position_compare`）：Phase 3 的 run 中 4,651,644 個框與 SRAM 單獨的框完全相同，13,935 個落在同規則框的聯集內，其餘 231 個（li.5、diff/tap.9）只比聯集多出最多 85 nm，所以容許 0.1 µm。P21 在 SRAM 框內植入一個 li.3（SRAM 單獨時也有的規則）違規，證明新的比對抓得到。
 3. LVS 中 SRAM 是 black box（`MAGIC_EXT_USE_GDS=false`），只驗 pin 的連接。
-4. **`OpenROAD.RepairDesignPostGRT` 隨機中止**：
-   - 這一步在修復之後重新做一次 global routing，有時會報 `[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200` 而中止。
+4. **`OpenROAD.RepairDesignPostGRT`、`OpenROAD.ResizerTimingPostGRT` 隨機中止**：
+   - 這兩步都在修復之後重新做一次 global routing，有時會報 `[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200` 而中止。
    - 已驗證是隨機的：拿 `make phase3` 第一次失敗那個 run 的同一份輸入（`state_in.json`）單獨重跑這一步 4 次，2 次中止、2 次通過。兩次通過的修復結果（resize 1273 顆、插 779 顆 buffer）與繞線總長（1,179,610 µm）完全相同；修復本身 4 次都相同，只有修復之後那次 global routing 會中止。
    - (79, 0) 正好是 clk pin 所在的 GCell（pin 在 x = 547.63 µm、die 下緣，GCell 約 6.9 µm），這條 clk net 用 CTS 的 non-default rule。65534 像是 16-bit 無號計數減到 −2。推測是 global router 在這個 GCell 的用量計算有 bug，尚未查證。
-   - 處理：`pnr/librelane_flow.sh` 只對「`RepairDesignPostGRT` 失敗且訊息是 GRT-0229 usage=65534」這一種情況，從這一步接續重跑，最多 3 次，每次重試都記在 `runs/<tag>_signoff/retries.txt`。其他任何失敗都不重試。接續的 run 與一次就跑完的 run 結果相同（見 Phase 3 exit review 的可重現性）。
+   - `ResizerTimingPostGRT`（ADR-0014 開啟）也一樣：Phase 5 PicoRV32 與 Hazard3 的正式 harden（`adac1a9`）都在這一步中止；PicoRV32 同一份輸入單步重跑 4 次，1 次中止、3 次通過且 DEF 相同（`docs/notes/grt0229_repro.md`）。
+   - 處理：`pnr/librelane_flow.sh` 只對「這兩步之一失敗且訊息是 GRT-0229 usage=65534」這一種情況，從中止的那一步接續重跑，最多 3 次，每次重試都記在 `runs/<tag>_signoff/retries.txt`。其他任何失敗都不重試。接續的 run 與一次就跑完的 run 結果相同（見 Phase 3 exit review 的可重現性）。

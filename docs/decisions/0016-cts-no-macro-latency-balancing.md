@@ -64,6 +64,6 @@ Hazard3（`runs/exp_h_d`，第 8 次 harden 第 34 步接續，同樣的暫存 S
 
 ## 出處
 
-- p5h3 worktree `runs/soc_top_signoff/criteria_review.md`（PicoRV32 第 1 次 harden）
+- p5h3 worktree `runs/p5_pico_h1_signoff/criteria_review.md`（PicoRV32 第 1 次 harden）
 - `runs/exp_p_hm01`、`exp_p_dtdout`、`exp_p_c1`、`exp_p_c2`、`exp_p_d`、`exp_h_d`（p5h3 worktree）
 - skill `cts-clock-tree`、`drv-timing-closure` 的經驗紀錄

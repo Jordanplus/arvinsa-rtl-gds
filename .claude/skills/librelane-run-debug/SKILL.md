@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`，也會出現在新開的 step 如 `ResizerTimingPostGRT`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -23,7 +23,8 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 5. **隨機失敗要先證明是隨機的**：
    - 某一步失敗、但同樣設定之前跑過沒事時，拿失敗那次的 `state_in.json` 單步重跑至少 3–4 次。
    - 有的過、有的不過，才算隨機；再比較通過的幾次輸出是否完全相同。
-   - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 的 GRT-0229，同一份輸入 2/4 中止）。其他失敗一律不重試。重試的判斷本身也要測：`make test-flow-retry` 用模擬的 nix-shell 跑 7 種情境（只有 GRT-0229 才重試、最多 2 次、其他錯誤不重試）。
+   - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 與 `ResizerTimingPostGRT` 修復後的 global routing 報 GRT-0229，同一份輸入分別 2/4、1/4 中止）。其他失敗一律不重試。重試的判斷本身也要測：`make test-flow-retry` 用模擬的 nix-shell 跑 10 種情境（只有 GRT-0229 才重試、從中止的那一步接續、最多 2 次、其他錯誤不重試）。
+   - flow 多開一個會呼叫同一個工具指令的 step（例如 `RUN_POST_GRT_RESIZER_TIMING` 也會做 `global_route`），已知的隨機錯誤也可能出現在那一步：重試規則是綁 step 名稱寫的，要一起檢查（Phase 5：PicoRV32 與 Hazard3 正式 harden 都在 `ResizerTimingPostGRT` 中止）。
    - 反過來說，**只跑一次就把錯誤歸因到某個設定，是不可靠的**：GRT-0229 原本被歸因到 `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH`（soc_explore3 只跑了一次），後來發現不設也有一半機率出現。結論是「某設定造成某錯誤」之前，同一設定至少跑兩次，或單步重跑確認。
 6. **重跑會覆蓋上一次的 run，失敗的證據要保留**：同一個 run tag 重跑時，舊做法 `rm -rf` 整個 run 目錄與 `_signoff` 輸出目錄。Phase 3.5 第 1 次 harden-soc（`RepairDesignPostGPL` 75 分鐘後異常結束）的 run 就在第 2 次開跑時被刪，只剩 ADR-0010 的摘要。
    - Phase 5 起 `pnr/*/run.sh` 用 `keep_prev_run`（`pnr/librelane_flow.sh`）把上一次的 run 搬成 `<dir>.prev`，更舊的 `.prev` 刪掉（只留一層：一次 soc_top run 約 4 GB）；`make test-flow-retry` 有這個情境。
@@ -41,7 +42,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 | console 輸出、OpenROAD step log 都會緩衝 | 進度看 step 目錄編號、`ps` 的 CPU 時間；不要只看 console | soc_explore6 |
 | LibreLane 的 console 輸出（rich 排版）會折行，一個錯誤訊息被拆成兩行：`[GRT-0229] Vertical edge usage exceeds the` ／ `maximum allowed. (79, 0) usage=65534` | 程式要比對訊息時，讀該 step 目錄自己的 log（一行完整），不要 grep console | `pnr/librelane_flow.sh` 第一版用 console 比對，永遠不會重試（模擬測試前讀碼發現） |
 | `pkill -f <字串>` 會誤殺命令字串含相同字的其他程序 | 用完整、唯一的字串（例如 `run-tag soc_explore8`） | 本專案 Phase 3 eqyB 被誤殺 |
-| `OpenROAD.RepairDesignPostGRT` 修復後的 global routing 隨機中止：`[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200`；位置是 clk pin 所在的 GCell | 已驗證是隨機的（同一份輸入 2/4 中止，修復結果 4 次相同）；`pnr/librelane_flow.sh` 只對這個訊息從該步接續，最多 3 次 | `make phase3` 第一次（worktree）、單步重跑 r1–r4 |
+| `OpenROAD.RepairDesignPostGRT`、`OpenROAD.ResizerTimingPostGRT` 修復後的 global routing 隨機中止：`[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200`；位置是 clk pin 所在的 GCell | 已驗證是隨機的（`RepairDesignPostGRT` 同一份輸入 2/4 中止，修復結果 4 次相同；`ResizerTimingPostGRT` 1/4 中止，通過的 3 次 DEF 相同）；`pnr/librelane_flow.sh` 只對這個訊息從該步接續，最多 3 次 | `make phase3` 第一次（worktree）、單步重跑 r1–r4 |
 | 實驗性選項 `RUN_POST_GRT_DESIGN_REPAIR` 搭配很大的 slew 餘裕（50%）或很短的長線限制（120 µm）時，單執行緒跑十幾分鐘以上不結束 | 先限時觀察：同一步正常約 1 分鐘；超過 10 分鐘就停掉換設定 | soc_explore6、8 |
 | 同上，起因是 corner 變多：resizer 看 15 個 corner（加了溫度反轉）時 `RepairDesignPostGRT` 35 分鐘以上不結束 | 停掉後拿同一份 `state_in.json` 單步重跑、只改 `RSZ_CORNERS` 回 9 個 → 58 秒，確認原因後才改 config（`multicorner-sta` 規則 3） | Phase 4 第 1 次 harden-soc |
 | 診斷「是不是卡住」：log 有緩衝，看不到進度 | `ps -o cputime` 看 CPU 時間是否持續增加；記憶體看 physical footprint（下一列）；macOS `sample <pid> 2` 看 call stack 卡在哪個函式 | Phase 4（看到每加一顆 buffer 就做一次增量 global routing） |
@@ -74,3 +75,4 @@ soc_top 全 flow 約 20–30 分鐘（正式 run 實測 18 與 28 分；Magic �
 | 2026-10-06 | Phase 5 第 2 次 harden-soc（Hazard3，`2251c4a`） | 分析 ss_n40C setup 違規時，第 38 步 `state_out.json` 顯示 nom_ss_n40C −15.5 ns、nom_ss_100C −1.89 ns，和前一步 resizer 的 `RSZ-0098 No setup violations found` 矛盾 | 已驗證：`STAMidPNR` 只量 `DEFAULT_CORNER`（該步 log 只讀 nom_tt 的 .lib，`or_metrics_out.json` 只有 nom_tt），state 裡 ss 的值是第 12 步 `STAPrePNR` 寫的、沿用到第 55 步 | 規則 4；量繞線前的其他 corner 用 `multicorner-sta` 規則 8（`eject` 後換成自己的 Tcl） | `runs/soc_top_hazard3/38-openroad-stamidpnr-2/`（`../arvinsa-rtl-gds-p5h3`） |
 | 2026-10-07 | Phase 5 Hazard3 第 6 次 harden | `RepairDesignPostGRT` 修復後的 global routing 沒有中止，但結果和前幾次不同（線長 1,146,538 對 1,146,421 µm），之後的 antenna 修補、`ResizerTimingPostGRT`、detailed routing 都跟著變 | 已驗證是隨機的（同一份輸入單步重跑 4 次都和多數結果相同，7 次裡 1 次不同；之後再用同一份輸入單步重跑 20 次：16 次與 golden 相同，其餘 4 次分成 3 種結果（其中 2 次與第 6 次相同）。合計 27 次裡 22 次相同（約 81%），沒有一次出現 GRT-0229）；和 `GRT-0229` 隨機中止在同一個呼叫，是否同源未驗證 | 重試機制只認 GRT-0229，這種不會被發現；要靠 golden 比對（`global_route__wirelength`）抓到 | `flow-regression-reproducibility` 經驗紀錄 |
 | 2026-10-07 | Phase 5 Hazard3 第 6 次 run 改名成 `p5_h3_h6` 後，要再單步重跑第 41 步 | `state_in.json` 指向 `runs/soc_top_hazard3/...`（已不存在） | 已驗證：LibreLane 的 state 檔記絕對路徑 | 用 `sed` 換成新目錄寫進複本再重跑（規則 3 的「改複本」）；20 次重跑都正常 | session 暫存的 `rerun41.sh` |
+| 2026-10-07 | Phase 5 正式 harden（`adac1a9`，ADR-0016），PicoRV32 與 Hazard3 | 兩個都在第 44 步 `OpenROAD.ResizerTimingPostGRT failed`：`[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200`（`rsz_timing_postgrt.tcl, 68`）；重試只認 `RepairDesignPostGRT`，所以沒有重試 | 已驗證是隨機的：PicoRV32 第 44 步單步重跑 4 次，1 次中止、3 次通過且 DEF 相同；同一份 CTS 結果的接續實驗 D 兩個 CPU 都通過這一步 | `librelane_flow.sh` 的重試加上這一步（從中止的 step 接續）；`make test-flow-retry` 加 3 種情境並檢查 `--from`，新情境用舊版腳本 FAIL 8/11、新版 PASS 11/11 | `runs/p5_pico_harden2.log`、`runs/p5_h3_harden9.log`、`docs/notes/grt0229_repro.md` |
