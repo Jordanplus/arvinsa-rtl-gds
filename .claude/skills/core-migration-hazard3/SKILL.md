@@ -77,7 +77,7 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
     - resizer 要看到 signoff 的所有慢 corner（ADR-0013）：Hazard3 有比 PicoRV32 長的整週期路徑，用另一個 corner 加餘量代替會漏（`drv-timing-closure` 規則 9、11）。
     - resizer 會換上的弱 cell 要用新 core 的 run 重查（ADR-0012、`drv-timing-closure` 規則 10）：讓 Hazard3 版第一次 harden 卡住的是兩版共用、RTL 沒改的 UART。
     - CTS 後的 setup 估計在長路徑偏樂觀，開 `RUN_POST_GRT_RESIZER_TIMING`（ADR-0014、`drv-timing-closure` 規則 12）。
-    - 上限檔裡依設計結構推導的數字（沒有寄生資料的 driver 數）要用新 core 的 run 重新數，不能從舊 core 的上限檔複製：PicoRV32 是 133，Hazard3 是 125（`signoff/limits/soc_top_hazard3.toml`）。golden 另建一份（`signoff/golden/soc_top_hazard3/`）。
+    - 上限檔裡依設計結構推導的數字（沒有寄生資料的 driver 數）要用新 core 的 run 重新數，不能從舊 core 的上限檔複製：PicoRV32 是 133，Hazard3 是 125（`signoff/limits/soc_top_hazard3.toml`）。golden 另建一份（`signoff/golden/soc_top_hazard3/`），而且要用幾次相同設定的 run 重新量可重現性：Hazard3 版有兩個會改變 cell 數、diode 數的不可重現步驟，PicoRV32 版沒看過（ADR-0015）。
     - 兩個 CPU 的最差 setup 都是 SRAM 讀出的半週期路徑，週期能縮多少受 duty cycle 預算限制（`signoff-criteria` 的 knowledge 檔）。
 
 ## 待補

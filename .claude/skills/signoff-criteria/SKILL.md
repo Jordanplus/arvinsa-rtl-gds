@@ -176,6 +176,7 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 
 - 引用 `criteria_review.txt` 最後一行（`criteria-review: PASS` 或 `FAIL`）。
 - `## 有沒有被執行`：第一部分每個 FAIL 的原因；各 checker 的 FAIL 列，逐條說明是設計問題還是 criteria 本身的問題；「不分析的項目清單」這次有沒有寫。
+  - golden 比對 FAIL 時，先判斷是「設計或設定改變」還是「flow 不可重現」：逐步比對這次 run 與 golden run 的 DEF 與 log，找出第一個分歧的步驟；設定相同卻分歧，就用同一份輸入單步重跑量頻率（Phase 5 Hazard3 第 6、7 次：第 41 步的 global routing、detailed routing 的 antenna 修補）。不可重現造成的差異超出誤差時，交給 `signoff-checker-qualification` 規則 5 處理，不要直接放寬誤差。
 - `## 合不合理`：每個自訂的 criterion 與餘量一列，欄位是「criterion｜當初的依據（出處）｜這次的實測｜判斷」。判斷只能是三種：依據仍成立、依據不成立、資料不足。至少要有這幾列：
   - resizer 的 setup／hold 餘量 vs.「最後一次修復修完到 signoff」的實測差距（本檔「resizer 的 slack margin」一列）。最後一次修復是 `ResizerTimingPostCTS`，開了 `RUN_POST_GRT_RESIZER_TIMING` 時是 `ResizerTimingPostGRT`（它沒有修 hold 時，hold 仍看 post-CTS）；腳本的 INFO 列兩個都印，差距用最後一個算；
   - hold 餘量的代價（hold buffer 數量與面積）；

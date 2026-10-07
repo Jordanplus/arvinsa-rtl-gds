@@ -35,3 +35,4 @@ P06：SRAM LEF 的閘極面積除以 1000 → `check_antennas` 違規從 0 變 5
 | 2026-10-03 | soc_explore1 | `Inserted 10231 diodes.`，GRT 不收斂 | 已驗證：heuristic 對全設計長線加 diode | 不用 heuristic，改 antenna LEF | ADR-0008 |
 | 2026-10-03 | soc_explore2 | 7 個 max fanout 違規 | 已驗證：每條線 10–11 顆 diode | 長線修復 200 µm | `pnr/soc_top/README.md` |
 | 2026-10-03 | signoff 條件調查（核對 agent） | 規則 6–10 的工具行為 | 已驗證（讀 OpenROAD dcf36133 原始碼與 PDK 檔案、比對報告） | 寫進規則 | `docs/notes/signoff_criteria_soc_top.md` |
+| 2026-10-07 | Phase 5 Hazard3 第 6、7 次 harden 與 golden（第 5 次）比較 | antenna diode 數 100（golden）／94／101，最後 antenna 違規都是 0。第 7 次：detailed routing 後的 antenna 修補前兩輪與 golden 相同（找到 70、插 95；找到 5、插 5），第 2 輪後重繞剩 1 個（golden 剩 0），多跑一輪多插 1 顆；第 6 次是更早的 global routing 不同，第 43 步一開始就找到 103 個（golden 109） | 已驗證：diode 數跟著繞線結果走，不是固定的；detailed routing（多執行緒）與第 41 步的 global routing 都不可重現 | golden 的 diode 數給誤差（±55，ADR-0015）；antenna 違規數仍必須是 0 | p5h3 worktree `runs/p5_h3_h6_signoff/`、`runs/p5_h3_h7_signoff/` 的 `criteria_review.md` |

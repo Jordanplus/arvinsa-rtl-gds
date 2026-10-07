@@ -222,7 +222,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 錯誤要先證明是隨機的（同一份輸入重跑 3–4 次，有過有不過），才能加重試；重試只針對那一個訊息，而且有次數上限。只跑一次就把錯誤歸因到某個設定不可靠：`GRT-0229` 原本被誤認為是某個設定造成的。
   - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。記憶體要看 physical footprint，`ps` 的 RSS 不算被換到 swap 的部分，會嚴重低估；CPU 使用率低、swap 一直增加，就是記憶體失控，要馬上停（Phase 5 一個 step 用到 92.9 GB，機器只有 24 GB）。
   - 要在某一步的工具指令裡加除錯輸出時，用 `python3 -m librelane.steps eject` 把那一步匯出成獨立 script 再改；可能失控的實驗要加記憶體上限自動停。
-  - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名。
+  - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名；改名後各步的 `state_in.json` 仍指向舊路徑，單步重跑前要在複本裡換掉。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。state 的 metrics 會沿用前面步驟的值，flow 中途 `state_out.json` 的數字不一定是那一步量的，要看該步的 `or_metrics_out.json`。log 的 `RSZ-0032 Inserted N hold buffers` 不是總數，要數網表。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
@@ -408,6 +408,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - **每次 harden 後的檢查**（使用者 2026-10-07 要求）：
     - 第一部分由 `signoff/scripts/review_criteria.py` 檢查 criteria 有沒有被執行：config 每個設定都進了 run、uncertainty 出現在每個時序步驟與 signoff corner、corner 齊全、repo 的 checker 都跑了。`pnr/soc_top/run.sh` 每次都跑它，LibreLane FAIL 也照跑；harden 要 PASS，它也必須 PASS。
     - 第二部分由 Claude 依 skill 判讀 criteria 合不合理，寫 `runs/<tag>_signoff/criteria_review.md`（有沒有被執行、合不合理、學習三節）。專案的 Stop hook（`.claude/hooks/require_criteria_review.py`）沒看到就不讓 Claude 回報。
+    - golden 比對 FAIL 時，先找出和 golden run 第一個分歧的步驟，判斷是設計或設定改變，還是 flow 不可重現（同一份輸入單步重跑量頻率）；後者交給 signoff-checker-qualification，不直接放寬誤差。
     - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；依據不成立的 criterion 提給使用者決定，不自己改。
   - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號。
 - **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P49（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
@@ -487,7 +488,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 上游測試要 newlib 工具鏈；rvcpp 印的是退休指令 trace，要自己用 RVFI 轉成同格式再逐條比對。
   - 舊 core 的建置要保持不變：新 core 專用的 RTL 都放在 define 下，再用前置處理後的 RTL 比對證明舊建置一字不差，舊的 golden 就能沿用。
   - 轉成 native bus 時，AHB 讀取的 `hwdata` 要擋掉（它會變動或是 X）；`mtval` 固定為 0；中斷進入次數與 cycle 數的期望值要依 CPU 分開訂。
-  - PnR 與 signoff：PicoRV32 版調好的設定不能直接沿用。resizer 要看 signoff 的所有慢 corner、resizer 會換上的弱 cell 要重查、開繞線後的 setup 修復；上限檔裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）要用新 core 的 run 重數，golden 另建一份。
+  - PnR 與 signoff：PicoRV32 版調好的設定不能直接沿用。resizer 要看 signoff 的所有慢 corner、resizer 會換上的弱 cell 要重查、開繞線後的 setup 修復；上限檔裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）要用新 core 的 run 重數，golden 另建一份，並重新量同設定 run 之間的差異（ADR-0015）。
   - core 層級驗證：測試台的設定檔從 SoC 的參數自動產生；上游測試台與 riscv-tests 都在 `runs/` 建置，submodule 不留檔案；rvcpp 要補 `fence`，而且它的 CSR 模型是全功能設定，所以逐指令比對只做 user-level 指令、從測試本體開始。
 - **不在這裡**：SoC 驗證的一般寫法看 dv-directed-tests、gate-level-simulation；SRAM 整合看 hard-macro-integration。
 - **本 repo 實例**：ADR-0011～0014、`rtl/cpu/`、`dv/core_hazard3/`（`make core-hazard3`）、`signoff/limits/soc_top_hazard3.toml`、`signoff/golden/soc_top_hazard3/`、`docs/phase_exit/phase5.md`（Phase 5）。

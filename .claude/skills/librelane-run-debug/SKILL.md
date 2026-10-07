@@ -27,7 +27,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
    - 反過來說，**只跑一次就把錯誤歸因到某個設定，是不可靠的**：GRT-0229 原本被歸因到 `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH`（soc_explore3 只跑了一次），後來發現不設也有一半機率出現。結論是「某設定造成某錯誤」之前，同一設定至少跑兩次，或單步重跑確認。
 6. **重跑會覆蓋上一次的 run，失敗的證據要保留**：同一個 run tag 重跑時，舊做法 `rm -rf` 整個 run 目錄與 `_signoff` 輸出目錄。Phase 3.5 第 1 次 harden-soc（`RepairDesignPostGPL` 75 分鐘後異常結束）的 run 就在第 2 次開跑時被刪，只剩 ADR-0010 的摘要。
    - Phase 5 起 `pnr/*/run.sh` 用 `keep_prev_run`（`pnr/librelane_flow.sh`）把上一次的 run 搬成 `<dir>.prev`，更舊的 `.prev` 刪掉（只留一層：一次 soc_top run 約 4 GB）；`make test-flow-retry` 有這個情境。
-   - 連跑兩次以上才會遇到的事（例如要比較三次 run），自己先把 `.prev` 改名保存；要引用的數字先寫進 ADR 或 phase_exit 文件。
+   - 連跑兩次以上才會遇到的事（例如要比較三次 run），自己先把 `.prev` 改名保存；要引用的數字先寫進 ADR 或 phase_exit 文件。改名後，那個 run 每一步的 `state_in.json` 仍是舊目錄的絕對路徑（Phase 5 第 6 次：第 41 步有 12 處），要單步重跑就先把路徑換成新目錄、寫進複本，原檔不改。
 
 ## 已知陷阱
 
@@ -73,3 +73,4 @@ soc_top 全 flow 約 20–30 分鐘（正式 run 實測 18 與 28 分；Magic �
 | 2026-10-05／06 | Phase 5 第 1 次 harden-soc（Hazard3，`../arvinsa-rtl-gds-p5h3`） | `OpenROAD.RepairDesignPostGPL failed with an unexpected error`：跑約 108 分鐘（process_stats 1:47:50）、physical footprint 92.9 GB、swap 28.0／28.7 GB，手動停止；`ps` 的 RSS 只有 418 MB（後三個數字是前一個 session 的 `vmmap`／`sysctl`／`ps` 輸出，run 目錄沒存） | 已驗證：resizer 在一條 net 上無限插 buffer（`drv-timing-closure` 規則 10）；`eject` 後加 `set_debug_level RSZ repair_net 1` 與 4 GB 上限，66 秒就重現並找到那條 net | 規則 3（`eject`）；已知陷阱（記憶體失控、RSS 低估）。推測：soc_explore6、8 與 Phase 4 第 1 次 harden 的「不結束」也是同一類，當時沒看記憶體 | `docs/notes/repair_design_loop.md` |
 | 2026-10-06 | Phase 5 第 2 次 harden-soc（Hazard3，`2251c4a`） | 分析 ss_n40C setup 違規時，第 38 步 `state_out.json` 顯示 nom_ss_n40C −15.5 ns、nom_ss_100C −1.89 ns，和前一步 resizer 的 `RSZ-0098 No setup violations found` 矛盾 | 已驗證：`STAMidPNR` 只量 `DEFAULT_CORNER`（該步 log 只讀 nom_tt 的 .lib，`or_metrics_out.json` 只有 nom_tt），state 裡 ss 的值是第 12 步 `STAPrePNR` 寫的、沿用到第 55 步 | 規則 4；量繞線前的其他 corner 用 `multicorner-sta` 規則 8（`eject` 後換成自己的 Tcl） | `runs/soc_top_hazard3/38-openroad-stamidpnr-2/`（`../arvinsa-rtl-gds-p5h3`） |
 | 2026-10-07 | Phase 5 Hazard3 第 6 次 harden | `RepairDesignPostGRT` 修復後的 global routing 沒有中止，但結果和前幾次不同（線長 1,146,538 對 1,146,421 µm），之後的 antenna 修補、`ResizerTimingPostGRT`、detailed routing 都跟著變 | 已驗證是隨機的（同一份輸入單步重跑 4 次都和多數結果相同，7 次裡 1 次不同；之後再用同一份輸入單步重跑 20 次：16 次與 golden 相同，其餘 4 次分成 3 種結果（其中 2 次與第 6 次相同）。合計 27 次裡 22 次相同（約 81%），沒有一次出現 GRT-0229）；和 `GRT-0229` 隨機中止在同一個呼叫，是否同源未驗證 | 重試機制只認 GRT-0229，這種不會被發現；要靠 golden 比對（`global_route__wirelength`）抓到 | `flow-regression-reproducibility` 經驗紀錄 |
+| 2026-10-07 | Phase 5 Hazard3 第 6 次 run 改名成 `p5_h3_h6` 後，要再單步重跑第 41 步 | `state_in.json` 指向 `runs/soc_top_hazard3/...`（已不存在） | 已驗證：LibreLane 的 state 檔記絕對路徑 | 用 `sed` 換成新目錄寫進複本再重跑（規則 3 的「改複本」）；20 次重跑都正常 | session 暫存的 `rerun41.sh` |
