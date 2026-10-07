@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P49).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P51).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -71,8 +71,9 @@ step re-run one step on a copy of that step's saved config and input state
   P09  final DEF: sram0 moved by 10 um               check_soc.py placement
   P12  metrics: design__instance__count -10 %        check_signoff.py golden comparison
   P31  metrics: final route__drc_errors golden + 1;  check_signoff.py golden comparison
-       route__drc_errors__iter:2 golden + 101 (each alone; the iteration-count tolerance is 100,
-       and does not cover the final count); positive control: iter:2 golden + 3 (Phase 4 regress 2)
+       route__drc_errors__iter:2 golden + tolerance + 1 (each alone; the tolerance is read from the
+       limits, 100 PicoRV32, 1310 Hazard3 per ADR-0015, and does not cover the final count);
+       positive control: iter:2 golden + 3 (Phase 4 regress 2)
   P13  signoff SDC without its set_output_delay line OpenROAD.STAPostPNR -> check_soc.py sta_setup
        (unconstrained endpoints, project-plan.md §7.2; check_soc.py runs on a fake run whose
        STA directory is the re-run)
@@ -121,6 +122,14 @@ step re-run one step on a copy of that step's saved config and input state
        LibreLane failed)                              review_criteria.py checkers_ran
   P49  ResizerTimingPostGRT log without the         review_criteria.py uncertainty (the repair
        clock_uncertainty.sdc line (ADR-0014)         step after global routing must see it too)
+  golden comparison with layout tolerances and optional keys (ADR-0015)
+  P50  metrics: design__instance__count__stdcell    within its [golden_layout_tolerance]: PASS;
+       golden + tolerance, then + tolerance + 1;     one more: FAIL; the limits with a layout
+       limits: "*__count" added as a layout pattern  pattern matching violation counts: FAIL
+  P51  metrics: the last route__drc_errors__iter    missing optional key: PASS; missing ordinary
+       key removed, then design__instance__count__  key: FAIL; the limits with a corner key as
+       class:inverter removed; limits: a corner     optional pattern: FAIL
+       key pattern added to [golden_optional]
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -136,6 +145,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -784,9 +794,14 @@ def p12(run, d):
 
 def p31(run, d):
     golden = json.load(open(GOLDEN))
+    with open(LIMITS, "rb") as f:
+        tol = tomllib.load(f).get("golden_tolerance", {}).get("route__drc_errors__iter:*", {}).get("abs")
+    if not tol:
+        return False, "no abs tolerance for route__drc_errors__iter:* in the limits"
+    tol = int(tol)
     results = []
     for name, key, delta, caught in (("final_plus_1", "route__drc_errors", 1, True),
-                                     ("iter2_plus_101", "route__drc_errors__iter:2", 101, True),
+                                     (f"iter2_plus_{tol + 1}", "route__drc_errors__iter:2", tol + 1, True),
                                      ("iter2_plus_3", "route__drc_errors__iter:2", 3, False)):
         sub = os.path.join(d, name)
         os.makedirs(sub)
@@ -795,7 +810,7 @@ def p31(run, d):
         results.append(row == caught and (rc != 0) == caught)
     return all(results), \
         "check_signoff.py golden route__drc_errors and route__drc_errors__iter:2 FAIL; iter:2 + 3 PASS " \
-        f"(final +1, iter +101, iter +3: {results})"
+        f"(final +1, iter +{tol + 1}, iter +3: {results})"
 
 
 def p13(run, d):
@@ -1071,13 +1086,85 @@ def p49(run, d):
     return review_case(run, d, "uncertainty", run_replace=edits)
 
 
+def signoff_limits_with(run, d, edit, table=None, line=None):
+    """signoff_with, optionally with `line` added under the [table] header of a copy of LIMITS."""
+    if table is None:
+        return signoff_with(run, d, edit)
+    text = open(LIMITS).read()
+    head = f"[{table}]\n"
+    if head not in text:
+        raise RuntimeError(f"no {head.strip()} in {LIMITS}")
+    lim = os.path.join(d, "limits.toml")
+    open(lim, "w").write(text.replace(head, head + line + "\n", 1))
+    m = json.load(open(os.path.join(run.rstrip("/") + "_signoff", "metrics.json")))
+    edit(m)
+    p = os.path.join(d, "metrics.json")
+    json.dump(m, open(p, "w"), indent=1)
+    cp = subprocess.run([sys.executable, CHECK_SIGNOFF, p, lim, GOLDEN], capture_output=True, text=True)
+    open(os.path.join(d, "run.log"), "w").write(cp.stdout + cp.stderr)
+    return cp.returncode, cp.stdout
+
+
+def p50(run, d):
+    golden = json.load(open(GOLDEN))
+    with open(LIMITS, "rb") as f:
+        spec = tomllib.load(f).get("golden_layout_tolerance", {}).get("design__instance__count__stdcell")
+    if not spec:
+        return False, "no design__instance__count__stdcell in [golden_layout_tolerance]"
+    key = "design__instance__count__stdcell"
+    tol = int(spec.get("abs") or (spec.get("rel") or 0) * golden[key])
+    results = []
+    for name, delta, table, line, row_re, caught in (
+            ("within", tol, None, None, rf"\[FAIL\] golden {key}:", False),
+            ("beyond", tol + 1, None, None, rf"\[FAIL\] golden {key}:", True),
+            ("violation_pattern", 0, "golden_layout_tolerance", '"*__count" = {rel = 0.5}',
+             r"\[FAIL\] golden layout tolerance \*__count:", True)):
+        sub = os.path.join(d, name)
+        os.makedirs(sub)
+        rc, out = signoff_limits_with(run, sub, lambda m: m.update({key: golden[key] + delta}), table, line)
+        results.append((re.search(row_re, out) is not None) == caught and (rc != 0) == caught)
+    return all(results), f"check_signoff.py layout tolerance: stdcell + {tol} PASS, + {tol + 1} FAIL, a pattern " \
+        f"matching violation counts FAIL ({results})"
+
+
+def p51(run, d):
+    golden = json.load(open(GOLDEN))
+    iters = sorted((k for k in golden if k.startswith("route__drc_errors__iter:")), key=lambda k: int(k.split(":")[1]))
+    if not iters:
+        return False, "no route__drc_errors__iter:* key in the golden"
+    text = open(LIMITS).read()
+    m = re.search(r"^\[golden_optional\]\n(?:#.*\n)*keys = \[", text, re.M)
+    if not m:
+        return False, f"no [golden_optional] keys = [ in {LIMITS}"
+    plain = "design__instance__count__class:inverter"
+    results = []
+    for name, drop, extra, row_re, caught in (
+            ("optional_missing", iters[-1], None, rf"\[FAIL\] golden {re.escape(iters[-1])}:", False),
+            ("plain_missing", plain, None, rf"\[FAIL\] golden {re.escape(plain)}:", True),
+            ("corner_pattern", None, '"timing__setup__ws__corner:*", ', r"\[FAIL\] golden optional timing__setup__ws__corner", True)):
+        sub = os.path.join(d, name)
+        os.makedirs(sub)
+        if extra:
+            lim = os.path.join(sub, "limits.toml")
+            open(lim, "w").write(text[:m.end()] + extra + text[m.end():])
+            cp = subprocess.run([sys.executable, CHECK_SIGNOFF, os.path.join(run.rstrip("/") + "_signoff", "metrics.json"),
+                                 lim, GOLDEN], capture_output=True, text=True)
+            open(os.path.join(sub, "run.log"), "w").write(cp.stdout + cp.stderr)
+            rc, out = cp.returncode, cp.stdout
+        else:
+            rc, out = signoff_with(run, sub, lambda m, k=drop: m.pop(k))
+        results.append((re.search(row_re, out) is not None) == caught and (rc != 0) == caught)
+    return all(results), f"check_signoff.py optional keys: missing {iters[-1]} PASS, missing {plain} FAIL, a corner " \
+        f"key pattern FAIL ({results})"
+
+
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
-         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49)]
+         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51)]
 
 
 def main():

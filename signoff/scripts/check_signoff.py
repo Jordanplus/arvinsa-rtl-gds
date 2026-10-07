@@ -17,14 +17,25 @@ usage: check_signoff.py <metrics.json> <limits.toml> <golden metrics.json>
                                      OpenSTA reports when no constrained path exists (e.g. a lost clock)
   [info]    keys = [...]             printed only
   [golden_tolerance] "<pattern>" = {abs = x} or {rel = y}   (optional, see below)
+  [golden_layout_tolerance] "<pattern>" = {abs = x} or {rel = y}   (optional, see below)
+  [golden_optional] keys = [...]     (optional, see below)
 Golden: the run must have exactly the golden key set, and every value must equal the golden value.
-The only exception are metrics whose key matches a [golden_tolerance] pattern (fnmatch, first match
-wins): there a numeric difference up to abs (|run - golden| <= x) or rel (<= y * |golden|) passes.
-Use it only for metric families measured to vary between identical runs (the detailed router is
-not deterministic, see signoff/golden/<design>/README.md); every other difference means a tool,
-PDK, RTL or config change that needs review before the golden file is replaced. A tolerance must
-be finite and > 0, and its pattern must not match an [equal] key or any key containing "count"
-or "area" (those must always be identical).
+The exceptions are metrics whose key matches a [golden_tolerance] or [golden_layout_tolerance]
+pattern (fnmatch; [golden_tolerance] first, first match wins): there a numeric difference up to
+abs (|run - golden| <= x) or rel (<= y * |golden|) passes. Use them only for metric families
+measured to vary between identical runs (see signoff/golden/<design>/README.md); every other
+difference means a tool, PDK, RTL or config change that needs review before the golden file is
+replaced. A tolerance must be finite and > 0.
+  [golden_tolerance] patterns must not match an [equal] key or any key containing "count" or
+  "area": continuous quantities only (slack, skew, wire length, power, IR).
+  [golden_layout_tolerance] is for layout counts and areas that change with the routing (cell,
+  diode and fill counts, areas, utilization; ADR-0015: a global routing step and the detailed
+  router are not repeatable). Its patterns must not match an [equal] key or any key that counts
+  violations or errors (a name containing one of VIOLATION_WORDS): those must always be identical.
+  [golden_optional] patterns name keys that may exist in only one of the run and the golden (the
+  router can run one more or one fewer iteration, a warning can come or go). They may only match
+  per-iteration keys (containing "__iter:") and per-message warning counts
+  ("flow__warnings__count:<id>"), never an [equal] key. A key present in both is compared as usual.
 
 Prints one line per row and `signoff: PASS` / `signoff: FAIL`; exit code 0 only on PASS.
 A metric missing from the run is a FAIL (a checker that silently skips is not a checker).
@@ -36,6 +47,10 @@ import math
 import os
 import sys
 import tomllib
+
+# A metric whose name contains one of these counts violations or errors: never a layout tolerance.
+VIOLATION_WORDS = ("violat", "_vio_", "error", "drc", "lvs", "xor", "unannotated", "disconnected", "unmapped",
+                   "illegal", "lint", "latch")
 
 
 def main(metrics_path, limits_path, golden_path):
@@ -95,22 +110,40 @@ def main(metrics_path, limits_path, golden_path):
         row("golden", "file", "<missing>", golden_path, False)
     else:
         tolerance = limits.get("golden_tolerance", {})
-        protected = set(limits.get("equal", {})) | {k for k in set(golden) | set(run) if "count" in k or "area" in k}
-        for pattern, spec in tolerance.items():
-            if not (isinstance(spec, dict) and len(spec) == 1 and set(spec) <= {"abs", "rel"}
-                    and finite(next(iter(spec.values()))) and next(iter(spec.values())) > 0):
-                row("golden", f"tolerance {pattern}", spec, "{abs = x} or {rel = y}, x/y finite and > 0", False)
-            hit = sorted(k for k in protected if fnmatch.fnmatchcase(k, pattern))
+        layout = limits.get("golden_layout_tolerance", {})
+        optional = limits.get("golden_optional", {}).get("keys", [])
+        equal = set(limits.get("equal", {}))
+        every = set(golden) | set(run) | equal
+        protected = equal | {k for k in every if "count" in k or "area" in k}
+        violation = equal | {k for k in every if any(w in k for w in VIOLATION_WORDS)}
+        for table, specs, forbidden, what in (("tolerance", tolerance, protected, "no [equal], count or area metric"),
+                                              ("layout tolerance", layout, violation,
+                                               "no [equal] or violation/error metric")):
+            for pattern, spec in specs.items():
+                if not (isinstance(spec, dict) and len(spec) == 1 and set(spec) <= {"abs", "rel"}
+                        and finite(next(iter(spec.values()))) and next(iter(spec.values())) > 0):
+                    row("golden", f"{table} {pattern}", spec, "{abs = x} or {rel = y}, x/y finite and > 0", False)
+                hit = sorted(k for k in forbidden if fnmatch.fnmatchcase(k, pattern))
+                if hit:
+                    row("golden", f"{table} {pattern}", f"matches {hit[:3]}", what, False)
+        for pattern in optional:
+            hit = sorted(k for k in every if fnmatch.fnmatchcase(k, pattern) and
+                         (k in equal or not ("__iter:" in k or k.startswith("flow__warnings__count:"))))
             if hit:
-                row("golden", f"tolerance {pattern}", f"matches {hit[:3]}", "no [equal], count or area metric", False)
+                row("golden", f"optional {pattern}", f"matches {hit[:3]}",
+                    "only __iter: and flow__warnings__count:<id> keys, no [equal] key", False)
         keys = sorted(set(golden) | set(run))
-        tolerated, differ = 0, 0
+        tolerated, differ, one_sided = 0, 0, 0
         for key in keys:
             have, want = run.get(key, "<missing>"), golden.get(key, "<missing>")
             if have == want:
                 continue
-            pattern = next((p for p in tolerance if fnmatch.fnmatchcase(key, p)), None)
-            spec = tolerance.get(pattern) if pattern else None
+            if "<missing>" in (have, want) and any(fnmatch.fnmatchcase(key, p) for p in optional):
+                one_sided += 1
+                continue
+            specs = {**layout, **tolerance}   # [golden_tolerance] first
+            pattern = next((p for p in list(tolerance) + list(layout) if fnmatch.fnmatchcase(key, p)), None)
+            spec = specs.get(pattern) if pattern else None
             if isinstance(spec, dict) and number(have) and number(want):
                 limit = spec.get("abs") or (spec.get("rel") or 0) * abs(want)
                 if abs(have - want) <= limit:
@@ -120,8 +153,9 @@ def main(metrics_path, limits_path, golden_path):
             else:
                 row("golden", key, have, want, False)
             differ += 1
-        row("golden", f"{len(keys)} metrics", f"{len(keys) - tolerated - differ} identical, {tolerated} within tolerance, "
-            f"{differ} different", golden_path.split("signoff/")[-1], differ == 0)
+        row("golden", f"{len(keys)} metrics", f"{len(keys) - tolerated - one_sided - differ} identical, {tolerated} within "
+            f"tolerance, {one_sided} optional key(s) in one side only, {differ} different",
+            golden_path.split("signoff/")[-1], differ == 0)
 
     for key in limits.get("info", {}).get("keys", []):
         row("info", key, run.get(key, "<missing>"), "-", True)

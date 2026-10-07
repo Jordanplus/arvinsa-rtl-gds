@@ -78,29 +78,66 @@ hold_ws_min = 0.0
 slack_max = 44.0
 
 [golden_tolerance]
-# The detailed router is not deterministic (measured in Phase 2, signoff/golden/picorv32_core/README.md;
-# measured again for soc_top in signoff/golden/soc_top/README.md). Only these metric families may
-# differ slightly from the golden run; cell counts, areas, violation counts, DRC, LVS, ... must be
-# identical.
-"timing__setup__ws*" = { abs = 0.01 }
-"timing__hold__ws*" = { abs = 0.01 }
-"timing__setup_r2r__ws*" = { abs = 0.01 }
-"timing__hold_r2r__ws*" = { abs = 0.01 }
-"clock__skew__*" = { abs = 0.01 }
-"route__wirelength" = { rel = 0.001 }
-"route__wirelength__iter:*" = { rel = 0.001 }
-"route__vias*" = { rel = 0.001 }
-"power__*" = { rel = 0.001 }
-"design_powergrid__*" = { rel = 0.001 }
-"ir__*" = { rel = 0.001 }
-# Phase 4 make regress 2 (clean checkout, commit c635ffb; the input of OpenROAD.DetailedRouting
-# byte-identical to regress 1): the last re-route after antenna repair left 14 instead of 11
-# violations after its 2nd iteration. route__drc_errors__iter:N is the count after iteration N of
-# the last router call (main route, then one re-route per antenna repair) that reached iteration N:
-# intermediate numbers, not signoff numbers. abs = 100, above every count seen (87 here, 90 in
-# picorv32_core).
-# The final route__drc_errors stays exact ([equal] = 0 and golden). neg_pnr.py P31.
-"route__drc_errors__iter:*" = { abs = 100 }
+# ADR-0015 (user decision 2026-10-07). The Hazard3 flow has two steps that are not repeatable: the
+# last global_route of OpenROAD.RepairDesignPostGRT (step 41; 5 of 27 runs of the same input differ)
+# and the multi-threaded detailed router (its antenna repair can run one more round). Measured on the
+# golden run (harden 5) against 4 others: harden 6 (step 41 differed), harden 7 (only detailed
+# routing differed) and two runs continued from step 41 re-runs that differed (p5h3 worktree
+# runs/exp_t41_r4, runs/exp_t41_r17); signoff/golden/soc_top_hazard3/README.md. Each tolerance is about
+# 5 x the largest difference seen (in brackets), rounded up. Continuous quantities only here; counts
+# and areas are in [golden_layout_tolerance], violation counts are never tolerated.
+"timing__setup__ws*" = { abs = 0.2 }          # [0.040 ns]
+"timing__hold__ws*" = { abs = 0.32 }          # [0.063 ns]
+"timing__setup_r2r__ws*" = { abs = 0.2 }      # [0.040 ns]
+"timing__hold_r2r__ws*" = { abs = 0.32 }      # [0.063 ns]
+"clock__skew__*" = { abs = 0.25 }             # [0.048 ns]
+"route__wirelength" = { rel = 0.0051 }        # [0.101 %]
+"route__wirelength__iter:*" = { rel = 0.006 } # [0.117 %]
+"route__wirelength__max" = { rel = 0.015 }    # [0.297 %]
+"route__wirelength__estimated" = { rel = 0.0025 }  # [0.046 %]
+"global_route__wirelength" = { rel = 0.0045 } # [0.086 %]
+"route__vias*" = { rel = 0.0033 }             # [0.064 %]
+"power__*" = { rel = 0.0031 }                 # [0.060 %]
+"design_powergrid__*" = { rel = 0.0021 }      # [0.040 %]
+"ir__*" = { rel = 0.0055 }                    # [0.108 %]
+"design__instance__displacement__*" = { rel = 0.7 }  # [14 %; detailed placement inside the repair steps]
+# route__drc_errors__iter:N is the count after iteration N of the last router call that reached it
+# (intermediate numbers). Up to 262 apart here (PicoRV32 Phase 4: 3). The final route__drc_errors
+# stays exact ([equal] = 0 and golden). neg_pnr.py P31.
+"route__drc_errors__iter:*" = { abs = 1310 }  # [262]
+
+[golden_layout_tolerance]
+# ADR-0015: layout counts and areas that follow the routing (see [golden_tolerance] for the data;
+# about 5 x the largest difference, in brackets). check_signoff.py refuses a pattern here that matches
+# an [equal] key or a violation/error count. neg_pnr.py P50.
+"antenna_diodes_count" = { abs = 55 }                                  # [11, golden 100]
+"design__instance__count__class:antenna_cell" = { abs = 65 }           # [13]
+"design__instance__area__class:antenna_cell" = { abs = 165 }           # [32.5 um^2]
+"design__instance__count__stdcell" = { abs = 70 }                      # [14 of 30,474]
+"design__instance__area__stdcell" = { abs = 210 }                      # [42 um^2]
+"design__instance__count" = { abs = 30 }                               # [6]
+"design__instance__count__class:fill_cell" = { abs = 85 }              # [17]
+"design__instance__area__class:fill_cell" = { abs = 210 }              # [42 um^2]
+"design__instance__area__class:multi_input_combinational_cell" = { abs = 65 }  # [12.5 um^2]
+"design__instance__count__class:timing_repair_buffer" = { abs = 30 }   # [6]
+"design__instance__area__class:timing_repair_buffer" = { abs = 150 }   # [30 um^2]
+"design__instance__count__setup_buffer" = { abs = 10 }                 # [2]
+"design__instance__utilization" = { abs = 0.0003 }                     # [0.000055]
+"design__instance__utilization__stdcell" = { abs = 0.00045 }           # [0.000088]
+"route__net" = { abs = 30 }                                            # [6]
+"global_route__vias" = { abs = 320 }                                   # [63; vias of the last incremental global route]
+
+[golden_optional]
+# ADR-0015: keys that may exist in only one of the run and the golden. The router ran 5 or 7
+# iterations (route__*__iter:6 and :7 come and go); RSZ-0062 (ResizerTimingPostGRT left a
+# violation) and GRT-0243 (antenna repair could not fix one net with a diode) came and went.
+# neg_pnr.py P51.
+keys = [
+    "route__drc_errors__iter:*",
+    "route__wirelength__iter:*",
+    "flow__warnings__count:RSZ-0062",
+    "flow__warnings__count:GRT-0243",
+]
 
 [info]
 keys = [

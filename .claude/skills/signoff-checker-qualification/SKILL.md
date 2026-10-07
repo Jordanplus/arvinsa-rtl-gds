@@ -1,6 +1,6 @@
 ---
 name: signoff-checker-qualification
-description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同，或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表，新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
+description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同（包括 cell 數、diode 數、面積也跟著變，或 key 只出現在一邊：`[golden_layout_tolerance]`、`[golden_optional]`），或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表，新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
 ---
 
 # Checker 設計、golden 與 testbench qualification
@@ -21,8 +21,15 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - **下游也要確認 run 是這個 commit 產生的**：`provenance.json` 的 `repo_head` 必須等於目前的 `HEAD`。只看 `result.txt` 時，改了 RTL 後單獨跑 `make eqy-soc` 仍會用舊網表而 PASS。Phase 4 已加 `signoff/scripts/run_guard.py` 與 `neg_run_guard.py`。
 4. **「不是 0」的計數要寫出組成**並固定下來：Phase 2 unannotated 114 = 35 PCPI port + 41 tie HI + 38 clkload；soc_top = clkload + 32 個 `sram0/dout1` + 未用的 tie 輸出（soc_explore4：92 + 32 + 11）。
 5. **golden**：逐項比對全部 metrics（key 集合也要相同）。不可重現的那一步（多執行緒 detailed routing）之後算出來的數字，依下一點分類後才給誤差：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差，約實測差異的 30–200 倍；count／area 一律不給誤差（`check_signoff.py` 會拒絕這種設定）。至少重跑一次確認可重現性，但一次相同不代表可重現。
+   - **不可重現的步驟也會改變數量時**（Phase 5 Hazard3，ADR-0015）：第 41 步的 global routing 偶發不同（同一份輸入 27 次裡 5 次），detailed routing 也會讓繞線後的 antenna 修補多一輪、多插 diode，cell 數、diode 數、面積跟著變，「count／area 不給誤差」幾乎每次 FAIL。做法：
+     - 先逐步比對 DEF 與 log 找到分歧的那一步，再單步重跑量頻率，確認是隨機而不是設定造成的；
+     - 收集足夠的樣本：除了完整 harden，也可以拿分歧步驟重跑出來的不同結果，接著跑完後面的步驟；
+     - 數量與面積放在另一個表（`[golden_layout_tolerance]`），連續量仍在原表；違規、錯誤類的計數與 `[equal]` 的 key 一律不給誤差，由 checker 拒絕（`VIOLATION_WORDS`）；
+     - 雜訊大時，誤差用實測最大差異的約 5 倍，不用 30–200 倍（30 倍會讓 slack 誤差到 1.9 ns，等於不比）；
+     - 每輪、每個 warning 這類可能只出現在一邊的 key，列進 `[golden_optional]`，只限 `__iter:` 與 `flow__warnings__count:<id>`；
+     - 用 negative test 證明誤差邊界與拒絕規則都有效（`neg_pnr.py` P50、P51），並寫明 golden 抓不到「所有 metric 都只動在誤差內」的改變。
    - **族群要依「哪一步產生的」來分，不能只看「到目前有沒有變過」**：不可重現那一步（detailed routing）算出來的每個 metric 都先分類——最終 signoff 數字（`route__drc_errors`）完全相同；中間過程數字（`route__drc_errors__iter:*`，繞線器各輪剩下的 DRC 數）給誤差。Phase 4 的教訓：Phase 2 的 5 次 run 與 Phase 4 regress 1 這組都沒變，於是被列為「必須完全相同」；regress 2 才變（11 → 14），整個 regression FAIL 一次（約 30 分鐘後才 FAIL，重跑又要 2 小時）。中間過程數字給的誤差要寫明它其實等於不比（例如 ±100，高於看過的所有值），並用 negative test 證明最終數字仍被保護（`neg_pnr.py` P31）。
-6. **更新 golden**：先確認所有 limits 與自寫 checker PASS → 逐項說明與舊 golden 的差異 → 複製並記 sha256 → 再跑一次確認新 golden PASS。golden 比對本身的 negative test：P12（instance 數 −10%）、P31（最終 DRC 數 +1、中間輪 +101 都 FAIL，+3 PASS）。
+6. **更新 golden**：先確認所有 limits 與自寫 checker PASS → 逐項說明與舊 golden 的差異 → 複製並記 sha256 → 再跑一次確認新 golden PASS。golden 比對本身的 negative test：P12（instance 數 −10%）、P31（最終 DRC 數 +1、中間輪「誤差 + 1」都 FAIL，+3 PASS；誤差從上限檔讀）、P50（版圖誤差的邊界、碰到違規計數的 pattern）、P51（可選 key、一般 key 缺少、碰到 corner key 的 pattern）。
 7. **negative test 設計**：
    - 每個 checker 至少一個真錯誤，加一個正向對照（沒植入時 PASS）。
    - 植入點必須只命中一處；命中 0 或多處時，negative test 本身 FAIL（`edit()` 的寫法見 `neg_eqy.py`）。
@@ -109,4 +116,5 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 2026-10-05 | Phase 3.5 `neg_char.py` N6 | 手改 .lib 的植入改成新餘量後什麼都沒改到（要替換的 `2.7500` 已不在 .lib 裡），`--check` 判沒有過期，N6 FAIL | 已驗證：植入沒有檢查替換次數 | 改成編輯 `timing_type : rising_edge;` 並斷言替換次數；N1–N6 6/6 PASS（「植入沒有生效」一列） | `ip/sram/char/neg_char.py` |
 | 2026-10-05 | Phase 5 開頭：修 Phase 3.5 審查的 12 個漏洞 | 每個漏洞補 negative test：neg-char N9–N16、neg-pnr P33–P36，P17 斷言收緊、P32 加 positive control、py-check 自我測試 11 段；新案例先在修正前的 checker 上確認抓不到 | 已驗證 | 漏洞類型表的「（未修）」改成修法與案例；修 `check_soc.py` 時寫錯的訊息（字串接 list）讓 P30 FAIL，被既有的案例抓到 | `docs/phase_exit/phase5.md` |
 | 2026-10-07 | Phase 5 建 Hazard3 golden（第 5 次 harden，`3a28d54`） | ① `soc_top_hazard3.toml` 從 PicoRV32 版複製，`timing__unannotated_net__count` 133 是 PicoRV32 的組成，Hazard3 的 run 是 125；② golden 的 `design__instance__count__hold_buffer` 是 0，網表卻有 2,739 顆 hold buffer | 已驗證：① 規則 4 的組成換了設計就要重數（15 個 corner 都是 81 clkload + 32 `sram0/dout1` + 12 tie）；② 這個 metric 取最後一個 resizer 步驟報的數字，開了 `RUN_POST_GRT_RESIZER_TIMING` 後是那一步的 0，而且 `RSZ-0032` 本來就不是總數（`drv-timing-closure` 規則 7） | 上限改 125 並寫明組成；golden README 註明這個 metric 的意思；換 core 的規則寫進 `core-migration-hazard3` 規則 22 | `signoff/limits/soc_top_hazard3.toml`、`signoff/golden/soc_top_hazard3/README.md` |
-| 2026-10-07 | Phase 5 Hazard3 第 6 次 harden（新 golden 的確認 run） | golden 比對 FAIL 61 個 metric，含數量、面積與 key 集合；signoff 全部 PASS | 已驗證：規則 5 假設「不可重現的只有 detailed routing」，這次第 41 步的 global routing 偶發不同（7 次裡 1 次），之後的 cell 數跟著變 | 規則 5 的前提對 Hazard3 版不成立；golden 怎麼處理提給使用者 | `flow-regression-reproducibility` 經驗紀錄 |
+| 2026-10-07 | Phase 5 Hazard3 第 6 次 harden（新 golden 的確認 run） | golden 比對 FAIL 61 個 metric，含數量、面積與 key 集合；signoff 全部 PASS | 已驗證：規則 5 假設「不可重現的只有 detailed routing」，這次第 41 步的 global routing 偶發不同（之後單步重跑合計 27 次裡 5 次不同，約 19%），之後的 cell 數跟著變 | 規則 5 的前提對 Hazard3 版不成立；ADR-0015，規則 5 加了「不可重現的步驟也會改變數量時」 | `flow-regression-reproducibility` 經驗紀錄 |
+| 2026-10-07 | Phase 5 Hazard3 第 7 次 harden | golden 比對 FAIL 11 個 metric（diode、cell 數、面積），signoff 全部 PASS | 已驗證：detailed routing 的差異經由繞線後的 antenna 修補（多一輪、多 1 顆 diode）改變數量；規則 5 原本只看過它改變中間輪 DRC 數。加上第 6 次的第 41 步，Hazard3 版三次 harden 只有來源 run 自己與 golden 完全相同 | 使用者決定改 golden 規則：ADR-0015（`[golden_layout_tolerance]`、`[golden_optional]`，約實測最大差異的 5 倍，P50、P51） | `flow-regression-reproducibility` 經驗紀錄 |

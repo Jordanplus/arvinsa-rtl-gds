@@ -95,6 +95,42 @@ slack_max = 44.0
 # The final route__drc_errors stays exact ([equal] = 0 and golden). neg_pnr.py P31.
 "route__drc_errors__iter:*" = { abs = 100 }
 
+[golden_layout_tolerance]
+# ADR-0015: layout counts and areas that follow the routing. PROVISIONAL: these numbers were measured
+# on the Hazard3 SoC (signoff/limits/soc_top_hazard3.toml, about 5 x the largest difference, in
+# brackets); re-measure them on the PicoRV32 re-run with the post-GRT timing repair (ADR-0014). The
+# [golden_tolerance] table above is still the PicoRV32 Phase 4 measurement. check_signoff.py refuses a pattern here that matches
+# an [equal] key or a violation/error count. neg_pnr.py P50.
+"antenna_diodes_count" = { abs = 55 }                                  # [11, golden 100]
+"design__instance__count__class:antenna_cell" = { abs = 65 }           # [13]
+"design__instance__area__class:antenna_cell" = { abs = 165 }           # [32.5 um^2]
+"design__instance__count__stdcell" = { abs = 70 }                      # [14 of 30,474]
+"design__instance__area__stdcell" = { abs = 210 }                      # [42 um^2]
+"design__instance__count" = { abs = 30 }                               # [6]
+"design__instance__count__class:fill_cell" = { abs = 85 }              # [17]
+"design__instance__area__class:fill_cell" = { abs = 210 }              # [42 um^2]
+"design__instance__area__class:multi_input_combinational_cell" = { abs = 65 }  # [12.5 um^2]
+"design__instance__count__class:timing_repair_buffer" = { abs = 30 }   # [6]
+"design__instance__area__class:timing_repair_buffer" = { abs = 150 }   # [30 um^2]
+"design__instance__count__setup_buffer" = { abs = 10 }                 # [2]
+"design__instance__utilization" = { abs = 0.0003 }                     # [0.000055]
+"design__instance__utilization__stdcell" = { abs = 0.00045 }           # [0.000088]
+"route__net" = { abs = 30 }                                            # [6]
+"global_route__vias" = { abs = 320 }                                   # [63; vias of the last incremental global route]
+
+[golden_optional]
+# ADR-0015: keys that may exist in only one of the run and the golden (seen on the Hazard3 SoC;
+# PicoRV32 Phase 4 always had the same keys). The Hazard3 router ran 5 or 7
+# iterations (route__*__iter:6 and :7 come and go); RSZ-0062 (ResizerTimingPostGRT left a
+# violation) and GRT-0243 (antenna repair could not fix one net with a diode) came and went.
+# neg_pnr.py P51.
+keys = [
+    "route__drc_errors__iter:*",
+    "route__wirelength__iter:*",
+    "flow__warnings__count:RSZ-0062",
+    "flow__warnings__count:GRT-0243",
+]
+
 [info]
 keys = [
     "timing__setup__ws__corner:nom_tt_025C_1v80",

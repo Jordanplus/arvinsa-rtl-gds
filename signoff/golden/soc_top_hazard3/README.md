@@ -1,6 +1,6 @@
 # soc_top_hazard3 golden：Hazard3 版 soc_top 的 metrics
 
-`make harden-soc CPU=hazard3` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/soc_top_hazard3.toml` 的 `[golden_tolerance]` 列出的族群可以有誤差（與 `signoff/golden/soc_top/README.md` 相同的規則：detailed routing 不是每次都一樣）。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
+`make harden-soc CPU=hazard3` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/soc_top_hazard3.toml` 的 `[golden_tolerance]`（連續量）與 `[golden_layout_tolerance]`（會隨繞線變的數量與面積）列出的族群可以有誤差，`[golden_optional]` 列出的 key 可以只出現在一邊；違規數一律相同。誤差約為實測最大差異的 5 倍，依據見下方「可重現性」與 ADR-0015。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
 
 ## 出處
 
@@ -33,11 +33,16 @@
 | run | 與本檔比較 |
 |---|---|
 | Phase 5 Hazard3 第 5 次 harden-soc（commit `3a28d54`） | 本檔來源 |
-| Phase 5 Hazard3 第 6 次 harden-soc（commit `d6f3074`，flow 設定相同） | 293 個相同、86 個在誤差內、61 個不同（含數量、面積與 `iter:7` 的 key）→ harden-soc FAIL；signoff 全部 PASS |
+| Phase 5 Hazard3 第 6 次 harden-soc（commit `d6f3074`，flow 設定相同） | 293 個相同、86 個在誤差內、61 個不同（含數量、面積與 `iter:7` 的 key）→ harden-soc FAIL；signoff 全部 PASS。ADR-0015 的誤差下：PASS |
+| Phase 5 Hazard3 第 7 次 harden-soc（commit `4d309de`） | 335 個相同、94 個在誤差內、11 個不同（diode、cell 數、面積）→ harden-soc FAIL；signoff 全部 PASS。ADR-0015 的誤差下：PASS |
 
 實驗 A（從第 4 次 run 的第 43 步之後接續，只跑到 signoff STA）與本次的 signoff STA 數字完全相同。
 
-第 6 次的差異從第 41 步（`RepairDesignPostGRT`）最後一次 global routing 開始：修完的 DEF 相同，global routing 的線長與 routing guide 不同（1,146,538 對本檔來源的 1,146,421 µm），之後的 antenna 修補、`ResizerTimingPostGRT`、detailed routing 跟著改變。用第 6 次自己的輸入單步重跑這一步 4 次，4 次都和本檔來源相同；第 4、5 次 harden 也相同，到目前 7 次裡 1 次不同。PicoRV32 版 golden 的前提「不可重現的只有 detailed routing」對 Hazard3 版不成立，處理方式待使用者決定。
+第 6 次的差異從第 41 步（`RepairDesignPostGRT`）最後一次 global routing 開始：修完的 DEF 相同，global routing 的線長與 routing guide 不同（1,146,538 對本檔來源的 1,146,421 µm），之後的 antenna 修補、`ResizerTimingPostGRT`、detailed routing 跟著改變。用第 6 次自己的輸入單步重跑這一步 4 次，4 次都和本檔來源相同；第 4、5 次 harden 也相同。之後再用同一份輸入單步重跑 20 次：16 次與 golden 相同，其餘 4 次分成 3 種結果（其中 2 次與第 6 次相同）。合計 27 次裡 22 次相同（約 81%），沒有一次出現 GRT-0229。PicoRV32 版 golden 的前提「不可重現的只有 detailed routing」對 Hazard3 版不成立。
+
+第 7 次 harden（commit `4d309de`）的第 41 步與本檔來源相同，但 detailed routing 內的 antenna 修補多跑一輪、多插 1 顆 diode：11 個 metric 不同（diode、cell 數、面積）。
+
+使用者決定改 golden 規則（ADR-0015）：用本檔來源對第 6、7 次 harden 與兩組「第 41 步不同、接著跑完」的 run 量出每個族群的最大差異，誤差訂為約 5 倍。改完後這 4 組 run 都 PASS（依據就是它們，所以不算驗證）；驗證要看之後的 harden。
 
 ## 何時更新
 

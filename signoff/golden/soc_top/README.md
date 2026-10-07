@@ -1,6 +1,6 @@
 # soc_top golden：整合 SRAM 的 soc_top 的 metrics
 
-`make harden-soc` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/soc_top.toml` 的 `[golden_tolerance]` 列出的族群（detailed routing 不是每次都一樣，見 `signoff/golden/picorv32_core/README.md`）可以有誤差：slack、skew、線長、via、功耗、IR drop 很小的誤差，繞線器中間各輪的 DRC 數 ±100（見下方可重現性）。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
+`make harden-soc` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/soc_top.toml` 的 `[golden_tolerance]` 列出的族群（detailed routing 不是每次都一樣，見 `signoff/golden/picorv32_core/README.md`）可以有誤差：slack、skew、線長、via、功耗、IR drop 很小的誤差，繞線器中間各輪的 DRC 數 ±100（見下方可重現性）。ADR-0015 另外加了 `[golden_layout_tolerance]`（會隨繞線變的數量與面積）與 `[golden_optional]`（只出現在一邊的每輪與 warning key），目前暫用 Hazard3 的實測值；PicoRV32 在新設定（ADR-0014）重跑、更新本 golden 時，要用它自己的 run 重新量測。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
 
 ## 出處
 

@@ -148,7 +148,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
 | gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
-| 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同 | signoff-checker-qualification | flow-regression-reproducibility |
+| 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同（連 cell 數、diode 數都變） | signoff-checker-qualification | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
 | 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對、PnR 設定與上限檔要不要重做 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面）、drv-timing-closure（時序收斂） |
 | 一個 Phase 收尾 | phase-exit-review | — |
@@ -235,6 +235,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **重點**：
   - 只認明確 PASS：缺一個 metric、表格被截斷、工具沒跑完都是 FAIL。型別要嚴格：`false` 不是 0；slack 是 1e30 代表沒有受約束的路徑。
   - golden 的誤差依「這個數字是哪一步產生的」分類，不要等出過差異才給。不可重現那一步（多執行緒 detailed routing）之後算出來的數字分三類：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差；繞線器中間各輪的 DRC 數這類中間過程數字給大誤差（等於不比數值）；計數、面積、最終 DRC、LVS 一律完全相同。
+  - 不可重現的步驟也會改變數量時（Phase 5 Hazard3：global routing 偶發不同、detailed routing 多插 diode）：先找到分歧的那一步、量出發生頻率，收集足夠樣本，再把會跟著繞線變的數量與面積放進另一個誤差表（約實測最大差異的 5 倍），每輪與個別 warning 的 key 列為可選。違規、錯誤類的計數仍一律完全相同，由 checker 拒絕任何碰到它們的誤差設定（ADR-0015）。
   - 每個 checker 至少要有一個植入錯誤，加一個沒植入時必須 PASS 的對照。斷言寫成「FAIL 的列剛好是這幾列」，而且要看全部問題，不能只看第一個。
   - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
   - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因。新 checker 要逐條對照。
