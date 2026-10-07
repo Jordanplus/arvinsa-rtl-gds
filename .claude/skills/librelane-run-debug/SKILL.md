@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`，也會出現在新開的 step 如 `ResizerTimingPostGRT`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`，也會出現在新開的 step 如 `ResizerTimingPostGRT`）、`Could not replace ... no replacement step with ID`（repo plugin 不在 `PYTHONPATH`）、要只改某一步的工具指令而不改 LibreLane 本身（plugin step 加 `substituting_steps`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -10,7 +10,9 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 ## 規則（已驗證）
 
 1. **執行**
-   - `cd .tools/librelane && nix-shell --run "python3 -m librelane --run-tag <tag> --design-dir <repo root> --pdk sky130A --scl sky130_fd_sc_hd --condensed <config.json>"`；config 內路徑用 `dir::`（相對 `--design-dir`）、`pdk_dir::`。
+   - `cd .tools/librelane && nix-shell --run "PYTHONPATH=<repo root>/pnr python3 -m librelane --run-tag <tag> --design-dir <repo root> --pdk sky130A --scl sky130_fd_sc_hd --condensed <config.json>"`；config 內路徑用 `dir::`（相對 `--design-dir`）、`pdk_dir::`。
+   - **config 的 `meta.substituting_steps` 用到 repo 自己的 step 時**（soc_top 的 CTS，ADR-0016），LibreLane 要能 import 那個 plugin（名稱 `librelane_plugin_*` 的模組，`librelane/plugins.py`）：`PYTHONPATH` 要含 `pnr/`。少了它，flow 一開始就停：`Could not replace 'OpenROAD.CTS' with 'Arvinsa.CTSNoInsertionDelay': no replacement step with ID ... found.`。`pnr/librelane_flow.sh` 已經設好；手動跑、接續（`--from`）都要自己加。單步重跑（`librelane.steps run`）讀的是 step 目錄的 config，不受影響。
+   - 不要為了改一個 step 的行為去改 LibreLane 本身（`provenance.py` 檢查它沒被改過）：寫一個繼承原 step 的 plugin step，只換它的 Tcl，再用 `substituting_steps` 換掉（`pnr/librelane_plugin_arvinsa/`）。
    - 路徑一律用絕對路徑變數組好再傳；不要在 `cd` 之後用 `$PWD`（soc_explore1 第一次因此找不到 config）。
    - JSON 註解用 `"//KEY"`。
    - 純量設定可用命令列 `-c KEY=VALUE` 覆寫（soc_explore7）；list 參數經 nix-shell 引號處理會變形，要寫進 config（Phase 2 試跑 #2）。

@@ -81,6 +81,8 @@ macro 整合清單看 `hard-macro-integration`；量到的數字要加多少餘�
 
 ## 待補
 
+- clock pin 的 insertion delay（.lib 的 clock tree path）：OpenROAD CTS 會用它決定 macro 的 latency 對齊目標（`TritonCTS::computeInsertionDelay`）。目前的 .lib 沒有這個資料，soc_top 直接關掉對齊（ADR-0016）；Phase 6 自產 SRAM 若要讓 CTS 對齊到內部 clock，要先從 SPICE 量出內部 clock 路徑延遲。
+
 - 寄生：萃取網表無法收斂（經驗紀錄 2026-10-05），寄生的影響目前只有「換上萃取 bitcell」的估計；Phase 6 用 OpenRAM 環境再量。
 - 其他 PVT 的步長與修剪誤差只在 TT 驗證過。
 - hold 弧的值和週期有關（週期 10–16 ns 時「讀之後接寫」比 .lib 早變化），.lib 只對週期 ≥ 20 ns 量過（ADR-0010 已知限制 11）。

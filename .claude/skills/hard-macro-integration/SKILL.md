@@ -1,6 +1,6 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner（或 corner 之間的溫度）不能動時的佔位 .lib 與下線風險、確認 STA 每個 corner 只讀到一份 macro .lib（LIB／EXTRA_LIBS 不能重複帶進）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用：MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner（或 corner 之間的溫度）不能動時的佔位 .lib 與下線風險、確認 STA 每個 corner 只讀到一份 macro .lib（LIB／EXTRA_LIBS 不能重複帶進）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off、macro 的 clock（CTS 在 macro clock pin 前插 `delaybuf_*` 對齊 latency，SRAM 半週期讀出的 setup 與 hold 變差，看 cts-clock-tree）、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
 ---
 
 # Hard macro 整合
@@ -23,7 +23,8 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
 3. **未用的 port**：輸入接 tie cell（RTL 直接寫常數，合成會產生 `conb_1`）；輸出接 RTL 具名 wire，就不算斷線。checker 要檢查實際的 tie 值（`check_soc.py port1_tieoff`）。
 4. **電源**：`VDD_NETS`／`GND_NETS` 與 macro 電源 pin 同名；`PDN_MACRO_CONNECTIONS`；實體連接靠 LVS 驗證（`lvs-signoff`、`pdn-ir-drop`）。
 5. **macro 在每個 STA corner 都要先證明功能正確**：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫、以及 ss 1.60 V 室溫時讀出前一次的值；STA corner 之間的溫度（例如 25°C）STA 看不到，要另外模擬（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
-6. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
+6. **macro 的 clock**：OpenROAD 的 CTS 預設把 macro 的 clock pin 分到另一棵 tree，插 delay buffer 對齊 flip-flop 的 latency。對 SRAM 這種半週期讀出（下降緣送出）的 macro，這串 buffer 的上升緣、下降緣延遲不同，會讓讀出的 setup 與 hold 同時變差；`soc_top` 用 `clock_tree_synthesis -no_insertion_delay` 關掉（ADR-0016，`cts-clock-tree` 規則 10、12）。整合新 macro 時，harden 後先看 macro clock pin 前有沒有 `delaybuf_*`，再拆 macro 讀出路徑 launch／capture 的 clock latency。
+7. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
 
 ## negative test
 

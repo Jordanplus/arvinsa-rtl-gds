@@ -82,7 +82,7 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
 
 ## 待補
 
-- Phase 5 尚未完成的部分：gate-level 模擬、EQY、PicoRV32 版在新設定下重跑。PnR 已收斂（規則 22；Hazard3 第 5 次 harden 時序與實體驗證全部 PASS，golden 已建立）。
+- Phase 5 尚未完成的部分：ADR-0016 之後兩個 CPU 的下游驗證（EQY、gate-level 模擬、negative test）、PicoRV32 golden 誤差的實測、乾淨 checkout 的 regression、exit review。已完成：兩個 CPU 在新設定（44 ns、ADR-0013／0014／0016）下 harden signoff PASS，golden 已重建（`signoff/golden/soc_top*/`）；Hazard3 第 8 次 harden 的下游六項 PASS。
 - 2port（指令從 SRAM port 1 讀）：port 1 要先特性化，pin 在 macro 上邊與右邊（本 repo 的 floorplan 下面對 die 邊緣），可能要重擺 macro。
 - riscv-arch-test（`riscof` + `spike`）與 formal（`test/formal/`，要 `sby` 與 SMT solver）在本機還沒跑過。
 
@@ -102,3 +102,4 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
 | 2026-10-05 | Phase 5：core 層級驗證（`make core-hazard3`） | rvcpp 在每支 riscv-tests 結尾 timeout；套修補後仍在初始化的 `pmpaddr0` 處與 RTL 岔開；比對 `intr` 旗標 FAIL；結尾長度差 1 | 已驗證：rvcpp 沒有 fence、CSR 模型是全功能設定、`rvfi_intr` 含 exception、pipeline 尾端 | 規則 20；riscv-tests 65/65、不支援 2 支照預期 FAIL、EXTENSION_M=0 植入錯誤 8/8、逐指令比對 48/48（13,881 條） | `dv/core_hazard3/` |
 | 2026-10-05／06 | Phase 5：第一次 `make harden-soc CPU=hazard3`（`4461661`） | `OpenROAD.RepairDesignPostGPL failed with an unexpected error`，約 108 分鐘、記憶體 92.9 GB（PicoRV32 版同一步 43 秒） | 已驗證：卡住的不是 CPU 的邏輯，是 RTL 沒改的 UART（`simpleuart.v` 的 `send_divcnt` 比較，兩版共用同一個檔案、不在 `SOC_CPU_HAZARD3` 下）：整顆 SoC 重新合成後，它的比較邏輯用了一顆 `a2111oi_2`，在 ss 100°C 略超過修復的 slew 上限；resizer 把它換成更弱的 `a2111oi_1`，接著進入無窮迴圈（`drv-timing-closure` 規則 10）。兩版的弱 cell 數也不同（`a2111oi_2` 1 → 2、`o41ai_2` 1 → 0） | 換 core 後第一次 harden 前，先對新的合成網表做規則 10 的弱 cell 檢查；修正方式待使用者決定 | `docs/notes/repair_design_loop.md` |
 | 2026-10-07 | Phase 5 Hazard3 第 2–5 次 harden（`2251c4a` → `3a28d54`） | 第 2 次 ss_n40C setup −4.16 ns；第 3 次（resizer 看 ss_n40C）−0.381；第 4 次（44 ns）−1.131；第 5 次（開 `RUN_POST_GRT_RESIZER_TIMING`）全部 corner PASS，最差 +0.530 ns；上限檔的 unannotated 數 133 不符 | 已驗證（各自的 ADR 與單步實驗） | 規則 22；ADR-0013、ADR-0014；建 Hazard3 golden | `docs/decisions/0013-*.md`、`0014-*.md`；`signoff/golden/soc_top_hazard3/README.md` |
+| 2026-10-07 | Phase 5：為 Hazard3 改的 flow 設定（ADR-0013／0014、44 ns）拿回去跑 PicoRV32（`c976976`） | PicoRV32 signoff setup −0.113 ns（舊設定 43 ns 時 +0.384）：SRAM 半週期路徑的 32 條 `sram_dout0` 各多 1 顆 hold delay cell | 已驗證：根因是 CTS 對 SRAM 的 latency 對齊（ADR-0016），兩個 CPU 共用；Hazard3 也因此拿回 0.59 ns | 兩份 config 一起改（`cpu_config` 要求兩份只差 RTL）；改 flow 設定後兩個 CPU 都要重新 harden，不能只驗新 core | ADR-0016、`runs/p5_pico_h1_signoff/criteria_review.md`（p5h3 worktree） |

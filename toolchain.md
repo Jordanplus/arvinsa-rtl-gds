@@ -39,7 +39,7 @@
 
 ## 2. RTL-to-GDS flow（Phase 0，2026-10-03 已安裝；`librelane --smoke-test` PASS）
 
-工具都在 LibreLane 的 nix-shell 裡（`cd .tools/librelane && nix-shell`），版本由 LibreLane 3.0.14 的 `flake.lock` 決定，不另外釘版。
+工具都在 LibreLane 的 nix-shell 裡（`cd .tools/librelane && nix-shell`），版本由 LibreLane 3.0.14 的 `flake.lock` 決定，不另外釘版。soc_top 的 config 用 repo 的 LibreLane plugin 換掉 CTS step（`pnr/librelane_plugin_arvinsa/`，ADR-0016）：手動執行完整 flow 時 `PYTHONPATH` 要含 `pnr/`（`pnr/librelane_flow.sh` 已設好）。
 `make flow-setup` 會把實際版本寫到 `runs/flow_setup/versions.txt`；下表就是 2026-10-03 那次的結果。
 
 | 工具 | 用途 | 版本 | 來源 | 狀態 |

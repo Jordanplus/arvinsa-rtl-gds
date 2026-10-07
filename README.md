@@ -217,9 +217,10 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 
 #### librelane-run-debug：LibreLane 執行與除錯
 
-- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無、重跑時保留上一次的 run。
+- **何時用**：跑 LibreLane、從中間 step 接續、只重跑一個 step（驗證設定或做 negative test）、run 失敗找原因、某一步很久不結束、錯誤時有時無、重跑時保留上一次的 run、要改某一步的工具指令而不改 LibreLane 本身。
 - **重點**：
   - 單步重跑用 `python3 -m librelane.steps run`，改的是 config 與 state 的複本，原 run 不動。
+  - 要改某一步的行為：寫一個繼承原 step 的 plugin step、只換 Tcl，config 用 `meta.substituting_steps` 換掉；手動跑完整 flow 時 `PYTHONPATH` 要含 plugin 的目錄，否則一開始就報 `no replacement step with ID`（ADR-0016）。
   - 錯誤要先證明是隨機的（同一份輸入重跑 3–4 次，有過有不過），才能加重試；重試只針對那一個訊息，而且有次數上限。只跑一次就把錯誤歸因到某個設定不可靠：`GRT-0229` 原本被誤認為是某個設定造成的。重試規則綁 step 名稱，flow 多開一個做同樣工具指令的 step（例如繞線後的 timing 修復也做 global routing）時要一起檢查。
   - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。記憶體要看 physical footprint，`ps` 的 RSS 不算被換到 swap 的部分，會嚴重低估；CPU 使用率低、swap 一直增加，就是記憶體失控，要馬上停（Phase 5 一個 step 用到 92.9 GB，機器只有 24 GB）。
   - 要在某一步的工具指令裡加除錯輸出時，用 `python3 -m librelane.steps eject` 把那一步匯出成獨立 script 再改；可能失控的實驗要加記憶體上限自動停。
@@ -239,7 +240,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 不可重現的步驟也會改變數量時（Phase 5 Hazard3：global routing 偶發不同、detailed routing 多插 diode）：先找到分歧的那一步、量出發生頻率，收集足夠樣本，再把會跟著繞線變的數量與面積放進另一個誤差表（約實測最大差異的 5 倍），每輪與個別 warning 的 key 列為可選。違規、錯誤類的計數仍一律完全相同，由 checker 拒絕任何碰到它們的誤差設定（ADR-0015）。
   - 每個 checker 至少要有一個植入錯誤，加一個沒植入時必須 PASS 的對照。斷言寫成「FAIL 的列剛好是這幾列」，而且要看全部問題，不能只看第一個。
   - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
-  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因。新 checker 要逐條對照。
+  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）。新 checker 要逐條對照。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂
@@ -270,8 +271,9 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 未用的 port 要 tie-off，checker 要檢查實際接的值。
   - STA 的每個 corner 只能讀到一份 macro .lib：`LIB`、`EXTRA_LIBS` 也會被讀進每個 corner。檢查要打開 STA 讀的每個 .lib 看誰定義了 macro cell，並比完整路徑。
   - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫、以及 ss 1.60 V 室溫時會讀出前一次的值；corner 之間的溫度 STA 看不到，要另外模擬。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
+  - macro 的 clock：CTS 預設會在 macro clock pin 前插 delay buffer 對齊 flip-flop 的 latency，對 SRAM 半週期讀出反而有害；soc_top 關掉了（ADR-0016，看 cts-clock-tree）。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
-- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008／0010。negative test：P08、P09、P14、P16–P20、P30、P32。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008／0010／0016。negative test：P08、P09、P14、P16–P20、P30、P32。
 
 #### openram-macro-characterization：SRAM macro 的 SPICE 特性化
 
