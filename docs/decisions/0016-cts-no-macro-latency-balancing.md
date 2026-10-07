@@ -1,6 +1,6 @@
 # ADR-0016：CTS 不做 macro 的 latency 對齊（`clock_tree_synthesis -no_insertion_delay`）
 
-- 狀態：已採用（2026-10-07，使用者決定「自訂 CTS step」）；兩個 CPU 都用接續實驗確認，等正式 harden 確認
+- 狀態：已採用（2026-10-07，使用者決定「自訂 CTS step」）；兩個 CPU 的正式 harden（`2caad0e`）確認，結果與接續實驗相同
 - 背景：PicoRV32 在 ADR-0013／0014 的新設定（44 ns）下第 1 次 harden（`c976976`），signoff setup FAIL：min_ss_n40C −0.113 ns、nom_ss_n40C −0.012 ns，9 個違規 endpoint，全部是 SRAM 讀出的半週期路徑（`sram0` 下降緣送出、flop 上升緣接收）。路徑上 mux 前、後各有 1 顆 hold delay cell（`dlygate4sd3_1`，ss_n40C 1.42、1.15 ns）。ADR-0014 把「`sram_dout0` 上的 hold buffer」列為已知限制，這次變成 FAIL。
 
 ## 原因（已驗證）
@@ -46,6 +46,10 @@ Hazard3（`runs/exp_h_d`，第 8 次 harden 第 34 步接續，同樣的暫存 S
 | 最差 hold | +0.107 ns | +0.106 ns |
 | SRAM 輸入腳 hold（min_ff） | +0.338 ns | +0.320 ns |
 | slew／cap／fanout 違規 | 0 | 0 |
+
+## 正式 harden（commit `2caad0e`，p5h3 worktree `runs/p5_pico_h3`、`runs/p5_h3_h10`）
+
+用自訂 CTS step 從頭跑：PicoRV32 setup +0.765／hold +0.079 ns，Hazard3 +1.116／+0.106 ns，與接續實驗 D 相同；DRC、LVS、slew、cap、antenna 都是 0；`check_soc.py` `cts_macro_latency` PASS（0 顆 `delaybuf_*`）。unannotated 上限依新的 clock tree 改成 118／126（CTS dummy load 75／82），兩個 golden 從這兩個 run 重建。第一次正式 harden（`adac1a9`）兩個 CPU 都在 `ResizerTimingPostGRT` 遇到已知的隨機 GRT-0229 而中止，重試規則因此擴大到這一步（`docs/notes/grt0229_repro.md`）。
 
 ## 決策
 

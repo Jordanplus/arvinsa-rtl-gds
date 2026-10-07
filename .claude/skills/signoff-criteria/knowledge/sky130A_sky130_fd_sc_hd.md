@@ -87,6 +87,8 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-07 | 同上 | 44 ns | `timing__unannotated_net__count` | 119 = 76 dummy load + 32 `dout1` + 11 tie cell（Phase 4：133 = 90 + 32 + 11） | 上限隨 clock tree 變；設計改完後重推 | 同上 |
 | 2026-10-07 | soc_top 兩個 CPU，接續實驗 D（CTS `-no_insertion_delay`，p5h3 worktree `runs/exp_p_d`、`runs/exp_h_d`） | 44 ns | SRAM `clk0` 前的 delay buffer 拿掉後：最差 setup；hold；SRAM 輸入腳 hold（min_ff） | PicoRV32 −0.113 → +0.765、hold +0.080 → +0.079、SRAM 輸入 +0.197 → +0.093；Hazard3 +0.530 → +1.116、+0.107 → +0.106、+0.338 → +0.320 ns | 半週期路徑的 DCD 預算 2.2 ns 下 44 ns 的餘量；`PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 仍保住 SRAM 輸入腳 | ADR-0016 |
 | 2026-10-07 | sky130_fd_sc_hd `.lib`（slew 0.1 ns、負載 3 fF 插值） | — | delay cell／buffer 的 ss_n40C_1v60 ÷ ff_n40C_1v95 延遲比 | `dlygate4sd3_1` 1.116／0.389（2.87）、`dlygate4sd1_1` 3.03、`dlymetal6s6s_1` 3.30、`buf_1` 2.47 | 在 data 端補 hold 的 setup 代價約 3 倍（`cts-clock-tree` 規則 12） | `drv-timing-closure` 經驗紀錄 |
+| 2026-10-07 | soc_top 兩個 CPU，ADR-0016 正式 harden（`2caad0e`，p5h3 worktree `runs/p5_pico_h3`、`runs/p5_h3_h10`） | 44 ns | 最差 setup／hold；post-CTS → GRT 後 → signoff 的 hold | PicoRV32 +0.765／+0.079（hold +0.300 → +0.069 → +0.079）；Hazard3 +1.116／+0.106（+0.293 → 無 → +0.106）；與接續實驗 D 相同 | 半週期路徑 DCD 預算 2.2 ns 下 44 ns 的餘量；hold 餘量 0.3 ns 足夠 | 兩個 run 的 `criteria_review.md` |
+| 2026-10-07 | 同上 | 44 ns | `timing__unannotated_net__count` | PicoRV32 118 = 75 dummy load + 32 `dout1` + 11 tie；Hazard3 126 = 82 + 32 + 12（15 個 corner 相同） | 上限隨 CTS 改變；結構不變 | 同上 |
 
 ## 待確認（推測，不能當規則用）
 

@@ -1,17 +1,30 @@
 # soc_top golden：整合 SRAM 的 soc_top 的 metrics
 
-`make harden-soc` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/soc_top.toml` 的 `[golden_tolerance]` 列出的族群（detailed routing 不是每次都一樣，見 `signoff/golden/picorv32_core/README.md`）可以有誤差：slack、skew、線長、via、功耗、IR drop 很小的誤差，繞線器中間各輪的 DRC 數 ±100（見下方可重現性）。ADR-0015 另外加了 `[golden_layout_tolerance]`（會隨繞線變的數量與面積）與 `[golden_optional]`（只出現在一邊的每輪與 warning key），目前暫用 Hazard3 的實測值；PicoRV32 在新設定（ADR-0014）重跑、更新本 golden 時，要用它自己的 run 重新量測。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
+`make harden-soc` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/soc_top.toml` 的 `[golden_tolerance]` 列出的族群（detailed routing 不是每次都一樣，見 `signoff/golden/picorv32_core/README.md`）可以有誤差：slack、skew、線長、via、功耗、IR drop 很小的誤差，繞線器中間各輪的 DRC 數 ±100（見下方可重現性）。ADR-0015 另外加了 `[golden_layout_tolerance]`（會隨繞線變的數量與面積）與 `[golden_optional]`（只出現在一邊的每輪與 warning key），目前暫用 Hazard3 的實測值；本 golden 已是新設定（ADR-0013／0014／0016），誤差要等之後的 PicoRV32 run 量出 run 之間的差異再更新。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
 
 ## 出處
 
 | 項目 | 值 |
 |---|---|
 | 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`，原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-05（Phase 3.5），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 3.5 第 3 次 harden-soc，commit `edb7d63`。只有與舊 golden 比對的 102 列 FAIL（預期）；其他 limits、`check_soc.py`（含新的 `sram_lib`）、輸入一致、來源追溯全部 PASS |
+| 日期／平台 | 2026-10-07（Phase 5），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 5 PicoRV32 的 ADR-0016 正式 harden，commit `2caad0e`（p5h3 worktree；log `runs/p5_pico_harden3.log`）。`check_signoff.py` 當時有兩類 FAIL：與舊 golden 比對（預期），以及 `timing__unannotated_net__count` 118 ≠ 133（上限依新的 clock tree 改成 118，組成見上限檔）。改完上限後只剩 golden；`check_soc.py`（含 `cts_macro_latency`）、`sram_drc_alone`、`check_inputs.py --resolved`、`provenance.py`、`review_criteria.py` 全部 PASS |
+| signoff criteria 檢查 | p5h3 worktree `runs/p5_pico_h3_signoff/criteria_review.md`（跑的時候 tag 是 `soc_top`，之後改名為 `p5_pico_h3`） |
 | LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config.json` sha256 `dd4704f57f0d8a894a4eef4a89bb862313bedcf3d40dc8b159b11a894b1c5751` |
-| 本檔 sha256 | `7123916f481e7b6b3b5833e875f15b103726fcccc0b2ec0da93f2518ddd4c6f4` |
+| flow 設定 | `pnr/soc_top/config.json` sha256 `df16dc8d1f4fc5d3c414b613c4ca97b86ee6e0cfa96f7a35a44d85a50d9a48b8`（含 `meta.substituting_steps`；CTS step 在 `pnr/librelane_plugin_arvinsa/`） |
+| 本檔 sha256 | `c4cad54c295e2c9e47fdcc9a5645846d68cd77f4aa89e1346c46d81249446e8e` |
+
+## 與 Phase 3.5 golden 的差異（逐項檢視過，2026-10-07）
+
+- metrics 從 439 個變成 436 個：少了 `route__drc_errors__iter:7`、`route__wirelength__iter:7`（detailed routing 少跑一輪，最終 DRC 仍是 0）與 `flow__warnings__count:GRT-0243`；沒有新 key。共有的 436 個中 261 個相同、175 個改變。
+- 原因是 Phase 5 的四項變更，沒有逐項分開實驗：週期 43 → 44 ns（ADR-0004 Phase 5 補充）、resizer 看 ss_n40C 且 setup 餘量 0.6 → 0.1 ns（ADR-0013）、繞線後再修一次 timing（ADR-0014）、CTS 不做 SRAM 的 latency 對齊（ADR-0016）。
+- timing：最差 setup +0.384 → +0.765 ns（仍是 min_ss_n40C 的 SRAM 半週期路徑）；最差 hold +0.074 → +0.079 ns。只有 ADR-0013／0014、還沒有 ADR-0016 的 run（commit `c976976`）是 −0.113 ns（`docs/decisions/0016-cts-no-macro-latency-balancing.md`）。
+- clock：`sram0/clk0` 前的 10 顆 `delaybuf_*` 沒有了；clock buffer 531 → 508、clock inverter 62 → 49；skew metric（setup）0.680 → 0.450 ns。
+- cell：standard cell 29,373 → 31,960（+2,587），面積 237,877 → 254,319 µm²，utilization 0.679 → 0.701；timing repair buffer 9,545 → 12,129（推測是 resizer 看到 ss_n40C 後多修的，沒有分開實驗）；網表的 hold buffer（`hold*`）3,563 顆，32 條 `sram_dout0` 上沒有 hold delay cell。`design__instance__count__hold_buffer` 3,479 → 8：這個 metric 是最後一個 resizer 步驟自己的數字，現在最後一步是 `ResizerTimingPostGRT`（只插了 8 顆），不是 hold buffer 總數（`drv-timing-closure` 規則 7）。antenna diode 48 → 83。
+- 功耗 9.24 → 8.73 mW；IR `ir__drop__worst` 3.95 → 3.72 mV。
+- 繞線：線長 895,243 → 863,010 µm，net 22,679 → 25,254，via 162,780 → 170,172。
+- `timing__unannotated_net__count` 133 → 118：CTS dummy load 90 → 75，其他組成不變。
+- 沒變的：Magic DRC 4,665,810（全部在 SRAM 框內）、KLayout DRC 0、LVS 0、XOR 0、SRAM 位置。
 
 ## 與 Phase 4 golden 的差異（逐項檢視過，2026-10-05）
 
@@ -43,7 +56,9 @@
 
 | run | 與本檔比較 |
 |---|---|
-| Phase 3.5 第 3 次 harden-soc（commit `edb7d63`） | 本檔來源 |
+| Phase 5 PicoRV32 ADR-0016 正式 harden（commit `2caad0e`） | 本檔來源 |
+| 下列為舊 golden 的紀錄 | |
+| Phase 3.5 第 3 次 harden-soc（commit `edb7d63`） | Phase 3.5 golden 的來源（見 git 歷史，commit `2caad0e` 以前的本檔） |
 | Phase 4 的 run（下列） | 與 Phase 4 的 golden 比較；該 golden 見 git 歷史（commit `edb7d63` 以前的本檔） |
 | Phase 4 第 5 次 harden-soc（commit `e5b7a4b`） | Phase 4 golden 的來源 |
 | Phase 4 `make regress` 第 1 次（乾淨 checkout，commit `72e5433`） | 434 個完全相同（沒有用到誤差） |
