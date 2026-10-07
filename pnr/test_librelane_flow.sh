@@ -4,6 +4,10 @@
 #   grt       stops in OpenROAD.RepairDesignPostGRT with the known GRT-0229 usage=65534 line
 #   grt44     stops in OpenROAD.ResizerTimingPostGRT with the same line (ADR-0014 runs that step)
 #   grtother  stops in RepairDesignPostGRT with another error -> must not be retried
+#   grtreal   stops with GRT-0229 but a real overflow (usage=2300, not the 65534 of the known
+#             intermittent abort)                            -> must not be retried
+#   grtdone   the GRT-0229 usage=65534 line, but the step finished (state_out.json) and the flow
+#             stopped later                                  -> must not be retried
 #   other     stops in another step                          -> must not be retried
 #   ok        finishes
 # and keep_prev_run (pnr/librelane_flow.sh): an existing run directory becomes <dir>.prev, an older
@@ -29,7 +33,7 @@ scenario() {  # scenario "<outcomes>" <want rc 0|fail> <want attempts> <want ret
       f=$(echo "$2" | grep -o -- "--from [A-Za-z.]*" | cut -d" " -f2); echo "${f:--}" >> "$T/froms"
       o=$(echo "$OUTCOMES" | cut -d" " -f$((calls + 1))); step=$((41 + calls))
       case "$o" in
-        grt|grtother|ok) d="$RUN_DIR/$step-openroad-repairdesignpostgrt" ;;
+        grt|grtother|grtreal|grtdone|ok) d="$RUN_DIR/$step-openroad-repairdesignpostgrt" ;;
         grt44) d="$RUN_DIR/$step-openroad-resizertimingpostgrt" ;;
         *) d="$RUN_DIR/$step-openroad-detailedrouting" ;;
       esac
@@ -40,6 +44,10 @@ scenario() {  # scenario "<outcomes>" <want rc 0|fail> <want attempts> <want ret
         grt44) echo "[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200" \
                > "$d/openroad-resizertimingpostgrt.log"; return 2 ;;
         grtother) echo "[ERROR GRT-0001] another error" > "$d/openroad-repairdesignpostgrt.log"; return 2 ;;
+        grtreal) echo "[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=2300 limit=2200" \
+               > "$d/openroad-repairdesignpostgrt.log"; return 2 ;;
+        grtdone) echo "[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200" \
+               > "$d/openroad-repairdesignpostgrt.log"; touch "$d/state_out.json"; return 2 ;;
         other) return 2 ;;
         ok) touch "$d/state_out.json"; return 0 ;;
       esac
@@ -62,6 +70,8 @@ scenario "grt grt ok" 0 3 2 "-,$R,$R"
 scenario "grt grt grt" fail 3 2 "-,$R,$R"
 scenario "other" fail 1 0 "-"
 scenario "grtother" fail 1 0 "-"
+scenario "grtreal" fail 1 0 "-"
+scenario "grtdone" fail 1 0 "-"
 scenario "grt other" fail 2 1 "-,$R"
 scenario "grt44 ok" 0 2 1 "-,$Z"
 scenario "grt grt44 ok" 0 3 2 "-,$R,$Z"

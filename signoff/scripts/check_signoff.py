@@ -35,7 +35,10 @@ replaced. A tolerance must be finite and > 0.
   [golden_optional] patterns name keys that may exist in only one of the run and the golden (the
   router can run one more or one fewer iteration, a warning can come or go). They may only match
   per-iteration keys (containing "__iter:") and per-message warning counts
-  ("flow__warnings__count:<id>"), never an [equal] key. A key present in both is compared as usual.
+  ("flow__warnings__count:<id>"), never an [equal] key. Only the iteration number may be a wildcard
+  ("route__drc_errors__iter:*"); a warning must be named by its message id (a wildcard such as
+  "flow__warnings__count:*" would let every new kind of warning pass). A key present in both is
+  compared as usual.
 
 Prints one line per row and `signoff: PASS` / `signoff: FAIL`; exit code 0 only on PASS.
 A metric missing from the run is a FAIL (a checker that silently skips is not a checker).
@@ -50,7 +53,7 @@ import tomllib
 
 # A metric whose name contains one of these counts violations or errors: never a layout tolerance.
 VIOLATION_WORDS = ("violat", "_vio_", "error", "drc", "lvs", "xor", "unannotated", "disconnected", "unmapped",
-                   "illegal", "lint", "latch")
+                   "illegal", "lint", "latch", "floating", "hanging", "warning")
 
 
 def main(metrics_path, limits_path, golden_path):
@@ -132,6 +135,10 @@ def main(metrics_path, limits_path, golden_path):
             if hit:
                 row("golden", f"optional {pattern}", f"matches {hit[:3]}",
                     "only __iter: and flow__warnings__count:<id> keys, no [equal] key", False)
+            head = pattern.split("__iter:")[0] if "__iter:" in pattern else pattern
+            if any(c in head for c in "*?["):
+                row("golden", f"optional {pattern}", "wildcard outside the iteration number",
+                    "<metric>__iter:* or flow__warnings__count:<id> named in full", False)
         keys = sorted(set(golden) | set(run))
         tolerated, differ, one_sided = 0, 0, 0
         for key in keys:

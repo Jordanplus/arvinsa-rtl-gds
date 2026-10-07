@@ -53,8 +53,12 @@ Checks (each prints a PASS/FAIL row):
                substituting_steps, ADR-0016); the run has exactly one step directory of it and none
                of OpenROAD.CTS; its log has the line of pnr/librelane_plugin_arvinsa/
                cts_no_insertion_delay.tcl (clock_tree_synthesis really got -no_insertion_delay);
-               the final netlist has no delaybuf_* instance (the delay buffers CTS adds before
-               sram0/clk0 when it balances the macro latency, cts-clock-tree rule 10)
+               step directories are matched with or without a -<n> suffix (a repeated step);
+               in the final netlist, at most SRAM_CLK_CHAIN_MAX clock buffers in a row above
+               sram0/clk0 drive nothing else (CTS balancing the macro latency puts a chain of
+               single-fanout delay buffers there: 11 and 12 on the two balanced Phase 5 runs, 0
+               on the runs without; a structural check, so it does not depend on what OpenROAD
+               names them), and no instance is named delaybuf_* (cts-clock-tree rule 10)
 Prints `soc-checks: PASS` / `soc-checks: FAIL`; exit code 0 only on PASS. Python stdlib only.
 
 usage: check_soc.py --make-drc-baseline <drc.magic.rpt of the SRAM alone> <out.json>
@@ -71,7 +75,31 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 LIB_LINE = re.compile(r"^Reading (?:cell|extra timing|timing) library for the '([^']*)' corner at '(.*?)'", re.M)
 CTS_STEP = "Arvinsa.CTSNoInsertionDelay"
 CTS_LINE = "[INFO] arvinsa: clock_tree_synthesis -no_insertion_delay"
+SRAM_CLK_CHAIN_MAX = 2   # single-fanout clock buffers in a row above sram0/clk0 (measured 0 / 11-12)
+CLK_BUF = re.compile(r"sky130_fd_sc_hd__(?:clkbuf|buf|clkdlybuf\w*|dlygate\w*|dlymetal\w*|clkinv|clkinvlp|inv)_\d+$")
 _DEFINES = {}
+
+
+def sram_clock_chain(nl):
+    """The clock buffers (and inverters) in a row above sram0/clk0 whose output drives nothing else:
+    [(instance, cell)], nearest first. A buffer's input pin counts as a load of the net it reads."""
+    drv, fanout, clk = {}, {}, None
+    for m in re.finditer(r"^\s*(\S+)\s+(\\\S+|\S+)\s*\((.*?)\);", nl, re.M | re.S):
+        cell, name, body = m.groups()
+        pins = {k: v.strip() for k, v in re.findall(r"\.(\w+)\(\s*(\\\S+\s|[^()\s]+)\s*\)", body)}
+        buf = CLK_BUF.match(cell) is not None
+        for pin, net in pins.items():
+            if not (buf and pin in ("X", "Y")):
+                fanout[net] = fanout.get(net, 0) + 1
+        if buf and (pins.get("X") or pins.get("Y")):
+            drv[pins.get("X") or pins.get("Y")] = (name, cell, pins.get("A"))
+        if name == INST:
+            clk = pins.get("clk0")
+    chain, net = [], clk
+    while net in drv and fanout.get(net, 0) == 1 and len(chain) < 1000:
+        chain.append(drv[net][:2])
+        net = drv[net][2]
+    return chain
 
 
 def defines_sram(path):
@@ -377,8 +405,9 @@ def main(run_dir, config_path, sram_drc):
 
     # CTS without macro latency balancing (ADR-0016)
     subst = ((cfg.get("meta") or {}).get("substituting_steps")) or {}
-    cts_dirs = glob.glob(os.path.join(run_dir, "*-arvinsa-ctsnoinsertiondelay"))
-    old_dirs = glob.glob(os.path.join(run_dir, "*-openroad-cts"))
+    names = os.listdir(run_dir) if os.path.isdir(run_dir) else []
+    cts_dirs = [os.path.join(run_dir, n) for n in names if re.fullmatch(r"\d+-arvinsa-ctsnoinsertiondelay(-\d+)?", n)]
+    old_dirs = [n for n in names if re.fullmatch(r"\d+-openroad-cts(-\d+)?", n)]
     cts_log = "".join(open(f, encoding="utf8", errors="replace").read()
                       for d in cts_dirs for f in glob.glob(os.path.join(d, "*.log")))
     delaybufs = re.findall(r"^\s*sky130_fd_sc_hd__\w+\s+(delaybuf_\S+)\s*\(", nl, re.M)
@@ -391,8 +420,12 @@ def main(run_dir, config_path, sram_drc):
         problems.append(f"no '{CTS_LINE}' in the log of {os.path.basename(cts_dirs[0])}")
     if delaybufs:
         problems.append(f"{len(delaybufs)} delaybuf_* instance(s) in the final netlist ({', '.join(delaybufs[:3])})")
-    row("cts_macro_latency", not problems, "CTS step with -no_insertion_delay, 0 delaybuf_* instances" if not problems
-        else "; ".join(problems))
+    chain = sram_clock_chain(nl)
+    if len(chain) > SRAM_CLK_CHAIN_MAX:
+        problems.append(f"{len(chain)} single-fanout clock buffers in a row above {INST}/clk0 (max {SRAM_CLK_CHAIN_MAX}: "
+                        f"{', '.join(n for n, _ in chain[:3])}, ...)")
+    row("cts_macro_latency", not problems, f"CTS step with -no_insertion_delay, 0 delaybuf_* instances, "
+        f"{len(chain)} single-fanout clock buffer(s) above {INST}/clk0" if not problems else "; ".join(problems))
 
     # STA check_setup
     corners = cfg.get("STA_CORNERS") or []

@@ -523,6 +523,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - `signoff/eqy/`：EQY 與它的植入錯誤。
   - `env/versions.mk`、`env/check_env.sh`、`toolchain.md`：釘版與環境檢查。
   - `scripts/check_py_names.py`、`scripts/check_skills.py`：開跑前的快速檢查。
+  - `scripts/progress.py` 加 `.claude/statusline-progress`：Claude Code 狀態列的第二行，顯示待辦剩幾項，以及執行中工作的進度百分比（regress 第幾項／共幾項、LibreLane 已完成 step／參考 run 的 step 數；其他 make target 只顯示「執行中」）。待辦清單在 `runs/todo.md`，不進版控，格式為 `- [ ]` 待辦、`- [~]` 進行中、`- [x]` 完成（CLAUDE.md 規則 11）。全域狀態列（claude-usage skill v1.6.0）遇到主 checkout 有可執行的 `.claude/statusline-progress` 才呼叫。
 - **要依新設計重做的**：
   - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，並用 `signoff-criteria` 重新推導。
   - golden。

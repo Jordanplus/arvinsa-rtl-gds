@@ -17,6 +17,8 @@
 #                                        STA check_setup, min pulse width and period, Magic DRC
 #                                        inside the SRAM only where the SRAM alone has it
 #   5. check_inputs.py --resolved      : the run really used rtl/rtl.f, the SRAM .lib and the antenna LEF
+#   5b. pnr/soc_top/ir_worst.py        : static IR with ff currents and ss metal resistance (the IR step
+#                                        of the flow is nom_tt) within the same [max_sum] limit
 #   7. signoff/scripts/review_criteria.py: the signoff criteria were applied (every config setting in
 #                                        resolved.json and the steps, the clock uncertainty in every
 #                                        timing step and signoff corner, the checkers above ran), plus
@@ -97,6 +99,9 @@ python3 pnr/soc_top/sram_drc_alone.py "$RUN_DIR" "$OUT/sram_drc_alone" | tee "$O
 python3 pnr/soc_top/check_soc.py "$RUN_DIR" --sram-drc "$OUT/sram_drc_alone/step/reports/drc.magic.rpt" --config "$CONFIG" | tee "$OUT/soc_checks.txt" || true
 python3 pnr/soc_top/check_inputs.py --cpu "$CPU" --resolved "$RUN_DIR/resolved.json" > "$OUT/inputs_resolved.txt" 2>&1 || true
 tail -1 "$OUT/inputs_resolved.txt"
+# Worst-case IR (ff currents + ss metal resistance) against the same 20 mV; the flow's IR step is nom_tt
+# (Phase 5 exit review: Hazard3 measured 25.75 mV there with 18.28 at nom_tt).
+python3 pnr/soc_top/ir_worst.py "$RUN_DIR" "$OUT" "$LIMITS" --ll-dir "$LL_DIR" | tee "$OUT/ir_worst.txt" || true
 python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \
   > "$OUT/provenance_end.txt" 2>&1 || true
 tail -1 "$OUT/provenance_end.txt"
@@ -106,6 +111,7 @@ python3 signoff/scripts/review_criteria.py --cpu "$CPU" --run "$RUN_DIR" --out "
   | tee "$OUT/criteria_review.txt" || true
 if [ "$flow_rc" = 0 ] && grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^soc-checks: PASS$' "$OUT/soc_checks.txt" \
    && grep -q '^soc-inputs: PASS$' "$OUT/inputs_resolved.txt" && grep -q '^criteria-review: PASS$' "$OUT/criteria_review.txt" \
+   && grep -q '^ir-worst: PASS$' "$OUT/ir_worst.txt" \
    && grep -q '^provenance: PASS$' "$OUT/provenance.txt" && grep -q '^provenance: PASS$' "$OUT/provenance_end.txt"; then
   echo "harden-soc: PASS" | tee "$OUT/result.txt"
 else

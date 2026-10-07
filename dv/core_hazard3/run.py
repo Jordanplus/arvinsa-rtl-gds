@@ -211,6 +211,9 @@ def main():
     tr_ok = selftest.returncode == 0 and bool(tbr) and bool(rvcpp) and len(trace) == len(tr_bins) and not tr_bad
 
     with open(os.path.join(out, "summary.txt"), "w") as f:
+        gcc = os.path.join(xpack, "riscv-none-elf-gcc")
+        ver = subprocess.run([gcc, "--version"], capture_output=True, text=True).stdout.splitlines()
+        f.write(f"toolchain {os.path.realpath(gcc)}: {ver[0] if ver else '?'}\n")
         for t, rc in sorted(res.items()):
             f.write(f"{t} rc={rc}{' UNSUPPORTED: ' + UNSUPPORTED[t] if t in UNSUPPORTED else ''}\n")
         for t, rc in sorted(neg.items()):

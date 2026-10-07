@@ -20,3 +20,10 @@
     - **防復發**：能抓到它再次出現的 checker 或 negative test。做不到的話，寫明「沒有自動防護」和原因。
 
     防護不能綁在 flow 會變的東西上，例如 step 名稱、step 編號、log 措辭。工具升版時，逐條重看這些防護是否還成立。只寫一列經驗紀錄不算完成。
+11. **待辦清單與進度顯示**（使用者 2026-10-07）：
+    - 目前 Phase 的待辦清單放在 `runs/todo.md`。
+      - 不進版控：勾選時不能弄髒 working tree，因為 harden 與 regress 都要求乾淨的 tree。
+      - 格式：`- [ ]` 待辦、`- [~]` 進行中、`- [x]` 完成。
+    - Phase 開始時，依 `project-plan.md` §8 建立清單；之後每開始或完成一項就更新。
+    - Phase exit review 寫完後清空。
+    - Claude Code 狀態列的第二行由 `scripts/progress.py` 顯示，透過 `.claude/statusline-progress` 呼叫。內容是待辦剩幾項，以及執行中工作的進度百分比。這些百分比只是給人看的估計，signoff 不讀它們。

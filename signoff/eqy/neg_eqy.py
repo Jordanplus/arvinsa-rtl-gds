@@ -51,9 +51,14 @@ Cases (the same kinds of error as the Phase 2 GL qualification, docs/phase_exit/
     minstreth8_stuck1     flip-flop u_cpu...csr_u.minstreth[8] D tied to 1 (rdinstreth)
     irq0_stuck0           flip-flop u_cpu...csr_u.irq[0] (the registered external IRQ) D tied to 0
     reset_b_tied1         first dfrtp flip-flop (by instance name) gets RESET_B = 1'b1: it never
-                          resets. The sequential cell check compares cell functions only (dfrtp
-                          stays dfrtp) and the clock check only clock pins, so the proof must catch
-                          it (async2sync turns the reset into logic before the D input)
+                          resets. Caught by EQY's constant mapping and the name conflict at the
+                          partition step (0 partitions: no proof is involved; REQUIRE). Phase 5
+                          independent review: this was described as caught by the proof; tying the
+                          pin through a conb_1 tie cell instead gives the same constant, so a
+                          tie-off cannot be caught by the proof. RESET_B = cpu_resetn (bypassing the
+                          synchronizer, not a constant) was refused at the partition step as well
+                          (2026-10-08), but it is not a case: its location scope covers the whole
+                          reset tree and accepted mcycleh13_stuck1's FAIL name (signoff/eqy/README.md)
 Prints `neg-eqy: PASS n/n caught` / `neg-eqy: FAIL ...`; exit code 0 only on PASS.
 """
 import argparse
@@ -97,13 +102,13 @@ def flop_d_const(q_name, value):
     return rx, lambda m: f"{m.group(1)}1'b{value}{m.group(2)}"
 
 
-def flop_reset_tied1(text):
-    """First dfrtp flip-flop (sorted by instance name) whose RESET_B is a net: RESET_B becomes 1'b1."""
+def flop_reset_tied1(text, to="1'b1"):
+    """First dfrtp flip-flop (sorted by instance name) whose RESET_B is a net: RESET_B becomes `to`."""
     cands = sorted(re.findall(r"sky130_fd_sc_hd__dfrtp_\d+ (\S+) \(\.CLK\([^)]*\),\s*\.D\([^)]*\),\s*\.RESET_B\([^1)][^)]*\)", text))
     if not cands:
         return re.compile(r"(?!x)x"), None
     rx = re.compile(r"(sky130_fd_sc_hd__dfrtp_\d+ " + re.escape(cands[0]) + r" \(\.CLK\([^)]*\),\s*\.D\([^)]*\),\s*\.RESET_B\()[^)]*(\))")
-    return rx, lambda m: f"{m.group(1)}1'b1{m.group(2)}"
+    return rx, lambda m: f"{m.group(1)}{to}{m.group(2)}"
 
 
 def mux_swap(text):
@@ -337,6 +342,9 @@ CASES["soc_top_hazard3"] = CASES["soc_top"] + [
     ("reset_b_tied1", flop_reset_tied1),
 ]
 
+# Cases that count only with this reason (the check the case is about must be the one that caught it).
+REQUIRE = {"reset_b_tied1": "mapped to a constant"}
+
 # Cases whose edit points a pin at a new net: (instance it belongs to, pin, inverter cell, new net).
 # edit() drives the new net from the pin's original net through that inverter (instance <net>_cell).
 # Each case has its own names, so the location cross check compares them with each other.
@@ -448,7 +456,11 @@ def main():
             names = (fail_names(os.path.join(case_dir, "eqy")) | set(summ.get("sequential_mismatch") or [])
                      | set(summ.get("clock_mismatch") or []))
             outside = sorted(names - near[name])
-            if rc != 0 and "eqy: FAIL" in text_log and reasons and names and not outside:
+            if name in REQUIRE and not any(REQUIRE[name] in x for x in reasons):
+                msg = f"eqy FAILed without '{REQUIRE[name]}' ({'; '.join(reasons) or 'no reason'}): not caught by the check this case is about"
+                errors.append(f"{name}: {msg}")
+                print(f"  [FAIL] {name}: {msg}")
+            elif rc != 0 and "eqy: FAIL" in text_log and reasons and names and not outside:
                 caught += 1
                 found[name] = names
                 print(f"  [PASS] {name}: eqy FAIL as expected ({'; '.join(reasons)}), "

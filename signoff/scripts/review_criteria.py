@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Signoff criteria review of one soc_top run, part 1: were the criteria applied (skill signoff-criteria,
+"""Signoff criteria review of one harden run, part 1: were the criteria applied (skill signoff-criteria,
 "每次 harden 後的檢查"; user decision 2026-10-07).
 
-usage: review_criteria.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--config <file>]
+usage: review_criteria.py [--design soc_top|picorv32_core] [--cpu picorv32|hazard3] [--run <dir>]
+                          [--out <dir>] [--config <file>]
 
+--design soc_top (default; pnr/soc_top/run.sh, `make harden-soc`) or picorv32_core
+(pnr/picorv32_core/run.sh, `make harden-core`; Phase 5 exit review: the core harden had no review).
 Defaults: --run runs/<tag>, --out runs/<tag>_signoff, --config pnr/soc_top/config.json or
-config_hazard3.json (the same tags as pnr/soc_top/run.sh). Rows, each PASS or FAIL:
+config_hazard3.json (the same tags as pnr/soc_top/run.sh; --cpu picks one), or
+pnr/picorv32_core/config.json. Rows, each PASS or FAIL:
   config_applied   every setting of the config (except meta) has the same value in the run's
                    resolved.json: numbers as numbers, dir::<p> = <the run's DESIGN_DIR>/<p>,
                    pdk_dir::<p> = a path ending in /<p>, a dict only for the keys the config has,
@@ -20,12 +24,25 @@ config_hazard3.json (the same tags as pnr/soc_top/run.sh). Rows, each PASS or FA
                    a step the config replaces (meta substituting_steps) is looked up under its
                    replacement (CTS: Arvinsa.CTSNoInsertionDelay, ADR-0016); only the step
                    directories that finished (state_out.json) count, every one of them must have
-                   the line (a stopped attempt kept by a retry does not)
+                   the line (a stopped attempt kept by a retry does not). soc_top only: picorv32_core
+                   has no SDC of its own (LibreLane's base.sdc), only uncertainty_applied below
+  uncertainty_applied  the uncertainty every path of the signoff STA reports really got, in every
+                   corner (max.rpt and min.rpt of STAPostPNR): a setup path between the same clock
+                   edges the setup value, a half-cycle setup path (a falling edge to a rising edge
+                   or back) the half-cycle value, a hold path the hold value; a path without an
+                   uncertainty row is a FAIL. soc_top: the values clock_uncertainty.sdc prints;
+                   picorv32_core: CLOCK_UNCERTAINTY_CONSTRAINT for all three. (Phase 5 independent
+                   review: the printed SDC line alone does not show that STA applied it; a later
+                   set_clock_uncertainty, a reordered source or another signoff SDC would not be
+                   caught, and the 0.25 setup/hold equal LibreLane's own default.)
   signoff_corners  the signoff STA (STAPostPNR) has one directory per STA_CORNERS entry, no more
-  checkers_ran     <out> has the verdict line of check_signoff.py (signoff.txt), check_soc.py
-                   (soc_checks.txt), check_inputs.py --resolved (inputs_resolved.txt) and
-                   provenance.py --verify (provenance_end.txt): PASS or FAIL, but present (a
-                   LibreLane FAIL must not skip them)
+  checkers_ran     <out> has the verdict line of every checker of the design: soc_top check_signoff.py
+                   (signoff.txt), check_soc.py (soc_checks.txt), check_inputs.py --resolved
+                   (inputs_resolved.txt), ir_worst.py (ir_worst.txt), provenance.py --verify
+                   (provenance_end.txt); picorv32_core
+                   check_signoff.py, check_disconnected.py (disconnected.txt), cpu_params.py
+                   --resolved (cpu_params_resolved.txt), provenance.py --verify: PASS or FAIL, but
+                   present (a LibreLane FAIL must not skip them)
 Then [INFO] rows with the numbers the second part needs (are the criteria reasonable; Claude
 reads them with the skill and writes <out>/criteria_review.md): where each resizer timing repair
 (ResizerTimingPostCTS, ResizerTimingPostGRT) ended and the gap from the last one to signoff
@@ -47,6 +64,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
+CORE_TAG, CORE_CONFIG = "picorv32_core", os.path.join("pnr", "picorv32_core", "config.json")
 TIMING_STEPS = ["OpenROAD.STAPrePNR", "OpenROAD.GlobalPlacement", "OpenROAD.RepairDesignPostGPL", "OpenROAD.CTS",
                 "OpenROAD.ResizerTimingPostCTS", "OpenROAD.GlobalRouting", "OpenROAD.RepairDesignPostGRT",
                 "OpenROAD.ResizerTimingPostGRT"]
@@ -58,8 +76,10 @@ REPAIRS = [("OpenROAD.ResizerTimingPostCTS", "placement parasitics", "PL_RESIZER
             "PL_RESIZER_HOLD_SLACK_MARGIN"),
            ("OpenROAD.ResizerTimingPostGRT", "global routing parasitics", "GRT_RESIZER_SETUP_SLACK_MARGIN",
             "GRT_RESIZER_HOLD_SLACK_MARGIN")]
-VERDICTS = {"signoff.txt": "signoff", "soc_checks.txt": "soc-checks", "inputs_resolved.txt": "soc-inputs",
-            "provenance_end.txt": "provenance"}
+VERDICTS = {"soc_top": {"signoff.txt": "signoff", "soc_checks.txt": "soc-checks", "inputs_resolved.txt": "soc-inputs",
+                        "ir_worst.txt": "ir-worst", "provenance_end.txt": "provenance"},
+            "picorv32_core": {"signoff.txt": "signoff", "disconnected.txt": "disconnected-pins",
+                              "cpu_params_resolved.txt": "cpu-params", "provenance_end.txt": "provenance"}}
 REPAIR_RE = re.compile(r"^(wire|fanout|load_slew|max_length|split|rebuffer)\d+$")
 HOLD_RE = re.compile(r"^hold\d+$")
 
@@ -70,8 +90,11 @@ SUBSTITUTED = {}
 
 
 def step_dirs(run, step_id):
-    """All step directories of a LibreLane step id, in run order (a repeated step gets -1, -2, ...)."""
+    """All step directories of a LibreLane step id, in run order (a repeated step gets -1, -2, ...).
+    A step the config removes (substituting_steps value null) has none."""
     step_id = SUBSTITUTED.get(step_id, step_id)
+    if not step_id:
+        return []
     pat = re.compile(r"\d+-" + re.escape(step_id.lower().replace(".", "-")) + r"(-\d+)?$")
     return sorted((d for d in glob.glob(os.path.join(run, "[0-9]*")) if pat.fullmatch(os.path.basename(d))),
                   key=lambda d: int(os.path.basename(d).split("-")[0]))
@@ -222,6 +245,31 @@ def netlist_buffers(nl):
     return counts
 
 
+def uncertainty_applied(sta, corners, want):
+    """Paths of the signoff reports whose uncertainty is not the expected one. want = {"setup": x,
+    "half": y, "hold": z}. Returns (number of paths checked, list of problems)."""
+    n, bad = 0, []
+    for c in corners:
+        if not sta or not os.path.isdir(os.path.join(sta, c)):
+            continue   # a missing corner is signoff_corners' FAIL
+        for rpt, kind in (("max.rpt", "setup"), ("min.rpt", "hold")):
+            p = os.path.join(sta, c, rpt) if sta else ""
+            if not os.path.isfile(p):
+                bad.append(f"{c}/{rpt} missing")
+                continue
+            paths = open(p, errors="replace").read().split("Startpoint:")[1:]
+            if not paths:
+                bad.append(f"{c}/{rpt} has no path")
+            for path in paths:
+                n += 1
+                edges, unc = path_edges(path)
+                k = "half" if kind == "setup" and half_cycle(edges) else kind
+                if unc is None or abs(unc - want[k]) > 0.0005:
+                    bad.append(f"{c}/{rpt} {path.split()[0]} -> {re.search(r'Endpoint: (\S+)', path).group(1)}: "
+                               f"{'no uncertainty' if unc is None else f'{unc:.3f}'} (want {want[k]:.3f}, {k})")
+    return n, bad
+
+
 def metric(step, key):
     p = os.path.join(step, "or_metrics_out.json") if step else ""
     return json.load(open(p)).get(key) if p and os.path.isfile(p) else None
@@ -229,15 +277,17 @@ def metric(step, key):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--design", default="soc_top", choices=["soc_top", "picorv32_core"])
     ap.add_argument("--cpu", default="picorv32", choices=sorted(TAGS))
     ap.add_argument("--run")
     ap.add_argument("--out")
     ap.add_argument("--config")
     args = ap.parse_args()
-    tag, cfg_name = TAGS[args.cpu]
+    soc = args.design == "soc_top"
+    tag, cfg_rel = (TAGS[args.cpu][0], os.path.join("pnr", "soc_top", TAGS[args.cpu][1])) if soc else (CORE_TAG, CORE_CONFIG)
     run = os.path.abspath(args.run or os.path.join(ROOT, "runs", tag))
     out = os.path.abspath(args.out or os.path.join(ROOT, "runs", tag + "_signoff"))
-    config_path = os.path.abspath(args.config or os.path.join(ROOT, "pnr", "soc_top", cfg_name))
+    config_path = os.path.abspath(args.config or os.path.join(ROOT, cfg_rel))
     rows = []
 
     def row(name, ok, msg):
@@ -270,10 +320,12 @@ def main():
     row("step_config", n_steps > 0 and not bad, f"{n_steps} step configs agree with resolved.json" if n_steps and not bad
         else ("no step config.json" if not n_steps else "; ".join(bad[:6])))
 
-    line, err = expected_uncertainty_line(design_dir, res.get("CLOCK_PERIOD"))
+    line, err = expected_uncertainty_line(design_dir, res.get("CLOCK_PERIOD")) if soc else (None, "")
     sta_steps = step_dirs(run, "OpenROAD.STAPostPNR")
     sta = sta_steps[-1] if sta_steps else None
-    if line is None:
+    if not soc:
+        pass   # no SDC of its own: only uncertainty_applied
+    elif line is None:
         row("uncertainty", False, err)
     else:
         missing, n_timing = [], 0
@@ -303,17 +355,34 @@ def main():
             if not missing else f"'{line}' missing in: {', '.join(missing)}")
 
     want = set(res.get("STA_CORNERS") or [])
+    if soc:
+        nums = dict(re.findall(r"(setup|hold|half-cycle setup) (\d+(?:\.\d+)?)", line or ""))
+        expect = ({"setup": float(nums["setup"]), "hold": float(nums["hold"]), "half": float(nums["half-cycle setup"])}
+                  if len(nums) == 3 else None)
+    else:
+        u = res.get("CLOCK_UNCERTAINTY_CONSTRAINT")
+        expect = {"setup": float(u), "hold": float(u), "half": float(u)} if isinstance(u, (int, float)) else None
+    if expect is None:
+        row("uncertainty_applied", False, "no expected uncertainty (" + ("clock_uncertainty.sdc line" if soc
+                                                                        else "CLOCK_UNCERTAINTY_CONSTRAINT") + ")")
+    else:
+        n_paths, bad = uncertainty_applied(sta, sorted(want), expect)
+        row("uncertainty_applied", n_paths > 0 and not bad,
+            f"{n_paths} signoff paths in {len(want)} corners got setup {expect['setup']:.3f}, half-cycle "
+            f"{expect['half']:.3f}, hold {expect['hold']:.3f} ns" if n_paths and not bad
+            else f"{len(bad)} problem(s): " + "; ".join(bad[:4]) + (f" (and {len(bad) - 4} more)" if len(bad) > 4 else ""))
     have = {os.path.basename(os.path.dirname(p)) for p in glob.glob(os.path.join(sta, "*", "sta.log"))} if sta else set()
     row("signoff_corners", bool(want) and have == want, f"{len(have)} corners = STA_CORNERS" if have == want and want
         else f"missing {sorted(want - have)}, extra {sorted(have - want)}")
 
     missing = []
-    for f, word in VERDICTS.items():
+    verdicts = VERDICTS[args.design]
+    for f, word in verdicts.items():
         p = os.path.join(out, f)
         txt = open(p, errors="replace").read() if os.path.isfile(p) else ""
         if not re.search(rf"^{re.escape(word)}: (PASS|FAIL)\b", txt, re.M):
             missing.append(f)
-    row("checkers_ran", not missing, f"verdict lines in {', '.join(VERDICTS)}" if not missing
+    row("checkers_ran", not missing, f"verdict lines in {', '.join(verdicts)}" if not missing
         else f"no verdict line in {', '.join(missing)} (in {out})")
 
     # Numbers for part 2 (are the criteria reasonable); printed only.
@@ -352,7 +421,7 @@ def main():
              + (f"; setup violations in {', '.join(viol)}" if viol else ""))
     cts = (step_dirs(run, "OpenROAD.CTS") or [None])[-1]
     a0, a1 = metric(cts, "design__instance__area__stdcell"), metric(rtc, "design__instance__area__stdcell")
-    nl = os.path.join(run, "final", "nl", "soc_top.nl.v")
+    nl = os.path.join(run, "final", "nl", f"{res.get('DESIGN_NAME', 'soc_top')}.nl.v")
     bufs = netlist_buffers(nl)
     if a0 and a1:
         info(f"ResizerTimingPostCTS stdcell area {a0:.0f} -> {a1:.0f} um^2 ({100 * (a1 - a0) / a0:+.1f} %); final netlist "

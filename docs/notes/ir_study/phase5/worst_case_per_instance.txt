@@ -1,0 +1,6 @@
+em_h3_ONESIDE_maxffssR worst per-instance (VDD drop + GND rise) = 25.745 mV at fanout1522  (Vnom 1.95)
+em_pico_ONESIDE_maxffssR worst per-instance (VDD drop + GND rise) = 10.357 mV at clkbuf_leaf_252_clk  (Vnom 1.95)
+h3_ONESIDE_maxffssR    worst per-instance (VDD drop + GND rise) = 25.745 mV at fanout1522  (Vnom 1.95)
+h3_ONESIDE_nomtt       worst per-instance (VDD drop + GND rise) = 18.276 mV at fanout1522  (Vnom 1.8)
+pico_ONESIDE_maxffssR  worst per-instance (VDD drop + GND rise) = 10.357 mV at clkbuf_leaf_252_clk  (Vnom 1.95)
+pico_ONESIDE_nomtt     worst per-instance (VDD drop + GND rise) = 7.396 mV at clkbuf_leaf_252_clk  (Vnom 1.8)

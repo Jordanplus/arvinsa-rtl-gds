@@ -9,6 +9,11 @@
 #   5. cpu_params.py --resolved           : the run really used config.json's SYNTH_PARAMETERS
 #   0/6. signoff/scripts/provenance.py    : before and after the run: committed working tree, pinned
 #                                           LibreLane and PDK (project-plan.md §7.2)
+#   7. signoff/scripts/review_criteria.py --design picorv32_core: the signoff criteria were applied
+#      (config settings in the run, the uncertainty every signoff path got, corners, checkers ran);
+#      part 2 is Claude's review in criteria_review.md (CLAUDE.md rule 9; Phase 5 exit review: the
+#      core harden had no review and the Stop hook did not ask for one)
+# A LibreLane FAIL does not skip steps 3-7 (as pnr/soc_top/run.sh since Phase 5).
 # Checker outputs go to runs/picorv32_core_signoff/; the verdict line is also written to result.txt,
 # which the later steps (gl-core, eqy-core) require to be `harden-core: PASS`.
 # Requires `make flow-setup` (Nix, LibreLane, PDK).
@@ -61,24 +66,25 @@ librelane_flow harden-core "$ROOT/pnr/picorv32_core/config.json"
   > "$OUT/extract.log" 2>&1 || true
 
 if [ "$flow_rc" != 0 ]; then
-  echo "harden-core: FAIL - LibreLane exited with $flow_rc; see $OUT/console.log"
+  echo "harden-core: LibreLane exited with $flow_rc (the verdict will be FAIL); see $OUT/console.log"
   tail -20 "$OUT/console.log"
-  exit 1
+  echo "harden-core: the checkers still run on what the flow produced"
 fi
-if [ ! -s "$OUT/metrics.json" ]; then
-  echo "harden-core: FAIL - no metrics extracted; see $OUT/extract.log"
-  exit 1
+if [ -s "$OUT/metrics.json" ]; then
+  python3 signoff/scripts/check_signoff.py "$OUT/metrics.json" "$LIMITS" "$GOLDEN" | tee "$OUT/signoff.txt" || true
+else
+  echo "signoff: FAIL - no metrics extracted; see $OUT/extract.log" | tee "$OUT/signoff.txt"
 fi
-
-python3 signoff/scripts/check_signoff.py "$OUT/metrics.json" "$LIMITS" "$GOLDEN" | tee "$OUT/signoff.txt" || true
 python3 pnr/picorv32_core/check_disconnected.py "$RUN_DIR" | tee "$OUT/disconnected.txt" || true
 python3 pnr/picorv32_core/cpu_params.py --resolved "$RUN_DIR/resolved.json" > "$OUT/cpu_params_resolved.txt" 2>&1 || true
 tail -1 "$OUT/cpu_params_resolved.txt"
 python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \
   > "$OUT/provenance_end.txt" 2>&1 || true
 tail -1 "$OUT/provenance_end.txt"
-if grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^disconnected-pins: PASS$' "$OUT/disconnected.txt" \
-   && grep -q '^cpu-params: PASS$' "$OUT/cpu_params_resolved.txt" \
+python3 signoff/scripts/review_criteria.py --design picorv32_core --run "$RUN_DIR" --out "$OUT" \
+  | tee "$OUT/criteria_review.txt" || true
+if [ "$flow_rc" = 0 ] && grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^disconnected-pins: PASS$' "$OUT/disconnected.txt" \
+   && grep -q '^cpu-params: PASS$' "$OUT/cpu_params_resolved.txt" && grep -q '^criteria-review: PASS$' "$OUT/criteria_review.txt" \
    && grep -q '^provenance: PASS$' "$OUT/provenance.txt" && grep -q '^provenance: PASS$' "$OUT/provenance_end.txt"; then
   echo "harden-core: PASS" | tee "$OUT/result.txt"
 else

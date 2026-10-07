@@ -18,6 +18,11 @@ CPU=neg_regress_outer, which every target must see replaced by the CPU of the ru
                                                         FAIL, HEAD changed during the regression
   target_fail    the fake make exits 1 on the third target
                                                         FAIL at that target, the later ones not run
+And env/check_env.sh's xPack check (make env-check-flow, the first target of make regress), with
+CPU=hazard3 and --flow:
+  xpack_real     XPACK_DIR = the pinned toolchain       [OK] xPack (positive control)
+  xpack_fake     XPACK_DIR = a gcc script that only     [FAIL] xPack (Phase 5 independent review:
+                 echoes 15.2.0                          the version string alone passed)
 Prints `neg-regress: PASS n/n` / `neg-regress: FAIL ...`; exit code 0 only on PASS.
 """
 import os
@@ -88,6 +93,23 @@ def main():
     case("ignore_errors", 1, "regress: FAIL before the first target (make flags 'i'", [], extra_env={"MAKEFLAGS": "i"})
     case("head_changed", 1, "regress: FAIL (HEAD changed during the regression", targets)
     case("target_fail", 1, f"regress: FAIL at {targets[2]}", targets[:3])
+    fake_xp = os.path.join(OUT, "xpack_fake", "bin")
+    os.makedirs(fake_xp)
+    open(os.path.join(fake_xp, "riscv-none-elf-gcc"), "w").write(
+        "#!/bin/sh\ncase \"$1\" in -dumpversion) echo 15.2.0 ;; --version) echo 'riscv-none-elf-gcc 15.2.0' ;; "
+        "*) echo libc.a ;; esac\n")
+    os.chmod(os.path.join(fake_xp, "riscv-none-elf-gcc"), 0o755)
+    pinned = os.path.join(ROOT, ".tools", "xpack-riscv-none-elf-gcc-" + next(
+        ln.split("=", 1)[1].strip() for ln in open(os.path.join(ROOT, "env", "versions.mk")) if ln.startswith("XPACK_RISCV_VERSION")))
+    for name, xp, want in (("xpack_real", os.environ.get("XPACK_DIR") or pinned, "[OK] xPack"),
+                           ("xpack_fake", os.path.dirname(fake_xp), "[FAIL] xPack")):
+        cp = subprocess.run(["bash", os.path.join(ROOT, "env", "check_env.sh"), "--flow"], cwd=ROOT, capture_output=True,
+                            text=True, env=dict(os.environ, CPU="hazard3", XPACK_DIR=xp))
+        os.makedirs(os.path.join(OUT, name), exist_ok=True)
+        open(os.path.join(OUT, name, "check_env.log"), "w").write(cp.stdout + cp.stderr)
+        line = next((x.strip() for x in cp.stdout.splitlines() if "xPack" in x), "")
+        results.append(" ".join(line.split()).startswith(want))
+        print(f"  [{'PASS' if results[-1] else 'FAIL'}] {name}: expected '{want} ...'; got '{line[:110]}'")
     ok = all(results)
     print(f"neg-regress: {'PASS' if ok else 'FAIL'} {sum(results)}/{len(results)}")
     return 0 if ok else 1

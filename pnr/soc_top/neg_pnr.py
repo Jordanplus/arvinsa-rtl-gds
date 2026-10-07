@@ -124,16 +124,32 @@ step re-run one step on a copy of that step's saved config and input state
        clock_uncertainty.sdc line (ADR-0014)         step after global routing must see it too)
   P55  ResizerTimingPostGRT: the finished step's    review_criteria.py uncertainty (only finished
        log without the line, plus a stopped attempt  attempts count; Phase 5: P49 was not caught on
-       of the step (no state_out.json) whose log     a PicoRV32 run with a GRT-0229 retry, because
-       has it                                        the stopped attempt's log still had the line)
+       of the step (no state_out.json, numbered     a PicoRV32 run with a GRT-0229 retry, because
+       one lower and without a suffix, as a          the stopped attempt's log still had the line)
+       LibreLane --from resume leaves it) whose log
+       has it
+  P56  signoff STA min_ss_n40C max.rpt: the worst    review_criteria.py uncertainty_applied (the
+       half-cycle path got 0.25 ns instead of the    SDC line still printed, so the uncertainty row
+       2.45 ns its SDC sets (as a later               alone passes; Phase 5 independent review)
+       set_clock_uncertainty would leave it)
+  P57  review_criteria.py --design picorv32_core     review_criteria.py checkers_ran (no
+       on this soc_top run (the core mode's           disconnected.txt, cpu_params_resolved.txt)
+       expectations: no SDC of its own,              and uncertainty_applied (2.45 ns half-cycle
+       CLOCK_UNCERTAINTY_CONSTRAINT everywhere, the   paths, not CLOCK_UNCERTAINTY_CONSTRAINT): the
+       core checkers' verdict files)                  core mode really checks (Phase 5 exit review:
+                                                      make harden-core runs it; its positive
+                                                      control is every harden-core PASS)
   golden comparison with layout tolerances and optional keys (ADR-0015)
   P50  metrics: design__instance__count__stdcell    within its [golden_layout_tolerance]: PASS;
-       golden + tolerance, then + tolerance + 1;     one more: FAIL; the limits with a layout
-       limits: "*__count" added as a layout pattern  pattern matching violation counts: FAIL
+       golden + tolerance, then + tolerance + 1      one more: FAIL (no entry, PicoRV32: + 1 FAIL);
+       (no entry: + 1 only); limits: "*__count",     the limits with a layout pattern matching
+       then "timing__drv__*" (floating nets), added  violation counts or floating nets: FAIL
+       as a layout pattern
   P51  metrics: the last route__drc_errors__iter    missing optional key: PASS; missing ordinary
        key removed, then design__instance__count__  key: FAIL; the limits with a corner key as
-       class:inverter removed; limits: a corner     optional pattern: FAIL
-       key pattern added to [golden_optional]
+       class:inverter removed; limits: a corner     optional pattern or a wildcard warning: FAIL
+       key pattern, then "flow__warnings__count:*"
+       added to [golden_optional]
   CTS without macro latency balancing (ADR-0016; check_soc.py on a fake run that also links the
   log of the Arvinsa.CTSNoInsertionDelay step)
   P52  final netlist: one CTS clock buffer renamed  check_soc.py cts_macro_latency (a delay buffer
@@ -142,6 +158,16 @@ step re-run one step on a copy of that step's saved config and input state
        Tcl                                           reach clock_tree_synthesis)
   P54  the CPU's config without substituting_steps  check_soc.py cts_macro_latency (the flow would
                                                      run LibreLane's own OpenROAD.CTS)
+  P58  final netlist: three clock buffers named     check_soc.py cts_macro_latency (structural: a
+       clkdly_* in a row before sram0/clk0           single-fanout buffer chain, whatever its names;
+                                                     Phase 5 independent review: renaming delaybuf_
+                                                     passed the name check)
+  P61  ir_worst.py on a result of VDD 11 mV and     ir_worst.py drop (each below 20 mV, the sum
+       GND 10 mV (positive control: 9 + 9 mV)       above; Phase 5: the worst-case IR check)
+  P62  <run>_signoff without ir_worst.txt           review_criteria.py checkers_ran
+  P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
+  P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
+       directory
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -557,10 +583,14 @@ def check_soc(fr, d, run, config=None):
     return cp.returncode, cp.stdout
 
 
-def soc_case(run, d, row, replace=None, links=None, also=(), config=None):
+def soc_case(run, d, row, replace=None, links=None, also=(), config=None, dirs=()):
     """check_soc.py on a fake run with one edit: (caught, output). Caught only if the FAIL rows are
-    exactly `row` (plus `also`) and the verdict is soc-checks: FAIL."""
-    rc, out = check_soc(fake_run(run, d, replace or {}, links), d, run, config)
+    exactly `row` (plus `also`) and the verdict is soc-checks: FAIL. dirs: empty step directories
+    added to the fake run."""
+    fr = fake_run(run, d, replace or {}, links)
+    for name in dirs:
+        os.makedirs(os.path.join(fr, name))
+    rc, out = check_soc(fr, d, run, config)
     failed = set(re.findall(r"^  \[FAIL\] (\w+):", out, re.M))
     return rc != 0 and failed == {row, *also} and "soc-checks: FAIL" in out, out
 
@@ -897,6 +927,55 @@ def p54(run, d):
     return ok, "check_soc.py cts_macro_latency: config without substituting_steps (only row FAIL, soc-checks: FAIL)"
 
 
+def p58(run, d):
+    rel = "final/nl/soc_top.nl.v"
+    nl = open(os.path.join(run, rel)).read()
+    m = re.search(r"^(\s*\S+\s+sram0\s*\(.*?\.clk0\()\s*(\S+?)\s*(\))", nl, re.M | re.S)
+    if not m:
+        return False, "no sram0 .clk0 in the final netlist"
+    net = m.group(2)
+    # three clock buffers in a row before sram0/clk0, with names CTS never uses
+    chain = "".join(f" sky130_fd_sc_hd__clkbuf_16 clkdly_{i} (.A({net if i == 0 else f'clkdly_n{i - 1}'}),\n"
+                    f"    .X(clkdly_n{i}));\n" for i in range(3))
+    new = nl[:m.start(2)] + "clkdly_n2" + nl[m.end(2):]
+    new = new.replace("endmodule", chain + "endmodule", 1)
+    ok, _ = soc_case(run, d, "cts_macro_latency", replace={rel: new})
+    return ok, "check_soc.py cts_macro_latency: 3 single-fanout clock buffers named clkdly_* before sram0/clk0 " \
+        "(only row FAIL, soc-checks: FAIL)"
+
+
+def p59(run, d):
+    n = os.path.basename(glob.glob(os.path.join(run, CTS_DIR))[0]).split("-")[0]
+    ok, _ = soc_case(run, d, "cts_macro_latency", dirs=[f"{n}-openroad-cts-1"])
+    return ok, "check_soc.py cts_macro_latency: an OpenROAD.CTS directory with a -1 suffix (only row FAIL)"
+
+
+def p60(run, d):
+    n = os.path.basename(glob.glob(os.path.join(run, CTS_DIR))[0]).split("-")[0]
+    ok, _ = soc_case(run, d, "cts_macro_latency", dirs=[f"{n}-arvinsa-ctsnoinsertiondelay-1"])
+    return ok, "check_soc.py cts_macro_latency: a second CTS step directory with a -1 suffix (only row FAIL)"
+
+
+IR_WORST = os.path.join(ROOT, "pnr", "soc_top", "ir_worst.py")
+
+
+def p61(run, d):
+    results = []
+    for name, vdd, gnd, caught in (("over", 0.011, 0.010, True), ("under", 0.009, 0.009, False)):
+        st = os.path.join(d, f"{name}.json")
+        json.dump({"metrics": {"design_powergrid__drop__worst__net:vccd1": vdd,
+                               "design_powergrid__drop__worst__net:vssd1": gnd}}, open(st, "w"))
+        cp = subprocess.run([sys.executable, IR_WORST, "--metrics", st, LIMITS], capture_output=True, text=True)
+        open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
+        results.append((cp.returncode != 0 and "ir-worst: FAIL" in cp.stdout) if caught
+                       else (cp.returncode == 0 and "ir-worst: PASS" in cp.stdout))
+    return all(results), f"ir_worst.py: 11 + 10 mV FAIL, 9 + 9 mV PASS ({results})"
+
+
+def p62(run, d):
+    return review_case(run, d, "checkers_ran", out_drop=("ir_worst.txt",))
+
+
 def inputs_check(d, *args):
     cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", CPU, *args], capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
@@ -1065,6 +1144,10 @@ def review_case(run, d, row, run_replace=None, run_drop=(), out_drop=(), config=
     that are not in the run, written into the copy."""
     fr = mirror(run, os.path.join(d, "run"), run_replace, run_drop)
     for rel, text in (run_add or {}).items():
+        # never write through a symlink of the mirror into the real run
+        parts = rel.split(os.sep)
+        if any(os.path.islink(os.path.join(fr, *parts[:i])) for i in range(1, len(parts) + 1)):
+            raise RuntimeError(f"run_add {rel}: a symlink to the real run is on the path")
         os.makedirs(os.path.dirname(os.path.join(fr, rel)), exist_ok=True)
         open(os.path.join(fr, rel), "w").write(text)
     fo = mirror(run.rstrip("/") + "_signoff", os.path.join(d, "out"), drop=out_drop)
@@ -1142,9 +1225,50 @@ def p55(run, d):
                                                if "clock_uncertainty.sdc:" not in ln) for lg in logs}
     # A stopped attempt of the same step (as a GRT-0229 retry leaves it): its log has the line, it has
     # no state_out.json. The finished attempt's log does not have the line.
-    stopped = f"{os.path.basename(sd).split('-')[0]}-openroad-resizertimingpostgrt-9"
+    # LibreLane's --from resume numbers the new attempt after the stopped one: the stopped directory has
+    # the lower number and no suffix (the clean Hazard3 regress of 2026-10-07: 44 stopped, 45 finished).
+    n = int(os.path.basename(sd).split('-')[0]) - 1
+    stopped = f"{n}-openroad-resizertimingpostgrt"
+    if os.path.exists(os.path.join(run, stopped)):   # the run has a real stopped attempt: add another one
+        stopped = f"{n}-openroad-resizertimingpostgrt-1"
     add = {os.path.join(stopped, os.path.basename(logs[0])): open(logs[0], errors="replace").read()}
     return review_case(run, d, "uncertainty", run_replace=edits, run_add=add)
+
+
+def p56(run, d):
+    corner = "min_ss_n40C_1v60"
+    rel = os.path.join(os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run), corner, "max.rpt")
+    text = open(os.path.join(run, rel), errors="replace").read()
+    parts = text.split("Startpoint:")
+    for i, part in enumerate(parts[1:], 1):
+        edges, unc = path_edges(part)
+        if len(edges) == 2 and edges[0][2] != edges[1][2] and unc and unc > 0.3:
+            parts[i] = re.sub(r"^(\s*)-\d+\.\d+(\s+-?\d+\.\d+\s+(?:inter-clock |clock )uncertainty)", r"\g<1>-0.250000\2",
+                              part, count=1, flags=re.M)
+            break
+    else:
+        return False, f"no half-cycle path with its uncertainty in {rel}"
+    return review_case(run, d, "uncertainty_applied", run_replace={rel: "Startpoint:".join(parts)})
+
+
+def p57(run, d):
+    fo = mirror(run.rstrip("/") + "_signoff", os.path.join(d, "out"))
+    cp = subprocess.run([sys.executable, REVIEW, "--design", "picorv32_core", "--run", run, "--out", fo,
+                         "--config", CONFIG], capture_output=True, text=True)
+    open(os.path.join(d, "run.log"), "w").write(cp.stdout + cp.stderr)
+    failed = set(re.findall(r"^  \[FAIL\] (\w+):", cp.stdout, re.M))
+    want = {"checkers_ran", "uncertainty_applied"}
+    return (cp.returncode != 0 and failed == want and "criteria-review: FAIL" in cp.stdout
+            and "disconnected.txt" in cp.stdout and "want 0.250, half" in cp.stdout), \
+        "review_criteria.py --design picorv32_core checkers_ran and uncertainty_applied"
+
+
+def path_edges(p):
+    """Clock edges and uncertainty of one OpenSTA path (the same parse as review_criteria.py)."""
+    edges = [(float(t), c, e) for t, c, e in
+             re.findall(r"^\s*(-?\d+\.\d+)\s+-?\d+\.\d+\s+clock (\S+) \((rise|fall) edge\)", p, re.M)]
+    unc = re.search(r"^\s*(-?\d+\.\d+)\s+-?\d+\.\d+\s+(?:inter-clock |clock )?uncertainty", p, re.M)
+    return edges[:2], abs(float(unc.group(1))) if unc else None
 
 
 def signoff_limits_with(run, d, edit, table=None, line=None):
@@ -1168,24 +1292,25 @@ def signoff_limits_with(run, d, edit, table=None, line=None):
 
 def p50(run, d):
     golden = json.load(open(GOLDEN))
-    with open(LIMITS, "rb") as f:
-        spec = tomllib.load(f).get("golden_layout_tolerance", {}).get("design__instance__count__stdcell")
-    if not spec:
-        return False, "no design__instance__count__stdcell in [golden_layout_tolerance]"
     key = "design__instance__count__stdcell"
+    with open(LIMITS, "rb") as f:
+        spec = tomllib.load(f).get("golden_layout_tolerance", {}).get(key) or {}
+    # no entry (PicoRV32: no measured difference yet): the count must match exactly, so + 1 must FAIL
     tol = int(spec.get("abs") or (spec.get("rel") or 0) * golden[key])
     results = []
     for name, delta, table, line, row_re, caught in (
-            ("within", tol, None, None, rf"\[FAIL\] golden {key}:", False),
+            *((("within", tol, None, None, rf"\[FAIL\] golden {key}:", False),) if tol else ()),
             ("beyond", tol + 1, None, None, rf"\[FAIL\] golden {key}:", True),
             ("violation_pattern", 0, "golden_layout_tolerance", '"*__count" = {rel = 0.5}',
-             r"\[FAIL\] golden layout tolerance \*__count:", True)):
+             r"\[FAIL\] golden layout tolerance \*__count:", True),
+            ("floating_pattern", 0, "golden_layout_tolerance", '"timing__drv__*" = {abs = 100}',
+             r"\[FAIL\] golden layout tolerance timing__drv__\*:", True)):
         sub = os.path.join(d, name)
         os.makedirs(sub)
         rc, out = signoff_limits_with(run, sub, lambda m: m.update({key: golden[key] + delta}), table, line)
         results.append((re.search(row_re, out) is not None) == caught and (rc != 0) == caught)
-    return all(results), f"check_signoff.py layout tolerance: stdcell + {tol} PASS, + {tol + 1} FAIL, a pattern " \
-        f"matching violation counts FAIL ({results})"
+    return all(results), f"check_signoff.py layout tolerance: stdcell {f'+ {tol} PASS, ' if tol else '(no entry) '}+ {tol + 1} FAIL, a pattern " \
+        f"matching violation counts or floating nets FAIL ({results})"
 
 
 def p51(run, d):
@@ -1202,7 +1327,8 @@ def p51(run, d):
     for name, drop, extra, row_re, caught in (
             ("optional_missing", iters[-1], None, rf"\[FAIL\] golden {re.escape(iters[-1])}:", False),
             ("plain_missing", plain, None, rf"\[FAIL\] golden {re.escape(plain)}:", True),
-            ("corner_pattern", None, '"timing__setup__ws__corner:*", ', r"\[FAIL\] golden optional timing__setup__ws__corner", True)):
+            ("corner_pattern", None, '"timing__setup__ws__corner:*", ', r"\[FAIL\] golden optional timing__setup__ws__corner", True),
+            ("warning_wildcard", None, '"flow__warnings__count:*", ', r"\[FAIL\] golden optional flow__warnings__count:\*", True)):
         sub = os.path.join(d, name)
         os.makedirs(sub)
         if extra:
@@ -1216,7 +1342,7 @@ def p51(run, d):
             rc, out = signoff_with(run, sub, lambda m, k=drop: m.pop(k))
         results.append((re.search(row_re, out) is not None) == caught and (rc != 0) == caught)
     return all(results), f"check_signoff.py optional keys: missing {iters[-1]} PASS, missing {plain} FAIL, a corner " \
-        f"key pattern FAIL ({results})"
+        f"key pattern FAIL, a wildcard warning FAIL ({results})"
 
 
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
@@ -1226,7 +1352,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
          ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
-         ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55)]
+         ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62)]
 
 
 def main():

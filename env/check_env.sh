@@ -88,12 +88,21 @@ fi
 # xPack toolchain with newlib, needed by make core-hazard3 (Phase 5, ADR-0011). A clean worktree has
 # no .tools/: XPACK_DIR points at an installed copy, like LIBRELANE_DIR. Strict (FAIL) only with --flow
 # and CPU=hazard3 (make regress), where core-hazard3 needs it; otherwise reported.
+# It must be the xPack build (its --version names xPack) of the pinned version, with newlib for the
+# SoC's -march/-mabi (libc.a found): a version string alone passed a script that only echoed 15.2.0
+# (Phase 5 independent review; scripts/neg_regress.py xpack_fake).
 xp_dir="${XPACK_DIR:-.tools/xpack-riscv-none-elf-gcc-$(pin XPACK_RISCV_VERSION)}"
 xp_want="$(pin XPACK_RISCV_VERSION | cut -d- -f1)"
-xp_have=$("$xp_dir/bin/riscv-none-elf-gcc" -dumpversion 2>/dev/null || echo none)
-if [ "$xp_have" = "$xp_want" ]; then ok "xPack riscv-none-elf-gcc $xp_have at $xp_dir"
+xp_gcc="$xp_dir/bin/riscv-none-elf-gcc"
+xp_have=$("$xp_gcc" -dumpversion 2>/dev/null || echo none)
+xp_vendor=$("$xp_gcc" --version 2>/dev/null | head -1)
+xp_libc=$("$xp_gcc" -march=rv32imc -mabi=ilp32 -print-file-name=libc.a 2>/dev/null)
+case "$xp_vendor" in *xPack*) xp_is=1 ;; *) xp_is=0 ;; esac
+case "$xp_libc" in /*) [ -f "$xp_libc" ] && xp_newlib=1 || xp_newlib=0 ;; *) xp_newlib=0 ;; esac
+if [ "$xp_have" = "$xp_want" ] && [ "$xp_is" = 1 ] && [ "$xp_newlib" = 1 ]; then
+  ok "xPack riscv-none-elf-gcc $xp_have at $xp_dir (newlib rv32imc/ilp32)"
 elif [ "$FLOW_STRICT" = 1 ] && [ "${CPU:-picorv32}" = hazard3 ]; then
-  bad "xPack riscv-none-elf-gcc $xp_want not at $xp_dir (found: $xp_have; run: make xpack-fetch, or set XPACK_DIR)"
+  bad "xPack riscv-none-elf-gcc $xp_want with newlib not at $xp_dir (found: version $xp_have, '${xp_vendor:-no --version}', libc.a ${xp_libc:-none}; run: make xpack-fetch, or set XPACK_DIR)"
 else pend "xPack riscv-none-elf-gcc $xp_want not at $xp_dir (needed by make core-hazard3; run: make xpack-fetch)"; fi
 if [ "$FLOW_STRICT" = 1 ] && [ "$flow_missing" = 1 ]; then fail=1; fi
 

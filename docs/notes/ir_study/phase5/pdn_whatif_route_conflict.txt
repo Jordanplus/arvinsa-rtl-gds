@@ -1,0 +1,18 @@
+signal shapes on met4 2756, met5 102 (nets with met5: 32); already near current straps: 0
+base         new collisions: met4 shapes     0 met5 shapes     0 nets     0
+h32          new collisions: met4 shapes     0 met5 shapes     0 nets     0
+h40          new collisions: met4 shapes     0 met5 shapes     0 nets     0
+h48          new collisions: met4 shapes     0 met5 shapes     0 nets     0
+h64          new collisions: met4 shapes     0 met5 shapes     0 nets     0
+h32v32       new collisions: met4 shapes   158 met5 shapes     0 nets    48
+h40v32       new collisions: met4 shapes   158 met5 shapes     0 nets    48
+h48v32       new collisions: met4 shapes   158 met5 shapes     0 nets    48
+h32vp768     new collisions: met4 shapes    57 met5 shapes     0 nets    19
+v32          new collisions: met4 shapes   158 met5 shapes     0 nets    48
+vp768        new collisions: met4 shapes    57 met5 shapes     0 nets    19
+v32vp768     new collisions: met4 shapes   256 met5 shapes     0 nets    81
+hp10212      new collisions: met4 shapes     0 met5 shapes     6 nets     2
+hp7659       new collisions: met4 shapes     0 met5 shapes     3 nets     1
+hp6128       new collisions: met4 shapes     0 met5 shapes    24 nets     8
+hp5106       new collisions: met4 shapes     0 met5 shapes    25 nets     7
+hp7659h32    new collisions: met4 shapes     0 met5 shapes     6 nets     2

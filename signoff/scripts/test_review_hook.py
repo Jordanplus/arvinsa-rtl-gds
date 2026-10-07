@@ -20,7 +20,7 @@ TXT = "  [PASS] config_applied: ...\ncriteria-review: FAIL\n"
 GOOD_MD = "# review\n\ncriteria-review: FAIL\n\n## 有沒有被執行\n\n## 合不合理\n\n## 學習\n"
 
 
-def case(name, files, expect_block, expect_text="", payload=None, touch_txt_later=False):
+def case(name, files, expect_block, expect_text="", payload=None, touch_txt_later=False, old_result=False):
     with tempfile.TemporaryDirectory() as d:
         sig = os.path.join(d, "runs", "soc_top_signoff")
         os.makedirs(sig)
@@ -28,6 +28,9 @@ def case(name, files, expect_block, expect_text="", payload=None, touch_txt_late
             p = os.path.join(d, rel)
             os.makedirs(os.path.dirname(p), exist_ok=True)
             open(p, "w").write(text)
+        if old_result:   # a harden before CLAUDE.md rule 9 (2026-10-07)
+            t = 1791302400 - 86400
+            os.utime(os.path.join(sig, "result.txt"), (t, t))
         if touch_txt_later:   # the run was redone after the review
             t = time.time() + 10
             os.utime(os.path.join(sig, "criteria_review.txt"), (t, t))
@@ -54,6 +57,13 @@ def main():
         case("review without the verdict line", {s + "criteria_review.txt": TXT,
                                                  s + "criteria_review.md": GOOD_MD.replace("criteria-review: FAIL\n", "")},
              True, "criteria-review: FAIL"),
+        case("harden result without part 1 (review_criteria.py not run, e.g. harden-core before Phase 5 fix)",
+             {s + "result.txt": "harden-core: PASS\n"}, True, "review_criteria.py 沒跑"),
+        case("harden result before the rule (2026-10-06)", {s + "result.txt": "harden-soc: PASS\n"}, False,
+             old_result=True),
+        case("part 1 without its verdict line (review_criteria.py crashed)",
+             {s + "result.txt": "harden-soc: FAIL\n", s + "criteria_review.txt": "Traceback (most recent call last):\n",
+              s + "criteria_review.md": GOOD_MD}, True, "沒有 criteria-review 結果行"),
         case("stop_hook_active lets it through", {s + "criteria_review.txt": TXT}, False,
              payload={"stop_hook_active": True}),
         case("signoff .prev directory ignored", {"runs/soc_top_signoff.prev/criteria_review.txt": TXT}, False),

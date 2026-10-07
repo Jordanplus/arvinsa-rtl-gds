@@ -81,6 +81,8 @@
             }
         }
     },
+    "//PDN_HWIDTH": "met5 strap width (LibreLane default 1.6 um; pitch, offset and met4 unchanged). Phase 5 exit review (user decision 2026-10-08): the worst-case static IR (ff currents + ss metal resistance, pnr/soc_top/ir_worst.py) of the Hazard3 layout was 25.75 mV against 20 mV with 1.6 um; 4.8 um measured 14.14 mV in a PDN what-if on the same layout (3.2: 18.04, 6.4: 11.76; denser met5 or a wider met4 helped less), and the via4 at each crossing gets 3 cuts instead of 1 (EM 78 % -> 18 %). Both CPUs share it (check_inputs.py cpu_config). See docs/phase_exit/phase5.md.",
+    "PDN_HWIDTH": 4.8,
     "//PDN_MACRO_CONNECTIONS": "Connects the SRAM vccd1/vssd1 pins to the top-level grid (project-plan.md §6.1).",
     "PDN_MACRO_CONNECTIONS": [
         "sram0 vccd1 vssd1 vccd1 vssd1"
