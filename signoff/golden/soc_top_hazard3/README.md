@@ -6,10 +6,10 @@
 
 | 項目 | 值 |
 |---|---|
-| 產生方式 | `make harden-soc CPU=hazard3`（tag `soc_top_hazard3`）的 `runs/soc_top_hazard3_signoff/metrics.json`，原檔複製，沒有修改 |
+| 產生方式 | `make harden-soc CPU=hazard3`（tag `soc_top_hazard3`）的 `runs/p5_h3_h5_signoff/metrics.json`，原檔複製，沒有修改 |
 | 日期／平台 | 2026-10-07（Phase 5），Apple Silicon macOS（arm64） |
 | 來源 run | Phase 5 Hazard3 第 5 次 harden-soc，commit `3a28d54`（worktree `../arvinsa-rtl-gds-p5h3`）。`check_signoff.py` 當時有 2 列 FAIL：沒有 golden（預期），以及 `timing__unannotated_net__count` 125 ≠ 133（上限是從 PicoRV32 複製的，已改成依 Hazard3 推導的 125，見上限檔註解）。改完上限後只剩沒有 golden。`check_soc.py`、`sram_drc_alone`、`check_inputs.py --resolved`、`provenance.py`、`review_criteria.py` 全部 PASS |
-| signoff criteria 檢查 | `runs/soc_top_hazard3_signoff/criteria_review.md`（p5h3 worktree） |
+| signoff criteria 檢查 | `runs/p5_h3_h5_signoff/criteria_review.md`（p5h3 worktree） |
 | LibreLane／PDK／Hazard3／SRAM macro | 同 `env/versions.mk` |
 | flow 設定 | `pnr/soc_top/config_hazard3.json` sha256 `b51e75b55cea6433f5834bc0aeac37c10bdd55cb9e90c149683515004e0a5b3c` |
 | 本檔 sha256 | `7ed3f5114ab0a11e4b1470fb41d7501cb3123a7c1b282fabe02594363175c40e` |
@@ -22,7 +22,7 @@
 - 設定：週期 44 ns（PicoRV32 golden 43 ns），開 `RUN_POST_GRT_RESIZER_TIMING`（ADR-0014），resizer 看得到 ss_n40C（ADR-0013）。
 - timing：最差 setup +0.530 ns（min_ss_n40C，SRAM 下降緣送出的半週期路徑；PicoRV32 golden 同一類路徑 +0.384）；最差 hold +0.107 ns（min_ff_n40C）。
 - cell：standard cell 30,474（29,373），面積 239,577 µm²（237,877）；timing repair buffer 11,088（9,545）、clock buffer 458（531）。
-- **`design__instance__count__hold_buffer` 是 0，不是 hold buffer 數**：這個 metric 是最後一個 resizer 步驟自己報的數字，這次最後一步是 `ResizerTimingPostGRT`，沒有插 hold buffer。網表裡的 hold buffer（`hold*`）是 2,739 顆。另外，`ResizerTimingPostCTS` 的 log 寫「Inserted 1 hold buffers」，但那一步面積 +5.7%，hold buffer 約 2,700 顆都是那一步插的；PicoRV32 版同一行寫 3479，與網表一致。為什麼這次的計數不對，沒有查證。要看 hold buffer 數，用 `review_criteria.py` 的 INFO 列（數網表）。
+- **`design__instance__count__hold_buffer` 是 0，不是 hold buffer 數**：這個 metric 是最後一個 resizer 步驟自己報的數字，這次最後一步是 `ResizerTimingPostGRT`，沒有插 hold buffer。網表裡的 hold buffer（`hold*`）是 2,739 顆。另外，`ResizerTimingPostCTS` 的 log 寫「Inserted 1 hold buffers」，但那一步面積 +5.7%，hold buffer 約 2,700 顆都是那一步插的：`RSZ-0032` 的數字不是總數，hold 修復進度表的 Buffers 欄中途會掉回來（`drv-timing-closure` 規則 7、`librelane-run-debug` 已知陷阱；PicoRV32 版同一行剛好與網表一致）。要看 hold buffer 數，用 `review_criteria.py` 的 INFO 列（數網表）。
 - 繞線：線長 798,897 µm（895,243），via 157,447（162,780），net 23,753（22,679）。
 - 功耗 19.43 mW（9.24 mW），IR `ir__drop__worst` 9.22 mV（3.95 mV）：都在上限內。功耗約為兩倍的原因沒有查證。
 - `timing__unannotated_net__count` 125（133）：組成見上限檔。
@@ -33,8 +33,11 @@
 | run | 與本檔比較 |
 |---|---|
 | Phase 5 Hazard3 第 5 次 harden-soc（commit `3a28d54`） | 本檔來源 |
+| Phase 5 Hazard3 第 6 次 harden-soc（commit `d6f3074`，flow 設定相同） | 293 個相同、86 個在誤差內、61 個不同（含數量、面積與 `iter:7` 的 key）→ harden-soc FAIL；signoff 全部 PASS |
 
-實驗 A（從第 4 次 run 的第 43 步之後接續，只跑到 signoff STA）與本次的 signoff STA 數字完全相同；完整 harden 的重跑比較待補（規則：至少重跑一次）。
+實驗 A（從第 4 次 run 的第 43 步之後接續，只跑到 signoff STA）與本次的 signoff STA 數字完全相同。
+
+第 6 次的差異從第 41 步（`RepairDesignPostGRT`）最後一次 global routing 開始：修完的 DEF 相同，global routing 的線長與 routing guide 不同（1,146,538 對本檔來源的 1,146,421 µm），之後的 antenna 修補、`ResizerTimingPostGRT`、detailed routing 跟著改變。用第 6 次自己的輸入單步重跑這一步 4 次，4 次都和本檔來源相同；第 4、5 次 harden 也相同，到目前 7 次裡 1 次不同。PicoRV32 版 golden 的前提「不可重現的只有 detailed routing」對 Hazard3 版不成立，處理方式待使用者決定。
 
 ## 何時更新
 

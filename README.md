@@ -130,6 +130,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
 | 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
 | signoff 才在 resizer 看不到的 corner 出現 setup 違規；繞線前想看某個 corner 的 slack | drv-timing-closure（規則 9、11：用別的 corner 加餘量代替，長路徑會漏） | multicorner-sta（規則 8：繞線前怎麼量；規則 7：flow 中途 state 的 metrics 可能是舊值） |
+| CTS 後修完 setup，signoff 卻在長路徑 setup 違規；想調大 setup 餘量或加週期 | drv-timing-closure（規則 12：先量差距落在哪一段，繞線後才出現的就開 `RUN_POST_GRT_RESIZER_TIMING`） | signoff-criteria（`review_criteria.py` 印出每次修復到 signoff 的差距） |
 | harden 跑完（PASS 或 FAIL）、要回報結果前；自己訂的 signoff criteria 有沒有生效、還合不合理；Stop hook 說要寫 `criteria_review.md` | signoff-criteria（每次 harden 後的檢查；knowledge 檔依製程分類） | drv-timing-closure（修法）、multicorner-sta（corner） |
 | 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
 | 要定 clock uncertainty、derate、corner、IR 上限、max transition 這類數值 | signoff-criteria | timing-constraints-sdc（寫進 SDC）、pdn-ir-drop（IR） |
@@ -149,7 +150,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
 | 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同 | signoff-checker-qualification | flow-regression-reproducibility |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
-| 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面） |
+| 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對、PnR 設定與上限檔要不要重做 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面）、drv-timing-closure（時序收斂） |
 | 一個 Phase 收尾 | phase-exit-review | — |
 
 ### 在流程中的位置
@@ -250,11 +251,12 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - resizer 停不下來、記憶體一直漲：OpenROAD 的 `repair_design` 修 driver 的 slew 時，可能把它換成更弱的尺寸（Phase 5：`a2111oi_2` 被換成 `a2111oi_1`）；換完若弱到連一顆最小 buffer 的輸入電容都推不動，長線修復會在同一位置無限插 buffer（Phase 5 單步重跑確認）。PDK 的 `no_synth.cells` 只擋合成，resizer 照樣會用裡面的弱 `_1`。slew 餘量越大、resizer 的 corner 越慢，會出事的 cell 越多。用除錯輸出找出那條 net；本 repo 把 `a2111oi_1` 加進 `EXTRA_EXCLUDED_CELLS`（ADR-0012），並在 harden 前用 .lib 查表檢查 resizer 可用的每個 cell（`pnr/check_weak_cells.py`）。macro 的 .lib 也曾讓這一步停不下來，換上新的先單步重跑確認時間。
   - 修哪個 corner 的違規，就用那個 corner 的資料判斷修法的影響。工具不一定做到：OpenROAD resizer 在 ss 100°C 抓到違規，卻用第一個讀進來的 tt .lib 挑尺寸（只改讀取順序，挑的尺寸就不同）。所以修完要在違規的 corner 確認被改的 cell 真的變好；換工具、升版或改 corner 設定時，用「只改 library 讀取順序或預設 corner」的對照實驗確認工具有沒有看對 corner。這條寫成規則而不只寫在腳本，是為了換工具或流程時也會重新驗證。流程設定也會讓工具看不到違規的 corner：用另一個 corner 加餘量代替，就是沒有用違規那個 corner 的資料。
   - macro 的 .lib 要每個 PVT 一份，resizer 才看得到 macro 在慢 corner 的延遲；只靠 STA hook 加 derate 時，PnR 看不到。OpenRAM SRAM 的 .lib 要有 dout 在上升緣後開始變化的時序弧，STA 才會檢查接收 flop 的 hold。
+  - CTS 後修完 setup，signoff 卻在長路徑違規：先量「修完 → 繞線前 → signoff」差距落在哪一段。繞線後才出現的，開 `RUN_POST_GRT_RESIZER_TIMING`，讓 resizer 用 global routing 估計的寄生再修一次（Phase 5 Hazard3：−1.131 → +0.530 ns，只換尺寸與拿掉 buffer）。不要調大 CTS 後的 setup 餘量（會擋住 hold 修復），也不要靠加週期（run 之間差約 1 ns）。
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
   - 附「退回過的做法」表，避免再試沒用的設定。
 - **不在這裡**：SDC 寫法看 timing-constraints-sdc；corner 設定看 multicorner-sta；clock tree 看 cts-clock-tree；數值怎麼定看 signoff-criteria。
-- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010、ADR-0012、`pnr/check_weak_cells.py`、`docs/notes/repair_design_loop.md`。negative test：P01–P04、P32、P40–P42。
+- **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010、ADR-0012、ADR-0013、ADR-0014、`pnr/check_weak_cells.py`、`docs/notes/repair_design_loop.md`。negative test：P01–P04、P32、P40–P42。
 
 #### hard-macro-integration：hard macro 整合
 
@@ -484,9 +486,10 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 上游測試要 newlib 工具鏈；rvcpp 印的是退休指令 trace，要自己用 RVFI 轉成同格式再逐條比對。
   - 舊 core 的建置要保持不變：新 core 專用的 RTL 都放在 define 下，再用前置處理後的 RTL 比對證明舊建置一字不差，舊的 golden 就能沿用。
   - 轉成 native bus 時，AHB 讀取的 `hwdata` 要擋掉（它會變動或是 X）；`mtval` 固定為 0；中斷進入次數與 cycle 數的期望值要依 CPU 分開訂。
+  - PnR 與 signoff：PicoRV32 版調好的設定不能直接沿用。resizer 要看 signoff 的所有慢 corner、resizer 會換上的弱 cell 要重查、開繞線後的 setup 修復；上限檔裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）要用新 core 的 run 重數，golden 另建一份。
   - core 層級驗證：測試台的設定檔從 SoC 的參數自動產生；上游測試台與 riscv-tests 都在 `runs/` 建置，submodule 不留檔案；rvcpp 要補 `fence`，而且它的 CSR 模型是全功能設定，所以逐指令比對只做 user-level 指令、從測試本體開始。
 - **不在這裡**：SoC 驗證的一般寫法看 dv-directed-tests、gate-level-simulation；SRAM 整合看 hard-macro-integration。
-- **本 repo 實例**：ADR-0011、`rtl/cpu/`、`dv/core_hazard3/`（`make core-hazard3`）、`docs/phase_exit/phase5.md`（Phase 5）。
+- **本 repo 實例**：ADR-0011～0014、`rtl/cpu/`、`dv/core_hazard3/`（`make core-hazard3`）、`signoff/limits/soc_top_hazard3.toml`、`signoff/golden/soc_top_hazard3/`、`docs/phase_exit/phase5.md`（Phase 5）。
 
 ### skill 的由來
 

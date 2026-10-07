@@ -1,6 +1,6 @@
 ---
 name: core-migration-hazard3
-description: 把 SoC 的 CPU 從 PicoRV32（native bus）換成 Hazard3（AHB5 介面的 RISC-V core）時使用：選 hazard3_cpu_1port 或 2port、AHB5 的寫入資料晚一個 cycle 與 1RW 同步 SRAM（OpenRAM）怎麼接、讀取時 hwdata 要擋掉、讓舊 core 的建置保持不變（define＋前置處理比對）、設定參數的陷阱（CSR_COUNTER 預設 0、計數器 reset 後停住、RESET_REGFILE、A 延伸預設開、mtval 固定為 0、hazard3_config.vh 不能用 define 改）、debug／power 等 port 怎麼 tie-off、沒有 trap 腳與中斷模型不同、非同步 reset 要同步器、CPI 變小讓 cycle 數檢查失效、上游測試要 newlib 工具鏈、riscv-tests 用 SoC 的設定建測試台、rvcpp 與 RVFI 逐指令比對（rvcpp 沒有 fence、CSR 模型是全功能設定、rvfi_intr 的意義）、授權。Use when migrating an SoC from PicoRV32 to Hazard3 (AHB5), covering wrapper choice, AHB5-to-SRAM timing, configuration pitfalls, tie-offs, traps/IRQ/reset differences, toolchain and ISS-trace verification.
+description: 把 SoC 的 CPU 從 PicoRV32（native bus）換成 Hazard3（AHB5 介面的 RISC-V core）時使用：選 hazard3_cpu_1port 或 2port、AHB5 的寫入資料晚一個 cycle 與 1RW 同步 SRAM（OpenRAM）怎麼接、讀取時 hwdata 要擋掉、讓舊 core 的建置保持不變（define＋前置處理比對）、設定參數的陷阱（CSR_COUNTER 預設 0、計數器 reset 後停住、RESET_REGFILE、A 延伸預設開、mtval 固定為 0、hazard3_config.vh 不能用 define 改）、debug／power 等 port 怎麼 tie-off、沒有 trap 腳與中斷模型不同、非同步 reset 要同步器、CPI 變小讓 cycle 數檢查失效、上游測試要 newlib 工具鏈、riscv-tests 用 SoC 的設定建測試台、rvcpp 與 RVFI 逐指令比對（rvcpp 沒有 fence、CSR 模型是全功能設定、rvfi_intr 的意義）、授權，以及 PnR 時不能直接沿用 PicoRV32 版調好的設定（resizer 要看的 corner、resizer 會換上的弱 cell、繞線後的 setup 修復、上限檔裡依設計結構推導的數字、golden 另建）。Use when migrating an SoC from PicoRV32 to Hazard3 (AHB5), covering wrapper choice, AHB5-to-SRAM timing, configuration pitfalls, tie-offs, traps/IRQ/reset differences, toolchain and ISS-trace verification.
 ---
 
 # 把 CPU 換成 Hazard3
@@ -73,10 +73,16 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
     - 測試台在 CPU 寫結束暫存器時就停止，3 級 pipeline 裡最多 2 條較早的指令來不及送出 RVFI：ISS 的 trace 結尾可以多 2 條，RTL 不能比 ISS 長。
     - 選配功能沒開的測試（PMP、`fence.i`）要列為「必須 FAIL」，不是直接跳過：它們變成 PASS 就代表設定被改了。
 21. **授權**：`hdl/` 全部 Apache-2.0；`example_soc/libfpga`（`ahb_sync_sram.v` 等）是 WTFPL，抄進來要另附授權說明；`example_soc/fpga/pll_*.v` 沒有授權標示，不要用。
+22. **PnR 與 signoff：PicoRV32 版調好的設定不能直接沿用**（Phase 5 已驗證，各自的 ADR）
+    - resizer 要看到 signoff 的所有慢 corner（ADR-0013）：Hazard3 有比 PicoRV32 長的整週期路徑，用另一個 corner 加餘量代替會漏（`drv-timing-closure` 規則 9、11）。
+    - resizer 會換上的弱 cell 要用新 core 的 run 重查（ADR-0012、`drv-timing-closure` 規則 10）：讓 Hazard3 版第一次 harden 卡住的是兩版共用、RTL 沒改的 UART。
+    - CTS 後的 setup 估計在長路徑偏樂觀，開 `RUN_POST_GRT_RESIZER_TIMING`（ADR-0014、`drv-timing-closure` 規則 12）。
+    - 上限檔裡依設計結構推導的數字（沒有寄生資料的 driver 數）要用新 core 的 run 重新數，不能從舊 core 的上限檔複製：PicoRV32 是 133，Hazard3 是 125（`signoff/limits/soc_top_hazard3.toml`）。golden 另建一份（`signoff/golden/soc_top_hazard3/`）。
+    - 兩個 CPU 的最差 setup 都是 SRAM 讀出的半週期路徑，週期能縮多少受 duty cycle 預算限制（`signoff-criteria` 的 knowledge 檔）。
 
 ## 待補
 
-- Phase 5 尚未完成的部分：PnR 與時序收斂、gate-level 模擬與 EQY 的差異。第一次 harden 卡在 placement 後的修復（經驗紀錄最後一列），修正方式待使用者決定。
+- Phase 5 尚未完成的部分：gate-level 模擬、EQY、PicoRV32 版在新設定下重跑。PnR 已收斂（規則 22；Hazard3 第 5 次 harden 時序與實體驗證全部 PASS，golden 已建立）。
 - 2port（指令從 SRAM port 1 讀）：port 1 要先特性化，pin 在 macro 上邊與右邊（本 repo 的 floorplan 下面對 die 邊緣），可能要重擺 macro。
 - riscv-arch-test（`riscof` + `spike`）與 formal（`test/formal/`，要 `sby` 與 SMT solver）在本機還沒跑過。
 
@@ -95,3 +101,4 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
 | 2026-10-05 | Phase 5：Hazard3 版 DV | `exc` FAIL 0x30（mtval 不是位址）；`irq` FAIL 0x20（進入 1 次不是 2 次）；memtest／muldiv／bootrom_march 早於 min_cycles；S01、M01 在 Hazard3 上漏網 | 已驗證：mtval 固定為 0；中斷是準位且只進 1 次；CPI 較小；變體映像用了 PicoRV32 的 start.o | 規則 14、18、19；Hazard3 regression 30/30；第一次完整植入錯誤 29/33，修正後重跑漏網與新增的 7 個全部抓到；全部重跑：Hazard3 36/36、PicoRV32 33/33（2026-10-05） | `dv/tests.toml`、`dv/bugs.toml`、`runs/neg_hazard3/summary.json` |
 | 2026-10-05 | Phase 5：core 層級驗證（`make core-hazard3`） | rvcpp 在每支 riscv-tests 結尾 timeout；套修補後仍在初始化的 `pmpaddr0` 處與 RTL 岔開；比對 `intr` 旗標 FAIL；結尾長度差 1 | 已驗證：rvcpp 沒有 fence、CSR 模型是全功能設定、`rvfi_intr` 含 exception、pipeline 尾端 | 規則 20；riscv-tests 65/65、不支援 2 支照預期 FAIL、EXTENSION_M=0 植入錯誤 8/8、逐指令比對 48/48（13,881 條） | `dv/core_hazard3/` |
 | 2026-10-05／06 | Phase 5：第一次 `make harden-soc CPU=hazard3`（`4461661`） | `OpenROAD.RepairDesignPostGPL failed with an unexpected error`，約 108 分鐘、記憶體 92.9 GB（PicoRV32 版同一步 43 秒） | 已驗證：卡住的不是 CPU 的邏輯，是 RTL 沒改的 UART（`simpleuart.v` 的 `send_divcnt` 比較，兩版共用同一個檔案、不在 `SOC_CPU_HAZARD3` 下）：整顆 SoC 重新合成後，它的比較邏輯用了一顆 `a2111oi_2`，在 ss 100°C 略超過修復的 slew 上限；resizer 把它換成更弱的 `a2111oi_1`，接著進入無窮迴圈（`drv-timing-closure` 規則 10）。兩版的弱 cell 數也不同（`a2111oi_2` 1 → 2、`o41ai_2` 1 → 0） | 換 core 後第一次 harden 前，先對新的合成網表做規則 10 的弱 cell 檢查；修正方式待使用者決定 | `docs/notes/repair_design_loop.md` |
+| 2026-10-07 | Phase 5 Hazard3 第 2–5 次 harden（`2251c4a` → `3a28d54`） | 第 2 次 ss_n40C setup −4.16 ns；第 3 次（resizer 看 ss_n40C）−0.381；第 4 次（44 ns）−1.131；第 5 次（開 `RUN_POST_GRT_RESIZER_TIMING`）全部 corner PASS，最差 +0.530 ns；上限檔的 unannotated 數 133 不符 | 已驗證（各自的 ADR 與單步實驗） | 規則 22；ADR-0013、ADR-0014；建 Hazard3 golden | `docs/decisions/0013-*.md`、`0014-*.md`；`signoff/golden/soc_top_hazard3/README.md` |

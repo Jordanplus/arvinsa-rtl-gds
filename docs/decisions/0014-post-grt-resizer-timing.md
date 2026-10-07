@@ -5,7 +5,7 @@
 
 ## 原因（已驗證）
 
-第 4 次 harden 後第一次做 signoff criteria 檢查（skill `signoff-criteria`「每次 harden 後的檢查」，`runs/soc_top_hazard3_signoff/criteria_review.md`，p5h3 worktree）：
+第 4 次 harden 後第一次做 signoff criteria 檢查（skill `signoff-criteria`「每次 harden 後的檢查」，`runs/p5_h3_h4_signoff/criteria_review.md`，p5h3 worktree）：
 
 1. CTS 後的 setup 修復（`ResizerTimingPostCTS`）結束時 WNS +0.112 ns；插完 hold buffer 後，繞線前估計是 −0.161 ns；繞線後 signoff 是 −1.131 ns。從修完到 signoff 共差 1.243 ns，其中約 0.97 ns 出現在繞線之後。第 3 次的差距是 0.578 ns。
 2. `PL_RESIZER_SETUP_SLACK_MARGIN` 0.1 ns 遠小於這個差距，但不能單純調大：ADR-0013 的實驗 1 顯示，0.6 ns 會擋住 hold 修復。
@@ -55,5 +55,5 @@
 
 ## 出處
 
-- `runs/p5_h3_harden4.log`、`runs/p5_h3_harden5.log`；`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff.prev/criteria_review.md`（第 4 次）、`../arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/criteria_review.md`（第 5 次）
+- `runs/p5_h3_harden4.log`、`runs/p5_h3_harden5.log`；`../arvinsa-rtl-gds-p5h3/runs/p5_h3_h4_signoff/criteria_review.md`（第 4 次）、`../arvinsa-rtl-gds-p5h3/runs/p5_h3_h5_signoff/criteria_review.md`（第 5 次）
 - skill `drv-timing-closure` 經驗紀錄（第 4 次 harden、實驗 A、B）；`signoff-criteria` 的 knowledge 檔「實測校準資料」
