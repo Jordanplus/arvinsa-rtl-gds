@@ -87,6 +87,7 @@ help:
 	@echo "  make regress              EVERYTHING for the Hazard3 SoC in one command, in order, stops at the first FAIL:"
 	@echo "                            RTL checks, core-hazard3, flow checkers, soc_top with Hazard3 (harden, EQY, GL, L5,"
 	@echo "                            negative tests), provenance-final; logs, summary.md and junit.xml in runs/regress/"
+	@echo "                            (a clean worktree has no .tools/: set LIBRELANE_DIR and XPACK_DIR to installed copies)"
 	@echo "  make core-hazard3         Hazard3 core: riscv-tests rv32ui/uc/um/mi on the SoC's configuration, and an"
 	@echo "                            instruction-by-instruction comparison with the rvcpp ISS (needs make xpack-fetch)"
 	@echo "  CPU=hazard3               for fw, sim, regress-rtl, neg-rtl, synth-check, harden-soc, eqy-soc, neg-eqy-soc,"

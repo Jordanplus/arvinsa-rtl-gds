@@ -436,7 +436,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **何時用**：建立或執行 `make regress`；在乾淨 checkout 驗證；查一個 run 是怎麼產生的；讓下游步驟拒絕過期或沒 PASS 的 run；長時間 run 期間繼續開發或等待它結束；長 regression 開跑前的快速檢查與預跑；長 regression 中途因機器負載 FAIL。同樣設定重跑結果不同、golden 該給多少誤差，看 signoff-checker-qualification。
 - **重點**：
   - regression 依相依順序一次跑一個 target，第一個 FAIL 就停。開始前工作目錄要乾淨，並拒絕 `make -i`／`-n`；結束時 HEAD 必須和開始時相同。
-  - 只有在乾淨 checkout 從頭跑到底才算驗證。開發目錄裡忽略版控的建置產物，會藏住漏宣告的依賴。
+  - 只有在乾淨 checkout 從頭跑到底才算驗證。開發目錄裡忽略版控的建置產物，會藏住漏宣告的依賴。版控外的工具（`.tools/`）要有環境變數覆寫（`LIBRELANE_DIR`、`XPACK_DIR`），並在第一個 target `env-check-flow` 就檢查。
   - 來源追溯要比內容，不只比版本字串：LibreLane clone 不能有改過的檔、PDK 要比內容 sha256、路徑要先解開 symlink。
   - 下游步驟要確認 run 是 PASS，而且來自目前的 commit。
   - golden 與 commit 的先後：更新 golden 的那次 run 永遠過不了下游檢查；要先 commit 新 golden，再用乾淨 checkout 跑完整 regression 證明它可重現。Makefile 要加 `.NOTPARALLEL:`，否則 `make -j` 時各 target 會互刪 `runs/`。

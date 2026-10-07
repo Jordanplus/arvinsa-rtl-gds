@@ -28,7 +28,8 @@ on that one commit (Phase 4 review: provenance-final alone compares only the har
 make neg-regress (scripts/neg_regress.py) checks these refusals. Outputs (runs/regress for hazard3,
 runs/regress_picorv32 for picorv32): <target>.log (full output), summary.md (target, result,
 minutes, the last line of its output), junit.xml (one testcase per target).
-Needs a committed working tree (harden-soc and harden-core check it). About 2.5 hours on the
+Needs a committed working tree (harden-soc and harden-core check it). A clean worktree has no .tools/:
+LIBRELANE_DIR and XPACK_DIR (hazard3: core-hazard3) point at installed copies; env-check-flow checks both. About 2.5 hours on the
 development machine (Apple M-series, 10 cores) for picorv32.
 Prints `regress: PASS n/n` / `regress: FAIL at <target>`; exit code 0 only on PASS.
 """

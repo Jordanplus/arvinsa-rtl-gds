@@ -85,6 +85,16 @@ if [ -d "$pdk_dir" ]; then
 else
   pend "PDK not found at $pdk_dir (run: make pdk-fetch)"; flow_missing=1
 fi
+# xPack toolchain with newlib, needed by make core-hazard3 (Phase 5, ADR-0011). A clean worktree has
+# no .tools/: XPACK_DIR points at an installed copy, like LIBRELANE_DIR. Strict (FAIL) only with --flow
+# and CPU=hazard3 (make regress), where core-hazard3 needs it; otherwise reported.
+xp_dir="${XPACK_DIR:-.tools/xpack-riscv-none-elf-gcc-$(pin XPACK_RISCV_VERSION)}"
+xp_want="$(pin XPACK_RISCV_VERSION | cut -d- -f1)"
+xp_have=$("$xp_dir/bin/riscv-none-elf-gcc" -dumpversion 2>/dev/null || echo none)
+if [ "$xp_have" = "$xp_want" ]; then ok "xPack riscv-none-elf-gcc $xp_have at $xp_dir"
+elif [ "$FLOW_STRICT" = 1 ] && [ "${CPU:-picorv32}" = hazard3 ]; then
+  bad "xPack riscv-none-elf-gcc $xp_want not at $xp_dir (found: $xp_have; run: make xpack-fetch, or set XPACK_DIR)"
+else pend "xPack riscv-none-elf-gcc $xp_want not at $xp_dir (needed by make core-hazard3; run: make xpack-fetch)"; fi
 if [ "$FLOW_STRICT" = 1 ] && [ "$flow_missing" = 1 ]; then fail=1; fi
 
 echo

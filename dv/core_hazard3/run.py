@@ -159,9 +159,12 @@ def main():
     os.makedirs(out, exist_ok=True)
     log = os.path.join(out, "run.log")
     open(log, "w").close()
-    xpack = os.path.join(ROOT, ".tools", f"xpack-riscv-none-elf-gcc-{pin('XPACK_RISCV_VERSION')}", "bin")
+    # XPACK_DIR, like LIBRELANE_DIR: a clean worktree has no .tools/ and points at the main checkout's
+    # installed toolchain (make env-check-flow checks it before a Hazard3 regress).
+    xpack = os.path.join(os.environ.get("XPACK_DIR") or os.path.join(
+        ROOT, ".tools", f"xpack-riscv-none-elf-gcc-{pin('XPACK_RISCV_VERSION')}"), "bin")
     if not os.path.isfile(os.path.join(xpack, "riscv-none-elf-gcc")):
-        print(f"core-hazard3: FAIL - xPack toolchain missing at {xpack} (run make xpack-fetch)")
+        print(f"core-hazard3: FAIL - xPack toolchain missing at {xpack} (run make xpack-fetch, or set XPACK_DIR)")
         return 1
     for repo, paths in ((H3, ["scripts", "test/sim/riscv-tests/riscv-tests"]), (RT, ["env"])):
         if sh(["git", "-C", repo, "submodule", "update", "--init"] + paths, log) != 0:

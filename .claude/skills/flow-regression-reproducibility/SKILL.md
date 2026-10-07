@@ -1,6 +1,6 @@
 ---
 name: flow-regression-reproducibility
-description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發或等待它結束（用 PID）、用舊 run 測新 checker（dev fixture），長 regression 開跑前的快速檢查與預跑（`make py-check`、dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
+description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果（worktree 沒有 `.tools/`：`LIBRELANE_DIR`、`XPACK_DIR`；`xPack toolchain missing`）、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發或等待它結束（用 PID）、用舊 run 測新 checker（dev fixture），長 regression 開跑前的快速檢查與預跑（`make py-check`、dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
 ---
 
 # 一鍵 regression、可重現性與來源追溯
@@ -22,7 +22,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - **開始前**：工作目錄必須乾淨、`MAKEFLAGS` 不能有 `-i`（子 make FAIL 也回 0）、`-n`／`-q`／`-t`（什麼都沒跑），並記下 HEAD；**結束時** HEAD 必須相同。只靠 `provenance-final` 時，它只比 harden 的紀錄：harden 之前的 target 可能跑在別的 commit 上（Phase 4 獨立審查）。`make neg-regress` 用假的 make 測這些拒絕條件（5 個情境，2 秒）。
    - 最後一個 target 是 `provenance-final`：HEAD 等於每個 harden run 記錄的 commit，而且工作目錄仍然乾淨，證明中間的步驟都在同一個 commit 上跑。
    - Makefile 加 `.NOTPARALLEL:`：多個 target 共用並會刪除 `runs/` 下的目錄，`make -j` 會互相刪檔。
-2. **只有乾淨 checkout 從頭跑到底才算驗證過**（`signoff-checker-qualification` 規則 10）：Phase 3 的 `make phase3` 跑了 4 次才在乾淨 checkout 跑完；前 3 次分別卡在隨機的工具錯誤、漏宣告 `fw` 依賴、植入腳本產生 Icarus 不收的網表。開發目錄都沒發現後兩個。LibreLane clone 不在版控內，worktree 用 `LIBRELANE_DIR` 指向主目錄的 `.tools/librelane`。
+2. **只有乾淨 checkout 從頭跑到底才算驗證過**（`signoff-checker-qualification` 規則 10）：Phase 3 的 `make phase3` 跑了 4 次才在乾淨 checkout 跑完；前 3 次分別卡在隨機的工具錯誤、漏宣告 `fw` 依賴、植入腳本產生 Icarus 不收的網表。開發目錄都沒發現後兩個。`.tools/` 不在版控內：worktree 用 `LIBRELANE_DIR` 指向主目錄的 `.tools/librelane`、`XPACK_DIR` 指向主目錄的 `.tools/xpack-riscv-none-elf-gcc-<版本>`（Hazard3 的 `core-hazard3` 用）。regression 的第一個 target `env-check-flow` 要檢查後面每個 target 會用到的、版控外的工具，缺了就在第 1 分鐘 FAIL，不要等到用它的 target（`env/check_env.sh`：`CPU=hazard3` 時缺 xPack 判 FAIL）。
 3. **來源追溯要涵蓋實際被執行或讀取的東西**（`provenance.py`）：
    - repo：HEAD、工作目錄乾淨（含未追蹤檔）、submodule 在記錄的 commit。
    - LibreLane：clone 的 commit 等於釘版，而且 clone 的 `git status --porcelain` 為空。只比 commit 時，改了 clone 裡的 `base.sdc` 照樣 PASS（Phase 3 獨立審查實測）。
@@ -56,6 +56,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 陷阱 | 對策 | 出處 |
 |---|---|---|
 | 開發目錄有舊的建置產物，缺依賴的 target 在開發目錄照樣 PASS | 乾淨 checkout 跑；對每個忽略版控的目錄 grep 誰在讀它 | 第二次 `make phase3`（`gl-soc` 沒依賴 `fw`） |
+| 乾淨 worktree 沒有 `.tools/` 裡的工具（不在版控內），只有寫了環境變數覆寫的才找得到 | 每個讀 `.tools/` 的 target 都要有環境變數覆寫（`LIBRELANE_DIR`、`XPACK_DIR`），`env-check-flow` 要先檢查它們 | Phase 5 第一次在乾淨 checkout 跑 Hazard3 `make regress`（`core-hazard3: FAIL - xPack toolchain missing at ...`） |
 | 新寫或改寫的 negative test 沒單獨跑過就加進 phase target | 先單獨跑完一次（規則 9） | 第三次 `make phase3`（`neg_gl_soc.py`）；Phase 3.5 `make regress` 第 1 次（neg-pnr P17） |
 | 來源追溯只比版本字串 | 比內容（規則 3） | Phase 3 獨立審查 |
 | 下游拿過期的 run | `run_guard.py`（規則 4） | Phase 3 獨立審查 |
@@ -87,3 +88,4 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 2026-10-07 | Phase 5 Hazard3 第 7 次 harden（`4d309de`，第 41 步這次與 golden 相同） | golden 比對 11 個 metric 不同：antenna diode 101 對 100、stdcell 30,475 對 30,474、面積、fill、utilization | 已驗證：第 44 步以前 DEF 全部相同；第 46 步 detailed routing（10 執行緒）內的 antenna 修補，前兩輪相同，第 2 輪後重繞剩 1 個違規（golden 剩 0），多跑一輪多插 1 顆 diode | detailed routing 的差異也會改變數量類 metric；ADR-0015 | p5h3 worktree `runs/p5_h3_h7_signoff/criteria_review.md` |
 | 2026-10-07 | Phase 5 Hazard3 第 7 次 harden（第一次） | 背景指令在第 46 步 detailed routing 被 Claude Code 中止：系統記憶體不足（harden 自己的 OpenROAD 只用 1.3–1.9 GB） | 已驗證：同時有使用者的另一個程式（圖片生成）佔約 17 GB，這台機器 24 GB；Claude Code 在記憶體吃緊時會停掉閒置 session 的背景指令 | 不自動重開，回報使用者；等那個程式結束後重開，跑完正常。長 run 開跑前先看有沒有大的程式在跑 | `runs/p5_h3_harden7_mem.log` |
 | 2026-10-07 | Phase 5 ADR-0016（`1d13775`） | 改 CTS 後兩個 golden 重建（PicoRV32 436 個 metric、Hazard3 434 個）；ADR-0015 的版圖誤差是用舊版圖（第 5–8 次 harden）量的，PicoRV32 的誤差還是暫用 Hazard3 的數字 | 已知：誤差隨版圖而定，新 golden 的 run 之間差異還沒量 | 先在新 commit 各 harden 一次確認 PASS；之後要用幾次相同設定的 run 重新量誤差（`signoff-checker-qualification` 規則 5）。舊 run 改名保留（`p5_pico_h1`–`h3`、`p5_h3_h9`、`h10`），因為 `keep_prev_run` 只留一層 `.prev` | `signoff/golden/soc_top*/README.md` |
+| 2026-10-07 | Phase 5 第一次在乾淨 checkout 跑 Hazard3 `make regress`（`941e1cb`，worktree `../arvinsa-rtl-gds-p5reg`） | 5/21 後 `core-hazard3: FAIL - xPack toolchain missing at <worktree>/.tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin (run make xpack-fetch)`；`env-check-flow` 沒查 xPack，所以第 6 個 target 才發現 | 已驗證：`dv/core_hazard3/run.py` 寫死 `<repo>/.tools/`，沒有像 `LIBRELANE_DIR` 的覆寫；開發目錄有裝，所以之前沒發現 | `core-hazard3` 讀 `XPACK_DIR`；`env-check-flow` 在 `CPU=hazard3` 時缺 xPack 判 FAIL（驗證：`XPACK_DIR=/nonexistent` 時 hazard3 FAIL、picorv32 只列 PENDING、主目錄 OK；`make ... CPU=hazard3` 與環境變數兩種傳法都生效）。沒有自動化的 negative test | `runs/p5_regress_hazard3.console`（main） |

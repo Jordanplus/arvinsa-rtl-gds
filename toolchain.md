@@ -94,7 +94,7 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 以下各值必須與 `env/versions.mk` 一致：
 `PDK = sky130A`、`STD_CELL_LIBRARY = sky130_fd_sc_hd`、`SRAM_MACRO = sky130_sram_2kbyte_1rw1r_32x512_8`、`RISCV_PREFIX = riscv64-elf-`、
 `VERILATOR_MIN = 5.050`、`ICARUS_MIN = 13.0`、`YOSYS_MIN = 0.69`、`RISCV_GCC_MIN = 16.1`、`PYTHON_MIN = 3.11`；
-xPack 工具鏈的三個值見 §1.1。
+xPack 工具鏈的三個值見 §1.1。乾淨 worktree 沒有 `.tools/`：設 `XPACK_DIR` 指向已安裝的目錄（與 `LIBRELANE_DIR` 相同做法）；`make env-check-flow CPU=hazard3` 檢查它。
 
 ## 7. 各 regression 實際用到的工具子元件與 override（驗證紀錄）
 
