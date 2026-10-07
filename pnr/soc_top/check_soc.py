@@ -49,6 +49,12 @@ Checks (each prints a PASS/FAIL row):
                wildcards to corners silently; this row shows what STA used. Phase 3.5 review: only
                the first message was read, and only the end of the path compared, so an SRAM .lib
                from EXTRA_LIBS or another checkout passed.
+  cts_macro_latency  the config replaces OpenROAD.CTS by Arvinsa.CTSNoInsertionDelay (meta
+               substituting_steps, ADR-0016); the run has exactly one step directory of it and none
+               of OpenROAD.CTS; its log has the line of pnr/librelane_plugin_arvinsa/
+               cts_no_insertion_delay.tcl (clock_tree_synthesis really got -no_insertion_delay);
+               the final netlist has no delaybuf_* instance (the delay buffers CTS adds before
+               sram0/clk0 when it balances the macro latency, cts-clock-tree rule 10)
 Prints `soc-checks: PASS` / `soc-checks: FAIL`; exit code 0 only on PASS. Python stdlib only.
 
 usage: check_soc.py --make-drc-baseline <drc.magic.rpt of the SRAM alone> <out.json>
@@ -63,6 +69,8 @@ MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
 INST = "sram0"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 LIB_LINE = re.compile(r"^Reading (?:cell|extra timing|timing) library for the '([^']*)' corner at '(.*?)'", re.M)
+CTS_STEP = "Arvinsa.CTSNoInsertionDelay"
+CTS_LINE = "[INFO] arvinsa: clock_tree_synthesis -no_insertion_delay"
 _DEFINES = {}
 
 
@@ -366,6 +374,25 @@ def main(run_dir, config_path, sram_drc):
         ok = found == [("0", "0")] and not os.path.exists(table)
         row("disconnected", ok, f"Odb.ReportDisconnectedPins: {found or 'no result line'}"
             + ("" if not os.path.exists(table) else f"; table {table} exists"))
+
+    # CTS without macro latency balancing (ADR-0016)
+    subst = ((cfg.get("meta") or {}).get("substituting_steps")) or {}
+    cts_dirs = glob.glob(os.path.join(run_dir, "*-arvinsa-ctsnoinsertiondelay"))
+    old_dirs = glob.glob(os.path.join(run_dir, "*-openroad-cts"))
+    cts_log = "".join(open(f, encoding="utf8", errors="replace").read()
+                      for d in cts_dirs for f in glob.glob(os.path.join(d, "*.log")))
+    delaybufs = re.findall(r"^\s*sky130_fd_sc_hd__\w+\s+(delaybuf_\S+)\s*\(", nl, re.M)
+    problems = []
+    if subst.get("OpenROAD.CTS") != CTS_STEP:
+        problems.append(f"config meta substituting_steps OpenROAD.CTS -> {subst.get('OpenROAD.CTS')}, expected {CTS_STEP}")
+    if len(cts_dirs) != 1 or old_dirs:
+        problems.append(f"{len(cts_dirs)} {CTS_STEP} step(s) and {len(old_dirs)} OpenROAD.CTS step(s) in the run")
+    elif CTS_LINE not in cts_log:
+        problems.append(f"no '{CTS_LINE}' in the log of {os.path.basename(cts_dirs[0])}")
+    if delaybufs:
+        problems.append(f"{len(delaybufs)} delaybuf_* instance(s) in the final netlist ({', '.join(delaybufs[:3])})")
+    row("cts_macro_latency", not problems, "CTS step with -no_insertion_delay, 0 delaybuf_* instances" if not problems
+        else "; ".join(problems))
 
     # STA check_setup
     corners = cfg.get("STA_CORNERS") or []

@@ -17,3 +17,4 @@
 | [0013](0013-resizer-sees-ss-n40c.md) | resizer 也看溫度反轉的 ss_n40C（不再用 ss_100C 的 0.6 ns 餘量代替），setup 餘量改 0.1 ns，排除 ss_n40C 下的 6 種弱 cell | 2026-10-07 |
 | [0014](0014-post-grt-resizer-timing.md) | global routing 後再修一次 setup（`RUN_POST_GRT_RESIZER_TIMING`）：CTS 後的估計比 signoff 樂觀 1.24 ns，餘量調大又會擋住 hold 修復；週期維持 44 ns | 2026-10-07 |
 | [0015](0015-golden-layout-tolerance.md) | golden 比對允許版圖數量與面積的小誤差（`[golden_layout_tolerance]`、`[golden_optional]`）：第 41 步 global routing 偶發不同、detailed routing 多插 diode，原規則幾乎每次 FAIL；誤差約實測最大差異的 5 倍，違規數仍必須相同 | 2026-10-07 |
+| [0016](0016-cts-no-macro-latency-balancing.md) | CTS 不做 macro 的 latency 對齊（repo 的 LibreLane plugin，`clock_tree_synthesis -no_insertion_delay`）：SRAM clock 前的 10 顆 delay buffer 讓半週期 setup 送出變晚、讀出 hold 要 32 顆 delay cell，PicoRV32 44 ns setup −0.113 → +0.765 ns | 2026-10-07 |

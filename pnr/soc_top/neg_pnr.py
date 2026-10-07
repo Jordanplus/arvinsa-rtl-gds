@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P51).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P54).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -130,6 +130,14 @@ step re-run one step on a copy of that step's saved config and input state
        key removed, then design__instance__count__  key: FAIL; the limits with a corner key as
        class:inverter removed; limits: a corner     optional pattern: FAIL
        key pattern added to [golden_optional]
+  CTS without macro latency balancing (ADR-0016; check_soc.py on a fake run that also links the
+  log of the Arvinsa.CTSNoInsertionDelay step)
+  P52  final netlist: one CTS clock buffer renamed  check_soc.py cts_macro_latency (a delay buffer
+       delaybuf_0_clk                                CTS adds before sram0/clk0 when it balances)
+  P53  CTS step log without the line of the plugin  check_soc.py cts_macro_latency (the flag did not
+       Tcl                                           reach clock_tree_synthesis)
+  P54  the CPU's config without substituting_steps  check_soc.py cts_macro_latency (the flow would
+                                                     run LibreLane's own OpenROAD.CTS)
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -518,13 +526,15 @@ def fake_run(run, d, replace, links=None):
     """A directory that looks like <run> to check_soc.py: symlinks, except the files in `replace`
     ({relative path: new text}), which are written as edited copies, and the files or directories
     in `links` ({relative path: other path}), which point elsewhere. Linked: the final netlist and
-    DEF, the disconnected-pin logs, the Magic DRC report and the last signoff STA directory."""
+    DEF, the disconnected-pin logs, the Magic DRC report, the last signoff STA directory and the
+    logs of the CTS step (ADR-0016)."""
     links = links or {}
     fr = os.path.join(d, "run")
     sta = os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run)
     for rel in ["final/nl/soc_top.nl.v", "final/def/soc_top.def", sta] + \
             [os.path.relpath(p, run) for p in glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "*.log"))
-             + glob.glob(os.path.join(run, "*-magic-drc", "reports", "drc.magic.rpt"))]:
+             + glob.glob(os.path.join(run, "*-magic-drc", "reports", "drc.magic.rpt"))
+             + glob.glob(os.path.join(run, "*-arvinsa-ctsnoinsertiondelay", "*.log"))]:
         dst = os.path.join(fr, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if rel in replace:
@@ -855,6 +865,34 @@ def p15(run, d):
     return ok, "check_soc.py disconnected (only row FAIL, soc-checks: FAIL)"
 
 
+CTS_DIR = "*-arvinsa-ctsnoinsertiondelay"
+
+
+def p52(run, d):
+    rel = "final/nl/soc_top.nl.v"
+    nl = open(os.path.join(run, rel)).read()
+    new = edit_once(nl, r"^(\s*sky130_fd_sc_hd__clkbuf_\w+\s+)clkbuf_0_clk(\s*\()", r"\1delaybuf_0_clk\2",
+                    "CTS root buffer clkbuf_0_clk")
+    ok, _ = soc_case(run, d, "cts_macro_latency", replace={rel: new})
+    return ok, "check_soc.py cts_macro_latency: a delaybuf_* instance (only row FAIL, soc-checks: FAIL)"
+
+
+def p53(run, d):
+    line = "[INFO] arvinsa: clock_tree_synthesis -no_insertion_delay"
+    logs = [q for q in glob.glob(os.path.join(run, CTS_DIR, "*.log")) if line in open(q).read()]
+    if len(logs) != 1:
+        return False, f"the plugin line not found in exactly one log of {CTS_DIR}"
+    new = "".join(x for x in open(logs[0]).read().splitlines(True) if line not in x)
+    ok, _ = soc_case(run, d, "cts_macro_latency", replace={os.path.relpath(logs[0], run): new})
+    return ok, "check_soc.py cts_macro_latency: no plugin line in the CTS log (only row FAIL, soc-checks: FAIL)"
+
+
+def p54(run, d):
+    cfg = config_with(d, lambda c: c["meta"].pop("substituting_steps"))
+    ok, _ = soc_case(run, d, "cts_macro_latency", config=cfg)
+    return ok, "check_soc.py cts_macro_latency: config without substituting_steps (only row FAIL, soc-checks: FAIL)"
+
+
 def inputs_check(d, *args):
     cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", CPU, *args], capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
@@ -1164,7 +1202,8 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P22", p22), ("P23", p23), ("P24", p24), ("P25", p25), ("P26", p26), ("P27", p27), ("P28", p28), ("P29", p29), ("P30", p30),
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
-         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51)]
+         ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
+         ("P52", p52), ("P53", p53), ("P54", p54)]
 
 
 def main():

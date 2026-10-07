@@ -16,7 +16,9 @@ config_hazard3.json (the same tags as pnr/soc_top/run.sh). Rows, each PASS or FA
                    pnr/soc_top/clock_uncertainty.sdc with the resolved CLOCK_PERIOD) is in the log
                    of every timing step (STAPrePNR, GlobalPlacement, RepairDesignPostGPL, CTS,
                    ResizerTimingPostCTS, GlobalRouting, RepairDesignPostGRT, and ResizerTimingPostGRT
-                   when RUN_POST_GRT_RESIZER_TIMING is on) and in the sta.log of every signoff corner
+                   when RUN_POST_GRT_RESIZER_TIMING is on) and in the sta.log of every signoff corner;
+                   a step the config replaces (meta substituting_steps) is looked up under its
+                   replacement (CTS: Arvinsa.CTSNoInsertionDelay, ADR-0016)
   signoff_corners  the signoff STA (STAPostPNR) has one directory per STA_CORNERS entry, no more
   checkers_ran     <out> has the verdict line of check_signoff.py (signoff.txt), check_soc.py
                    (soc_checks.txt), check_inputs.py --resolved (inputs_resolved.txt) and
@@ -60,8 +62,14 @@ REPAIR_RE = re.compile(r"^(wire|fanout|load_slew|max_length|split|rebuffer)\d+$"
 HOLD_RE = re.compile(r"^hold\d+$")
 
 
+# The config's "meta": {"substituting_steps": {old id: new id}} (set in main): a step the flow replaced
+# is looked up under its replacement (OpenROAD.CTS -> Arvinsa.CTSNoInsertionDelay, ADR-0016).
+SUBSTITUTED = {}
+
+
 def step_dirs(run, step_id):
     """All step directories of a LibreLane step id, in run order (a repeated step gets -1, -2, ...)."""
+    step_id = SUBSTITUTED.get(step_id, step_id)
     pat = re.compile(r"\d+-" + re.escape(step_id.lower().replace(".", "-")) + r"(-\d+)?$")
     return sorted((d for d in glob.glob(os.path.join(run, "[0-9]*")) if pat.fullmatch(os.path.basename(d))),
                   key=lambda d: int(os.path.basename(d).split("-")[0]))
@@ -235,7 +243,9 @@ def main():
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {msg}")
 
     print(f"criteria-review: run {run}, config {config_path}")
-    cfg = {k: v for k, v in json.load(open(config_path)).items() if not k.startswith("//") and k != "meta"}
+    raw = json.load(open(config_path))
+    SUBSTITUTED.update(((raw.get("meta") or {}).get("substituting_steps")) or {})
+    cfg = {k: v for k, v in raw.items() if not k.startswith("//") and k != "meta"}
     res_p = os.path.join(run, "resolved.json")
     if not os.path.isfile(res_p):
         row("config_applied", False, f"no {res_p}")

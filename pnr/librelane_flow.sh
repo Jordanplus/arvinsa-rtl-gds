@@ -10,6 +10,8 @@
 # resumed from that step (--from), at most 3 attempts in all. Any other failure is not retried.
 # Each retry is recorded in $OUT/retries.txt. The decision reads the log of the last step directory,
 # not the console: the console wraps lines, so the message is split there.
+# pnr/ is on PYTHONPATH so that LibreLane finds the repo plugin pnr/librelane_plugin_arvinsa (the
+# soc_top configs substitute its CTS step, ADR-0016); without it LibreLane stops with an unknown step.
 # keep_prev_run <dir>...: before a new run, each existing <dir> becomes <dir>.prev and an older
 # <dir>.prev is removed. A rerun with the same tag used to delete the run it replaced, with the
 # evidence of a failed run (Phase 3.5: the first harden-soc's log was lost that way). One level only:
@@ -29,7 +31,7 @@ librelane_flow() {
   while :; do
     flow_attempts=$((flow_attempts + 1))
     flow_rc=0
-    (cd "$LL_DIR" && nix-shell --run "python3 -m librelane --run-tag '$TAG' --design-dir '$ROOT' --pdk '$PDK' --scl '$SCL' --condensed $from '$config'") \
+    (cd "$LL_DIR" && nix-shell --run "PYTHONPATH='$ROOT/pnr' python3 -m librelane --run-tag '$TAG' --design-dir '$ROOT' --pdk '$PDK' --scl '$SCL' --condensed $from '$config'") \
       > "$OUT/console.log" 2>&1 || flow_rc=$?
     [ "$flow_rc" = 0 ] && return 0
     [ "$flow_attempts" -ge 3 ] && return 0

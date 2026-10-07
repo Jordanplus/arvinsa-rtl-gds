@@ -127,6 +127,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
 | run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
+| hold delay cell 卡在 setup 吃緊的路徑上、半週期路徑、launch 與 capture 的 clock 差隨 corner 變號 | cts-clock-tree | drv-timing-closure（hold 修復本身） |
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
 | 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
 | signoff 才在 resizer 看不到的 corner 出現 setup 違規；繞線前想看某個 corner 的 slack | drv-timing-closure（規則 9、11：用別的 corner 加餘量代替，長路徑會漏） | multicorner-sta（規則 8：繞線前怎麼量；規則 7：flow 中途 state 的 metrics 可能是舊值） |
@@ -198,7 +199,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 | [drc-signoff](.claude/skills/drc-signoff/SKILL.md) | DRC、GDS 輸出、XOR、macro 內部 DRC、金屬密度 | 多為 sky130；位置比對方法通用 |
 | [formal-equivalence-eqy](.claude/skills/formal-equivalence-eqy/SKILL.md) | EQY 等價證明、它會靜默略過的情況與補法 | Yosys／EQY |
 | [antenna-signoff](.claude/skills/antenna-signoff/SKILL.md) | antenna 檢查與修復，macro 沒有 antenna 資料時的處理 | OpenROAD；數值是 sky130 |
-| [cts-clock-tree](.claude/skills/cts-clock-tree/SKILL.md) | clock tree、clock pin、macro 的 clock latency | OpenROAD／LibreLane |
+| [cts-clock-tree](.claude/skills/cts-clock-tree/SKILL.md) | clock tree、clock pin、macro 的 clock latency、clock 造成的 setup／hold | OpenROAD／LibreLane |
 | [pdn-ir-drop](.claude/skills/pdn-ir-drop/SKILL.md) | 電源網路、IR drop、供電點模型、EM | OpenROAD／LibreLane |
 | [lvs-signoff](.claude/skills/lvs-signoff/SKILL.md) | LVS、macro black box、實體連接、斷線 pin | LibreLane（Magic、Netgen） |
 | [gate-level-simulation](.claude/skills/gate-level-simulation/SKILL.md) | 網表模擬、RTL 與網表 lockstep、X、帶電源網表、時限 | Icarus＋sky130 模型；lockstep 方法通用 |
@@ -329,14 +330,15 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 
 #### cts-clock-tree：clock tree
 
-- **何時用**：clock buffer 的 fanout／cap 違規、skew、clock 輸入 pin 到第一級 buffer 的長線 slew、clock pin 擺放、CTS 把 macro 的 clock 延後而讓 macro 輸入的 hold 變差。
+- **何時用**：clock buffer 的 fanout／cap 違規、skew、clock 輸入 pin 到第一級 buffer 的長線 slew、clock pin 擺放、CTS 把 macro 的 clock 延後而讓 macro 輸入的 hold 變差，以及 setup／hold 違規可能是 clock 造成的時候。
 - **重點**：
   - clock pin 到 clock tree 根部的線不在 resizer 的修復範圍內。對策是把 pin 擺在 flip-flop 重心附近，或用 `CTS_CLK_MAX_WIRE_LENGTH` 讓 CTS 把這段線切開加 buffer（soc_top 這樣做之後通過，但同一次 run 也改了別的設定，這一項的效果沒有單獨實驗）。
   - clock buffer 的 fanout／cap 違規：`CTS_SINK_CLUSTERING_SIZE`、`CTS_DISTANCE_BETWEEN_BUFFERS`。PDK 的 `RT_CLOCK_MIN_LAYER` 在 LibreLane 3 沒有生效，clock 實際走 met1／met2。
   - skew 的 metric 含 clock uncertainty 與 derate，不是 skew 的真值。
-  - CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚（插 delay buffer），`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步；目前用 resizer 的 hold 餘量補。
+  - CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚（插 delay buffer），`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步。這串 buffer 的上升緣、下降緣延遲不同，讓 SRAM 半週期路徑的 setup 與讀出的 hold 一起變差。關掉用 `clock_tree_synthesis -no_insertion_delay`；LibreLane 沒有對應設定，本 repo 用 LibreLane plugin 換掉 CTS step（ADR-0016）。
+  - setup／hold 違規先拆 launch 與 capture 的 clock latency（各 corner、上升緣與下降緣），來自 clock 結構就在 clock 端修。在 data 端補 hold 很貴：delay cell 在慢 corner 的延遲是快 corner 的約 3 倍。
   - 有記錄試過但沒有作用的設定，例如 `CTS_MAX_CAP`。
-- **本 repo 實例**：`pnr/soc_top/README.md` 的設定表、`pnr/soc_top/pin_order.cfg`。
+- **本 repo 實例**：`pnr/soc_top/README.md` 的設定表、`pnr/soc_top/pin_order.cfg`、`pnr/librelane_plugin_arvinsa/`（negative test P52–P54）。
 
 #### pdn-ir-drop：電源網路與 IR drop
 
@@ -511,6 +513,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - `signoff/scripts/provenance.py`、`run_guard.py`：來源追溯，與下游拒絕過期的 run。
   - `signoff/scripts/check_signoff.py` 加 `signoff/limits/*.toml` 的格式：signoff 門檻與 golden 比對。
   - `pnr/librelane_flow.sh`：LibreLane 呼叫與有上限的重試。
+  - `pnr/librelane_plugin_arvinsa/`：不改 LibreLane、只換掉一個 step 的寫法（`meta.substituting_steps` 加 `PYTHONPATH`；ADR-0016 的 CTS）。
   - `dv/scripts/dvlib.py`：模擬的 checker。
   - `dv/monitors/gl_lockstep.v`：RTL 與網表 lockstep。
   - `signoff/eqy/`：EQY 與它的植入錯誤。

@@ -1,8 +1,12 @@
 {
     "//": "Phase 3: soc_top with the prebuilt SRAM macro, project-plan.md §6 and §8. Run with `make harden-soc`; paths are relative to the repo root (run.sh passes --design-dir). Settings are explained in README.md next to this file.",
+    "//meta": "substituting_steps (ADR-0016): OpenROAD.CTS is replaced by Arvinsa.CTSNoInsertionDelay (pnr/librelane_plugin_arvinsa; pnr/librelane_flow.sh puts pnr/ on PYTHONPATH): the same step, but clock_tree_synthesis -no_insertion_delay, so CTS does not add delay buffers before sram0/clk0 to match the flip-flop latency. Those ten clkbuf_16 made the sram0 falling edge (half-cycle setup launch) 1.08 ns later than its rising edge at min_ss_n40C and needed one hold delay cell on each sram_dout0 bit; PicoRV32 at 44 ns: signoff setup -0.113 ns with them, +0.765 ns without (experiment D). check_soc.py cts_macro_latency checks it.",
     "meta": {
         "version": 3,
-        "flow": "Classic"
+        "flow": "Classic",
+        "substituting_steps": {
+            "OpenROAD.CTS": "Arvinsa.CTSNoInsertionDelay"
+        }
     },
     "DESIGN_NAME": "soc_top",
     "//VERILOG_FILES": "Must list exactly the source files of rtl/rtl.f (run.sh checks this). The SRAM is not here: the flow reads its blackbox from MACROS.vh.",
