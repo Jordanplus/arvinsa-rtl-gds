@@ -35,6 +35,7 @@
 | Phase 5 Hazard3 第 5 次 harden-soc（commit `3a28d54`） | 本檔來源 |
 | Phase 5 Hazard3 第 6 次 harden-soc（commit `d6f3074`，flow 設定相同） | 293 個相同、86 個在誤差內、61 個不同（含數量、面積與 `iter:7` 的 key）→ harden-soc FAIL；signoff 全部 PASS。ADR-0015 的誤差下：PASS |
 | Phase 5 Hazard3 第 7 次 harden-soc（commit `4d309de`） | 335 個相同、94 個在誤差內、11 個不同（diode、cell 數、面積）→ harden-soc FAIL；signoff 全部 PASS。ADR-0015 的誤差下：PASS |
+| Phase 5 Hazard3 第 8 次 harden-soc（commit `9ef0be7`，ADR-0015 的誤差） | 440 個完全相同（第 41 步與 detailed routing 都與本檔來源相同）→ harden-soc PASS |
 
 實驗 A（從第 4 次 run 的第 43 步之後接續，只跑到 signoff STA）與本次的 signoff STA 數字完全相同。
 

@@ -311,9 +311,9 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 - **重點**：
   - 目前可用的組合是合成網表 vs 最終網表。必要設定：加大 stack（`ulimit -s`）、`insbuf off`、刪掉 `$scopeinfo`。
   - EQY 會靜默略過三種情況，都要另外補：被換成常數的 bit（看 log 的 `found constant`）、flip-flop 本身的種類、clock 接線（`sat` 先把所有 flip-flop 改成同一個隱含 clock）。後兩項用 EQY 以外的結構比對。
-  - negative test 要分清楚錯誤是被哪一種機制抓到的：分區證明失敗、常數規則、或名稱對應矛盾。而且要有一個非常數的錯誤，證明「證明步驟」本身有效。FAIL 的位置要在植入點附近，並在案例之間做交叉檢查。
+  - negative test 要分清楚錯誤是被哪一種機制抓到的：分區證明失敗、常數規則、或名稱對應矛盾。而且要有一個非常數的錯誤，證明「證明步驟」本身有效。FAIL 的位置要在植入點附近（被接成常數的腳只往上游追，否則大扇出的 reset 樹會整棵算進來），並在案例之間做交叉檢查。
   - RTL 對合成網表：LibreLane 一定會重新編碼狀態機，目前沒有可用的做法，靠 gate-level 模擬與 directed 測試補。
-- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 9 種、picorv32 11 種）。
+- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 9 種、Hazard3 版 soc_top 13 種、picorv32 11 種）。
 
 #### antenna-signoff：antenna
 

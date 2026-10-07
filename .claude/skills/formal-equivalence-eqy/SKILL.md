@@ -1,6 +1,6 @@
 ---
 name: formal-equivalence-eqy
-description: 用 YosysHQ EQY 證明兩份網表（或 RTL 與網表）等價時使用：必要設定（stack、`insbuf off`、`$scopeinfo`）、EQY 會靜默略過而要另外補的情況（被換成常數的 bit、flip-flop 本身的種類、clock 接線）、EQY 當機（SIGSEGV）或分區證不出來、RTL 對合成網表為什麼還做不到、EQY 的 negative test 與 FAIL 位置檢查。Use for formal equivalence checking with EQY, its silent holes (constant bits, flip-flops, clock wiring) and qualifying it by bug injection.
+description: 用 YosysHQ EQY 證明兩份網表（或 RTL 與網表）等價時使用：必要設定（stack、`insbuf off`、`$scopeinfo`）、EQY 會靜默略過而要另外補的情況（被換成常數的 bit、flip-flop 本身的種類、clock 接線）、EQY 當機（SIGSEGV）或分區證不出來、RTL 對合成網表為什麼還做不到、EQY 的 negative test 與 FAIL 位置檢查（`eqy FAILed, but not at the injection`，含被接成常數的 reset 腳）。Use for formal equivalence checking with EQY, its silent holes (constant bits, flip-flops, clock wiring) and qualifying it by bug injection.
 ---
 
 # Formal equivalence（EQY）
@@ -39,12 +39,12 @@ Phase 4 agent 再試一次（gold 端照 LibreLane 的順序跑到 `memory_map`�
 ## negative test（`neg_eqy.py`）
 
 - picorv32_core（11 個）：輸出 buffer 輸入接 0、輸出 buffer 換成反相器、`count_cycle[45]`／`count_instr[40]` 卡 1、bus-error IRQ 卡 0（這三個是 GL 模擬漏掉的）、暫存器 bit 卡 0、mux 兩輸入對調；Phase 4 加 `nand2_to_nor2`（非常數的邏輯錯誤）、`flop_q_inverted`、`flop_async_reset`（flip-flop 換種類）、`flop_clk_inverted`（clock 接線）。
-- soc_top（9 個）：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調；Phase 4 加 `clk0_inverted`（SRAM clock 反相）與上面 4 個 Phase 4 案例。
+- soc_top（9 個）：SRAM `din0[5]` 卡 0、`csb0` 反相、`host_rdata[7]` 反相、mux 兩輸入對調；Phase 4 加 `clk0_inverted`（SRAM clock 反相）與上面 4 個 Phase 4 案例。Hazard3 版（13 個）再加 3 個 CSR flip-flop 的 D 卡成常數，以及 `reset_b_tied1`（RESET_B 接 1，cell 種類與 clock 都沒變，只有證明抓得到）。
 - **被抓到的機制要分開記**（看 `summary.json` 的 `proved`、`constant_matches`、`conflicting_matches`）。EQY 的 FAIL 有三種來源：(a) 分區證明失敗；(b) 常數規則（`found constant ... bit`）；(c) 切分時名稱對應互相矛盾而拒絕（`conflicting matches`），這時一個分區都沒證。
   - 2026-10-03 實測：soc_top 的 `csb0_inverted`、`host_rdata7_inverted`、`mux_swap` 與 picorv32 的 `instr_inverted`、`mux_swap` 都是 (c)；`wdata3_stuck0` 只靠 (b)（15136/15136 分區照樣證明通過）；`din5_stuck0` 是 (a)+(b)（18099/18100）。picorv32 的 `count_cycle45_stuck1`、`count_instr40_stuck1`、`buserr_irq_stuck0`、`x8_bit24_stuck0` 是 (a)+(b)，各 1 個分區沒證明（2026-10-04 第四次 `make phase3` 重現，GL 模擬漏掉的 3 個都在其中）。
   - 只有 (a) 證明「證明本身有效」。qualification 報告要寫出每個案例是哪一種，並確保 (a) 有案例。
   - **(a) 的案例也要有非常數的錯誤**：「卡成常數」的 (a) 案例，失敗的分區正好就是被換成常數的那個 bit；反相器、mux 對調都落在 (c)。`neg_eqy.py nand2_to_nor2`（Phase 4）：第一顆 nand2（依 instance 名稱）換成同尺寸的 nor2，名稱與接線不動 → soc_top 18100 個分區中 1 個證明失敗、picorv32 15137 個中 1 個，沒有常數也沒有名稱衝突，證明步驟有效。
-  - **抓到的位置要對**（`neg_eqy.py` 的 `fail_names()`、`neighborhood()`，Phase 4）：從 EQY 紀錄取出 FAIL 牽涉的名稱（沒證明的分區、常數 bit、名稱矛盾的兩邊），每一個都要在植入點附近：被改的 cell、被改的腳上的 net、這些 net 上的 cell，遇到 buffer／inverter 繼續往下走（EQY 報的是合成網表的名稱，最終網表在 flip-flop 與 port 之間插了好幾級 buffer，只看一層會誤判）；bus pin 逐 bit 算；clock net 不往下走，只把它往回穿過 buffer 找到的來源加進範圍（`clk0_inverted`）。`neg_eqy.py` 每次自動做交叉檢查：植入點不同的任兩個案例，A 的 FAIL 名稱不能全部落在 B 的範圍內（Phase 4 regress：soc_top 60 組、picorv32 104 組）。為什麼反相器、mux 對調會造成 (c)：推測與 `insbuf off` 的別名處理有關，尚未查證。
+  - **抓到的位置要對**（`neg_eqy.py` 的 `fail_names()`、`neighborhood()`，Phase 4）：從 EQY 紀錄取出 FAIL 牽涉的名稱（沒證明的分區、常數 bit、名稱矛盾的兩邊），每一個都要在植入點附近：被改的 cell、被改的腳上的 net、這些 net 上的 cell，遇到 buffer／inverter 繼續往下走（EQY 報的是合成網表的名稱，最終網表在 flip-flop 與 port 之間插了好幾級 buffer，只看一層會誤判）；bus pin 逐 bit 算；clock net 不往下走，只把它往回穿過 buffer 找到的來源加進範圍（`clk0_inverted`）。`neg_eqy.py` 每次自動做交叉檢查：植入點不同的任兩個案例，A 的 FAIL 名稱不能全部落在 B 的範圍內（Phase 4 regress：soc_top 60 組、picorv32 104 組）。被接成常數的腳（例如 RESET_B 接 1）不能往兩個方向走：原來的 net 是大扇出的 reset 樹時，範圍會大到接受別的案例的 FAIL；只沿 buffer／inverter 往上游追到 driver（EQY 報的是那個 driver），常數本身不算名稱（Phase 5 Hazard3 `reset_b_tied1`，完整重跑後交叉檢查確認）。為什麼反相器、mux 對調會造成 (c)：推測與 `insbuf off` 的別名處理有關，尚未查證。
 
 ## 用完後
 
@@ -60,3 +60,4 @@ Phase 4 agent 再試一次（gold 端照 LibreLane 的順序跑到 `memory_map`�
 | 2026-10-03 | neg-eqy-soc（正式 run 2 網表） | 4/4 抓到，其中 `csb0_inverted`、`host_rdata7_inverted`、`mux_swap` 是 `partition step refused: conflicting name matches` | 已驗證（`runs/neg_eqy_soc_top/*/eqy/summary.json`） | 見 negative test 一節；`make phase3` 重跑完整 neg-eqy-core 後補記各案例的機制 | `runs/p3_neg_eqy_soc.log` |
 | 2026-10-04 | Phase 4 獨立審查 | flip-flop 的 CLK 改接反相 clock：EQY 與 sequential cell 結構比對都 PASS | 已驗證（審查者在最終網表植入；`partition.list` 0 個分區含 CLK） | 加 clock 來源追蹤（規則 5）與 2 個 negative test；位置檢查改逐 bit 並加交叉檢查 | `signoff/eqy/README.md` 判定第 7 點 |
 | 2026-10-04 | Phase 4 預跑（dev fixture） | `clk0_inverted: eqy FAILed, but not at the injection: clk` | 已驗證：EQY 報 `conflicting matches for gold bit \clk: \clk vs \neg_eqy_inv`；位置範圍刻意不走 clock net，所以不含 `clk` | 範圍加入 clock net 的源頭（沿 buffer 往回追）；插反相器的案例各用不同名稱，交叉檢查才會比到它們 | `runs/neg_eqy_dev6/clk0_inverted/` |
+| 2026-10-07 | Phase 5 Hazard3 `neg-eqy-soc`（第 8 次 harden 的網表） | `reset_b_tied1: eqy FAILed, but not at the injection`（12/13） | 已驗證：EQY 報 reset 同步器 `_21925_` 與常數 `1'1`；checker 把 `1'1` 當名稱。只拿掉常數後，範圍從 RESET_B 舊 net 往兩邊走遍 reset 樹（1,449 個名稱），交叉檢查發現它接受 `mcycleh13_stuck1`、`minstreth8_stuck1` 的 FAIL | 常數不算名稱；被接成常數的腳只往上游追到 driver（範圍 37 個名稱）。完整重跑 13/13、交叉檢查 144 組 PASS；PicoRV32 兩個設計待重跑確認 | `runs/p5_h3_neg-eqy-soc.log`、`runs/p5_h3_neg-eqy-soc_fix.log`、`signoff/eqy/README.md` |

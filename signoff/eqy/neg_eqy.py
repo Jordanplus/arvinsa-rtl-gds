@@ -180,9 +180,17 @@ def neighborhood(orig_text, new_text):
     those nets, and for buffers and inverters also the nets on their other pin, so that the walk
     passes through the buffer chains that placement and routing add (a flip-flop of the synthesized
     netlist that drives a port is several buffers away from it in the final netlist). Clock nets
-    (clknet_*) are not followed."""
+    (clknet_*) are not followed.
+    A pin the edit ties to a constant is different: its old net is not walked both ways (for a reset
+    pin that walk covers the whole buffered reset tree and every flip-flop on it, so the location
+    check could not tell the case from others on the reset net: Hazard3 reset_b_tied1 reached 1449
+    names and accepted the FAIL names of mcycleh13_stuck1 and minstreth8_stuck1). It is followed
+    upstream only, through buffers and inverters, to the cell that drives it (EQY names that driver:
+    the reset synchronizer flop for reset_b_tied1)."""
     a, b = instances(orig_text), instances(new_text)
     changed = {n for n in set(a) | set(b) if a.get(n) != b.get(n)}
+    const = re.compile(r"\d+'[bh][0-9a-fA-F]+")
+    tied = set()                         # old nets of pins the edit tied to a constant
     nets = set()
     for n in changed:
         old, new = a.get(n), b.get(n)
@@ -193,9 +201,16 @@ def neighborhood(orig_text, new_text):
                     nets.update(ns)
                     continue
                 o, w = old[1].get(pin) or [], new[1].get(pin) or []
-                if o != w:
-                    nets.update([x for pair in zip(o, w) if pair[0] != pair[1] for x in pair]
-                                if len(o) == len(w) else o + w)
+                if o != w and len(o) == len(w):
+                    for x, y in zip(o, w):
+                        if x == y:
+                            continue
+                        if const.fullmatch(y) and not const.fullmatch(x):
+                            tied.add(x)
+                        else:
+                            nets.update((x, y))
+                elif o != w:
+                    nets.update(o + w)
     # A clock net is not walked (the whole clock tree would be "at the injection"); instead its source
     # is added, found by walking back through the clock buffers (EQY names the gold clock port when a
     # clock pin is inverted: clk0_inverted).
@@ -227,12 +242,29 @@ def neighborhood(orig_text, new_text):
                         if n2 not in found and not n2.startswith("clknet"):
                             found.add(n2)
                             todo.append(n2)
+    out_pins = {"X", "Y", "Q", "Q_N", "HI", "LO"}
+    driver = {net: name for name, (_, pins) in a.items() for pin, ns in pins.items() if pin in out_pins
+              for net in ns}
+    for net in tied - nets:
+        for _ in range(200):
+            found.add(net)
+            d = driver.get(net)
+            if d is None:
+                break
+            found.add(d)
+            cell, pins = a[d]
+            if BUFFER.match(cell) and pins.get("A"):
+                net = pins["A"][0]
+                continue
+            found.update(x for p, ns in pins.items() if p in out_pins for x in ns)
+            break
     return found
 
 
 def fail_names(eqy_dir):
     """Names (instance or net, without the backslash, bus index as [n]) in the EQY reasons for FAIL:
-    partitions not proved, constant matches, conflicting matches."""
+    partitions not proved, constant matches, conflicting matches. Constants are not names: EQY writes
+    `conflicting matches for gold bit X: X vs 1'1` when an edit ties a pin (Hazard3 reset_b_tied1)."""
     log = os.path.join(eqy_dir, "eqy_run.log")
     plist = os.path.join(eqy_dir, "work", "partition.list")
     plog = os.path.join(eqy_dir, "work", "partition.log")
@@ -246,6 +278,8 @@ def fail_names(eqy_dir):
         raw += list(m)
     names = set()
     for r in raw:
+        if re.fullmatch(r"\d+'[01xzXZ]+", r):          # a constant (EQY writes 1'1), not a name
+            continue
         base = r.split(".")[0]
         if re.fullmatch(r"[^.\[]+\.\d+", r):                               # partition name sram_din0.5
             base = re.sub(r"\.(\d+)$", r"[\1]", r)
