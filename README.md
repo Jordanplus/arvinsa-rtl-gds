@@ -226,7 +226,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。記憶體要看 physical footprint，`ps` 的 RSS 不算被換到 swap 的部分，會嚴重低估；CPU 使用率低、swap 一直增加，就是記憶體失控，要馬上停（Phase 5 一個 step 用到 92.9 GB，機器只有 24 GB）。
   - 要在某一步的工具指令裡加除錯輸出時，用 `python3 -m librelane.steps eject` 把那一步匯出成獨立 script 再改；可能失控的實驗要加記憶體上限自動停。
   - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名；改名後各步的 `state_in.json` 仍指向舊路徑，單步重跑前要在複本裡換掉。
-  - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
+  - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號），而且中止那次的目錄還在（checker 只採計有 `state_out.json` 的目錄）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。state 的 metrics 會沿用前面步驟的值，flow 中途 `state_out.json` 的數字不一定是那一步量的，要看該步的 `or_metrics_out.json`。log 的 `RSZ-0032 Inserted N hold buffers` 不是總數，要數網表。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
 - **本 repo 實例**：`pnr/*/run.sh`、`pnr/librelane_flow.sh`（GRT-0229 重試，negative test `make test-flow-retry`）、`pnr/soc_top/neg_pnr.py` 的 `rerun()`。
@@ -241,7 +241,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 不可重現的步驟也會改變數量時（Phase 5 Hazard3：global routing 偶發不同、detailed routing 多插 diode）：先找到分歧的那一步、量出發生頻率，收集足夠樣本，再把會跟著繞線變的數量與面積放進另一個誤差表（約實測最大差異的 5 倍），每輪與個別 warning 的 key 列為可選。違規、錯誤類的計數仍一律完全相同，由 checker 拒絕任何碰到它們的誤差設定（ADR-0015）。
   - 每個 checker 至少要有一個植入錯誤，加一個沒植入時必須 PASS 的對照。斷言寫成「FAIL 的列剛好是這幾列」，而且要看全部問題，不能只看第一個。
   - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
-  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）。新 checker 要逐條對照。
+  - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）、重試留下的中止目錄頂替完成的那次。新 checker 要逐條對照。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂

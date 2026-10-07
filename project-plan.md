@@ -372,6 +372,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | P43–P49 | criteria 檢查 | positive control；config 的設定沒進 run；某 step 沒收到設定；某 signoff corner 沒套 uncertainty；少一個 signoff corner；`check_soc.py` 沒跑；繞線後的 setup 修復（`ResizerTimingPostGRT`）沒套 uncertainty | `review_criteria.py` 對應的那一列（`pnr/soc_top/neg_pnr.py`） |
 | P50–P51 | golden 比對的誤差（ADR-0015） | 版圖數量剛好在誤差內、超出 1；誤差設定碰到違規計數；可選 key 缺少、一般 key 缺少；可選設定碰到 corner key | `check_signoff.py` 的 golden 比對與誤差設定檢查（`pnr/soc_top/neg_pnr.py`） |
 | P52–P54 | CTS 不做 macro latency 對齊（ADR-0016） | 最終網表出現 `delaybuf_*`；CTS step 的 log 沒有 plugin 印的那一行；config 沒有 `substituting_steps` | `check_soc.py` `cts_macro_latency` |
+| P55 | 檢查只採計完成的 step（重試留下中止的目錄時） | `ResizerTimingPostGRT` 完成那次的 log 沒有 uncertainty 那一行，另有一個中止的同名目錄（沒有 `state_out.json`）的 log 有 | `review_criteria.py` `uncertainty` |
 
 不採用「`CLOCK_PERIOD` 設 2 ns」：FAIL 位置不確定（resizer 跑很久、slew/cap 先爆、甚至 crash）且耗時，改用 P01。
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P54).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P55).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -122,6 +122,10 @@ step re-run one step on a copy of that step's saved config and input state
        LibreLane failed)                              review_criteria.py checkers_ran
   P49  ResizerTimingPostGRT log without the         review_criteria.py uncertainty (the repair
        clock_uncertainty.sdc line (ADR-0014)         step after global routing must see it too)
+  P55  ResizerTimingPostGRT: the finished step's    review_criteria.py uncertainty (only finished
+       log without the line, plus a stopped attempt  attempts count; Phase 5: P49 was not caught on
+       of the step (no state_out.json) whose log     a PicoRV32 run with a GRT-0229 retry, because
+       has it                                        the stopped attempt's log still had the line)
   golden comparison with layout tolerances and optional keys (ADR-0015)
   P50  metrics: design__instance__count__stdcell    within its [golden_layout_tolerance]: PASS;
        golden + tolerance, then + tolerance + 1;     one more: FAIL; the limits with a layout
@@ -1054,11 +1058,15 @@ def mirror(src, dst, replace=None, drop=()):
     return dst
 
 
-def review_case(run, d, row, run_replace=None, run_drop=(), out_drop=(), config=None):
+def review_case(run, d, row, run_replace=None, run_drop=(), out_drop=(), config=None, run_add=None):
     """review_criteria.py on mirrored copies of the run and <run>_signoff: (caught, expect). Caught
     only if the FAIL rows are exactly `row` and the verdict is criteria-review: FAIL (row None: the
-    positive control, no FAIL row and criteria-review: PASS)."""
+    positive control, no FAIL row and criteria-review: PASS). run_add: {relative path: text}, files
+    that are not in the run, written into the copy."""
     fr = mirror(run, os.path.join(d, "run"), run_replace, run_drop)
+    for rel, text in (run_add or {}).items():
+        os.makedirs(os.path.dirname(os.path.join(fr, rel)), exist_ok=True)
+        open(os.path.join(fr, rel), "w").write(text)
     fo = mirror(run.rstrip("/") + "_signoff", os.path.join(d, "out"), drop=out_drop)
     cp = subprocess.run([sys.executable, REVIEW, "--cpu", CPU, "--run", fr, "--out", fo, "--config", config or CONFIG],
                         capture_output=True, text=True)
@@ -1122,6 +1130,21 @@ def p49(run, d):
     edits = {os.path.relpath(lg, run): "".join(ln for ln in open(lg, errors="replace").read().splitlines(True)
                                                if "clock_uncertainty.sdc:" not in ln) for lg in logs}
     return review_case(run, d, "uncertainty", run_replace=edits)
+
+
+def p55(run, d):
+    sd = step_dir(run, "OpenROAD.ResizerTimingPostGRT")
+    rel = os.path.relpath(sd, run)
+    logs = [lg for lg in glob.glob(os.path.join(sd, "*.log")) if "clock_uncertainty.sdc:" in open(lg, errors="replace").read()]
+    if not logs:
+        return False, f"no clock_uncertainty.sdc line in the logs of {rel}"
+    edits = {os.path.relpath(lg, run): "".join(ln for ln in open(lg, errors="replace").read().splitlines(True)
+                                               if "clock_uncertainty.sdc:" not in ln) for lg in logs}
+    # A stopped attempt of the same step (as a GRT-0229 retry leaves it): its log has the line, it has
+    # no state_out.json. The finished attempt's log does not have the line.
+    stopped = f"{os.path.basename(sd).split('-')[0]}-openroad-resizertimingpostgrt-9"
+    add = {os.path.join(stopped, os.path.basename(logs[0])): open(logs[0], errors="replace").read()}
+    return review_case(run, d, "uncertainty", run_replace=edits, run_add=add)
 
 
 def signoff_limits_with(run, d, edit, table=None, line=None):
@@ -1203,7 +1226,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
          ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
-         ("P52", p52), ("P53", p53), ("P54", p54)]
+         ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55)]
 
 
 def main():

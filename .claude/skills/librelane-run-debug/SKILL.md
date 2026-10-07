@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`，也會出現在新開的 step 如 `ResizerTimingPostGRT`）、`Could not replace ... no replacement step with ID`（repo plugin 不在 `PYTHONPATH`）、要只改某一步的工具指令而不改 LibreLane 本身（plugin step 加 `substituting_steps`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`，也會出現在新開的 step 如 `ResizerTimingPostGRT`）、`Could not replace ... no replacement step with ID`（repo plugin 不在 `PYTHONPATH`）、要只改某一步的工具指令而不改 LibreLane 本身（plugin step 加 `substituting_steps`）、接續後同一個 step 有兩個目錄（中止的沒有 `state_out.json`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -42,6 +42,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 | Magic `[E] Error while reading cell ... Unknown layer/datatype` | 讀 OpenRAM SRAM GDS 的專用 layer，不會讓 flow 失敗（CI 參考設計也有） | soc_explore2 |
 | `Magic DRC errors found - deferred` | deferred = 延後到 flow 最後才報錯；看完整錯誤清單再判斷 | soc_explore2 |
 | console 輸出、OpenROAD step log 都會緩衝 | 進度看 step 目錄編號、`ps` 的 CPU 時間；不要只看 console | soc_explore6 |
+| 從中間 step 接續（`--from`，例如 GRT-0229 重試）後，中止那次的 step 目錄還在：同一個 step 有兩個目錄，中止的沒有 `state_out.json`，後面每一步的編號都多 1，step config 也多一個 | 讀 step 目錄的 checker 只採計有 `state_out.json` 的目錄；不要用「任一個目錄有就算」或「取最後一個」的寫法代替（`review_criteria.py`、negative test P55） | Phase 5 PicoRV32 確認 harden（`1d13775`） |
 | LibreLane 的 console 輸出（rich 排版）會折行，一個錯誤訊息被拆成兩行：`[GRT-0229] Vertical edge usage exceeds the` ／ `maximum allowed. (79, 0) usage=65534` | 程式要比對訊息時，讀該 step 目錄自己的 log（一行完整），不要 grep console | `pnr/librelane_flow.sh` 第一版用 console 比對，永遠不會重試（模擬測試前讀碼發現） |
 | `pkill -f <字串>` 會誤殺命令字串含相同字的其他程序 | 用完整、唯一的字串（例如 `run-tag soc_explore8`） | 本專案 Phase 3 eqyB 被誤殺 |
 | `OpenROAD.RepairDesignPostGRT`、`OpenROAD.ResizerTimingPostGRT` 修復後的 global routing 隨機中止：`[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200`；位置是 clk pin 所在的 GCell | 已驗證是隨機的（`RepairDesignPostGRT` 同一份輸入 2/4 中止，修復結果 4 次相同；`ResizerTimingPostGRT` 1/4 中止，通過的 3 次 DEF 相同）；`pnr/librelane_flow.sh` 只對這個訊息從該步接續，最多 3 次 | `make phase3` 第一次（worktree）、單步重跑 r1–r4 |

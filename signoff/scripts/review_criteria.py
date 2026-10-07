@@ -18,7 +18,9 @@ config_hazard3.json (the same tags as pnr/soc_top/run.sh). Rows, each PASS or FA
                    ResizerTimingPostCTS, GlobalRouting, RepairDesignPostGRT, and ResizerTimingPostGRT
                    when RUN_POST_GRT_RESIZER_TIMING is on) and in the sta.log of every signoff corner;
                    a step the config replaces (meta substituting_steps) is looked up under its
-                   replacement (CTS: Arvinsa.CTSNoInsertionDelay, ADR-0016)
+                   replacement (CTS: Arvinsa.CTSNoInsertionDelay, ADR-0016); only the step
+                   directories that finished (state_out.json) count, every one of them must have
+                   the line (a stopped attempt kept by a retry does not)
   signoff_corners  the signoff STA (STAPostPNR) has one directory per STA_CORNERS entry, no more
   checkers_ran     <out> has the verdict line of check_signoff.py (signoff.txt), check_soc.py
                    (soc_checks.txt), check_inputs.py --resolved (inputs_resolved.txt) and
@@ -280,10 +282,19 @@ def main():
             if sid in OPTIONAL_STEPS and not res.get(*OPTIONAL_STEPS[sid]):
                 continue
             n_timing += 1
+            # Only the attempts that finished (state_out.json) count: after a retry (GRT-0229,
+            # pnr/librelane_flow.sh) the stopped attempt's directory is still there, and its log
+            # must not stand in for the one the run used (neg_pnr.py P55).
+            done = [d for d in dirs if os.path.isfile(os.path.join(d, "state_out.json"))]
             if not dirs:
                 missing.append(f"{sid} (no step)")
-            elif not any(has_line(lg, line) for d in dirs for lg in glob.glob(os.path.join(d, "**", "*.log"), recursive=True)):
-                missing.append(sid)
+            elif not done:
+                missing.append(f"{sid} (no finished step)")
+            else:
+                bad = [os.path.basename(d) for d in done if not any(
+                    has_line(lg, line) for lg in glob.glob(os.path.join(d, "**", "*.log"), recursive=True))]
+                if bad:
+                    missing.append(sid if len(done) == 1 else f"{sid} ({', '.join(bad)})")
         corner_logs = sorted(glob.glob(os.path.join(sta, "*", "sta.log"))) if sta else []
         missing += [f"signoff {os.path.basename(os.path.dirname(lg))}" for lg in corner_logs if not has_line(lg, line)]
         if not corner_logs:

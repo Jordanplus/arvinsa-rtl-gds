@@ -51,6 +51,11 @@ Hazard3（`runs/exp_h_d`，第 8 次 harden 第 34 步接續，同樣的暫存 S
 
 用自訂 CTS step 從頭跑：PicoRV32 setup +0.765／hold +0.079 ns，Hazard3 +1.116／+0.106 ns，與接續實驗 D 相同；DRC、LVS、slew、cap、antenna 都是 0；`check_soc.py` `cts_macro_latency` PASS（0 顆 `delaybuf_*`）。unannotated 上限依新的 clock tree 改成 118／126（CTS dummy load 75／82），兩個 golden 從這兩個 run 重建。第一次正式 harden（`adac1a9`）兩個 CPU 都在 `ResizerTimingPostGRT` 遇到已知的隨機 GRT-0229 而中止，重試規則因此擴大到這一步（`docs/notes/grt0229_repro.md`）。
 
+## 確認 harden 與下游驗證（commit `1d13775`，2026-10-07）
+
+- harden-soc：兩個 CPU 都 PASS，golden 完全相同（PicoRV32 436、Hazard3 434）。PicoRV32 第 44 步遇到 GRT-0229，從該步接續一次後完成。
+- 下游：`eqy-soc` 兩個都 PASS；`neg-eqy-soc` 9/9、13/13；`gl-soc`、`gl-soc-powered` 各 15/15；`neg-gl-soc` 8/8；`neg-pnr` 第一次 PicoRV32 54/55（P49：重試留下的中止目錄頂替了完成那次的 log，`review_criteria.py` 的漏洞），修正並加 P55 後兩個都 56/56。
+
 ## 決策
 
 1. repo 加一個 LibreLane plugin `pnr/librelane_plugin_arvinsa`：step `Arvinsa.CTSNoInsertionDelay` 繼承 `OpenROAD.CTS`（設定、輸出、metric 都相同），只換 Tcl：`cts_no_insertion_delay.tcl` 把 OpenROAD 的 `clock_tree_synthesis` 包一層、每次呼叫加 `-no_insertion_delay`，印一行 `[INFO] arvinsa: ...`，再 source LibreLane 原本的 `cts.tcl`。LibreLane 本身不改（`provenance.py` 檢查它沒有被修改）。

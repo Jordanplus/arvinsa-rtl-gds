@@ -13,7 +13,7 @@
 | signoff criteria 有沒有被執行（2026-10-07 起） | `signoff/scripts/review_criteria.py` → `runs/<tag>_signoff/criteria_review.txt` | config 的每個設定都進了 `resolved.json` 與每個 step；`clock_uncertainty.sdc` 的值出現在每個時序 step 與 signoff corner；signoff corner = `STA_CORNERS`；上面各 checker 都留下結果行。之後由 Claude 依 skill `signoff-criteria` 寫 `criteria_review.md`（合不合理），Stop hook 強制 |
 | signoff metrics | `signoff/scripts/check_signoff.py` + `signoff/limits/soc_top.toml` | 見該檔：各種違規數 = 0、15 個 corner 的 setup／hold slack ≥ 0 且 < 44 ns、IR drop ≤ 20 mV（Phase 4，使用者決定）；nom_tt setup 只報告；所有 metrics 與 golden（`signoff/golden/soc_top/`）相同，只有不可重現的步驟造成差異的族群有明確的誤差：連續量在 `[golden_tolerance]`，會隨繞線變的數量與面積在 `[golden_layout_tolerance]`，每輪與個別 warning 的 key 在 `[golden_optional]`；違規數一律相同（ADR-0015） |
 
-全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案，而且 run 是從目前的 commit 產生的（`signoff/scripts/run_guard.py`）：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`／`gl-soc-powered`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-gl-soc`（網表植入錯誤，lockstep 必須抓到）、`make neg-pnr`（PnR 與 checker 的 negative test P00–P54，`neg_pnr.py`）。
+全部 PASS 時 `runs/soc_top_signoff/result.txt` 寫 `harden-soc: PASS`。後續步驟使用 harden 的結果前，都先確認這個檔案，而且 run 是從目前的 commit 產生的（`signoff/scripts/run_guard.py`）：`make eqy-soc`（formal equivalence，`signoff/eqy/README.md`）、`make gl-soc`／`gl-soc-powered`（gate-level lockstep 模擬，`dv/gl_soc/README.md`）、`make neg-gl-soc`（網表植入錯誤，lockstep 必須抓到）、`make neg-pnr`（PnR 與 checker 的 negative test P00–P55，`neg_pnr.py`）。
 
 ## Hazard3 版（Phase 5，ADR-0011）
 

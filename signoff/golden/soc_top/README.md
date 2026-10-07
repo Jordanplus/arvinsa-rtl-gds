@@ -57,6 +57,7 @@
 | run | 與本檔比較 |
 |---|---|
 | Phase 5 PicoRV32 ADR-0016 正式 harden（commit `2caad0e`） | 本檔來源 |
+| Phase 5 PicoRV32 確認 harden（commit `1d13775`） | 436 個完全相同；第 44 步遇到 GRT-0229，從該步接續一次（接續的 run 與一次跑完的 run 結果相同）→ harden-soc PASS |
 | 下列為舊 golden 的紀錄 | |
 | Phase 3.5 第 3 次 harden-soc（commit `edb7d63`） | Phase 3.5 golden 的來源（見 git 歷史，commit `2caad0e` 以前的本檔） |
 | Phase 4 的 run（下列） | 與 Phase 4 的 golden 比較；該 golden 見 git 歷史（commit `edb7d63` 以前的本檔） |

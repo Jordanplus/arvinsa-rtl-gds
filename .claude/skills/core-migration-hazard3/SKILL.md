@@ -82,7 +82,7 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
 
 ## 待補
 
-- Phase 5 尚未完成的部分：ADR-0016 之後兩個 CPU 的下游驗證（EQY、gate-level 模擬、negative test）、PicoRV32 golden 誤差的實測、乾淨 checkout 的 regression、exit review。已完成：兩個 CPU 在新設定（44 ns、ADR-0013／0014／0016）下 harden signoff PASS，golden 已重建（`signoff/golden/soc_top*/`）；Hazard3 第 8 次 harden 的下游六項 PASS。
+- Phase 5 尚未完成的部分：PicoRV32 golden 誤差的實測、`neg-eqy-core`（picorv32_core）重跑、乾淨 checkout 的 regression、exit review。已完成：兩個 CPU 在新設定（44 ns、ADR-0013／0014／0016）下 harden PASS、golden 重建並重現（`signoff/golden/soc_top*/`），下游六項（EQY、gate-level 模擬、negative test）兩個 CPU 都 PASS（ADR-0016）。
 - 2port（指令從 SRAM port 1 讀）：port 1 要先特性化，pin 在 macro 上邊與右邊（本 repo 的 floorplan 下面對 die 邊緣），可能要重擺 macro。
 - riscv-arch-test（`riscof` + `spike`）與 formal（`test/formal/`，要 `sby` 與 SMT solver）在本機還沒跑過。
 

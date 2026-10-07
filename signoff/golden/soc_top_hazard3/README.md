@@ -44,6 +44,7 @@
 | run | 與本檔比較 |
 |---|---|
 | Phase 5 Hazard3 第 10 次 harden-soc（commit `2caad0e`，ADR-0016） | 本檔來源 |
+| Phase 5 Hazard3 第 11 次 harden-soc（commit `1d13775`） | 434 個完全相同 → harden-soc PASS |
 | 下列為第 5 次 harden 的 golden（見 git 歷史，commit `2caad0e` 以前的本檔）的紀錄；ADR-0015 的誤差就是從它們量的 | |
 | Phase 5 Hazard3 第 5 次 harden-soc（commit `3a28d54`） | 舊 golden 的來源 |
 | Phase 5 Hazard3 第 6 次 harden-soc（commit `d6f3074`，flow 設定相同） | 293 個相同、86 個在誤差內、61 個不同（含數量、面積與 `iter:7` 的 key）→ harden-soc FAIL；signoff 全部 PASS。ADR-0015 的誤差下：PASS |
