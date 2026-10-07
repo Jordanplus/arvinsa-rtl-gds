@@ -24,6 +24,7 @@ description: Clock tree（CTS）問題，或 setup／hold 違規可能是 clock 
     - 後果三，SRAM 讀出的 hold 變差：hold 用上升緣，SRAM 比讀出 flop 早（min_ff 0.40 ns），每條 `dout` 要插 hold delay cell，在 ss_n40C 每顆再吃掉 1.1–1.4 ns 的 setup（規則 12）。PicoRV32 44 ns：setup −0.113 ns。
     - **`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步**：設 0 或 1，結果與預設完全相同，仍是 10 顆。
     - **關掉的方法**：`clock_tree_synthesis -no_insertion_delay`（OpenROAD `dcf36133`：`balanceMacroRegisterLatencies()` 只在 insertion delay 開啟時執行，而 `clock_tree_synthesis` 每次呼叫都把它重新打開，只有這個旗標能關）。LibreLane 3.0.14 的 `cts.tcl` 沒有對應的設定，本 repo 用 LibreLane plugin 換掉 CTS step（`pnr/librelane_plugin_arvinsa`，config `meta.substituting_steps`；ADR-0016）；不要為此改 LibreLane 本身，也不要把改工具行為的 Tcl 放進 SDC。PicoRV32 接續實驗：0 顆 delay buffer，setup −0.113 → +0.765 ns，hold 不變，SRAM 輸入腳 hold +0.197 → +0.093 ns（要確認仍為正）。
+    - **防護**：`check_soc.py cts_macro_latency` 每次 harden 確認 config 有替換、log 有 plugin 印的那一行、網表沒有 `delaybuf_*`（negative test P52–P54）。LibreLane 或 OpenROAD 升版時要重看：`cts.tcl` 是否仍只呼叫一次 `clock_tree_synthesis`、這個旗標與 `balanceMacroRegisterLatencies()` 的條件是否還在、LibreLane 是否已經提供對應的設定（有的話改用設定，拿掉 plugin）。旗標沒傳到時，P53 的那一行會不見，`delaybuf_*` 也會回來。
 11. **clock 輸入 pin 到 clock tree 根部的線**（接規則 4）：`CTS_CLK_MAX_WIRE_LENGTH` 預設 0，表示依 slew 算出來的長度，約 3.5 mm，所以 360 µm 的線不會被切段。pin 的 driver 是 LibreLane 假設的 `inv_2`（`SYNTH_CLK_DRIVING_CELL` 預設），max_ss_n40C 的 slew 0.767 ns，超過 0.75 ns（Phase 4 第 4 次 harden-soc）。
     - 設 150 µm 後，CTS（LibreLane `cts.tcl` 的 `repair_clock_nets`）會把這段線切開加 buffer。
     - 第 5 次 harden 同時改了週期與 max transition，15 個 corner 全部通過；這一項的效果沒有單獨實驗。

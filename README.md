@@ -258,6 +258,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
   - 附「退回過的做法」表，避免再試沒用的設定。
+  - hold 修復：OpenROAD 整顆晶片只用一種 hold buffer（sky130 是 `dlygate4sd3_1`，慢 corner 約是快 corner 的 3 倍），換小 cell 會插好幾倍、碰上限 `RSZ-0060`。hold delay cell 卡在 setup 吃緊的路徑時，先從 clock 端找原因（cts-clock-tree）。繞線後的估計不一定比 signoff 悲觀，開了 post-GRT 修復仍要看 signoff。
 - **不在這裡**：SDC 寫法看 timing-constraints-sdc；corner 設定看 multicorner-sta；clock tree 看 cts-clock-tree；數值怎麼定看 signoff-criteria。
 - **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010、ADR-0012、ADR-0013、ADR-0014、`pnr/check_weak_cells.py`、`docs/notes/repair_design_loop.md`。negative test：P01–P04、P32、P40–P42。
 
