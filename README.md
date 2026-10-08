@@ -141,7 +141,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
 | 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
 | SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
-| PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM | pdn-ir-drop | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
+| PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
 | LVS 失敗、斷線 pin、電源 pin 有沒有真的接上 | lvs-signoff | pdn-ir-drop |
@@ -150,7 +150,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
 | gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
-| 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同（連 cell 數、diode 數都變） | signoff-checker-qualification | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
+| 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同（連 cell 數、diode 數都變）；checker 只證明設定被讀到、靠名稱辨識結構、抓到的機制和宣稱的不同 | signoff-checker-qualification（漏洞類型表；規則 7：斷言抓到的機制、守門條件本身要有測試） | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
 | 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對、PnR 設定與上限檔要不要重做 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面）、drv-timing-closure（時序收斂） |
 | 一個 Phase 收尾 | phase-exit-review | — |
@@ -228,6 +228,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名；改名後各步的 `state_in.json` 仍指向舊路徑，單步重跑前要在複本裡換掉。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號），而且中止那次的目錄還在（checker 只採計有 `state_out.json` 的目錄）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。state 的 metrics 會沿用前面步驟的值，flow 中途 `state_out.json` 的數字不一定是那一步量的，要看該步的 `or_metrics_out.json`。log 的 `RSZ-0032 Inserted N hold buffers` 不是總數，要數網表。
+  - what-if：改 config 複本後單步重跑一個 step（例如 `IRDropReport` 換 corner 與電阻、`GeneratePDN` 換 Tcl 重產 PDN），先用現行設定確認結果與原 run 相同（Phase 5）。GRT-0229 接續後的結果不一定逐項相同。同一步還有另一種隨機中止 `GRT-0116`（溢位只有個位數），重試只在總溢位 ≤ 10 時接手。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
 - **本 repo 實例**：`pnr/*/run.sh`、`pnr/librelane_flow.sh`（GRT-0229 重試，negative test `make test-flow-retry`）、`pnr/soc_top/neg_pnr.py` 的 `rerun()`。
 
@@ -242,6 +243,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 每個 checker 至少要有一個植入錯誤，加一個沒植入時必須 PASS 的對照。斷言寫成「FAIL 的列剛好是這幾列」，而且要看全部問題，不能只看第一個。
   - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
   - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）、重試留下的中止目錄頂替完成的那次。新 checker 要逐條對照。
+  - Phase 5 獨立審查的 9 種新漏洞類型：只證明設定被讀到、沒證明生效；靠名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制的觸發條件比規則小；抓到的機制和宣稱的不同；守門條件本身沒測試；只看版本字串；暫用另一個設計的誤差；比對到資料而不是指令。規則 7 補兩條：斷言抓到它的機制、每道守門條件都要有「拿掉就 FAIL」的情境。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂
@@ -318,6 +320,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - EQY 會靜默略過三種情況，都要另外補：被換成常數的 bit（看 log 的 `found constant`）、flip-flop 本身的種類、clock 接線（`sat` 先把所有 flip-flop 改成同一個隱含 clock）。後兩項用 EQY 以外的結構比對。
   - negative test 要分清楚錯誤是被哪一種機制抓到的：分區證明失敗、常數規則、或名稱對應矛盾。而且要有一個非常數的錯誤，證明「證明步驟」本身有效。FAIL 的位置要在植入點附近（被接成常數的腳只往上游追，否則大扇出的 reset 樹會整棵算進來），並在案例之間做交叉檢查。
   - RTL 對合成網表：LibreLane 一定會重新編碼狀態機，目前沒有可用的做法，靠 gate-level 模擬與 directed 測試補。
+  - 改到 reset 連接的錯誤（接常數、接 tie cell、繞過同步器）都在分區步驟被拒絕，不會走到證明；negative test 用 `REQUIRE` 斷言抓到的機制（Phase 5）。
 - **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 9 種、Hazard3 版 soc_top 13 種、picorv32 11 種）。
 
 #### antenna-signoff：antenna
@@ -342,7 +345,8 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚（插 delay buffer），`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步。這串 buffer 的上升緣、下降緣延遲不同，讓 SRAM 半週期路徑的 setup 與讀出的 hold 一起變差。關掉用 `clock_tree_synthesis -no_insertion_delay`；LibreLane 沒有對應設定，本 repo 用 LibreLane plugin 換掉 CTS step（ADR-0016）。
   - setup／hold 違規先拆 launch 與 capture 的 clock latency（各 corner、上升緣與下降緣），來自 clock 結構就在 clock 端修。在 data 端補 hold 很貴：delay cell 在慢 corner 的延遲是快 corner 的約 3 倍。
   - 有記錄試過但沒有作用的設定，例如 `CTS_MAX_CAP`。
-- **本 repo 實例**：`pnr/soc_top/README.md` 的設定表、`pnr/soc_top/pin_order.cfg`、`pnr/librelane_plugin_arvinsa/`（negative test P52–P54）。
+  - macro latency 對齊的防護改成結構判斷：`sram0/clk0` 上方「只驅動下一級」的 clock buffer 連續幾級（對齊 11–12、沒對齊 0），不靠 `delaybuf_*` 名稱；比 tree 總級數分不出來（Phase 5 獨立審查）。
+- **本 repo 實例**：`pnr/soc_top/README.md` 的設定表、`pnr/soc_top/pin_order.cfg`、`pnr/librelane_plugin_arvinsa/`（negative test P52–P54、P58–P60（結構判斷））。
 
 #### pdn-ir-drop：電源網路與 IR drop
 
@@ -354,6 +358,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
+  - 規則 12：每次 harden 判最壞組合（ff 電流＋ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；最壞組合約是 nom_tt 的 1.4 倍。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
 - **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29。
 
 #### lvs-signoff：LVS 與連接性
@@ -417,6 +422,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
     - golden 比對 FAIL 時，先找出和 golden run 第一個分歧的步驟，判斷是設計或設定改變，還是 flow 不可重現（同一份輸入單步重跑量頻率）；後者交給 signoff-checker-qualification，不直接放寬誤差。
     - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；依據不成立的 criterion 提給使用者決定，不自己改。
   - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號。
+  - 第一部分新增 `uncertainty_applied`（逐條路徑核對 STA 實際套用的 uncertainty），`checkers_ran` 加 `ir_worst.py`，`harden-core` 也跑（`--design picorv32_core`）。判斷原則補：criterion 的依據是在哪個設計量的，換設計就要重量（Phase 5 的 IR）。
 - **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P49（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
 
 #### rtl-synthesis-lint：合成與 lint
@@ -479,6 +485,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 請兩個沒參與實作的 agent 獨立審查：一個核對文件，一個找 checker 漏洞。審查找到的問題沒有重跑驗證，就不能寫「已修正」。
   - 要放寬門檻或改比對規則時先問使用者，並記錄決定。
   - 收尾時分析本階段的重大任務是否需要新 skill，並逐一對照每個 skill、README 與 `description` 有沒有寫回。
+  - 規則 1 補：再前一個階段沒結的限制也要延續；「沒變」要在新設計上重新量過才算（Phase 5 的 IR 原本寫沒變，實際超過上限）。
 - **本 repo 實例**：`docs/phase_exit/phase0.md`–`phase4.md`。
 
 #### core-migration-hazard3：把 CPU 換成 Hazard3

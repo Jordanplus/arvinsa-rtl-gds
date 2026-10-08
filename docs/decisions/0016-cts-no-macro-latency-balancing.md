@@ -61,7 +61,7 @@ Hazard3（`runs/exp_h_d`，第 8 次 harden 第 34 步接續，同樣的暫存 S
 1. repo 加一個 LibreLane plugin `pnr/librelane_plugin_arvinsa`：step `Arvinsa.CTSNoInsertionDelay` 繼承 `OpenROAD.CTS`（設定、輸出、metric 都相同），只換 Tcl：`cts_no_insertion_delay.tcl` 把 OpenROAD 的 `clock_tree_synthesis` 包一層、每次呼叫加 `-no_insertion_delay`，印一行 `[INFO] arvinsa: ...`，再 source LibreLane 原本的 `cts.tcl`。LibreLane 本身不改（`provenance.py` 檢查它沒有被修改）。
 2. 兩份 config 的 `meta.substituting_steps` 把 `OpenROAD.CTS` 換成它；`pnr/librelane_flow.sh` 把 `pnr/` 放進 `PYTHONPATH`（LibreLane 會自動載入名稱是 `librelane_plugin_*` 的模組，`librelane/plugins.py`）。
 3. 不用「放在 `pnr.sdc` 包一層」：做得到（實驗 D 就是這樣做），但 SDC 應該只放約束。
-4. 檢查：`check_soc.py` `cts_macro_latency`：config 有這個替換、run 裡只有這個 CTS step、它的 log 有那一行、最終網表沒有 `delaybuf_*`。negative test P52（網表多一顆 `delaybuf_0_clk`）、P53（log 沒有那一行）、P54（config 沒有替換）。`review_criteria.py` 依 `substituting_steps` 找 CTS step 的目錄。
+4. 檢查：`check_soc.py` `cts_macro_latency`：config 有這個替換、run 裡只有這個 CTS step、它的 log 有那一行、最終網表沒有 `delaybuf_*`。negative test P52（網表多一顆 `delaybuf_0_clk`）、P53（log 沒有那一行）、P54（config 沒有替換）。Phase 5 獨立審查後（2026-10-08）主要改成結構判斷：`sram0/clk0` 上方「只驅動下一級」的 clock buffer 連續不超過 2 級（有對齊的 run 是 11、12 級），step 目錄容許 `-<n>` 字尾；P58–P60。`review_criteria.py` 依 `substituting_steps` 找 CTS step 的目錄。
 
 ## 影響與限制
 

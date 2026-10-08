@@ -370,6 +370,7 @@ def main():
         row("uncertainty_applied", n_paths > 0 and not bad,
             f"{n_paths} signoff paths in {len(want)} corners got setup {expect['setup']:.3f}, half-cycle "
             f"{expect['half']:.3f}, hold {expect['hold']:.3f} ns" if n_paths and not bad
+            else "no signoff STA path to check (no STAPostPNR report: the flow stopped before signoff)" if not n_paths and not bad
             else f"{len(bad)} problem(s): " + "; ".join(bad[:4]) + (f" (and {len(bad) - 4} more)" if len(bad) > 4 else ""))
     have = {os.path.basename(os.path.dirname(p)) for p in glob.glob(os.path.join(sta, "*", "sta.log"))} if sta else set()
     row("signoff_corners", bool(want) and have == want, f"{len(have)} corners = STA_CORNERS" if have == want and want

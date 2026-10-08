@@ -50,3 +50,14 @@ Error: rsz_timing_postgrt.tcl, 68 GRT-0229
 - `pnr/librelane_flow.sh`：只有最後一步是 `RepairDesignPostGRT`（Phase 5 起也包括 `ResizerTimingPostGRT`）、沒有 `state_out.json`、step log 有上面這行時，從該步接續；總共最多跑 3 次（最多重試 2 次），重試記在 `runs/<tag>_signoff/retries.txt`。
 - `make test-flow-retry` 用假的 nix-shell 測情境（Phase 3 7 種，Phase 5 加到 10 種）。真正的重試路徑只在第一次 `make phase3` 手動接續過一次（接續後 320 個 metrics 與 golden 相同）；第二到第四次 `make phase3` 都沒有觸發。
 - skill：`librelane-run-debug` 規則 5、`signoff-checker-qualification` 漏洞類型表。
+
+## 同一步的另一種隨機中止：GRT-0116（2026-10-08）
+
+- PicoRV32 SoC，commit `5aaf036`（`PDN_HWIDTH` 4.8），版圖誤差樣本 4：`ResizerTimingPostGRT` 在 hold 修復後的增量 global routing 報 `[ERROR GRT-0116] Global routing finished with congestion`。
+  - 前面的壅塞報告：使用率 37.05%，水平 1、垂直 1、合計溢位 2。
+  - 同一步第一次 global routing 的溢位是 0。
+- 用那次的 `state_in.json` 單步重跑 4 次：4 次都通過，溢位 0；第二次 global routing 的線長 1,226,226–1,226,440 µm，每次略不同。
+- 同一個 commit 的另外 4 次 harden（乾淨 regress、樣本 3、樣本 5，以及 golden 來源）都沒出現。
+- **處理**：`pnr/librelane_flow.sh` 在這個訊息、而且最後的總溢位 ≤ 10 時，從該步接續；溢位大代表真的壅塞，不重試。
+- `make test-flow-retry` 加 `cong`、`congbig` 兩個情境（15/15）。
+- 證據：p5fin_h3 worktree `runs/p5fin_pico_s4_grt0116`（原 tag `soc_top`）。

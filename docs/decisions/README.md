@@ -18,3 +18,4 @@
 | [0014](0014-post-grt-resizer-timing.md) | global routing 後再修一次 setup（`RUN_POST_GRT_RESIZER_TIMING`）：CTS 後的估計比 signoff 樂觀 1.24 ns，餘量調大又會擋住 hold 修復；週期維持 44 ns | 2026-10-07 |
 | [0015](0015-golden-layout-tolerance.md) | golden 比對允許版圖數量與面積的小誤差（`[golden_layout_tolerance]`、`[golden_optional]`）：第 41 步 global routing 偶發不同、detailed routing 多插 diode，原規則幾乎每次 FAIL；誤差約實測最大差異的 5 倍，違規數仍必須相同 | 2026-10-07 |
 | [0016](0016-cts-no-macro-latency-balancing.md) | CTS 不做 macro 的 latency 對齊（repo 的 LibreLane plugin，`clock_tree_synthesis -no_insertion_delay`）：SRAM clock 前的 10 顆 delay buffer 讓半週期 setup 送出變晚、讀出 hold 要 32 顆 delay cell，PicoRV32 44 ns setup −0.113 → +0.765 ns | 2026-10-07 |
+| [0017](0017-met5-strap-width-worst-case-ir.md) | met5 strap 加寬到 4.8 µm（`PDN_HWIDTH`），每次 harden 檢查最壞組合 IR（ff 電流 + ss 金屬電阻，`ir_worst.py`）：Hazard3 的最壞組合 25.75 mV 超過 20 mV 上限，加寬後 14.13 mV，via4 EM 78% → 18% | 2026-10-08 |

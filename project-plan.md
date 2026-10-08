@@ -373,6 +373,13 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | P50–P51 | golden 比對的誤差（ADR-0015） | 版圖數量剛好在誤差內、超出 1；誤差設定碰到違規計數；可選 key 缺少、一般 key 缺少；可選設定碰到 corner key | `check_signoff.py` 的 golden 比對與誤差設定檢查（`pnr/soc_top/neg_pnr.py`） |
 | P52–P54 | CTS 不做 macro latency 對齊（ADR-0016） | 最終網表出現 `delaybuf_*`；CTS step 的 log 沒有 plugin 印的那一行；config 沒有 `substituting_steps` | `check_soc.py` `cts_macro_latency` |
 | P55 | 檢查只採計完成的 step（重試留下中止的目錄時） | `ResizerTimingPostGRT` 完成那次的 log 沒有 uncertainty 那一行，另有一個中止的同名目錄（沒有 `state_out.json`）的 log 有 | `review_criteria.py` `uncertainty` |
+| P56 | 實際套到的 uncertainty（Phase 5 獨立審查） | `min_ss_n40C` 的 `max.rpt`：最差的半週期路徑只套 0.25 ns（SDC 設 2.45），SDC 那一行仍有印出 | `review_criteria.py` `uncertainty_applied` |
+| P57 | picorv32_core 的 criteria 檢查 | 在 soc_top 的 run 上跑 `review_criteria.py --design picorv32_core` | `review_criteria.py` `checkers_ran`、`uncertainty_applied` |
+| P58 | CTS macro latency 的結構檢查 | `sram0/clk0` 上方 3 顆連續的單一 fanout clock buffer，名稱改成 `clkdly_*` | `check_soc.py` `cts_macro_latency` |
+| P59 | 重跑的 step 目錄（`-<n>` 尾碼） | 多一個 `<n>-openroad-cts-1` 目錄 | `check_soc.py` `cts_macro_latency` |
+| P60 | 同上 | 多一個 `<n>-arvinsa-ctsnoinsertiondelay-1` 目錄 | `check_soc.py` `cts_macro_latency` |
+| P61 | 最壞組合 IR（ADR-0017） | `ir_worst.py` 讀 VDD 11 + GND 10 mV（各自 < 20，合計超過）；positive control 9 + 9 mV 要 PASS | `ir_worst.py` |
+| P62 | 最壞組合 IR 沒有跑 | `<run>_signoff` 沒有 `ir_worst.txt` | `review_criteria.py` `checkers_ran` |
 
 不採用「`CLOCK_PERIOD` 設 2 ns」：FAIL 位置不確定（resizer 跑很久、slew/cap 先爆、甚至 crash）且耗時，改用 P01。
 

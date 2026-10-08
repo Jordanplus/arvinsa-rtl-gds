@@ -1,6 +1,6 @@
 ---
 name: signoff-checker-qualification
-description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同（包括 cell 數、diode 數、面積也跟著變，或 key 只出現在一邊：`[golden_layout_tolerance]`、`[golden_optional]`），或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表（包括 checker 或重試規則綁死 step 名稱，flow 換掉或多開 step 時靜默失效；重試留下的中止 step 目錄頂替完成的那次），新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
+description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同（包括 cell 數、diode 數、面積也跟著變，或 key 只出現在一邊：`[golden_layout_tolerance]`、`[golden_optional]`），或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表（包括 checker 或重試規則綁死 step 名稱，flow 換掉或多開 step 時靜默失效；重試留下的中止 step 目錄頂替完成的那次；只證明設定被讀到、沒證明生效（SDC 印了 uncertainty 但 STA 沒套用）；靠 instance 名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制（Stop hook）的觸發條件比規則小；抓到錯誤的機制和案例宣稱的不同；守門條件本身沒有測試；只檢查版本字串；暫用另一個設計的誤差），新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
 ---
 
 # Checker 設計、golden 與 testbench qualification
@@ -39,6 +39,8 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - **說明與程式要一致**：每個案例在程式裡逐一斷言它聲稱涵蓋的每個 checker；docstring／README 寫了、程式沒測的，等於沒有（P10 原本只測 KLayout，說明卻寫也測 Magic）。
    - **假 run（fake run）要先有 positive control**：沒植入時假 run 必須整體 PASS。否則某一列（例如缺 STA 目錄的 `sta_setup`）永遠 FAIL，「整體 FAIL」的斷言就沒有作用。每個案例要斷言：FAIL 的只有被植入的那一列，而且整體判 FAIL（Phase 3 的 P08–P10、P14、P15 沒做到）。
    - **確認 FAIL 的位置和植入有關**：FAIL 訊息裡要有被植入的 instance、net 或座標，不能只看「有 FAIL」。
+   - **斷言抓到它的機制**：同一個錯誤可能被別的機制碰巧抓到（例如 EQY 在分區步驟就拒絕，沒有走到證明）。案例要測哪個機制，就斷言那個機制的原因（`neg_eqy.py REQUIRE`）；做不出只由該機制抓到的錯誤時，要在文件寫明「沒有案例證明 X」，不要寫成已涵蓋（Phase 5 獨立審查）。
+   - **守門條件本身要有測試**：checker 或重試規則的每一道條件（例如「只在 usage=65534 時重試」），都要有一個情境在條件拿掉時 FAIL。驗證方法：把條件刪掉，跑一次測試，確認真的 FAIL（Phase 5：`test-flow-retry` 原本兩道條件都沒測到）。
    - **位置檢查本身要能分出不同案例**：對每一對植入點不同的案例，A 的 FAIL 名稱不能全部落在 B 的「附近」範圍內，否則範圍大到什麼都接受（`neg_eqy.py` 的交叉檢查；Phase 4 審查前 bus pin 整條一起算，`din5_stuck0` 的範圍含全部 32 個 bit）。
    - **斷言要看全部問題，不要只看第一個**：checker 只印第一個問題時，案例能 PASS 可能只是報告順序剛好（P23：29 ns 時 ss corner 的 min pulse width 也 FAIL，只因 nom_tt 排第一才看到 min_period；P21 只看第一個不符的違規的規則）。讓 checker 印出全部問題的種類，斷言「種類集合」。
    - **比對粒度要分得出同類的新錯誤**：只比「種類」（例如 DRC 規則名）時，同種類多一個錯誤會漏掉；改比位置或逐筆比對（`drc-signoff` 規則 2）。
@@ -90,6 +92,15 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 非有限的數值被比較吞掉 | `char.json` 的 setup 是 NaN 時，`max(下限, nan)` 默默變成下限；hold 弧寫出 `nan` 的 .lib 也被接受 | Phase 3.5 獨立審查；Phase 5 開頭修（N11） |
 | 失敗時留下新舊混合的輸出 | 特性化有一個 PVT 失敗、印 FAIL，`char.json` 已經寫入其他 PVT 的新結果，失敗的 PVT 留舊紀錄，之後照樣產生 5 份 .lib | Phase 3.5 獨立審查；Phase 5 開頭修：有失敗就不寫檔（N16） |
 | 被測的模型本身太樂觀 | IR 用「所有 pin 形狀都是理想電源」，算出 0.3 mV，任何門檻都會 PASS | Phase 4 IR 研究（`pdn-ir-drop` 規則 10） |
+| 只證明「設定被讀到」，沒證明「生效」 | `review_criteria.py` 的 uncertainty 檢查只找 SDC 印出的那一行：把 15 個 corner 報表裡的 uncertainty 全刪掉仍 PASS；setup／hold 的 0.25 又剛好等於 LibreLane 預設，單看數字分不出來。要從工具的結果核對實際套用的值 | Phase 5 獨立審查；`review_criteria.py uncertainty_applied`（50,670 條路徑逐條比對），P56 |
+| 靠名稱辨識工具產生的結構 | `cts_macro_latency` 只認 `delaybuf_*` 這個 instance 名稱，改名 `clkdly_` 就 PASS；目錄只認沒有 `-1` 字尾的名稱，重複的 step 漏掉。改成結構判斷：`sram0/clk0` 上方只驅動下一級的 clock buffer 連續幾級（有做 latency 對齊 11、12 級，沒做 0 級）。注意 latency 對齊**不會**讓級數變多（對齊就是讓延遲相同），比級數分不出來 | Phase 5 獨立審查；`check_soc.py sram_clock_chain`，P58–P60 |
+| 誤差表的保護不完整 | `[golden_layout_tolerance]` 的受保護字沒有 `floating`、`warning`：floating net 2 → 40 可以被放進誤差表；`[golden_optional]` 接受 `flow__warnings__count:*`，任何新種類的 warning 都會被略過 | Phase 5 獨立審查；`check_signoff.py VIOLATION_WORDS`，P50、P51 的變體 |
+| 強制機制的觸發條件比規則的範圍小 | Stop hook 只在看到 `criteria_review.txt` 時才要求 review：沒跑 `review_criteria.py` 的 `harden-core`，以及它當掉、沒有結果行時，都放行。觸發條件要用「每次 harden 一定會寫的檔案」（`result.txt`），並把「當掉」也當成要擋的情況 | Phase 5 獨立審查；`require_criteria_review.py`，`test-review-hook` 12/12 |
+| 抓到的機制和案例宣稱的不同 | `reset_b_tied1` 寫「只有證明抓得到」，實際上 EQY 在分區步驟就因名稱衝突拒絕（0 個分區），根本沒有證明。要斷言抓到它的原因；改用 tie cell 或繞過同步器，結果也一樣 | Phase 5 獨立審查；`neg_eqy.py REQUIRE`，`signoff/eqy/README.md` |
+| 測試沒有測到守門條件本身 | `test-flow-retry` 11/11：把「只在 usage=65534 時重試」或「已完成的 step 不重試」任一條件拿掉，測試仍 11/11。每一道條件都要有一個「條件拿掉就 FAIL」的情境 | Phase 5 獨立審查；`grtreal`、`grtdone`（13/13），拿掉條件後實測 FAIL |
+| 只檢查版本字串 | xPack 檢查只比 `-dumpversion`：一支只會 `echo 15.2.0` 的腳本 PASS。要核對產品本身，例如 `--version` 寫 xPack，而且找得到 newlib 的 `libc.a` | Phase 5 獨立審查；`env/check_env.sh`，`neg-regress xpack_fake` |
+| 暫用另一個設計的數字 | PicoRV32 的版圖誤差暫用 Hazard3 量到的值：diode +54、standard cell +69 這種真實改變也 PASS。沒有這顆設計的實測就不給誤差，量到再訂 | Phase 5 獨立審查；`signoff/limits/soc_top.toml`，P50（沒有誤差項時 +1 就 FAIL） |
+| 比對到資料，不是指令 | 全域守門 hook 用 regex 找 `make harden`，把 heredoc 裡「README 提到 `make harden-soc`」也當成要開 harden 而擋下。比對前先拿掉 heredoc 內容與引號內字串 | 2026-10-08；`~/.claude/hooks/guard-bash.py shell_text()`，`test_guard_bash.py` |
 
 ## 用完後
 
@@ -122,3 +133,5 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 2026-10-07 | Phase 5 Hazard3 第 7 次 harden | golden 比對 FAIL 11 個 metric（diode、cell 數、面積），signoff 全部 PASS | 已驗證：detailed routing 的差異經由繞線後的 antenna 修補（多一輪、多 1 顆 diode）改變數量；規則 5 原本只看過它改變中間輪 DRC 數。加上第 6 次的第 41 步，Hazard3 版三次 harden 只有來源 run 自己與 golden 完全相同 | 使用者決定改 golden 規則：ADR-0015（`[golden_layout_tolerance]`、`[golden_optional]`，約實測最大差異的 5 倍，P50、P51） | `flow-regression-reproducibility` 經驗紀錄 |
 | 2026-10-07 | Phase 5 ADR-0016（`adac1a9`、`2caad0e`） | 新 checker `check_soc.py cts_macro_latency`（config 有替換、run 只有自訂 CTS step、log 有 plugin 那一行、網表沒有 `delaybuf_*`）；正式 harden 兩個 CPU 都在第 44 步 GRT-0229 中止、沒有重試 | 已驗證：重試規則綁 `RepairDesignPostGRT` 一個 step 名稱；`review_criteria.py` 的 step 清單也綁名稱（這次先改好才沒漏） | negative test P52–P54（網表多一顆 `delaybuf_0_clk`、log 少一行、config 少替換）；先用舊做法的 run 確認 FAIL；`make test-flow-retry` 加 3 種情境並檢查 `--from`，新情境用舊腳本 8/11 FAIL；漏洞類型表加「checker 綁死 step 名稱」 | `pnr/soc_top/neg_pnr.py`、`pnr/test_librelane_flow.sh` |
 | 2026-10-07 | Phase 5 PicoRV32 確認 harden（`1d13775`）的 `neg-pnr` | `[FAIL] P49: expected FAIL at review_criteria.py uncertainty`（54/55）；Hazard3 同一個 commit 55/55 | 已驗證：PicoRV32 這次第 44 步重試過，`ResizerTimingPostGRT` 有 44（中止）、45（完成）兩個目錄；P49 刪的是 45 的那一行，`review_criteria.py` 接受 44 的 | `review_criteria.py` 只採計有 `state_out.json` 的目錄、每個都要有那一行；加 P55（自己造一個中止目錄，不靠 run 剛好有重試）：舊版兩個 CPU 都漏、新版都抓到，P49 也抓到 | `runs/p5_pico_neg-pnr.log`、`pnr/soc_top/neg_pnr.py` |
+| 2026-10-08 | Phase 5 exit 的獨立審查（agent，在 run 的副本上做實驗） | 8 個 checker 漏洞：uncertainty 只看印出的行、`cts_macro_latency` 靠名稱、誤差表保護字與萬用字元、Stop hook 不涵蓋 harden-core 與當掉、`reset_b_tied1` 不是靠證明、`test-flow-retry` 沒測條件、xPack 只看版本字串、PicoRV32 暫用 Hazard3 的誤差；沒有一個讓本階段結果變成假 PASS | 已驗證：逐項做出壞掉的輸入、跑 checker、看到 PASS | 全部修正，各有 negative test（P50、P51 變體、P56–P62、test-review-hook、test-flow-retry、neg-regress）；漏洞類型表加 9 種；規則 7 加兩條 | `docs/phase_exit/phase5.md`「獨立審查」，commit `1dee974` |
+| 2026-10-08 | Phase 5 PicoRV32 的乾淨 `make regress-picorv32`（`5aaf036`） | `harden-soc` FAIL：golden 10 個版圖 metric 不同（diode 100 → 99、cell ±1、`global_route__vias` 20 → 11），其他全 PASS | 已驗證：PicoRV32 的版圖誤差依決定清空，這是第一次量到 PicoRV32 在 run 之間的差異 | 使用者決定再量 2 次，用 4 個樣本的最大差異 × 5 訂誤差（ADR-0015 的方法） | p5fin_pico worktree `runs/p5fin_pico_regress_signoff/criteria_review.md` |

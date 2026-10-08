@@ -78,3 +78,4 @@ P11：只改 KLayout 那份 GDS → `Checker.XOR` FAIL。
 | 2026-10-04 | Phase 3 獨立審查（找 checker 漏洞） | 假報告在 SRAM 外框內多加一個 `li.1` 錯誤，`check_soc.py magic_drc` 仍 PASS | 已驗證（審查 agent 實驗）：checker 只比規則種類 | 規則 2 補「比位置」；位置比對證實本次 0 個無法解釋；修正與 P10b（外框內植入）列入 Phase 4 | `docs/phase_exit/phase3.md` 已知限制 14 |
 | 2026-10-04 | Phase 4 位置比對 | 嚴格的「被同規則框聯集蓋住」在已知乾淨的 run 上有 231 個框不通過 | 已驗證：同一個錯誤在 soc_top 裡畫得比較長，最多 85 nm | δ = 100 nm（規則 2） | `pnr/soc_top/check_soc.py` `DRC_POS_TOL` |
 | 2026-10-04 | neg-pnr P21 第一版 | 植入的 li1 細線被報成 `li.c1`，SRAM 單獨時沒有這個規則 | 已驗證：SRAM 範圍在 Magic 是 core 區 | 改兩塊方塊 → `li.3`（negative test 一節） | `runs/neg_pnr_dev/P21/run.log`（本機） |
+| 2026-10-08 | Phase 5 `PDN_HWIDTH` 4.8 的兩次 harden（`1dee974`） | Magic DRC 總數 4,665,810 → 4,746,079（兩個 CPU 相同），golden 比對 FAIL | 已驗證：`check_soc.py magic_drc` PASS，框外 0；框內每一個都對得上 SRAM 單獨檢查時的位置（4,735,395 個框完全相同）。總數變多推測是加寬的 met5 跨過 SRAM 的方式改變了 Magic 的分割或計數，沒有逐規則比對 | 新 golden 採用新總數；判斷 macro 內 DRC 時靠位置比對，不要只看總數 | `signoff/golden/soc_top_hazard3/README.md` |

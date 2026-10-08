@@ -158,15 +158,16 @@ harden 跑完、回報結果之前，一定要做這個檢查，PASS 或 FAIL �
 
 ### 第一部分：有沒有被執行（腳本，`signoff/scripts/review_criteria.py`）
 
-`pnr/soc_top/run.sh` 每次都會跑，LibreLane FAIL 也照跑，結果寫進 `runs/<tag>_signoff/criteria_review.txt`。harden 要判 PASS，這支也必須 PASS。每一項都有 negative test（`neg_pnr.py` P43–P49）。
+`pnr/soc_top/run.sh` 與 `pnr/picorv32_core/run.sh`（`--design picorv32_core`，Phase 5 獨立審查後加）每次都會跑，LibreLane FAIL 也照跑，結果寫進 `runs/<tag>_signoff/criteria_review.txt`。harden 要判 PASS，這支也必須 PASS。每一項都有 negative test：`neg_pnr.py` P43–P49、P55–P57、P62。
 
 | 檢查項 | 檢查內容 |
 |---|---|
 | `config_applied` | config 的每個設定在 `resolved.json` 裡值都一樣 |
 | `step_config` | 每個步驟的 `config.json` 都收到同樣的值 |
 | `uncertainty` | `clock_uncertainty.sdc` 印出的那一行（用 `tclsh` 執行 SDC 算出預期值）出現在每個時序步驟（開了 `RUN_POST_GRT_RESIZER_TIMING` 時包含 `ResizerTimingPostGRT`）與每個 signoff corner |
+| `uncertainty_applied` | 每個 signoff corner 的 STA 報表（`max.rpt`、`min.rpt`）裡**每一條路徑實際套用的** uncertainty：同緣 setup、半週期 setup、hold 各等於 SDC 算出的值。core 沒有自己的 SDC，三者都等於 `CLOCK_UNCERTAINTY_CONSTRAINT`。Phase 5 獨立審查：上一列只證明 SDC 印了那一行，報表裡的 uncertainty 全刪掉仍 PASS（P56） |
 | `signoff_corners` | signoff STA 的 corner 目錄等於 `STA_CORNERS` |
-| `checkers_ran` | `check_signoff.py`、`check_soc.py`、`check_inputs.py --resolved`、`provenance.py --verify` 都留下結果行 |
+| `checkers_ran` | soc_top：`check_signoff.py`、`check_soc.py`、`check_inputs.py --resolved`、`ir_worst.py`（最壞組合 IR，`pdn-ir-drop` 規則 12）、`provenance.py --verify` 都留下結果行；picorv32_core：`check_signoff.py`、`check_disconnected.py`、`cpu_params.py --resolved`、`provenance.py --verify` |
 
 FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只重跑。
 
@@ -193,6 +194,7 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 判斷的原則：
 - 「依據不成立」不等於要立刻改數字。要先找出原因，同一個現象出現兩次以上或用實驗確認後，才改規則或設定（CLAUDE.md 規則 3）。
 - 第二部分的數字是一次 run 的實測。和 knowledge 檔裡的舊資料比對，差很多時，要先查是設計不同還是 flow 變了。
+- **criterion 的依據是在哪個設計上量的，就只對那個設計成立**（Phase 5，實測確認）。「IR 只判 nom_tt」的依據是 PicoRV32 版圖的最壞組合 11.46 mV；換成 Hazard3 後，nom_tt 仍 PASS，最壞組合卻是 25.75 mV。換設計，或改了會影響這個依據的設定時，「合不合理」表裡每一列都要重新量依據本身，不要只看這次的數字有沒有過。量不到的，判「資料不足」。
 
 ## 用完後
 
@@ -212,3 +214,4 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 | 2026-10-04 | soc_top IR 研究 | LibreLane 的 IR 是「所有 pin 理想」且只看 VDD；換成一側供電 + VDD/GND 合計後 8.2 mV（最壞組合 11.5 mV） | 已驗證（agent 單步重跑 16 種組合） | IR 預算改判合計；`pdn-ir-drop` 規則 4、10、11 | `docs/notes/ir_worst_case_soc_top.md` |
 | 2026-10-07 | Phase 5 Hazard3 第 4 次 harden（`1292ca4`，44 ns）的第一次 criteria 檢查 | ① LibreLane FAIL 時 `run.sh` 直接結束，第 2–4 次 harden 的 `check_signoff.py`、`check_soc.py` 都沒跑；② `soc_top_hazard3.toml` 的 `timing__unannotated_net__count` 133 是 PicoRV32 的組成，Hazard3 是 125（81 clkload + 32 `sram0/dout1` + 12 tie）；③ `PL_RESIZER_SETUP_SLACK_MARGIN` 0.1 ns，實測 post-CTS 到 signoff 差距 1.243 ns | 已驗證（①讀 `run.sh` 79–81 行；②數 `checks.rpt` 的 unannotated driver；③`review_criteria.py` 的數字） | ①`run.sh` 改成照跑 checker，加 `review_criteria.py`（P43–P48）與 Stop hook；②③提給使用者 | `runs/p5_h3_h4_signoff/criteria_review.md`（p5h3 worktree） |
 | 2026-10-07 | Phase 5 Hazard3 第 5 次 harden（`3a28d54`）的 criteria 檢查 | `review_criteria.py` 的兩個缺口：① setup 差距只拿 `ResizerTimingPostCTS` 的修完值比 signoff，開了 `RUN_POST_GRT_RESIZER_TIMING` 後印出「差距 −0.418」，沒有意義；② 最差路徑的 INFO 印「arrival 21.81 ns」，是從下降緣算起，看不出是半週期路徑，也沒印扣掉的 2.45 ns | 已驗證（對照 `ResizerTimingPostGRT` 的 log 與 signoff STA 報告） | 已修（使用者 2026-10-07 決定）：INFO 列印出每次修復的修完值、用最後一次算差距；最差路徑標出送出與接收的 clock 邊緣與 uncertainty；另印最差的半週期路徑；`uncertainty` 檢查涵蓋 `ResizerTimingPostGRT`（negative test P49）。用新腳本看三個 run，兩個 CPU 的最差 setup 都在 SRAM 半週期路徑上（knowledge 檔） | p5h3 worktree `runs/p5_h3_h5_signoff/criteria_review.md` |
+| 2026-10-08 | Phase 5 exit 的獨立審查 | ① `uncertainty` 列只證明 SDC 印了那一行；② `harden-core` 沒跑 `review_criteria.py`，hook 也不擋；③ 「IR 只判 nom_tt」的依據是 PicoRV32 量的，Hazard3 最壞組合 25.75 mV | 已驗證（①刪掉報表的 uncertainty 仍 PASS；②`harden-core` 的 signoff 目錄沒有 txt；③用 Phase 4 方法重測） | ①加 `uncertainty_applied`（P56）；②`--design picorv32_core` 與 hook 的觸發條件改成 `result.txt`；③加 `ir_worst.py`、`PDN_HWIDTH` 4.8，並在判斷原則加「依據要在這個設計上重新量」 | `docs/phase_exit/phase5.md`；knowledge 檔 2026-10-08 列 |

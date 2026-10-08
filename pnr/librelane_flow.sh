@@ -8,7 +8,12 @@
 # With the same input state it is random (2026-10-03, soc_top RepairDesignPostGRT: 4 single-step
 # re-runs, 2 stopped there and 2 passed with identical repair and wirelength; 2026-10-07, PicoRV32
 # ResizerTimingPostGRT (ADR-0014/0016): 4 re-runs, 1 stopped, 3 passed with identical DEFs;
-# docs/notes/grt0229_repro.md). The flow is then resumed from that step (--from), at most 3
+# docs/notes/grt0229_repro.md). The same holds for
+#   [ERROR GRT-0116] Global routing finished with congestion.
+# when the final congestion report just before it has a total overflow of at most 10 (2026-10-08,
+# PicoRV32 ResizerTimingPostGRT at 5aaf036: overflow 2 at 37 % usage; 4 single-step re-runs of that
+# input all passed with overflow 0 and slightly different wirelength). A larger overflow is real
+# congestion and is not retried. The flow is then resumed from that step (--from), at most 3
 # attempts in all. Any other failure is not retried.
 # Each retry is recorded in $OUT/retries.txt. The decision reads the log of the last step directory,
 # not the console: the console wraps lines, so the message is split there.
@@ -27,7 +32,7 @@ keep_prev_run() {
 }
 
 librelane_flow() {
-  local name="$1" config="$2" from="" n last step log
+  local name="$1" config="$2" from="" n last step log overflow why
   flow_attempts=0
   rm -f "$OUT/retries.txt"
   while :; do
@@ -45,11 +50,19 @@ librelane_flow() {
     esac
     [ -e "$RUN_DIR/$last/state_out.json" ] && return 0
     log="openroad-$(echo "${step#OpenROAD.}" | tr '[:upper:]' '[:lower:]').log"
-    grep -q '^\[ERROR GRT-0229\] Vertical edge usage exceeds the maximum allowed\..*usage=65534' \
-      "$RUN_DIR/$last/$log" 2>/dev/null || return 0
+    # || true: under the callers' set -euo pipefail a log without a congestion report (GRT-0229) must not stop the script
+    overflow=$(grep -E '^Total[[:space:]]+[0-9]+' "$RUN_DIR/$last/$log" 2>/dev/null | tail -1 | awk '{print $NF}' || true)
+    if grep -q '^\[ERROR GRT-0229\] Vertical edge usage exceeds the maximum allowed\..*usage=65534' "$RUN_DIR/$last/$log" 2>/dev/null; then
+      why="GRT-0229"
+    elif grep -q '^\[ERROR GRT-0116\] Global routing finished with congestion' "$RUN_DIR/$last/$log" 2>/dev/null \
+         && [ -n "$overflow" ] && [ "$overflow" -le 10 ] 2>/dev/null; then
+      why="GRT-0116 (total overflow $overflow)"
+    else
+      return 0
+    fi
     n=$flow_attempts
     mv "$OUT/console.log" "$OUT/console_attempt$n.log"
-    echo "$name: attempt $n stopped with the known intermittent GRT-0229 in $step ($last; console_attempt$n.log); resuming from that step" \
+    echo "$name: attempt $n stopped with the known intermittent $why in $step ($last; console_attempt$n.log); resuming from that step" \
       | tee -a "$OUT/retries.txt"
     from="--from $step"
   done

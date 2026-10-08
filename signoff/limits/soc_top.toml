@@ -97,14 +97,24 @@ slack_max = 44.0
 "route__drc_errors__iter:*" = { abs = 100 }
 
 [golden_layout_tolerance]
-# ADR-0015: layout counts and areas that follow the routing. EMPTY for PicoRV32 on purpose (Phase 5
-# exit review, user decision 2026-10-08): the Hazard3 numbers that were here provisionally let real
-# layout changes pass on PicoRV32 (independent review, a diode +54 and stdcell +69 change passed),
-# and every PicoRV32 run since the ADR-0016 golden (source, confirm run, clean regress) had identical
-# metrics, so there is no PicoRV32 measurement to derive a tolerance from. Layout counts must match
-# the golden exactly until runs differ; then measure and add entries here (about 5 x the largest
-# difference, as signoff/limits/soc_top_hazard3.toml). check_signoff.py refuses a pattern here that
-# matches an [equal] key or a violation/error count. neg_pnr.py P50.
+# ADR-0015: layout counts and areas that follow the routing, about 5 x the largest difference measured
+# on PicoRV32 (in brackets). Samples at commit 5aaf036 (PDN_HWIDTH 4.8), 2026-10-08: the golden
+# source (p5h3 p5_pico_pdn, commit 1dee974, same flow settings) and three runs (clean regress
+# p5fin_pico_regress, samples 3 and 5); the three were identical to each other, the golden differs
+# by one diode (detailed routing's antenna repair). A fourth sample stopped at step 44 (GRT-0116) and
+# is not used. Phase 5 exit review, user decisions 2026-10-08: no provisional numbers from another
+# design (they let diode +54 and stdcell +69 pass); measure first. check_signoff.py refuses a pattern
+# here that matches an [equal] key or a violation/error count. neg_pnr.py P50.
+"antenna_diodes_count" = { abs = 5 }                                   # [1]
+"design__instance__count__class:antenna_cell" = { abs = 5 }            # [1]
+"design__instance__area__class:antenna_cell" = { abs = 12.5 }          # [2.5 um^2]
+"design__instance__count__stdcell" = { abs = 5 }                       # [1]
+"design__instance__area__stdcell" = { abs = 15 }                       # [3 um^2]
+"design__instance__count__class:fill_cell" = { abs = 5 }               # [1]
+"design__instance__area__class:fill_cell" = { abs = 15 }               # [3 um^2]
+"design__instance__utilization" = { abs = 0.00002 }                    # [0.000004]
+"design__instance__utilization__stdcell" = { abs = 0.000025 }          # [0.000005]
+"global_route__vias" = { abs = 45 }                                    # [9; vias of the last incremental global route]
 
 [golden_optional]
 # ADR-0015: keys that may exist in only one of the run and the golden (seen on the Hazard3 SoC;

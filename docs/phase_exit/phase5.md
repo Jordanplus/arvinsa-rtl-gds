@@ -265,7 +265,7 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
    - 第 41 步 global routing 偶發不同；
    - detailed routing 多執行緒會多插 diode；
    - `DRT_THREADS=1` 沒試。
-5. **GRT-0229 只用重試繞過**，根因沒有查證；現在已知出現在兩個位置。
+5. **GRT-0229 與 GRT-0116 只用重試繞過**，根因沒有查證：GRT-0229 已知出現在兩個 step；GRT-0116（hold 修復後的增量 global routing 剩下個位數的溢位）在 `ResizerTimingPostGRT` 出現一次，單步重跑 4 次都通過，重試只在總溢位 ≤ 10 時接手（`docs/notes/grt0229_repro.md`）。
 6. **golden 誤差內的改變抓不到**（ADR-0015）：
    - standard cell 少於約 70 顆、slack 小於約 0.2 ns 的變化；
    - 繞線器中間各輪的 DRC 數，Hazard3 的誤差給到 ±1310。
@@ -356,7 +356,51 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
 
 ## Skill 分析（`phase-exit-review` 規則 8）
 
-**（待補：逐一對照 21 個 skill，含規則 10 的工具缺陷防護稽核）**
+本階段的重大任務與對應的 skill（對照方法見 `phase-exit-review` 規則 8；`git diff --stat e16465b HEAD -- .claude/skills` 加上收尾的修改）：
+
+| 任務 | skill | 寫回 |
+|---|---|---|
+| 換 CPU：wrapper、AHB 轉接、設定參數、上游測試與 ISS 比對 | `core-migration-hazard3`（Phase 5 開始時新建，CLAUDE.md 規則 7） | 規則與經驗紀錄；收尾補「換 core 要重量最壞組合 IR」 |
+| resizer 失控、弱 cell、resizer 看的 corner、繞線後修復 | `drv-timing-closure` | 規則 7（hold buffer 只有一種，補上「沒有自動防護」）、9–12；ADR-0012–0014 |
+| CTS 把 macro 的 clock 延後 | `cts-clock-tree`、`hard-macro-integration` | 規則 10（防護改成結構判斷）、12 |
+| golden 誤差、重跑結果不同、checker 漏洞 | `signoff-checker-qualification` | 規則 5（版圖誤差）、規則 7 加兩條；漏洞類型表加 9 種 |
+| criteria 檢查（每次 harden 後） | `signoff-criteria` 與 knowledge 檔 | 第一部分加 `uncertainty_applied`、`ir_worst`、core 模式；判斷原則加「依據要在這個設計上重量」 |
+| IR 的最壞組合、PDN what-if | `pdn-ir-drop` | 規則 12、13（新）；待補更新 |
+| EQY 的 negative test | `formal-equivalence-eqy` | reset 連接的錯誤都在分區步驟被拒絕；`REQUIRE` |
+| LibreLane plugin、GRT-0229 第二個位置、單步 what-if | `librelane-run-debug` | 規則 1、3；已知陷阱 |
+| 乾淨 checkout 的 regress、xPack、進度與剩餘時間 | `flow-regression-reproducibility` | 規則 2；經驗紀錄 |
+| 多 corner STA 的 uncertainty 核對 | `multicorner-sta`、`timing-constraints-sdc` | 經驗紀錄 |
+| Magic DRC 數在 SRAM 內改變 | `drc-signoff` | 經驗紀錄 |
+| 收尾 | `phase-exit-review` | 規則 1 補兩點；經驗紀錄 |
+| SRAM 特性化（Phase 3.5 漏洞修正） | `openram-macro-characterization` | Phase 5 開頭寫回 |
+
+沒有更新的 skill 與理由：
+- `antenna-signoff`：只改了一行，antenna 修補照舊，`GRT-0243` 記在 golden README。
+- `lvs-signoff`、`floorplan-congestion`：結果與 Phase 4 相同。
+- `gate-level-simulation`：Hazard3 的 GL 測試沿用同一套方法，沒有新現象。
+- `dv-directed-tests`：轉接器的植入錯誤 H01–H04 是一般的 RTL negative test，沒有新的缺口類型。
+- `rtl-synthesis-lint`：合成沒有新問題。
+
+另外兩個全域的自動化，使用者 2026-10-08 決定做成全域：
+- `~/.claude/skills/overnight-run/`：夜間連續任務的 skill；
+- `~/.claude/skills/progress-pane/`：`/progress` 進度面板 mod。
+
+這兩個不在本 repo，本 repo 只提供 `.claude/statusline-progress` 與 `.claude/guard.json`。
+
+### 規則 10 稽核：本階段的工具缺陷與防護
+
+| 工具缺陷或意外行為 | 症狀（寫進 description） | 怎麼發現 | 怎麼繞過 | 防復發 |
+|---|---|---|---|---|
+| OpenROAD GRT-0229 隨機中止（兩個位置） | `librelane-run-debug` | `retries.txt`、console | 有上限的重試，從中止的 step 接續 | `test-flow-retry` 13/13，含「條件拿掉就 FAIL」的情境 |
+| CTS 把 macro 的 clock 延後（latency 對齊） | `cts-clock-tree`、`hard-macro-integration` | `check_soc.py cts_macro_latency` | repo 的 plugin 加 `-no_insertion_delay`（ADR-0016） | P52–P54、P58–P60，結構判斷 |
+| resizer 換上推不動的弱 cell，停不下來 | `drv-timing-closure` | `check_weak_cells.py`、記憶體監看 | 排除弱 cell（ADR-0012） | P40–P42 |
+| RepairHold 全設計只用一種 hold buffer | `drv-timing-closure` | INFO 列的網表 hold buffer 數 | 在 clock 端修 | **沒有自動防護**：這是工具挑 cell 的策略，不影響正確性；已寫明 |
+| `RSZ-0032` 的 hold buffer 數不是總數 | `librelane-run-debug` | 數網表 | 不讀那個數字 | `review_criteria.py` 改數網表；golden 比對 cell 數 |
+| 只判 nom_tt 的 IR 步驟（LibreLane 的預設做法） | `pdn-ir-drop` | `ir_worst.py` | 最壞組合每次判 | P61、P62 |
+| EQY 對 reset 連接的修改一律在分區步驟拒絕 | `formal-equivalence-eqy` | `summary.json` 的 `partitions` | 照實寫進文件 | `REQUIRE` |
+| Magic DRC 在 macro 內的計數隨上方金屬改變 | `drc-signoff` | golden 比對 | 用位置比對判斷，不看總數 | `check_soc.py magic_drc`（P09、P21） |
+
+每一條防護都沒有綁在 step 編號上；用到 step 名稱的地方（`ResizerTimingPostGRT`、CTS 的替換）都容許 `-<n>` 字尾，並由 `substituting_steps` 對照。
 
 ## 交付物
 

@@ -33,9 +33,23 @@
 
 1. **signoff 改用模型 C**（`pnr/soc_top/config.json` 的 `VSRC_LOC_FILES`，點位在 `pnr/soc_top/vsrc/`）：比 LibreLane 預設悲觀，但仍是每條 strap 都接得到電源的合理假設。`check_soc.py ir_sources` 檢查每個點都在對應 net 的 met5 strap 上。
 2. **判定改成「VDD 降壓 + GND 抬升 ≤ 20 mV」**（`signoff/limits/soc_top.toml` 的 `[max_sum]`）：LibreLane 的 `ir__drop__worst` 只有 vccd1 的降壓（它只取 `irdrop.rpt` 的第一筆），GND 抬升在 `design_powergrid__drop__worst__net:vssd1`；20 mV 的預算是兩者合計。
-3. flow 的 IR step 用 nom_tt：本研究在 Phase 3 版圖上是 8.19 mV；Phase 4 改 42 ns 後的 golden run 實測 4.04 + 4.03 = 8.07 mV。最壞的組合（本研究，Phase 3 版圖）是 11.46 mV，仍比 20 mV 低 8.5 mV。
+3. flow 的 IR step 用 nom_tt：本研究在 Phase 3 版圖上是 8.19 mV；Phase 4 改 42 ns 後的 golden run 實測 4.04 + 4.03 = 8.07 mV。最壞的組合（本研究，Phase 3 版圖）是 11.46 mV，比 20 mV 低 8.5 mV。這個餘量只對 PicoRV32 的 Phase 3 版圖成立：Phase 5 的 Hazard3 版圖在最壞組合是 25.75 mV，超過 20 mV（見下面「Phase 5」一節）。
 4. **Phase 7 要確認**：Caravel 實際怎麼接這顆 macro 的電源。如果只有一個接點（模型 D），20 mV 與 EM 都不過。
 5. picorv32_core（只當流程測試用的 block）保留 LibreLane 預設模型，判定同樣改成兩個 net 合計 ≤ 20 mV。
+
+## Phase 5（2026-10-08）
+
+- 用同一方法（模型 C、ff 電流 + ss 金屬電阻）在 Phase 5 乾淨 regress 的版圖（`7348fab`）實測：
+
+  | 版圖 | nom_tt | 最壞組合 |
+  |---|---|---|
+  | PicoRV32 | 7.40 mV | 10.36 mV |
+  | Hazard3 | 18.28 mV | **25.75 mV** |
+
+- 上面第 3 點「flow 只用 nom_tt 判 IR」的依據對 Hazard3 不成立。使用者決定在 Phase 5 內修好（2026-10-08）。
+- PDN 的 what-if 選了 met5 strap 加寬到 4.8 µm（`PDN_HWIDTH`），每個 net 仍是 5 個供電點；量測與腳本在 `docs/notes/ir_study/phase5/`，決策見 ADR-0017。
+- 重新 harden（`1dee974`）：Hazard3 最壞組合 14.13 mV、nom_tt 9.98 mV；PicoRV32 5.72、4.06 mV。
+- **flow 現在每次 harden 都檢查最壞組合**：`pnr/soc_top/ir_worst.py` 用同一個 run 的 IR step 單步重跑，判 VDD 降壓 + GND 抬升 ≤ 20 mV，harden-soc 要求 `ir-worst: PASS`（negative test P61、P62）。
 
 ## 工具行為（這版 OpenROAD，2026-02-17）
 

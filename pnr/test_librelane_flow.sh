@@ -8,6 +8,9 @@
 #             intermittent abort)                            -> must not be retried
 #   grtdone   the GRT-0229 usage=65534 line, but the step finished (state_out.json) and the flow
 #             stopped later                                  -> must not be retried
+#   cong      stops in ResizerTimingPostGRT with GRT-0116 after a congestion report of total
+#             overflow 2 (the intermittent case)             -> retried
+#   congbig   the same with total overflow 480 (real congestion) -> must not be retried
 #   other     stops in another step                          -> must not be retried
 #   ok        finishes
 # and keep_prev_run (pnr/librelane_flow.sh): an existing run directory becomes <dir>.prev, an older
@@ -34,7 +37,7 @@ scenario() {  # scenario "<outcomes>" <want rc 0|fail> <want attempts> <want ret
       o=$(echo "$OUTCOMES" | cut -d" " -f$((calls + 1))); step=$((41 + calls))
       case "$o" in
         grt|grtother|grtreal|grtdone|ok) d="$RUN_DIR/$step-openroad-repairdesignpostgrt" ;;
-        grt44) d="$RUN_DIR/$step-openroad-resizertimingpostgrt" ;;
+        grt44|cong|congbig) d="$RUN_DIR/$step-openroad-resizertimingpostgrt" ;;
         *) d="$RUN_DIR/$step-openroad-detailedrouting" ;;
       esac
       mkdir -p "$d"
@@ -44,6 +47,12 @@ scenario() {  # scenario "<outcomes>" <want rc 0|fail> <want attempts> <want ret
         grt44) echo "[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200" \
                > "$d/openroad-resizertimingpostgrt.log"; return 2 ;;
         grtother) echo "[ERROR GRT-0001] another error" > "$d/openroad-repairdesignpostgrt.log"; return 2 ;;
+        cong|congbig) ov=2; [ "$o" = congbig ] && ov=480
+               { echo "Total   328662   125442   38.17%   0 /  0 /  0"
+                 echo "[INFO GRT-0018] Total wirelength: 1266729 um"
+                 echo "Total   328706   121799   37.05%   1 /  1 /  $ov"
+                 echo "[ERROR GRT-0116] Global routing finished with congestion. Check the congestion regions in the DRC Viewer."
+               } > "$d/openroad-resizertimingpostgrt.log"; return 2 ;;
         grtreal) echo "[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=2300 limit=2200" \
                > "$d/openroad-repairdesignpostgrt.log"; return 2 ;;
         grtdone) echo "[ERROR GRT-0229] Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534 limit=2200" \
@@ -72,6 +81,8 @@ scenario "other" fail 1 0 "-"
 scenario "grtother" fail 1 0 "-"
 scenario "grtreal" fail 1 0 "-"
 scenario "grtdone" fail 1 0 "-"
+scenario "cong ok" 0 2 1 "-,$Z"
+scenario "congbig" fail 1 0 "-"
 scenario "grt other" fail 2 1 "-,$R"
 scenario "grt44 ok" 0 2 1 "-,$Z"
 scenario "grt grt44 ok" 0 3 2 "-,$R,$Z"

@@ -62,7 +62,7 @@ help:
 	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
-	@echo "  make neg-pnr              bug injection P00-P55 (STA, PDN, IR, DRC, XOR, placement, inputs, SRAM .lib, weak cells, criteria review, CTS, ...), each must FAIL at its checker"
+	@echo "  make neg-pnr              bug injection P00-P62, 63 cases (STA, PDN, IR, worst-case IR, DRC, XOR, placement, inputs, SRAM .lib, weak cells, criteria review, CTS, ...), each must FAIL at its checker"
 	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
