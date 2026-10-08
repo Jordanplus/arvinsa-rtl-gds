@@ -1,6 +1,6 @@
 # Phase 5 exit review：把 CPU 換成 Hazard3
 
-日期：2026-10-08　結論：**未結案。兩份乾淨 checkout 的 regression 都 PASS；獨立審查找到 8 個 checker 漏洞；Hazard3 的 IR 在最壞組合實測 25.75 mV，超過 20 mV 上限；exit criteria 第 7b 項（flow 設定只需改 design 層）未達成，都待使用者決定**
+日期：2026-10-08　結論：**PASS**（使用者 2026-10-08 確認結案）。commit `71b1454` 的兩份乾淨 checkout regression：Hazard3 `make regress` 21/21、PicoRV32 `make regress-picorv32` 26/26，三次 harden 都與 golden 逐項相同。獨立審查找到的 8 個 checker 漏洞與 IR 超標都已修正後重跑；exit criteria 第 7b 項（flow 設定只需改 design 層）未達成，使用者決定接受為與計畫不同。
 
 Exit criteria 出處：`project-plan.md` §8 Phase 5。
 - 原文：「submodule Hazard3；AHB5 寫入資料在 data phase，接 1RW SRAM 需 write buffer 或 wait state；建議用 `hazard3_cpu_2port`，SRAM port 1 負責 I-fetch；測試以 Hazard3 的 rvcpp ISS trace 比對；加裝 xPack toolchain（newlib）」
@@ -21,22 +21,22 @@ Exit criteria 出處：`project-plan.md` §8 Phase 5。
 
 | regression | commit | 時間 | exit code | 結果 | 證據 |
 |---|---|---|---|---|---|
-| `make regress`（Hazard3，21 項） | `7348fab` | 2026-10-07 21:12–23:14，121 分鐘 | 0 | **21/21 PASS** | worktree `p5reg` 的 `runs/regress/summary.md`、`junit.xml`；console `runs/p5_regress_hazard3.console` |
-| `make regress-picorv32`（26 項） | `7348fab` | 2026-10-07 23:17–10-08 01:19，122 分鐘 | 0 | **26/26 PASS** | worktree `p5reg2` 的 `runs/regress_picorv32/summary.md`、`junit.xml`；console `runs/p5_regress_picorv32.console` |
+| `make regress`（Hazard3，21 項） | `71b1454` | 2026-10-08，109 分鐘 | 0 | **21/21 PASS** | worktree `p5final_h3` 的 `runs/regress/summary.md`、`junit.xml`；console `runs/p5final_regress_hazard3.console` |
+| `make regress-picorv32`（26 項） | `71b1454` | 2026-10-08，124 分鐘（Hazard3 那輪之後依序跑） | 0 | **26/26 PASS** | worktree `p5final_pico` 的 `runs/regress_picorv32/summary.md`、`junit.xml`；console `runs/p5final_regress_picorv32.console` |
 
-- **重試**：Hazard3 的 `harden-soc` 第一次嘗試在第 44 步（`ResizerTimingPostGRT`）遇到已知的 GRT-0229 而停止，依有上限的重試從該 step 接續完成（`runs/soc_top_hazard3_signoff/retries.txt`）。PicoRV32 沒有重試。
-- **golden 比對**：兩次 `harden-soc` 的 metrics 都與 golden 完全相同（Hazard3 434 個、PicoRV32 436 個）。
+- **重試**：PicoRV32 的 `harden-soc` 第一次嘗試在第 44 步（`ResizerTimingPostGRT`）遇到已知的 GRT-0229 而停止，依有上限的重試從該 step 接續完成（`runs/soc_top_signoff/retries.txt`）。Hazard3 沒有重試。
+- **golden 比對**：三次 harden 的 metrics 都與 golden 逐項相同：Hazard3 436 個、PicoRV32 SoC 435 個、picorv32_core 325 個。
 - **每次 harden 的 criteria review**（CLAUDE.md 規則 9）：
-  - `p5reg/runs/soc_top_hazard3_signoff/criteria_review.md`；
-  - `p5reg2/runs/soc_top_signoff/criteria_review.md`；
-  - `p5reg2/runs/picorv32_core_signoff/criteria_review.md`：手動寫的，見已知限制 9。
+  - `p5final_h3/runs/soc_top_hazard3_signoff/criteria_review.md`；
+  - `p5final_pico/runs/soc_top_signoff/criteria_review.md`；
+  - `p5final_pico/runs/picorv32_core_signoff/criteria_review.md`：`harden-core` 第一次自動跑 `review_criteria.py`。
 
-之前一次乾淨 checkout 不當作結案證據：
-- `941e1cb` 的 `make regress` 在第 6 項 `core-hazard3` FAIL。原因是乾淨 checkout 沒有 `.tools/` 下的 xPack toolchain。
-- 那次的 log 沒有保存，紀錄只在 `7348fab` 的 commit message。
-- 修正見 `7348fab`：加 `XPACK_DIR`，並在 `env-check-flow` 加 xPack 檢查。
+之前幾次乾淨 checkout 不當作結案證據（依時間順序）：
+- `941e1cb` 的 `make regress` 在第 6 項 `core-hazard3` FAIL：乾淨 checkout 沒有 `.tools/` 下的 xPack toolchain。log 沒有保存，紀錄只在 `7348fab` 的 commit message。修正見 `7348fab`。
+- `7348fab`：Hazard3 21/21、PicoRV32 26/26 都 PASS。之後的獨立審查找到 8 個 checker 漏洞與 IR 超標，使用者決定修正後重跑（「使用者決定」1、2）。
+- `5aaf036`（修正與新 PDN 之後）：Hazard3 21/21 PASS；PicoRV32 在 `harden-soc` FAIL：版圖誤差依決定清空，第一次量到 run 之間的差異（diode 差 1 顆等 10 個 metric）。使用者決定再量樣本、依實測訂誤差（「使用者決定」4），並在 `71b1454` 重跑兩輪。
 
-除非另外註明，下面的數字取自這兩次乾淨 regress 的 run，它們與 golden 完全相同。golden 的來源 run 是開發 worktree 的 `2caad0e`，見 golden README。
+除非另外註明，下面的數字取自 `71b1454` 兩次乾淨 regress 的 run，它們與 golden 逐項相同。golden 的來源 run 是開發 worktree 的 `1dee974`（`PDN_HWIDTH` 4.8 後的第一次 harden），見 golden README 與 ADR-0017。
 
 ## Exit criteria
 
@@ -45,11 +45,11 @@ Exit criteria 出處：`project-plan.md` §8 Phase 5。
 | 1 | submodule Hazard3 | PASS：`third_party/hazard3`（v1.1.1，`8af9929`） | `.gitmodules`；ADR-0011 |
 | 2 | AHB5 寫入資料在 data phase：write buffer 或 wait state | PASS，採 **wait state**：<br>• `hazard3_cpu_1port` 加轉接器 `rtl/cpu/soc_ahb2native.v`<br>• `hready` = 0 直到 `mem_ready`<br>• 轉接器的植入錯誤 H01–H04 都被抓到 | `soc_ahb2native.v` 檔頭；ADR-0011；`dv/bugs.toml` H01–H04；`neg-rtl` 36/36 |
 | 3 | 以 rvcpp ISS trace 比對 | PASS：<br>• riscv-tests 65/65，2 項不支援：`rv32mi-p-pmpaddr`、`rv32ui-p-fence_i`<br>• 逐指令比對 48/48 個測試、13,881 條指令。rv32mi 不比，因為 rvcpp 的 CSR 模型是全功能設定<br>• negative test 1/1：`EXTENSION_M=0` 時 rv32um 的 8 個測試都 FAIL<br>• rvcpp 加了 `rvcpp_fence.patch`，把 `fence` 當 no-op | `make core-hazard3`；`dv/core_hazard3/run.py`；`core-migration-hazard3` 經驗紀錄 |
-| 4 | xPack toolchain | PASS：15.2.0，`env-check` 檢查版本，`make xpack-fetch` 釘 sha256。版本檢查本身的漏洞見審查第 8 項 | `toolchain.md`；`env/fetch_xpack.sh`；`7348fab` |
+| 4 | xPack toolchain | PASS：15.2.0，`make xpack-fetch` 釘 sha256；`env-check` 檢查 `--version` 是 xPack、找得到 newlib 的 `libc.a`（審查第 8 項修正，`neg-regress` 8/8） | `toolchain.md`；`env/fetch_xpack.sh`、`env/check_env.sh` |
 | 5 | L0–L5 全 PASS（Hazard3） | PASS，見下表 | `p5reg` 的 `runs/regress/summary.md` |
 | 6 | Hazard3 完成 signoff | PASS：15 個 corner 的 setup 與 hold 都 PASS，DRC、LVS、antenna 都是 0 | `p5reg` 的 `runs/soc_top_hazard3_signoff/signoff.txt` |
 | 7a | 同一套 flow 設定（§10 第 4 項） | PASS：<br>• 兩個 CPU 的 config 只差 `VERILOG_FILES`、`VERILOG_INCLUDE_DIRS`、`VERILOG_DEFINES`，每次 harden 都檢查<br>• negative test P37–P39 | 兩次乾淨 regress 的 `harden-soc.log`：`[PASS] cpu_config`；`check_inputs.py cpu_config` |
-| 7b | flow 設定只需改 design 層 | **未達成**。換 CPU 後 Hazard3 的時序修不過，迫使下列改動，而且兩個 CPU 一起改：<br>• 4 項 flow 設定（ADR-0012、0013、0014、0016）<br>• 週期 43 → 44 ns<br>• flow 程式碼：`pnr/librelane_plugin_arvinsa/`（繼承 `OpenROAD.CTS` 的替換 step）、`pnr/librelane_flow.sh`（重試範圍、`PYTHONPATH`）<br>• checker：`check_signoff.py`（ADR-0015）、`signoff/limits/`<br>LibreLane 與 PDK 本身沒有改。**待使用者決定** | 「與計畫不同的地方」 |
+| 7b | flow 設定只需改 design 層 | **未達成**。換 CPU 後 Hazard3 的時序修不過，迫使下列改動，而且兩個 CPU 一起改：<br>• 4 項 flow 設定（ADR-0012、0013、0014、0016）<br>• 週期 43 → 44 ns<br>• flow 程式碼：`pnr/librelane_plugin_arvinsa/`（繼承 `OpenROAD.CTS` 的替換 step）、`pnr/librelane_flow.sh`（重試範圍、`PYTHONPATH`）<br>• checker：`check_signoff.py`（ADR-0015）、`signoff/limits/`<br>LibreLane 與 PDK 本身沒有改。**使用者決定 3：接受為與計畫不同** | 「與計畫不同的地方」 |
 | 8 | PicoRV32 版仍 PASS（ADR-0011：移到 `make regress-picorv32`） | PASS：26/26，含 PicoRV32 單獨 harden、`gl-core`、`neg-gl-core` 2/2、`eqy-core`、`neg-eqy-core` 11/11 | `p5reg2` 的 `runs/regress_picorv32/summary.md` |
 | 9 | 帶進本階段的項目 | 見「帶進本階段的項目」 | — |
 
@@ -61,7 +61,7 @@ L0–L5 與 Hazard3 regression 的對應（層級定義見 `project-plan.md` §7
 | L1a Core ISA regression | `core-hazard3` | 65/65、trace 48/48 |
 | L1b SoC RTL sim | `regress-rtl`、`neg-rtl` | 30/30、36/36 |
 | L2 合成與 gate-level 模擬 | `synth-check`、`gl-soc` | PASS、15/15 |
-| L3 PnR signoff | `harden-soc`、`neg-pnr` | PASS、56/56 |
+| L3 PnR signoff | `harden-soc`、`neg-pnr` | PASS、63/63 |
 | L4 Equivalence | `eqy-soc`、`neg-eqy-soc` | PASS、13/13 |
 | L5 Post-layout GL sim | `gl-soc-powered`、`neg-gl-soc` | 15/15、8/8 |
 
@@ -72,25 +72,27 @@ L0–L5 與 Hazard3 regression 的對應（層級定義見 `project-plan.md` §7
 
 | 項目 | PicoRV32 SoC | Hazard3 SoC |
 |---|---|---|
-| setup 最差 | +0.765 ns（min_ss_n40C_1v60） | +1.116 ns（min_ss_n40C_1v60） |
-| hold 最差 | +0.079 ns（min_ff_n40C_1v95） | +0.106 ns（min_ff_n40C_1v95） |
+| setup 最差 | +0.789 ns（min_ss_n40C_1v60） | +1.114 ns（min_ss_n40C_1v60） |
+| hold 最差 | +0.080 ns（min_ff_n40C_1v95） | +0.109 ns（min_ff_n40C_1v95） |
 | 最差 setup 路徑 | SRAM 半週期路徑（`sram0` 在下降緣送出，flip-flop 在上升緣接收） | 同左 |
 | die／core 面積 | 800,000／769,005 µm² | 800,000／769,005 µm² |
-| standard cell | 31,960 顆，254,319 µm² | 30,428 顆，239,062 µm² |
+| standard cell | 31,966 顆，254,358 µm² | 30,423 顆，238,995 µm² |
 | flip-flop | 2,639 | 2,152 |
-| hold buffer（網表中的 `dlygate4sd3_1`） | 3563 | 2721 |
-| `power__total`（內部＋切換＋漏電） | 8.73 mW（5.91＋2.47＋0.35） | 19.34 mW（10.60＋8.41＋0.33） |
-| 繞線長度 | 863,010 µm | 795,843 µm |
-| IR：VDD 降壓＋GND 抬升（flow 的模型：nom_tt、一側供電；上限 20 mV） | 3.72＋3.68＝7.40 mV | 9.18＋9.09＝18.28 mV |
+| hold buffer（網表中的 `dlygate4sd3_1`） | 3562 | 2721 |
+| `power__total`（內部＋切換＋漏電） | 8.73 mW（5.91＋2.47＋0.35） | 19.33 mW（10.60＋8.39＋0.33） |
+| PDN | met5 strap 4.8 µm（`PDN_HWIDTH`，ADR-0017），met4 1.6 µm | 同左 |
+| 繞線長度 | 863,205 µm | 796,279 µm |
+| IR：VDD 降壓＋GND 抬升（nom_tt、一側供電；上限 20 mV） | 2.03＋2.03＝4.06 mV | 5.02＋4.96＝9.98 mV |
+| IR 最壞組合（ff 電流＋ss 金屬電阻，`ir_worst.py`；上限 20 mV） | 5.72 mV | 14.13 mV |
 | DRC（繞線、KLayout）／LVS／XOR／antenna | 全部 0 | 全部 0 |
-| Magic DRC | 4,665,810（全在 SRAM 框內，同 Phase 3） | 同左 |
+| Magic DRC | 4,746,079（全在 SRAM 框內，每一個都對得上 SRAM 單獨檢查時的位置；met5 加寬前是 4,665,810） | 同左 |
 
 數字的出處與讀法：
 - 出處：`signoff/golden/{soc_top,soc_top_hazard3}/metrics.json`，與兩次乾淨 regress 相同。hold buffer 數取自 criteria review 的 INFO 列；IR 合計是兩個 metric 相加。
 - `power__total` 是 LibreLane 最後寫入的那個 corner 的值，不是各 corner 的最大值（`librelane-run-debug` 規則 4）。
-- Hazard3 的功耗約為兩倍，其中切換功耗是 3.4 倍（8.41 對 2.47 mW），原因沒有查證。
+- Hazard3 的功耗約為兩倍，其中切換功耗是 3.4 倍（8.39 對 2.47 mW），原因沒有查證。
 
-**IR 的疑慮**：
+**IR：獨立審查後發現超標，已修正**（使用者決定 1，ADR-0017）：
 - Phase 4 允許 flow 只用 nom_tt 判 IR，依據是「最壞組合（ff 電流＋ss 金屬電阻）在 PicoRV32 版圖是 11.46 mV，仍低於 20 mV」（`docs/notes/ir_worst_case_soc_top.md` 第 36 行）。
 - Hazard3 的 nom_tt 已到 18.28 mV。照 Phase 4 的比例 1.40 推算，最壞組合約 25.6 mV。
 - 用 Phase 4 的同一方法（`docs/notes/ir_study/`，模型 C 一側供電，LibreLane 單步重跑 `OpenROAD.IRDropReport`）在兩次乾淨 regress 的版圖上實測（2026-10-08）：
@@ -105,7 +107,8 @@ L0–L5 與 Hazard3 regression 的對應（層級定義見 `project-plan.md` §7
 - 最差的 cell 在兩種條件下都是 `fanout1522`（Hazard3）。最壞組合對 nom_tt 的比例：Hazard3 1.41、PicoRV32 1.40，與 Phase 4 相同。
 - 結論：**Phase 4「flow 只用 nom_tt 判 IR」的依據對 Hazard3 不成立**（skill `signoff-criteria` 的判斷：依據不成立）。flow 的 checker 判 PASS，是因為它只看 nom_tt。
 - 限制同 Phase 4 研究：只做 static IR；switching activity 用 OpenSTA 預設值；「ff 電流＋ss 金屬電阻」是人為組合的上限，不是真實存在的 corner；供電位置仍是假設（Phase 7 才確定）。
-- 量測的原始輸出目前在 session 暫存目錄，結案前要存進 `docs/notes/ir_study/`。
+- 量測與 PDN what-if 的結果存在 `docs/notes/ir_study/phase5/`。
+- 修正：met5 strap 1.6 → 4.8 µm（`PDN_HWIDTH`，兩個 CPU 共用）；flow 每次 harden 都判最壞組合（`pnr/soc_top/ir_worst.py`，P61、P62）。修正後見上表：Hazard3 14.13 mV、PicoRV32 5.72 mV，via4 EM 約 18%（what-if）。
 
 ## 收斂過程
 
@@ -123,6 +126,7 @@ L0–L5 與 Hazard3 regression 的對應（層級定義見 `project-plan.md` §7
 | 9 | `adac1a9` | GRT-0229 在 `ResizerTimingPostGRT` 停止<br>→ `2caad0e`：重試範圍擴大 |
 | 10 | `2caad0e` | ADR-0016 的正式 harden：setup +1.116／hold +0.106 ns<br>`harden-soc` FAIL：unannotated 126 ≠ 125，且與舊 golden 不符<br>→ 依使用者決定改上限，從這次 run 重建 golden（`1d13775`） |
 | 11 | `1d13775` | 確認 run：434 個完全相同，PASS |
+| 12 | `1dee974` | 獨立審查後：`PDN_HWIDTH` 4.8、最壞組合 IR 檢查。最壞組合 25.75 → 14.13 mV，setup +1.114／hold +0.109 ns；只有與舊 golden 比對 FAIL → 重建 golden（`5aaf036`） |
 
 ### PicoRV32 SoC（同一份 config 改動後）
 
@@ -132,6 +136,8 @@ L0–L5 與 Hazard3 regression 的對應（層級定義見 `project-plan.md` §7
 | 2 | `adac1a9` | GRT-0229 停止 |
 | 3 | `2caad0e` | setup +0.765／hold +0.079 ns；unannotated 上限 133 → 118，golden 來源 |
 | 4 | `1d13775` | 確認 run：436 個完全相同（第 44 步 GRT-0229 接續一次） |
+| 5 | `1dee974` | `PDN_HWIDTH` 4.8：最壞組合 10.36 → 5.72 mV，setup +0.789／hold +0.080 ns；重建 golden |
+| 6–9 | `5aaf036` | 版圖誤差的樣本：乾淨 regress、樣本 3、樣本 5 三次逐項相同（與 golden 差 1 顆 diode）；樣本 4 在第 44 步因 GRT-0116 中止（見「本階段找到並修正的 checker 問題」第 6 點） |
 
 ADR-0016 的實驗（`docs/decisions/0016-cts-no-macro-latency-balancing.md`）：
 - A：hold 餘量 0.1；
@@ -149,7 +155,7 @@ LibreLane 3.0.14 沒有變數可以關掉這個行為，所以用 repo 的 plugi
 |---|---|---|
 | 1 | SRAM 時序是假設值 | Phase 3.5 已改成 SPICE 特性化的 .lib。ss_n40C 讀取失敗，那個 corner 仍是佔位值（ADR-0013「限制」）。Phase 6 再檢討 |
 | 2 | duty cycle 與 jitter 是假設 | 沒變。週期 44 ns 時 DCD 預算 2.20 ns，半週期 uncertainty 2.45 ns。待 Phase 7 |
-| 3 | IR 供電位置是假設 | **變差**：Hazard3 nom_tt 18.28 mV；最壞組合實測 25.75 mV，超過 20 mV（見 signoff 結果） |
+| 3 | IR 供電位置是假設 | **變差後已修正**：Hazard3 最壞組合 25.75 mV 超過 20 mV；met5 加寬後 14.13 mV，flow 每次都判最壞組合（ADR-0017）。供電位置仍是假設 |
 | 4 | 溫度反轉 corner 沒給 resizer | **已改變**（ADR-0013）：`RSZ_CORNERS` 加 3 個 ss_n40C；`ff_100C_1v95` 仍只在 signoff 判定 |
 | 5 | CTS 把 SRAM clock 延到與 flip-flop 一樣晚 | **已解決**（ADR-0016）：網表 `delaybuf_*` 為 0，由 `check_soc.py cts_macro_latency` 檢查（P52–P54）。這個檢查的漏洞見審查第 2 項 |
 | 6 | EQY 只涵蓋組合邏輯 | 沒變；Hazard3 版 neg-eqy 13 案 |
@@ -196,29 +202,35 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
 
 | run | 與 golden 比對 |
 |---|---|
-| Hazard3 確認 run（`1d13775`，開發 worktree） | 434 個完全相同 |
-| Hazard3 乾淨 regress（`7348fab`，一次 GRT-0229 接續） | 434 個完全相同 |
-| PicoRV32 確認 run（`1d13775`，開發 worktree，一次 GRT-0229 接續） | 436 個完全相同 |
-| PicoRV32 乾淨 regress（`7348fab`） | 436 個完全相同 |
-| picorv32_core 乾淨 regress（`7348fab`）與預跑（`941e1cb`） | 兩次都是 254 個相同、71 個在 Phase 2 訂的誤差內<br>兩次之間只差 5 個（功耗、via、第 4 輪線長），屬 Phase 2 已知的 detailed routing 不可重現 |
+| Hazard3 第 12 次 harden（`1dee974`，開發 worktree，`PDN_HWIDTH` 4.8） | 本 golden 的來源 |
+| Hazard3 乾淨 regress（`5aaf036`，一次 GRT-0229 接續） | 422 個相同、14 個連續量在誤差內 |
+| Hazard3 乾淨 regress（`71b1454`） | 436 個完全相同 |
+| PicoRV32 第 5 次 harden（`1dee974`，開發 worktree） | 本 golden 的來源 |
+| PicoRV32 乾淨 regress、樣本 3、樣本 5（`5aaf036`） | 三次彼此逐項相同；與 golden 差 1 顆 diode、`global_route__vias` 20 對 11 → 依這 4 個樣本訂版圖誤差（使用者決定 4） |
+| PicoRV32 乾淨 regress（`71b1454`，一次 GRT-0229 接續） | 435 個完全相同 |
+| picorv32_core 乾淨 regress（`71b1454`） | 325 個完全相同（之前兩次是 254 個相同、71 個在 Phase 2 訂的誤差內） |
+| 下列為 ADR-0016 golden 的紀錄 | |
+| Hazard3 確認 run（`1d13775`）、乾淨 regress（`7348fab`，一次 GRT-0229 接續） | 都是 434 個完全相同 |
+| PicoRV32 確認 run（`1d13775`）、乾淨 regress（`7348fab`） | 都是 436 個完全相同 |
 
 - GRT-0229 中斷後從該 step 接續，最終 metrics 與沒有中斷的 golden 完全相同（兩個 CPU 各一次）。
-- PicoRV32 SoC 的 `[golden_layout_tolerance]`、`[golden_optional]` 暫用 Hazard3 的數字（`signoff/limits/soc_top.toml`）。
-  - 新 golden 之後的 3 次 PicoRV32 SoC run 彼此完全相同，量不到差異。
-  - 所以 ADR-0015「實測最大差異的約 5 倍」算不出 PicoRV32 自己的值。
-  - 審查第 6 項用實驗證明，這個暫用值會放過真的版圖改變。**待使用者決定**
+- PicoRV32 SoC 的 `[golden_layout_tolerance]`：獨立審查證明暫用 Hazard3 的值會放過真的版圖改變（審查第 6 項），先清空；`5aaf036` 的乾淨 regress 第一次量到差異後，依 4 個樣本的最大差異 × 5 重訂（diode 5、cell 5、面積 15 µm²、`global_route__vias` 45；`signoff/limits/soc_top.toml`）。
 
 ## Checker qualification（本階段新增）
 
 | checker | 植入的錯誤 | 預期 FAIL 的地方 | 結果 | 與計畫的差異 |
 |---|---|---|---|---|
-| `neg-pnr` | P33–P36：SRAM .lib 的來源 | `check_soc.py sram_lib`、`check_inputs.py` | 兩個 CPU 都 56/56（整組） | Phase 3.5 審查新增 |
+| `neg-pnr` | P33–P36：SRAM .lib 的來源 | `check_soc.py sram_lib`、`check_inputs.py` | 兩個 CPU 都 63/63（整組，`71b1454`） | Phase 3.5 審查新增 |
 | | P37–P39：兩個 CPU 的 config 差異 | `check_inputs.py cpu_config` | | 計畫沒有 |
 | | P40–P42：弱 cell | `check_weak_cells.py` | | ADR-0012 |
 | | P43–P49：criteria review | `review_criteria.py` | | 規則 9 |
 | | P50–P51：golden 版圖誤差 | `check_signoff.py` | | ADR-0015 |
 | | P52–P54：CTS macro latency | `check_soc.py cts_macro_latency` | | ADR-0016 |
 | | P55：重試留下的中斷 step 代替完成的 step | `review_criteria.py uncertainty` | | 本階段發現 |
+| | P56：報表裡半週期路徑的 uncertainty 被改小 | `review_criteria.py uncertainty_applied` | | 獨立審查 |
+| | P57：core 模式的 criteria 檢查 | `review_criteria.py --design picorv32_core` | | 獨立審查 |
+| | P58–P60：改名的延遲鏈、帶字尾的 CTS 目錄 | `check_soc.py cts_macro_latency`（結構判斷） | | 獨立審查 |
+| | P61、P62：最壞組合 IR 超標、`ir_worst.txt` 缺少 | `ir_worst.py`、`review_criteria.py checkers_ran` | | 獨立審查、ADR-0017 |
 | `neg-eqy-soc` | Hazard3 版加 `mcycleh13_stuck1`、`minstreth8_stuck1`、`irq0_stuck0`、`reset_b_tied1` | EQY 證明、位置檢查（`reset_b_tied1` 實際上不是靠證明抓到，見審查第 5 項） | Hazard3 13/13（交叉檢查 144 組）；PicoRV32 9/9 | — |
 | `neg-eqy-core` | 沿用 | 同上 | 11/11（104 組） | — |
 | `neg-gl-soc` | Hazard3 版把 3 個 PicoRV32 的 flip-flop 案例換成 Hazard3 的 | gate-level 模擬 | 兩個 CPU 都 8/8 | — |
@@ -226,7 +238,7 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
 | `neg-rtl` | Hazard3 版，含轉接器 H01–H04 | RTL 模擬的 checker | 36/36（PicoRV32 33/33） | — |
 | `core-hazard3` | `EXTENSION_M=0` | riscv-tests | rv32um 8/8 FAIL | — |
 | `neg-char` | N9–N16 | 特性化腳本與 `check_char_lib.py` | 16/16（只在主 checkout 跑過，不在 regress） | Phase 3.5 審查新增 |
-| `neg-regress`、`test-flow-retry`、`test-review-hook` | regress 的拒絕條件、GRT-0229 第二個位置、Stop hook | 各自的腳本 | 6/6、11/11、9/9 | — |
+| `neg-regress`、`test-flow-retry`、`test-review-hook` | regress 的拒絕條件與 xPack；GRT-0229 第二個位置、GRT-0116、守門條件本身；Stop hook 的觸發條件 | 各自的腳本 | 8/8、15/15、12/12 | 獨立審查擴充 |
 
 ## 本階段找到並修正的 checker 問題
 
@@ -239,7 +251,11 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
 3. **neg-eqy 把常數當名稱**：`reset_b_tied1` 的範圍有 1,449 個名稱，會接受別的案例的 FAIL（`c976976`）。
 4. **乾淨 checkout 找不到 xPack**：`core-hazard3` 直接讀 `.tools/`，在乾淨 checkout 才發現。
    - 修正：加 `XPACK_DIR`，並在 `env-check-flow` 檢查（`7348fab`）。
-   - 這個檢查沒有 negative test，見審查第 8 項。
+   - 審查第 8 項：原本只看版本字串，已改成檢查產品本身，並加 negative test（`neg-regress xpack_fake`）。
+5. **獨立審查的 8 個 checker 漏洞**：見「獨立審查」一節，全部修正並各有 negative test（`1dee974`）。
+6. **GRT-0116 的重試，以及重試腳本的 `set -euo pipefail` 陷阱**（`71b1454`）：
+   - PicoRV32 樣本 4 在第 44 步因 `GRT-0116 Global routing finished with congestion` 中止，溢位只有 2；同一份輸入單步重跑 4 次都通過，所以是隨機的。重試範圍加入「GRT-0116，而且總溢位 ≤ 10」。
+   - 加這段程式時，新的 `grep` 在 GRT-0229 的 log 上找不到內容，在呼叫端的 `set -euo pipefail` 下會讓整支腳本結束。`test-flow-retry` 當場抓到；若沒被抓到，正式 harden 一走到重試路徑就會中斷。已修正。
 
 ## 與計畫不同的地方
 
@@ -260,7 +276,7 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
    - ss_n40C 的時序是佔位值（ADR-0013）；
    - 低溫與 ss 室溫讀取失敗（Phase 3.5 限制 1，頭號下線風險）；
    - Phase 3.5 限制 2–7、13–15 的特性化方法限制。
-3. **IR**：Hazard3 在最壞組合實測 25.75 mV，超過 20 mV 上限；flow 的 checker 只看 nom_tt（18.28 mV）所以判 PASS。供電位置仍是假設。**處理方式待使用者決定**
+3. **IR 供電位置是假設**：最壞組合已修到 14.13 mV（Hazard3），每次 harden 都判；但供電點仍是「每條 met5 strap 左端一點」的假設，EM 沒有 flow 檢查（ADR-0017 限制）。Phase 7 確定 Caravel 的接法後要重算。
 4. **不可重現的步驟**（ADR-0015）：
    - 第 41 步 global routing 偶發不同；
    - detailed routing 多執行緒會多插 diode；
@@ -274,7 +290,7 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
    - useful skew 沒試；
    - PicoRV32 SRAM 輸入腳的 hold 變緊（min_ff 從 +0.197 降到 +0.093 ns）。
 8. **RepairHold 全設計只用一種 hold buffer**（`dlygate4sd3_1`，ss_n40C 的延遲約是 ff 的 3 倍）。排除它會停在 `RSZ-0060`（drv-timing-closure 規則 7）。
-9. **`harden-core` 沒有接 `review_criteria.py`**：規則 9 在 PicoRV32 單獨 harden 上靠手動 review，Stop hook 也不會擋（審查第 4 項）。**待使用者決定**
+9. ~~`harden-core` 沒有接 `review_criteria.py`~~：已修正（`--design picorv32_core`，Stop hook 改用 `result.txt` 觸發；P57、`test-review-hook`）。
 10. **`neg-char` 不在 regress 裡**（Phase 3.5 限制 9）：N9–N16 沒在乾淨 checkout 跑過。
 11. **沒有分析的項目**：
     - Hazard3 功耗為兩倍的原因；
@@ -286,7 +302,7 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
     - 限制 8 的 LVS black box、金屬密度；
     - 限制 11 的 `flop_async_reset` 範圍；
     - Phase 3.5 的 `GRT-0243`。
-13. **獨立審查找到的 8 個 checker 漏洞**：見下節。修正或列為限制，**待使用者決定**。
+13. 獨立審查找到的 8 個 checker 漏洞：已全部修正，見「獨立審查」。審查另外列的三個疑點（P55 的中斷目錄形狀已改；`substituting_steps` 為 `null` 時當掉已修；neg-eqy 只往上游追的範圍會落在共用的 reset 同步器上）中，最後一項保留，交叉檢查目前都分得開。
 
 ## 獨立審查（2026-10-08）
 
@@ -330,6 +346,8 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
 
 實驗用的副本在 session 暫存目錄，沒有改動 repo、worktree 或 `runs/`。
 
+**處理**（使用者決定 2）：8 項全部修正，各有 negative test（`1dee974`），並在 `71b1454` 的兩輪乾淨 regress 裡全部通過（neg-pnr 63/63、test-flow-retry 15/15、test-review-hook 12/12、neg-regress 8/8、neg-eqy 13/13 與 9/9、11/11）。
+
 ## 使用者決定
 
 2026-10-08，看完獨立審查與 IR 實測後：
@@ -346,6 +364,9 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
    - 這條 criteria 原本假設 flow 設定夠通用，實際換 core 就要重新調。
    - 改用「兩個 CPU 共用同一份 flow 設定、只差 RTL」（第 7a 項）當替代判準。
    - project-plan.md 不改。
+
+4. **PicoRV32 的版圖誤差依實測訂**（`5aaf036` 的 regress 第一次量到差異之後）：再跑 2 次 harden 收集樣本，用最大差異 × 5（ADR-0015 的方法），不沿用 Hazard3 的值。其中一次因 GRT-0116 中止，補跑一次；4 個有效樣本中 3 個逐項相同。
+5. **確認 Phase 5 結案**，以 `71b1454` 的兩輪乾淨 regress 為結案證據；commit 並推到兩個 remote。
 
 本階段已做的決定：
 - ADR-0011：1port 加轉接器、`make regress` 換成 Hazard3；
@@ -391,7 +412,8 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
 
 | 工具缺陷或意外行為 | 症狀（寫進 description） | 怎麼發現 | 怎麼繞過 | 防復發 |
 |---|---|---|---|---|
-| OpenROAD GRT-0229 隨機中止（兩個位置） | `librelane-run-debug` | `retries.txt`、console | 有上限的重試，從中止的 step 接續 | `test-flow-retry` 13/13，含「條件拿掉就 FAIL」的情境 |
+| OpenROAD GRT-0229 隨機中止（兩個位置） | `librelane-run-debug` | `retries.txt`、console | 有上限的重試，從中止的 step 接續 | `test-flow-retry` 15/15，含「條件拿掉就 FAIL」的情境 |
+| OpenROAD GRT-0116：hold 修復後的增量 global routing 剩個位數溢位 | `librelane-run-debug` | step log 最後的 `Total` 壅塞列 | 總溢位 ≤ 10 才重試，大溢位是真的壅塞 | `test-flow-retry` 的 `cong`、`congbig` |
 | CTS 把 macro 的 clock 延後（latency 對齊） | `cts-clock-tree`、`hard-macro-integration` | `check_soc.py cts_macro_latency` | repo 的 plugin 加 `-no_insertion_delay`（ADR-0016） | P52–P54、P58–P60，結構判斷 |
 | resizer 換上推不動的弱 cell，停不下來 | `drv-timing-closure` | `check_weak_cells.py`、記憶體監看 | 排除弱 cell（ADR-0012） | P40–P42 |
 | RepairHold 全設計只用一種 hold buffer | `drv-timing-closure` | INFO 列的網表 hold buffer 數 | 在 clock 端修 | **沒有自動防護**：這是工具挑 cell 的策略，不影響正確性；已寫明 |
@@ -434,4 +456,10 @@ Phase 3.5 的 12 個 checker 漏洞（原始清單：`docs/phase_exit/phase3_5.m
   - `docs/notes/grt0229_repro.md`、`docs/notes/repair_design_loop.md`；
   - `signoff-criteria` 的 knowledge 檔。
 - **狀態列進度**：`scripts/progress.py`、`.claude/statusline-progress`（CLAUDE.md 規則 11）。結案 commit 前要確認已納入版控。
+- **獨立審查後（`1dee974`、`5aaf036`、`71b1454`）**：
+  - `pnr/soc_top/ir_worst.py`、`PDN_HWIDTH` 4.8、`pnr/soc_top/vsrc/vssd1.vsrc`、ADR-0017、`docs/notes/ir_study/phase5/`；
+  - `review_criteria.py` 的 `uncertainty_applied` 與 `--design picorv32_core`、`pnr/picorv32_core/run.sh`；
+  - `check_soc.py` 的結構判斷 `sram_clock_chain`、`check_signoff.py` 的保護字與 optional 規則；
+  - Stop hook 的觸發條件、`neg_eqy.py` 的 `REQUIRE`、`test_librelane_flow.sh`（15 個情境，含 GRT-0116）、`env/check_env.sh` 的 xPack 檢查；
+  - `neg_pnr.py` P56–P62；PicoRV32 的版圖誤差（`signoff/limits/soc_top.toml`）；兩個 golden 重建。
 - **skill**：新增 `core-migration-hazard3`（Phase 5 開始時建立）；其他見「Skill 分析」。

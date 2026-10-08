@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-05）：Phase 0–4 與 Phase 3.5 完成，Phase 5（換 Hazard3）進行中。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-08）：Phase 0–5 與 Phase 3.5 完成。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -34,6 +34,14 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
   - `make regress` 第 2 次在乾淨 checkout 25/25 PASS（136 分鐘），soc_top 439 個 metric 與 golden 完全相同，164 個植入錯誤全部在預期的 checker FAIL。第 1 次因一個植入程式的 bug FAIL，已修正。
   - 獨立審查更正了文件，並找到 12 個 checker 漏洞（沒有一個造成假 PASS），Phase 5 開頭修。
   - 紀錄見 [docs/phase_exit/phase3_5.md](docs/phase_exit/phase3_5.md)。
+- Phase 5：CPU 換成 Hazard3（`hazard3_cpu_1port` 加 AHB 轉 native bus 的轉接器，ADR-0011），PicoRV32 版保留在 `make regress-picorv32`。
+  - riscv-tests 65/65，與 rvcpp 逐指令比對 48/48；兩個 CPU 共用同一份 flow 設定，只差 RTL。
+  - 週期 44 ns。為了 Hazard3 改了 4 項 flow 設定（ADR-0012–0014、0016），以及 met5 strap 加寬到 4.8 µm（ADR-0017）。
+  - 15 個 corner 的 setup／hold 全部 PASS：Hazard3 +1.114／+0.109 ns、PicoRV32 +0.789／+0.080 ns。
+  - IR 最壞組合（ff 電流＋ss 金屬電阻）Hazard3 14.13 mV、PicoRV32 5.72 mV，上限 20 mV；flow 現在每次都判最壞組合。
+  - 獨立審查找到 8 個 checker 漏洞，並發現 Hazard3 的最壞組合 IR 原本 25.75 mV 超標，全部修正後重跑。
+  - 結案證據：commit `71b1454` 的乾淨 checkout，`make regress` 21/21（109 分鐘）、`make regress-picorv32` 26/26（124 分鐘），三次 harden 都與 golden 逐項相同。
+  - 紀錄見 [docs/phase_exit/phase5.md](docs/phase_exit/phase5.md)。
 
 ## 快速開始
 
@@ -87,7 +95,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 3 | 整合預建 SRAM macro | 完成（2026-10-04） |
 | 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 完成（2026-10-05） |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
-| 5 | 換成 Hazard3 | 進行中 |
+| 5 | 換成 Hazard3 | 完成（2026-10-08） |
 | 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 未開始 |
 | 7 | （可選）chip-level 整合，例如 ChipFoundry Caravel | 未開始 |
 

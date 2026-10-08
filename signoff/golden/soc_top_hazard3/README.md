@@ -55,6 +55,8 @@
 | run | 與本檔比較 |
 |---|---|
 | Phase 5 Hazard3，`PDN_HWIDTH` 4.8（commit `1dee974`） | 本檔來源 |
+| 乾淨 checkout 的 `make regress`（commit `5aaf036`，第 44 步 GRT-0229 接續一次） | 422 個相同、14 個連續量在誤差內 → PASS，regress 21/21 |
+| 乾淨 checkout 的 `make regress`（commit `71b1454`，Phase 5 結案） | 436 個完全相同 → PASS，regress 21/21 |
 | 下列為 ADR-0016 golden（見 git 歷史，commit `1dee974` 以前的本檔）的紀錄 | |
 | Phase 5 Hazard3 第 10 次 harden-soc（commit `2caad0e`，ADR-0016） | 本檔來源 |
 | Phase 5 Hazard3 第 11 次 harden-soc（commit `1d13775`） | 434 個完全相同 → harden-soc PASS |

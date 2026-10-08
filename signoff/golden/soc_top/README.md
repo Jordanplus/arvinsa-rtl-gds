@@ -67,6 +67,8 @@
 | run | 與本檔比較 |
 |---|---|
 | Phase 5 PicoRV32，`PDN_HWIDTH` 4.8（commit `1dee974`） | 本檔來源 |
+| 乾淨 checkout 的 `make regress-picorv32`、樣本 3、樣本 5（commit `5aaf036`） | 三次彼此逐項相同；與本檔差 10 個版圖 metric（diode 99 對 100、`global_route__vias` 11 對 20 等）→ 當時沒有版圖誤差，FAIL；依這 4 個樣本訂 `[golden_layout_tolerance]`。樣本 4 在第 44 步因 GRT-0116 中止，不算 |
+| 乾淨 checkout 的 `make regress-picorv32`（commit `71b1454`，Phase 5 結案；第 44 步 GRT-0229 接續一次） | 435 個完全相同 → PASS，regress 26/26 |
 | 下列為 ADR-0016 golden（見 git 歷史，commit `1dee974` 以前的本檔）的紀錄 | |
 | Phase 5 PicoRV32 ADR-0016 正式 harden（commit `2caad0e`） | 本檔來源 |
 | Phase 5 PicoRV32 確認 harden（commit `1d13775`） | 436 個完全相同；第 44 步遇到 GRT-0229，從該步接續一次（接續的 run 與一次跑完的 run 結果相同）→ harden-soc PASS |
