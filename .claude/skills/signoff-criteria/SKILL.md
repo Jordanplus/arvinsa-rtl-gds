@@ -104,7 +104,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 
 | 條件 | 推導 | 工具支援／沒分析時怎麼補 |
 |---|---|---|
-| static IR drop 上限 | 不能超過 corner 電壓隱含的預算（上表的 PVT 一列）。上限大於預算時，STA 的 slow corner 就不再保守 | 用最大電阻的 RC corner 與最大功耗的 corner 再算一次（`analyze_power_grid -corner`）；電壓源要放在真實 pad 的位置 |
+| static IR drop 上限 | 不能超過 corner 電壓隱含的預算（上表的 PVT 一列）。上限大於預算時，STA 的 slow corner 就不再保守 | 用最大電阻的 RC corner 與最大功耗的 corner 再算一次（`analyze_power_grid -corner`）；電壓源要放在真實 pad 的位置。**每次 harden 都要判這個最壞組合，不能只判 nom_tt**：sky130 的最壞組合約是 nom_tt 的 1.4 倍（knowledge 檔 S23；本 repo `pnr/soc_top/ir_worst.py`） |
 | dynamic IR、L·di/dt | 開源工具沒有 | 用 decap 與 margin 補；用最壞情境的 VCD（reset 解除、SRAM 連續讀寫）估 peak current |
 | 功耗 | 沒有 VCD／SAIF 時用預設 activity（vectorless）；`power__total` 是最後寫入的 corner | 用模擬的 activity（`read_vcd`、`read_saif`）；報告附上 activity 標註率 |
 | power grid EM | 每段電流 / 線寬 ≤ tech LEF 的電流密度（Tj 90 °C 基準）；via 個別比對 | `-enable_em` 輸出電流後自己比對 |
@@ -131,7 +131,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | min pulse width、min period | `sta_extra_corner.tcl` 每個 corner 輸出報告，必要的 slack 從 SDC 的變數算 | `check_soc.py pulse_width` | P22、P23 |
 | macro 的 PVT 差異 | Phase 4：`sta_extra_corner.tcl` 的 instance derate 乘進 OCV；Phase 3.5 起：每個 PVT 一份 SRAM .lib，不加 instance derate，OCV 由 `base.sdc` 套用（ADR-0010） | STA 本身、`check_soc.py sram_lib` | P04、P30 |
 | 溫度反轉 corner | `config.json` 的 `STA_CORNERS`、`LIB`（resizer 用 `RSZ_CORNERS` 另外控制，`multicorner-sta`） | `[corners]` | — |
-| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES` | `check_signoff.py`、`check_soc.py ir_sources` | P07、P26–P29 |
+| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES`；最壞組合（ff 電流＋ss 金屬電阻） | `check_signoff.py`、`check_soc.py ir_sources`、`ir_worst.py` | P07、P26–P29、P61、P62 |
 | 「typical corner slack ≥ 週期 X%」 | 降為只報告（`[info]`） | — | — |
 
 假設值（jitter、duty cycle 範圍、供電位置）集中寫在檔案開頭並標「假設」，確定來源後只改那幾個值。

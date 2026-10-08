@@ -91,7 +91,30 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-07 | soc_top 兩個 CPU，ADR-0016 正式 harden（`2caad0e`，p5h3 worktree `runs/p5_pico_h3`、`runs/p5_h3_h10`） | 44 ns | 最差 setup／hold；post-CTS → GRT 後 → signoff 的 hold | PicoRV32 +0.765／+0.079（hold +0.300 → +0.069 → +0.079）；Hazard3 +1.116／+0.106（+0.293 → 無 → +0.106）；與接續實驗 D 相同 | 半週期路徑 DCD 預算 2.2 ns 下 44 ns 的餘量；hold 餘量 0.3 ns 足夠 | 兩個 run 的 `criteria_review.md` |
 | 2026-10-07 | 同上 | 44 ns | `timing__unannotated_net__count` | PicoRV32 118 = 75 dummy load + 32 `dout1` + 11 tie；Hazard3 126 = 82 + 32 + 12（15 個 corner 相同） | 上限隨 CTS 改變；結構不變 | 同上 |
 
+S20. **sky130_fd_sc_hd 有推不動負載的弱 cell**（Phase 5，單步重跑確認；ADR-0012、0013）：
+    - 在 ss_n40C_1v60，有些驅動力 `_1`（少數 `_2`）的 cell 連最小負載都推不到 slew 上限內。resizer 修 slew 時會把 driver 換成它們，然後停不下來：Hazard3 第一次 harden 記憶體漲到 92.9 GB。
+    - 這次排除的 11 種：`a2111oi_1`、`a2111oi_2`、`o41ai_1`、`nor4b_1`、`a222oi_1`、`o311ai_1`、`nor4_1`，以及 4 種 `clkdlybuf4s*`（`EXTRA_EXCLUDED_CELLS`）。
+    - 合成時禁用沒有用：resizer 照樣會換上去。
+    - 清單依 corner 與 slew 上限而定，要用 `pnr/check_weak_cells.py` 在最慢的 corner 重新列，不要抄這份。
+
+S21. **`dlygate*` 在 .lib 的 footprint 是 `buf`**（Phase 5，讀 .lib 與 OpenROAD 原始碼確認）：
+    - OpenROAD 的 hold 修復因此把它當成一般 buffer，挑「hold 延遲 ÷ 面積」最高的 `dlygate4sd3_1`，整顆晶片只用這一種。
+    - 它在 ss_n40C 的延遲是 ff 的 2.87 倍（ff 0.39、ss 1.12 ns）：在 ff 補 hold，到 ss 會吃掉約 3 倍的 setup。
+    - 排除它會換成延遲很小的 cell，插的數量多好幾倍，碰到上限就 `RSZ-0060`（`drv-timing-closure` 規則 7）。
+
+S22. **`clkbuf_16` 的下降緣比上升緣慢**（Phase 5，STA 報表）：min_ss_n40C 每顆約 0.31 對 0.21 ns。
+    - clock 路徑上串很多級時（CTS 的 macro latency 對齊插了 10 顆），用下降緣送出的半週期路徑會被多扣約 1 ns。
+    - 有半週期路徑的設計，clock 路徑的級數要少（`cts-clock-tree` 規則 10、ADR-0016）。
+
+S23. **LibreLane 對 sky130 的預設 PDN 與 IR**（Phase 5，what-if 與兩次 harden 實測；ADR-0017）：
+    - **預設 PDN**：met4、met5 strap 都是 1.6 µm 寬，間距約 153 µm；met4–met5 交叉處的 via4 只有 1 個 cut，via4 的 EM 上限是 2.49 mA／cut。
+    - **最壞組合**（ff 電流＋ss 金屬電阻，met5 每平方 0.037 Ω）的 IR 約是 nom_tt 的 1.4 倍：兩個設計、一側供電、strap 寬 1.6 與 4.8 µm 都量過，1.40–1.42。所以 20 mV 的預算下，nom_tt 要低於約 14 mV。
+    - **壓降主要在 met5 strap 本身**。用掉同樣的 met5 金屬量時，加寬比加密有效：4.8 µm 寬時 via4 有 3 個 cut。
+    - **只改 met4 幫助很小**。
+
+S24. **Magic 對 SRAM macro 內部的 DRC 計數，會隨 macro 上方的金屬改變**（Phase 5）：met5 strap 從 1.6 加寬到 4.8 µm 後，SRAM 框內的 Magic DRC 從 4,665,810 變成 4,746,079。每一個違規仍對得上 SRAM 單獨檢查時的位置。macro 內部的 DRC 要用位置比對判斷，不能看總數（`drc-signoff`）。
+
 ## 待確認（推測，不能當規則用）
 
 - hold 餘量用預設 0.1 ns 時，hold buffer 也有 2,200–2,500 顆（`drv-timing-closure` 規則 7）。修復前違反 hold 的 endpoint 數接近 flop 總數，原因還沒拆開。
-- CTS 讓 SRAM 和 flop 的 clock latency 對齊（`cts-clock-tree` 規則 10），但 ss_n40C 時 SRAM 早 1.1 ns、ff_n40C 時早 0.24 ns：看起來只在某一個 corner 對齊。
+- CTS 讓 SRAM 和 flop 的 clock latency 對齊（`cts-clock-tree` 規則 10），但 ss_n40C 時 SRAM 早 1.1 ns、ff_n40C 時早 0.24 ns：看起來只在某一個 corner 對齊。（Phase 5 之後已用 `-no_insertion_delay` 關掉對齊，ADR-0016，這一條不再影響設計；對齊用哪個 corner 仍沒有查證。）

@@ -430,7 +430,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
     - golden 比對 FAIL 時，先找出和 golden run 第一個分歧的步驟，判斷是設計或設定改變，還是 flow 不可重現（同一份輸入單步重跑量頻率）；後者交給 signoff-checker-qualification，不直接放寬誤差。
     - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；依據不成立的 criterion 提給使用者決定，不自己改。
   - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號。
-  - 第一部分新增 `uncertainty_applied`（逐條路徑核對 STA 實際套用的 uncertainty），`checkers_ran` 加 `ir_worst.py`，`harden-core` 也跑（`--design picorv32_core`）。判斷原則補：criterion 的依據是在哪個設計量的，換設計就要重量（Phase 5 的 IR）。
+  - 第一部分新增 `uncertainty_applied`（逐條路徑核對 STA 實際套用的 uncertainty），`checkers_ran` 加 `ir_worst.py`，`harden-core` 也跑（`--design picorv32_core`）。判斷原則補：criterion 的依據是在哪個設計量的，換設計就要重量（Phase 5 的 IR）。sky130 的 knowledge 檔補了 Phase 5 確認的製程事實 S20–S24：推不動負載的弱 cell、`dlygate` 被當成 buffer、`clkbuf_16` 下降緣較慢、預設 PDN（via4 只有 1 個 cut）與最壞組合 IR 約是 nom_tt 的 1.4 倍、SRAM 內的 Magic DRC 計數隨上方金屬改變。
 - **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P49（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
 
 #### rtl-synthesis-lint：合成與 lint
