@@ -100,7 +100,7 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 測試沒有測到守門條件本身 | `test-flow-retry` 11/11：把「只在 usage=65534 時重試」或「已完成的 step 不重試」任一條件拿掉，測試仍 11/11。每一道條件都要有一個「條件拿掉就 FAIL」的情境 | Phase 5 獨立審查；`grtreal`、`grtdone`（13/13），拿掉條件後實測 FAIL |
 | 只檢查版本字串 | xPack 檢查只比 `-dumpversion`：一支只會 `echo 15.2.0` 的腳本 PASS。要核對產品本身，例如 `--version` 寫 xPack，而且找得到 newlib 的 `libc.a` | Phase 5 獨立審查；`env/check_env.sh`，`neg-regress xpack_fake` |
 | 暫用另一個設計的數字 | PicoRV32 的版圖誤差暫用 Hazard3 量到的值：diode +54、standard cell +69 這種真實改變也 PASS。沒有這顆設計的實測就不給誤差，量到再訂 | Phase 5 獨立審查；`signoff/limits/soc_top.toml`，P50（沒有誤差項時 +1 就 FAIL） |
-| 比對到資料，不是指令 | 全域守門 hook 用 regex 找 `make harden`，把 heredoc 裡「README 提到 `make harden-soc`」也當成要開 harden 而擋下。比對前先拿掉 heredoc 內容與引號內字串 | 2026-10-08；`~/.claude/hooks/guard-bash.py shell_text()`，`test_guard_bash.py` |
+| 比對到資料，不是指令；只看第一個指令 | 全域守門 hook 用 regex 找 `make harden`，把 heredoc 裡「README 提到 `make harden-soc`」也當成要開 harden 而擋下。比對前先拿掉 heredoc 內容與引號內字串。同一個 hook 在 `git push origin main && git push gitlab main` 只看第一個 push，誤報「gitlab 還沒推」：一行裡的每一個指令都要看 | 2026-10-08；`~/.claude/hooks/guard-bash.py shell_text()`，`test_guard_bash.py` |
 
 ## 用完後
 
@@ -135,3 +135,4 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 2026-10-07 | Phase 5 PicoRV32 確認 harden（`1d13775`）的 `neg-pnr` | `[FAIL] P49: expected FAIL at review_criteria.py uncertainty`（54/55）；Hazard3 同一個 commit 55/55 | 已驗證：PicoRV32 這次第 44 步重試過，`ResizerTimingPostGRT` 有 44（中止）、45（完成）兩個目錄；P49 刪的是 45 的那一行，`review_criteria.py` 接受 44 的 | `review_criteria.py` 只採計有 `state_out.json` 的目錄、每個都要有那一行；加 P55（自己造一個中止目錄，不靠 run 剛好有重試）：舊版兩個 CPU 都漏、新版都抓到，P49 也抓到 | `runs/p5_pico_neg-pnr.log`、`pnr/soc_top/neg_pnr.py` |
 | 2026-10-08 | Phase 5 exit 的獨立審查（agent，在 run 的副本上做實驗） | 8 個 checker 漏洞：uncertainty 只看印出的行、`cts_macro_latency` 靠名稱、誤差表保護字與萬用字元、Stop hook 不涵蓋 harden-core 與當掉、`reset_b_tied1` 不是靠證明、`test-flow-retry` 沒測條件、xPack 只看版本字串、PicoRV32 暫用 Hazard3 的誤差；沒有一個讓本階段結果變成假 PASS | 已驗證：逐項做出壞掉的輸入、跑 checker、看到 PASS | 全部修正，各有 negative test（P50、P51 變體、P56–P62、test-review-hook、test-flow-retry、neg-regress）；漏洞類型表加 9 種；規則 7 加兩條 | `docs/phase_exit/phase5.md`「獨立審查」，commit `1dee974` |
 | 2026-10-08 | Phase 5 PicoRV32 的乾淨 `make regress-picorv32`（`5aaf036`） | `harden-soc` FAIL：golden 10 個版圖 metric 不同（diode 100 → 99、cell ±1、`global_route__vias` 20 → 11），其他全 PASS | 已驗證：PicoRV32 的版圖誤差依決定清空，這是第一次量到 PicoRV32 在 run 之間的差異 | 使用者決定再量 2 次，用 4 個樣本的最大差異 × 5 訂誤差（ADR-0015 的方法） | p5fin_pico worktree `runs/p5fin_pico_regress_signoff/criteria_review.md` |
+| 2026-10-08 | Phase 5 結案（`71b1454`） | PicoRV32 SoC 加寬 met5 後共 6 次 run，版圖只有兩種結果（3 次與 golden 相同、3 次差 1 顆 diode）；依 4 個樣本訂的誤差這次沒用上（435 個逐項相同）。picorv32_core 之前兩次各有 71 個在誤差內，這次 325 個逐項相同 | 已驗證 | 誤差仍照「實測最大差異 × 5」；只有一兩個樣本時，結果剛好相同不代表一直相同（規則 5） | `docs/phase_exit/phase5.md`「可重現性」 |
