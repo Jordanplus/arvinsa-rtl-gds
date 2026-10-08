@@ -1,3 +1,5 @@
 #!/bin/sh
-# Status-line progress for this repo (CLAUDE.md rule 11): called by ~/.claude/statusline-command.sh.
-exec python3 "$(dirname "$0")/../scripts/progress.py" --oneline "$@"
+# Progress of this repo (CLAUDE.md rule 11) for Claude Code: no argument = one line for the status
+# line (~/.claude/statusline-command.sh); --json = todo and jobs for the progress-pane mod.
+[ $# -eq 0 ] && set -- --oneline
+exec python3 "$(dirname "$0")/../scripts/progress.py" "$@"

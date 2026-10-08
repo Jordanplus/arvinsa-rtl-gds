@@ -26,4 +26,4 @@
       - 格式：`- [ ]` 待辦、`- [~]` 進行中、`- [x]` 完成。
     - Phase 開始時，依 `project-plan.md` §8 建立清單；之後每開始或完成一項就更新。
     - Phase exit review 寫完後清空。
-    - Claude Code 狀態列的第二行由 `scripts/progress.py` 顯示，透過 `.claude/statusline-progress` 呼叫。內容是待辦剩幾項，以及執行中工作的進度百分比。這些百分比只是給人看的估計，signoff 不讀它們。
+    - Claude Code 狀態列的第二行由 `scripts/progress.py` 顯示，透過 `.claude/statusline-progress` 呼叫；`--json` 給 `/progress` 進度面板。內容是待辦剩幾項，以及執行中工作的進度百分比。這些百分比只是給人看的估計，signoff 不讀它們。

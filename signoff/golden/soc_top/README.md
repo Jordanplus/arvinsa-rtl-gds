@@ -6,13 +6,23 @@
 
 | 項目 | 值 |
 |---|---|
-| 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`，原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-07（Phase 5），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 5 PicoRV32 的 ADR-0016 正式 harden，commit `2caad0e`（p5h3 worktree；log `runs/p5_pico_harden3.log`）。`check_signoff.py` 當時有兩類 FAIL：與舊 golden 比對（預期），以及 `timing__unannotated_net__count` 118 ≠ 133（上限依新的 clock tree 改成 118，組成見上限檔）。改完上限後只剩 golden；`check_soc.py`（含 `cts_macro_latency`）、`sram_drc_alone`、`check_inputs.py --resolved`、`provenance.py`、`review_criteria.py` 全部 PASS |
-| signoff criteria 檢查 | p5h3 worktree `runs/p5_pico_h3_signoff/criteria_review.md`（跑的時候 tag 是 `soc_top`，之後改名為 `p5_pico_h3`） |
+| 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`（之後改名為 `runs/p5_pico_pdn_signoff/`），原檔複製，沒有修改 |
+| 日期／平台 | 2026-10-08（Phase 5），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 5 獨立審查後的修正（使用者決定 2026-10-08）：`PDN_HWIDTH` 4.8（met5 strap 1.6 → 4.8 µm）、最壞組合 IR 檢查（`pnr/soc_top/ir_worst.py`）後的第一次 harden，commit `1dee974`（p5h3 worktree；log `runs/p5_pdn_harden_picorv32.log`）。`check_signoff.py` 只有與舊 golden 比對 FAIL（預期）；其他全部 PASS |
+| signoff criteria 檢查 | p5h3 worktree `runs/p5_pico_pdn_signoff/criteria_review.md` |
 | LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config.json` sha256 `df16dc8d1f4fc5d3c414b613c4ca97b86ee6e0cfa96f7a35a44d85a50d9a48b8`（含 `meta.substituting_steps`；CTS step 在 `pnr/librelane_plugin_arvinsa/`） |
-| 本檔 sha256 | `c4cad54c295e2c9e47fdcc9a5645846d68cd77f4aa89e1346c46d81249446e8e` |
+| flow 設定 | `pnr/soc_top/config.json` sha256 `959f20ffea4f0b7458538bd9df9e2c1c1990419f10fcf7a0ecd43513ff910be1`（含 `PDN_HWIDTH` 4.8 與 `meta.substituting_steps`） |
+| 本檔 sha256 | `002cadb49718fb375618d3499eae9336dfbd30f6f228e79709d88720c86b89fb` |
+
+## 與 ADR-0016 golden 的差異（逐項檢視過，2026-10-08）
+
+- 設定變更只有 `PDN_HWIDTH` 4.8，以及 vssd1 的供電點。
+- metrics 從 436 個變成 435 個：少了 `route__drc_errors__iter:6`、`route__wirelength__iter:6`（detailed routing 少跑一輪），多了 `flow__warnings__count:GRT-0243`。共有的 434 個中 284 個相同、150 個改變；比 Hazard3 版多，PicoRV32 的 placement 跟著變得較多（原因沒有查證）。
+- IR（nom_tt）：3.72＋3.68 → **2.03＋2.03 mV**。最壞組合：10.36 → **5.72 mV**。
+- timing：最差 setup +0.765 → **+0.789 ns**（同一類 SRAM 半週期路徑）；hold +0.079 → +0.080 ns；ss_n40C 的 hold 少了 0.02–0.03 ns，clock skew 差 0.01–0.04 ns。
+- cell：standard cell 31,960 → 31,966；diode 83 → 100；hold buffer 3,563 → 3,562。
+- Magic DRC 4,665,810 → 4,746,079：同 Hazard3 版，全部在 SRAM 框內、位置對得上。
+- 沒變的：KLayout DRC 0、LVS 0、XOR 0、unannotated 118。
 
 ## 與 Phase 3.5 golden 的差異（逐項檢視過，2026-10-07）
 
@@ -56,6 +66,8 @@
 
 | run | 與本檔比較 |
 |---|---|
+| Phase 5 PicoRV32，`PDN_HWIDTH` 4.8（commit `1dee974`） | 本檔來源 |
+| 下列為 ADR-0016 golden（見 git 歷史，commit `1dee974` 以前的本檔）的紀錄 | |
 | Phase 5 PicoRV32 ADR-0016 正式 harden（commit `2caad0e`） | 本檔來源 |
 | Phase 5 PicoRV32 確認 harden（commit `1d13775`） | 436 個完全相同；第 44 步遇到 GRT-0229，從該步接續一次（接續的 run 與一次跑完的 run 結果相同）→ harden-soc PASS |
 | Phase 5 乾淨 checkout 的 `make regress-picorv32`（commit `7348fab`，2026-10-08） | 436 個完全相同，沒有重試 → harden-soc PASS，regress 26/26 |

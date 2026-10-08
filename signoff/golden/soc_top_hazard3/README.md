@@ -6,13 +6,13 @@
 
 | 項目 | 值 |
 |---|---|
-| 產生方式 | `make harden-soc CPU=hazard3`（tag `soc_top_hazard3`）的 `runs/soc_top_hazard3_signoff/metrics.json`（之後改名為 `runs/p5_h3_h10_signoff/`），原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-07（Phase 5），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 5 Hazard3 第 10 次 harden-soc（ADR-0016 正式 harden），commit `2caad0e`（worktree `../arvinsa-rtl-gds-p5h3`；log `runs/p5_h3_harden10.log`）。`check_signoff.py` 當時有兩類 FAIL：與舊 golden 比對（預期），以及 `timing__unannotated_net__count` 126 ≠ 125（上限依新的 clock tree 改成 126，見上限檔註解）。改完上限後只剩 golden；`check_soc.py`（含 `cts_macro_latency`）、`sram_drc_alone`、`check_inputs.py --resolved`、`provenance.py`、`review_criteria.py` 全部 PASS |
-| signoff criteria 檢查 | `runs/p5_h3_h10_signoff/criteria_review.md`（p5h3 worktree） |
+| 產生方式 | `make harden-soc CPU=hazard3`（tag `soc_top_hazard3`）的 `runs/soc_top_hazard3_signoff/metrics.json`（之後改名為 `runs/p5_h3_pdn_signoff/`），原檔複製，沒有修改 |
+| 日期／平台 | 2026-10-08（Phase 5），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 5 獨立審查後的修正（使用者決定 2026-10-08）：`PDN_HWIDTH` 4.8（met5 strap 1.6 → 4.8 µm）、最壞組合 IR 檢查（`pnr/soc_top/ir_worst.py`）後的第一次 harden，commit `1dee974`（worktree `../arvinsa-rtl-gds-p5h3`；log `runs/p5_pdn_harden_hazard3.log`）。`check_signoff.py` 只有與舊 golden 比對 FAIL（預期）；其他 limits、`check_soc.py`、`ir_worst.py`（14.13 mV）、`review_criteria.py` 全部 PASS |
+| signoff criteria 檢查 | `runs/p5_h3_pdn_signoff/criteria_review.md`（p5h3 worktree） |
 | LibreLane／PDK／Hazard3／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config_hazard3.json` sha256 `ee7fa839d6cf8aec6083d411d080338db006eedb70bd918b50ede36ce861e747`（含 `meta.substituting_steps`；CTS step 在 `pnr/librelane_plugin_arvinsa/`） |
-| 本檔 sha256 | `e7fbdb2b720c937394fc8e80f2ee481277039bf969fd95a20111d0312dd2b62c` |
+| flow 設定 | `pnr/soc_top/config_hazard3.json` sha256 `fdd383f80470ebd409f1313983029816ff5236d5c481accee154e6f58ee24293`（含 `PDN_HWIDTH` 4.8 與 `meta.substituting_steps`） |
+| 本檔 sha256 | `d2147738f94e1eb1fdccb130a6d84eb8071d3e46391bd82c6e8a94c0c6ae745c` |
 
 ## 與第 5 次 harden 的 golden 的差異（逐項檢視過，2026-10-07）
 
@@ -24,6 +24,17 @@
 - 功耗 19.43 → 19.34 mW；IR 9.22 → 9.18 mV；線長 798,897 → 795,843 µm。
 - `timing__unannotated_net__count` 125 → 126：CTS dummy load 81 → 82。
 - 沒變的：Magic DRC 4,665,810、KLayout DRC 0、LVS 0、XOR 0、SRAM 位置。
+
+## 與 ADR-0016 golden 的差異（逐項檢視過，2026-10-08）
+
+- 設定變更只有 `PDN_HWIDTH` 4.8，以及 `pnr/soc_top/vsrc/vssd1.vsrc` 跟著 strap 位置改。
+- metrics 從 434 個變成 436 個：多了 `route__drc_errors__iter:5`、`route__wirelength__iter:5`（detailed routing 多跑一輪，最終 DRC 0）。共有的 434 個中 287 個相同、147 個改變。
+- IR（nom_tt）：9.18＋9.09 → **5.02＋4.96 mV**。最壞組合（`ir_worst.py`）：25.75 → **14.13 mV**。這是改動的目的。
+- timing 幾乎不變：最差 setup +1.116 → +1.114 ns，hold +0.106 → +0.109 ns，仍是同一條 SRAM 半週期路徑。
+- cell：standard cell 30,428 → 30,423，面積 239,062 → 238,995 µm²；diode 92 → 88；hold buffer 2,721 不變。
+- 功耗 19.34 → 19.33 mW；線長 795,843 → 796,279 µm。
+- **Magic DRC 4,665,810 → 4,746,079**：全部在 SRAM 框內，每一個都對得上 SRAM 單獨檢查時的位置（`check_soc.py magic_drc` PASS）。推測是加寬的 met5 跨過 SRAM 的方式改變了 Magic 的分割或計數，沒有逐規則比對。
+- 沒變的：KLayout DRC 0、LVS 0、XOR 0、unannotated 126、SRAM 位置。
 
 ## 與 PicoRV32 版 golden（`signoff/golden/soc_top/`）的差異（第 5 次 harden 的 golden 建立時檢視，數字是當時的）
 
@@ -43,6 +54,8 @@
 
 | run | 與本檔比較 |
 |---|---|
+| Phase 5 Hazard3，`PDN_HWIDTH` 4.8（commit `1dee974`） | 本檔來源 |
+| 下列為 ADR-0016 golden（見 git 歷史，commit `1dee974` 以前的本檔）的紀錄 | |
 | Phase 5 Hazard3 第 10 次 harden-soc（commit `2caad0e`，ADR-0016） | 本檔來源 |
 | Phase 5 Hazard3 第 11 次 harden-soc（commit `1d13775`） | 434 個完全相同 → harden-soc PASS |
 | Phase 5 乾淨 checkout 的 `make regress`（commit `7348fab`，2026-10-07） | 434 個完全相同；第 44 步遇到 GRT-0229，從該步接續一次 → harden-soc PASS，regress 21/21 |

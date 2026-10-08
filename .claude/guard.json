@@ -1,0 +1,11 @@
+{
+  "//": "Read by ~/.claude/hooks/guard-bash.py (user decision 2026-10-08: block only what clearly goes wrong). public_repo: a push must not add local absolute paths or secrets. heavy: harden needs a committed tree (provenance fails only at the end otherwise); at most 2 LibreLane or EQY runs at once on this 24 GB machine; free + inactive memory at least 4 GB (Phase 5: a runaway repair_design reached 92.9 GB with swap).",
+  "public_repo": true,
+  "heavy": {
+    "commands": ["\\bmake\\b[^;&|]*\\b(harden|regress|neg-eqy|eqy-soc|eqy-core|gl-soc|gl-core|neg-gl|neg-pnr)", "python3 -m librelane"],
+    "require_clean": ["\\bmake\\b[^;&|]*\\bharden-(soc|core)\\b"],
+    "processes": ["^\\S*/[Pp]ython[0-9.]* -m librelane --run-tag", "^\\S*[Pp]ython[0-9.]* \\S*run_eqy\\.py"],
+    "max_concurrent": 2,
+    "min_free_gb": 4
+  }
+}
