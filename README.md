@@ -164,7 +164,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
-| 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`、`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`）；OpenROAD 報 `ODB-0292 LEF data from ... is discarded due to errors`；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
+| 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`、`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`、`LEF has no FOREIGN`）；OpenROAD 報 `ODB-0292 LEF data from ... is discarded due to errors`；最終 GDS 的 macro 是空的、XOR 差異幾百萬；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
 | SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix；用 OpenRAM 自產 macro（官方環境只有 x86_64-linux、要不要關 use_nix、words_per_row 與讀取電路）；OpenRAM 的 LVS 用新 PDK 報 `Netlists do not match`（`special_nfet_01v8`、`special_pfet_latch`）、log 有 `ERROR` 但 exit 0、`Custom cell pin names do not match spice file`、同一設定產生的 GDS 每次不同；`gen_char_lib` 報 `internal_power ... outside (0, 1000]`；用 SPICE 量 internal power 時漏電隨網表改變或外插成負值；漏電量測窗 `leakage window ... not settled`、bitcell 漏電不隨溫度變或 `bitcell leakage depends on gmin`、用 `.nodeset` 算 DC 工作點報 `doAnalyses: out of memory`；sky130 1RW 報 `must have an even number of cols including replica cols`、DRC／LVS 失敗 | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
@@ -267,7 +267,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 - **何時用**：把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
 - **重點**：
-  - 自建或收到 macro（任何產生工具或廠商）後，先檢查每個交付檔的內容：LEF、.lib、Verilog、SPICE 的名稱、腳位與方向一致，.lib 的數字在合理範圍、面積等於 LEF 尺寸，LEF 尺寸等於 GDS 外框，LEF 的資料庫單位不比 tech LEF 細。產生工具自己的 DRC、LVS 不看這些；OpenRAM dev 的 .lib power 錯了 10 個數量級仍然 DRC／LVS 全過，它的 LEF 寫 `DATABASE MICRONS 2000`，OpenROAD 會整份丟掉（`ODB-0292`），產生 flow 用的 LEF 時要無損改成 1000。
+  - 自建或收到 macro（任何產生工具或廠商）後，先檢查每個交付檔的內容：LEF、.lib、Verilog、SPICE 的名稱、腳位與方向一致，.lib 的數字在合理範圍、面積等於 LEF 尺寸，LEF 尺寸等於 GDS 外框，LEF 的資料庫單位不比 tech LEF 細。產生工具自己的 DRC、LVS 不看這些；OpenRAM dev 的 .lib power 錯了 10 個數量級仍然 DRC／LVS 全過，它的 LEF 寫 `DATABASE MICRONS 2000`，OpenROAD 會整份丟掉（`ODB-0292`），產生 flow 用的 LEF 時要無損改成 1000；它的 LEF 也沒有 `FOREIGN`，LibreLane 的 KLayout 輸出會留下空的 macro 而不報錯（只有 XOR 抓到），要補上，harden 後再比對最終 GDS 的 macro 和 macro 自己的 GDS（`check_soc.py macro_gds`）。
   - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、每個 PVT 一份的 .lib（SPICE 實測，Phase 3.5 起）、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
   - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以 .lib 要每個 PVT 一份（用 SPICE 實測產生，看 openram-macro-characterization）；只有廠商的單一 TT 解析 .lib 時，暫時用一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
   - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
@@ -276,7 +276,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫、以及 ss 1.60 V 室溫時會讀出前一次的值；corner 之間的溫度 STA 看不到，要另外模擬。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
   - macro 的 clock：CTS 預設會在 macro clock pin 前插 delay buffer 對齊 flip-flop 的 latency，對 SRAM 半週期讀出反而有害；soc_top 關掉了（ADR-0016，看 cts-clock-tree）。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
-- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、`scripts/check_macro_views.py`（`make macro-views`）、ADR-0006／0007／0008／0010／0016／0018。negative test：Q1–Q12（`make neg-macro-views`）、P08、P09、P14、P16–P20、P30、P32、P63–P66。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、`scripts/check_macro_views.py`（`make macro-views`）、ADR-0006／0007／0008／0010／0016／0018。negative test：Q1–Q13（`make neg-macro-views`）、P08、P09、P14、P16–P20、P30、P32、P63–P69。
 
 #### openram-macro-characterization：SRAM macro 的 SPICE 特性化
 

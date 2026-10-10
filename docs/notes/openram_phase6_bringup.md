@@ -360,3 +360,17 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 - 修剪網表的 deck 也改 1e-15（5 個平行）：tt 449.5 nW（原 453.8，468 秒）、ss 100°C 1206.6（1241.2，305 秒）、ff 100°C 400.66 µW（400.73，259 秒）、ff −40°C 166.3 nW（246.3，1392 秒）、ss −40°C `doAnalyses: TRAN:  Timestep too small; time = 1.57627e-09, timestep = 1.25e-22: trouble with node "vwm3#branch"`。tt 的 1264 顆保留 bitcell 照單顆結果應少約 54 nW，實際少 4.3 nW（原因未查；這份 deck 的工作點也走了 dynamic gmin stepping）。
 - 完整網表舊波形（無 bitcell `.ic`，`power/full/<pvt>/leak`）對快速量法（當時 gmin 預設）：ff 100°C 404.3 對 409.9 µW（+1.4%）；ff −40°C 0.760 對 0.999 µW（+31%）；ss −40°C 量測窗前後半差 166%（半穩態 bitcell），不能比。
 - 處理：單顆 deck `gmin=1e-17`，再以 1e-18 跑 Q=0 核對（`power.cell_gmin_problem()`，差 > 1% FAIL），N21。`make openram-power` PASS（1 分鐘）、`make openram-lib`、view QA（`check_macro_views.py`，LEF／5 份 .lib／Verilog／SPICE／GDS）PASS、`make openram-check-lib` PASS。整顆漏電：tt 461.9 nW、ss 100°C 1256.4、ff −40°C 252.0、ss −40°C 80.7、ff 100°C 409.14 µW。
+
+## 步驟 4a：換進 soc_top（2026-10-10，commit `221822a`）
+
+- view：`openram/` 的 GDS／LEF／Verilog 進版控（sha256 對 `summary.json`）；flow 用的 LEF 由 `gen_antenna_lef.py` 產生（59 支輸入腳位的 `ANTENNAGATEAREA`：資料／位址 0.6 µm²、`clk0`／`clk1` 0.222 µm²）。OpenRAM dev 的網表沒有 `*.PININFO`，輸入腳位改取 LEF 並核對是網表頂層的 port；新版 Verilog 模型的 `mem` 已宣告在使用前，`gen_sim_model.py` 改成只在需要時搬移。
+- 擺放：(290.72, 353.6)、N（ADR-0006 Phase 6 補充）。只跑到 PDN 的試跑 `runs/p6_fp_pico` 第一次在 Floorplan 失敗：`[ODB-0205] The LEF UNITS DATABASE MICRON convert factor (2000) is greater than the database units per micron (1000)`、`[ODB-0292] LEF data from ... is discarded due to errors`。OpenRAM LEF 的 1178 個座標都在 0.005 µm 格點上，改成 1000 無損；改後試跑 rc=0、沒有 PDN 錯誤、SRAM 右邊沒有 row。唯一新 warning（64 支輸出腳位沒有 antenna diffusion 資訊）Phase 5 也有。
+- RTL：`clk1` 接 `clk`（決定 9）。lint 49 變體、synth-check、regress-rtl 兩個 CPU 30/30。
+
+## 步驟 4b 第一輪 harden（2026-10-10，commit `221822a`，兩個 CPU 平行）
+
+- signoff 上限只有兩項 FAIL：`timing__unannotated_net__count`（PicoRV32 148／上限 118、Hazard3 151／126，上限要照推導重算）與 `design__xor_difference__count`（5,691,003／5,690,757，上限 0）；時序、DRV、IR、LVS 都在上限內。`check_soc`：`port1_tieoff`（`clk1` 追到 `clk`）、`sta_setup`（沒有警告）PASS；`sram_drc_ref` FAIL（SRAM 單獨 5,576,033 個、31 種，參考檔是預建的 5,579,161、30 種，要重建）。golden 152／88 列不同（預期）。
+- XOR：差異分布在 30 層，包括 SRAM 的 poly、diff、licon、li1 與 SRAM 專用層。KLayout 輸出的 `soc_top.gds` 裡 SRAM cell 沒有子 cell、外框是空的；Magic 的 GDS 有 168 個（名稱加了 `EN_`）。兩邊 GDS 的資料庫單位都是 0.001（排除）。
+- 根因（已驗證）：LibreLane `scripts/klayout/stream_out.py` 先用 LEF＋DEF 建 cell、清空，再合併 GDS；OpenRAM 的 LEF 沒有 `FOREIGN`，SRAM 不是 ghost cell，GDS 的同名 cell 被 `RenameCell` 改名後沒被引用；缺 GDS 的檢查只看 ghost cell，log 印 `All LEF cells have matching GDS cells`。單步重跑 `KLayout.StreamOut`、LEF 加 `FOREIGN` 後 169 個 cell 全部相同（`scripts/check_macro_gds.py` PASS）。
+- 連帶發現：Magic DRC 讀的是同一份 GDS，`magic_drc` 框內 0 個違規仍 PASS（比對的集合是空的）。
+- 處理（commit `3ceca55`）：`add_foreign()`、view QA `foreign`（Q13）、`check_macro_gds.py`＋`check_soc.py macro_gds`（步驟 3d）、`magic_drc` 框內下限 50%，P67–P69；P21 的注入點改成 (20, 20)（KLayout 掃描新 GDS）。兩個 CPU 重新 harden。
