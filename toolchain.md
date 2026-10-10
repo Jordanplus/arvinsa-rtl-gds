@@ -73,6 +73,15 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 
 為什麼不用 LibreLane 自己下載 PDK：ciel 只用一條連線、不能續傳。2026-10-03 本機到 GitHub 單一連線只有 45–175 KB/s，中斷就要從頭重下約 340 MB；平行下載約 360 KB/s。
 
+### 3.1 OpenRAM 產生 macro 用的 PDK（Phase 6，ADR-0018 決定 5）
+
+| 項目 | 值 |
+|---|---|
+| open_pdks commit（OpenRAM Makefile 的 `SKY130_CIEL`，2022.07.29） | `e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066` |
+| 用到的壓縮檔（ciel-releases `sky130-<hash>`） | `common.tar.zst` sha256 `a37160e9a00e39e540e5e7746c064537c7331d6542ebd7a3b05b5801ef7cf044`；`sky130_fd_pr.tar.zst` sha256 `9795dee2b08e0ca794e39a041f661b72168cba1dd4140474bde94320d75bcb46`（2026-10-08 由下載檔算出；release 沒有 digest，大小與 GitHub API 相符） |
+| 安裝位置 | `.tools/openram-pdk-e8294524/`（`make openram-setup`），只用來產生 macro 與跑 OpenRAM 的 DRC／LVS；SoC flow 與 SPICE 特性化仍用上表的 `8afc834` |
+| 為什麼不用 `8afc834` | 兩版之間 bitcell PMOS 從 `special_pfet_pass` 改名 `special_pfet_latch`、`w<0.42` 的 NMOS 改萃取成 `special_nfet_01v8`，sky130_fd_bd_sram 的 cell 在 `8afc834` 下 LVS 不過（`docs/notes/openram_phase6_bringup.md`） |
+
 ## 4. IP
 
 | IP | 用途 | 版本 | 授權 | 位置 |
@@ -86,7 +95,7 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 | 工具／IP | 階段 | 用途 | 備註 |
 |---|---|---|---|
 | Hazard3 | Phase 5 | 第二顆 RISC-V core | Apache-2.0 |
-| OpenRAM | Phase 3.5／6 | SRAM 產生與 SPICE characterization | 只支援 x86_64 Linux（Colab 或 Lima VM） |
+| OpenRAM | Phase 6 | SRAM macro 產生（特性化仍用 `ip/sram/char/` 的 ngspice 流程） | https://github.com/VLSIDA/OpenRAM dev `3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8`；cell 庫 https://github.com/VLSIDA/sky130_fd_bd_sram `fc63b12883b4bf458ee8c756ba64c37063e1ffb9`；`make openram-setup` 裝到 `.tools/`。官方環境（`nix develop`）只宣告 x86_64-linux，但 OpenRAM 是純 Python，`use_nix=False` 時用 PATH 上的工具；本機 macOS 原生執行（2026-10-08 實測可行），Colab 只當對照（ADR-0018） |
 | CVC | 可選 | 含 SDF 的 gate-level 模擬 | x86_64 Linux |
 
 ## 6. 釘版值對照（由 `make env-check` 檢查）

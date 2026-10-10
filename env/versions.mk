@@ -37,3 +37,16 @@ NGSPICE_MIN          = 47
 XPACK_RISCV_VERSION  = 15.2.0-1
 XPACK_RISCV_SIZE     = 401163559
 XPACK_RISCV_SHA256   = 6588e8351455fad8aca37551f0e5a5543f3346bfa9a837cf03cbd3bdd4989f8f
+
+# ---- OpenRAM self-generated SRAM (Phase 6, ADR-0018); make openram-setup installs into .tools/ ----
+# The macro is generated and DRC/LVS-checked with OpenRAM's own pinned PDK (decision 5); the SoC flow keeps SKY130_PDK_HASH.
+OPENRAM_REPO             = https://github.com/VLSIDA/OpenRAM
+OPENRAM_COMMIT           = 3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8
+SKY130_FD_BD_SRAM_REPO   = https://github.com/VLSIDA/sky130_fd_bd_sram
+SKY130_FD_BD_SRAM_COMMIT = fc63b12883b4bf458ee8c756ba64c37063e1ffb9
+# open_pdks commit pinned by OpenRAM's Makefile (SKY130_CIEL, 2022.07.29); only libs.tech (common) and sky130_fd_pr are used
+# SHA256 computed on 2026-10-08 from the ciel-releases assets (the release has no digest; sizes match the GitHub API,
+# and Colab's independent ciel install of the same hash produced the same macro, docs/notes/openram_phase6_bringup.md)
+OPENRAM_PDK_HASH         = e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066
+OPENRAM_PDK_COMMON_SHA256 = a37160e9a00e39e540e5e7746c064537c7331d6542ebd7a3b05b5801ef7cf044
+OPENRAM_PDK_FD_PR_SHA256  = 9795dee2b08e0ca794e39a041f661b72168cba1dd4140474bde94320d75bcb46

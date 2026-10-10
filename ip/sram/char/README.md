@@ -11,9 +11,11 @@
 | `gen_char_lib.py` | 由 `char.json` 和 PDK 的 TT .lib（當格式範本）產生 5 份 .lib；`--check` 檢查是否過期；先檢查 `char.json` 每筆紀錄是它的 PVT、數值合理（有限、pass > fail 且差距不超過解析度） |
 | `check_char_lib.py` | 獨立檢查（不 import `gen_char_lib.py`）：從 `char.json` 重算 .lib 的每個數字並比對；檢查 `char.json` 來自釘版的 PDK 網表與 `characterize.py` 的設定；檢查 `confirm.json` |
 | `confirm_char_lib.py` | 確認模擬：每個量得到的 PVT，用 .lib 最終採用的 setup／hold／pulse width／週期跑一次，全部要讀寫正確，結果寫進 `confirm.json` |
-| `neg_char.py` | 特性化本身的植入錯誤 N1–N16 |
+| `power.py` | internal power 與漏電（ADR-0018 決定 10、11）：完整網表上同一個寫／讀／閒置序列的 VDD 電流積分成每次時脈邊緣的能量（扣每個窗口的局部基準），另跑一份待機狀態的 deck 量漏電，結果 `power.json`；`gen_char_lib.py --power` 寫進 .lib，`check_char_lib.py` 重算 |
+| `neg_char.py` | 特性化本身的植入錯誤 N1–N21 |
 | `extract_sram.py` | 用 Magic 從 GDS 萃取含走線電容的網表（寄生的影響比較用） |
 | `../sky130_sram_2kbyte_1rw1r_32x512_8/char/` | 進版控的結果：`char.json`、`confirm.json` 與 5 份 `<macro>__<pvt>.lib` |
+| `../arv_sram_2kbyte_1rw1r_32x512_8/char/` | Phase 6 自產 macro 的同一組結果（ADR-0018，見下一節） |
 
 ## 怎麼跑
 
@@ -26,6 +28,21 @@ make sram-char     # 重新特性化：先 tt，再以 tt 為中心跑其他 4 �
 需要 ngspice（`toolchain.md`）與 PDK（`env/versions.mk` 的版本）。每次模擬存在 `runs/sram_char/<netlist>/<pvt>/<名稱>/`（deck、log、波形）；同一個 deck 已經跑過、而且那次的 log 沒有錯誤、波形涵蓋到 `.tran` 的結束時間，就不會重跑。中途失敗的模擬可能留下半截的波形，不能重用；讀出檢查要看的時間點超過波形結尾時直接報錯（Phase 3.5 審查）。有任何 PVT 失敗時 `characterize.py` 不改 `char.json`（避免新舊紀錄混在一起），已跑完的模擬留在快取裡。
 
 `make harden-soc` 開頭的 `check_inputs.py` 會跑 `gen_char_lib.py --check`（.lib 沒過期）與 `check_char_lib.py`（數字獨立重算、來源、確認模擬）。重新特性化或改 `gen_char_lib.py` 之後，要再跑 `confirm_char_lib.py` 更新 `confirm.json`（4 個 PVT、20 次模擬，約 1 小時）。
+
+### Phase 6：OpenRAM 自產的 macro（ADR-0018）
+
+同一套程式，用環境變數換 macro：`SRAM_CHAR_MACRO`（macro 名稱）與 `SRAM_CHAR_NETLIST`（電晶體級網表，預設是 PDK 的）。Makefile 已包好：
+
+```bash
+make openram-lib-template   # OpenRAM 的 TT .lib，internal_power 換成預建 macro 的值（skill 規則 24）
+make openram-char           # 5 個 PVT 的特性化，接著 openram-lib、openram-confirm（數小時）
+make openram-lib            # 由 char.json 重新產生 5 份 .lib
+make openram-check-lib      # 獨立重算、來源（ip/sram/<macro>/openram/<macro>.sp 與 summary.json）、confirm.json
+```
+
+- 網表修剪時把 `special_pfet_pass` 改名成 `special_pfet_latch`（OpenRAM 用 2022 PDK 產生，SPICE 用流程的 PDK，ADR-0018 決定 5）；PDK 網表沒有這個元件，修剪結果不變。
+- 模擬存在 `runs/sram_char/<macro>/schematic/`，不和預建 macro 的快取混在一起。
+- 測試序列中 port 1 照 SoC 的接法：`csb1=1`、`addr1=0`、`clk1` 和 `clk0` 同一個波形（ADR-0018 決定 9：`clk1` 固定為 0 時，port 1 的 chip-select DFF 從不鎖存）。
 
 ## 量什麼、怎麼量
 
@@ -54,7 +71,7 @@ make sram-char     # 重新特性化：先 tt，再以 tt 為中心跑其他 4 �
 
 **讀取失敗的 PVT**：每個 PVT 先跑延遲表中間那一點的模擬（和延遲表共用）。只要有一次讀取錯，就只記下錯的讀取（`char.json` 的 `read_fail`），不量時序；`gen_char_lib.py` 為它產生佔位 .lib（`PLACEHOLDER_FROM` 的數字，hold 弧取所有 PVT 最早的值，檔頭寫明）。目前 STA 的 PVT 中只有 ss −40°C 1.60 V：PDK 這顆 macro 在低溫，以及 ss 1.60 V 的室溫（25°C）會讀成前一次的值（25°C 不是 STA corner），原因與證據見 ADR-0010「ss −40°C 讀取失敗」。
 
-**port 1**：SoC 裡 tie-off，STA 沒有 clk1 的 clock，沿用 PDK 的解析數字；功耗也沿用 PDK 的數字。
+**port 1**：SoC 裡 tie-off，STA 沒有 clk1 的 clock，沿用 PDK 的解析數字。功耗：預建 macro 沿用 PDK 的解析數字；自產 macro 用 `power.py` 量（`make openram-power`）。port 1 從不選時它的 sense amp 浮接、上下同時導通，這個靜態電流不在 .lib 的漏電裡，記在 `power.json` 的 `static_mw`（ADR-0018 決定 11）。
 
 ## 植入錯誤（`make neg-char`）
 
@@ -76,8 +93,13 @@ make sram-char     # 重新特性化：先 tt，再以 tt 為中心跑其他 4 �
 | N14 | `confirm.json` 的值與 .lib 不同、某條沒有 PASS、來自另一份 `char.json`（先做正向對照） | `check_char_lib.py` confirm FAIL（每一種） |
 | N15 | 中途失敗的模擬快取（log 有錯誤、波形被截斷） | 快取不被重用；讀出檢查報錯而不是判對 |
 | N16 | 特性化時一個 PVT 失敗 | `characterize.py` FAIL，`char.json` 不變 |
+| N17 | `power.json` 來自另一份網表、有負的能量（先做正向對照：.lib 標明 power 是量測值） | `gen_char_lib.py --power` FAIL（每一種） |
+| N18 | .lib 的量測 power 被手改、`gen_char_lib.py` 讀寫對調、.lib 標明量測值但 `power.json` 被刪（先做正向對照） | `check_char_lib.py` power FAIL（每一種，且只有 power 列） |
+| N19 | `power.py` 的計算：合成波形，已知每個邊緣的能量、clk1 的份、dout 負載、整段上升 100 倍的靜態電流，以及停住邊緣有突波的漏電 deck | 每一項都在 1% 內算回來；植入「整段扣時脈停住後的值」「漏電量測窗包含停住的邊緣」「不扣靜態電流」都 FAIL |
+| N20 | 漏電量測窗裡有 bitcell 翻轉的階躍或 20% 斜率、上升 6%（4.6 nW）、下降 6%（25 nW）；少一顆 bitcell 的網表 | `power.unsettled()` 必須 FAIL（平坦、1% 緩降、階躍在窗外、下降 6% 但只有 4.6 nW 必須 PASS，ADR-0018 決定 14）；`sramchar.bitcell_ic()` 必須 FAIL（PDK 網表每顆 bitcell 一行 `.ic`） |
+| N21 | 單顆 bitcell 漏電 deck 拿掉 gmin 設定（ngspice 預設 1e-12） | `power.cell_gmin_problem()` 對 `CELL_GMIN_CHECK` 的 deck 必須報出（預設 gmin 49.8 pW 對 1.19 pW）；`CELL_GMIN` 必須 PASS（ADR-0018 決定 15） |
 
-N5–N16 只要幾秒；N1–N3 要跑 ngspice。這些新案例都在修正前的程式上確認過抓不到（N15 在舊程式上沒有對應的檢查函式）。
+N5–N20 只要幾秒；N1–N3 要跑 ngspice，N21 跑三份單顆 bitcell deck（幾秒）。這些新案例都在修正前的程式上確認過抓不到（N15 在舊程式上沒有對應的檢查函式）。
 
 把 .lib 接進 SoC 之後的植入錯誤在 `pnr/soc_top/neg_pnr.py`：
 - P04（sram0 延遲 ×10 → setup FAIL）；

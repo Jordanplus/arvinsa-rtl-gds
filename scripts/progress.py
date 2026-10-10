@@ -12,6 +12,9 @@ Running work is found with ps in this repo and in every worktree of it (git work
                                     state_out.json: a stopped retry attempt does not count, the same rule
                                     as signoff/scripts/review_criteria.py); no reference run: step count only
   any other make <target>           "running" (no denominator, so no percentage)
+  a Python script of the tree run     "running", labelled with the script name (for example characterize.py
+  directly (not under make)           or power.py started without make; 2026-10-09 the status line showed
+                                      nothing during a 6-hour characterization started that way)
 To-do list: runs/todo.md of the main checkout (git-ignored: ticking an item must not dirty the working
 tree that harden and regress require clean); `- [ ]` open, `- [~]` in progress, `- [x]` done.
 The percentages are estimates for people; nothing in signoff reads them.
@@ -159,7 +162,12 @@ def jobs():
     librelane = [p for p, (_, _, c) in procs.items() if "-m librelane" in c and "--run-tag" in c]
     # top-level make only: EQY and others run their own make (-f strategies.mk, -C work) underneath
     makes = [p for p, (_, _, c) in procs.items() if is_make(c) and not has_ancestor(p, procs, is_make)]
-    where = cwds(regress + makes)
+    # python <tree>/.../x.py (or a relative x.py run from inside a tree), not started by make or regress
+    is_py = lambda c: re.match(r"(\S*/)?[Pp]ython[\d.]*\s", c) is not None or "/Python.app/" in c
+    scripts = [p for p, (_, _, c) in procs.items() if is_py(c) and re.search(r"\S+\.py\b", c)
+               and not is_regress(c) and not has_ancestor(p, procs, is_make) and not has_ancestor(p, procs, is_regress)
+               and not has_ancestor(p, procs, is_py) and os.path.basename(__file__) not in c]
+    where = cwds(regress + makes + scripts)
     by_tree = {}
     for p in librelane:
         cmd = procs[p][2]
@@ -197,6 +205,18 @@ def jobs():
         made = by_tree.setdefault(tree, {}).setdefault("make", [])
         if target not in [m["label"] for m in made]:
             made.append({"kind": "make", "label": target, "done": None, "total": None, "current": None,
+                         "elapsed_s": procs[p][1], "eta_s": None, "alerts": []})
+    for p in scripts:
+        cmd = procs[p][2]
+        script = re.search(r"(\S+\.py)\b", cmd).group(1)
+        path = script if os.path.isabs(script) else os.path.join(where.get(p, ""), script)
+        tree = tree_of(os.path.realpath(path), trees)
+        if not tree:
+            continue
+        made = by_tree.setdefault(tree, {}).setdefault("make", [])
+        label = os.path.basename(script)
+        if label not in [m["label"] for m in made]:
+            made.append({"kind": "make", "label": label, "done": None, "total": None, "current": None,
                          "elapsed_s": procs[p][1], "eta_s": None, "alerts": []})
     items = []
     for tree in trees:

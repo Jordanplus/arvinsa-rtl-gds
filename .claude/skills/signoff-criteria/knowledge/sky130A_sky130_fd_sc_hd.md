@@ -114,7 +114,27 @@ S23. **LibreLane 對 sky130 的預設 PDN 與 IR**（Phase 5，what-if 與兩次
 
 S24. **Magic 對 SRAM macro 內部的 DRC 計數，會隨 macro 上方的金屬改變**（Phase 5）：met5 strap 從 1.6 加寬到 4.8 µm 後，SRAM 框內的 Magic DRC 從 4,665,810 變成 4,746,079。每一個違規仍對得上 SRAM 單獨檢查時的位置。macro 內部的 DRC 要用位置比對判斷，不能看總數（`drc-signoff`）。
 
+S25. **sky130 的 OpenRAM SRAM 在低溫、ss 低電壓會讀成前一次的值；機制與有效的修法已用電路圖實驗確認**（Phase 3.5 預建 macro、Phase 6 自產 macro；ADR-0010、ADR-0018 決定 7、8；`docs/notes/openram_phase6_bringup.md`）：
+    - 機制：sense amp `sky130_fd_bd_sram__openram_sense_amp` 沒有自己的預充電，每次讀取前靠 bitline 經過只有 NMOS 的 column mux 把內部節點拉回去，最高只到 VDD − Vt。
+    - 失敗條件（2 KB 1rw1r，words per row 4，週期 20 ns；預建與自產相同）：tt −40°C 1.60 V、ss −40°C 1.60 V（Phase 3.5 到 1.95 V 也錯）、ss 25°C 1.60 V。tt 25°C 1.80 V、ss 100°C 1.60 V、ff −40／100°C 1.95 V 正常。STA corner 只有 −40 與 100°C，ss 25°C 這種中間溫度要另外模擬。
+    - 有效的修法（電路圖 what-if，單一變因）：讓 sense amp 的輸入端能回到滿 VDD。column mux 並聯 PMOS（transmission gate），或在 column mux 輸出端（sense amp 輸入）加一排 PMOS 預充電，都讓上面三個條件讀對。拿掉 column mux（`words_per_row = 1`）也讓 ss 兩個條件讀對，但 2 KB 變成 446.99 × 1152.58 µm。
+S26. **兩版 PDK 之間 SRAM 特殊元件改名，影響 LVS 與 SPICE**（open_pdks `e8294524`〔2022-07，OpenRAM 釘的版本〕→ `8afc8346`；只換 PDK 的對照實驗）：
+    - bitcell 的 PMOS 從 `sky130_fd_pr__special_pfet_pass` 改名 `sky130_fd_pr__special_pfet_latch`（新 PDK `libs.ref/sky130_fd_pr/spice/sky130_fd_pr__special_pfet_latch.pm3.spice` 第 343 行起的註記，2023-07-16）。舊名稱留了一個轉接 subckt，但用 `.lib sky130.lib.spice tt` 載入時 ngspice 報 `unknown subckt`，不能用。
+    - 標準 cell 區域（`scnfet`）裡 `w < 0.42` µm 的 NMOS，新 PDK 萃取成 `sky130_fd_pr__special_nfet_01v8`（`sky130A.tech` 第 5951 行）；舊 PDK 沒有這條。在新 PDK 的 tt 模型下，0.36 µm 的 `nfet_01v8` 與 `special_nfet_01v8` 都能模擬，同一個操作點結果相同。
+    - sky130_fd_bd_sram（`fc63b12`）的 cell 網表仍用舊名，所以用新 PDK 跑 OpenRAM macro 的 LVS 會 `Netlists do not match`；PDK 附的預建 macro 網表已是新名。
+S27. **sky130 SRAM macro 的整顆 Magic DRC（`drc style drc(full)`）**（Phase 6，PDK `8afc8346`；`ip/sram/openram/drc_baseline_sky130_sram_2kbyte_1rw1r_32x512_8.json`）：
+    - bitcell 陣列本來就有大量 SRAM 專用規則的「錯誤」：2 KB 預建 macro 2,235,078 個、30 種（diff/tap.9、li.1、licon.8、poly.8 …），自產同規格 macro 的 29 種數量只差幾百。所以 macro 的 DRC 要逐種類比對參考 macro，不能看總數（同 S24）。
+    - Deep N-well 的 N-well 保護環要包住 Deep N-well 邊界：外 0.4、內 1.03 µm（nwell.5a）。預建 macro 剛好是 0.42／1.03 µm；OpenRAM 的預設 DRC 不是 full 規則，抓不到這條。
+    - latch-up：diff 到 tap 不能超過 15 µm（LU.2.1：Deep N-well 裡的 N-diff 到 P-tap；LU.3：P-diff 到 N-tap）。2 KB 改成 512 列的瘦長陣列時出現各 80 個。
+
+S28. **sky130 OpenRAM dp bitcell（`sky130_fd_bd_sram__openram_dp_cell`）的待機漏電與 ngspice gmin**（Phase 6，ngspice-47，PDK `8afc8346`；ADR-0018 決定 15、`docs/notes/openram_phase6_bringup.md` 步驟 3e「gmin」）：
+    - 待機（4 條 bitline 接 VDD、wordline 接地，Q=0 與 Q=1 相同）每顆漏電，gmin 1e-17：tt 25°C 0.53 pW、ss 100°C 1.01 pW、ff −40°C 0.37 pW、ss −40°C 0.21 pW、ff 100°C 556 pW。
+    - ngspice 預設 gmin（1e-12 S）時每顆多約 13.1 pS × VDD²（約 13 個反向偏壓接面），tt 量成 42.7 pW；除了 ff 100°C，量到的幾乎都是 gmin。
+    - 2 KB 1rw1r 自產 macro 整顆待機漏電（修剪網表＋單顆 × 15120）：tt 462 nW、ss 100°C 1.26 µW、ff −40°C 252 nW、ss −40°C 81 nW、ff 100°C 409 µW；tt 與 −40°C 不是穩態值（ADR-0018 已知限制）。
+
 ## 待確認（推測，不能當規則用）
+
+- 2 KB 1rw1r 改成 `words_per_row = 1`（沒有 column mux）後，tt −40°C 1.60 V 仍有 2 筆讀錯：只有最後一列（位址 511）的 bit 31，該讀 0 讀成 1；週期 20、30、44 ns 結果相同，所以不是讀取時序的競爭。推測是離寫入電路最遠的 cell 寫不進去或被干擾，沒有量 storage node（Phase 6，`docs/notes/openram_phase6_bringup.md`）。
 
 - hold 餘量用預設 0.1 ns 時，hold buffer 也有 2,200–2,500 顆（`drv-timing-closure` 規則 7）。修復前違反 hold 的 endpoint 數接近 flop 總數，原因還沒拆開。
 - CTS 讓 SRAM 和 flop 的 clock latency 對齊（`cts-clock-tree` 規則 10），但 ss_n40C 時 SRAM 早 1.1 ns、ff_n40C 時早 0.24 ns：看起來只在某一個 corner 對齊。（Phase 5 之後已用 `-no_insertion_delay` 關掉對齊，ADR-0016，這一條不再影響設計；對齊用哪個 corner 仍沒有查證。）

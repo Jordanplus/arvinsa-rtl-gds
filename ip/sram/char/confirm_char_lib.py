@@ -14,7 +14,8 @@ to confirm), this script reads the numbers of <char_dir>/<macro>__<pvt>.lib and 
   minimum_period, at characterize.PERIOD.
 Every lane must read back right. Writes <char_dir>/confirm.json (the values, the result per lane,
 and the sha256 of <char.json>); check_char_lib.py checks it against the .lib.
-Simulations are kept under --work (default runs/sram_char/schematic/), like characterize.py.
+Simulations are kept under --work (default runs/sram_char/schematic/, runs/sram_char/<macro>/schematic/ for a
+self-generated macro), like characterize.py.
 Prints `confirm_char_lib: PASS ...` / `FAIL ...`; exit 0 only on PASS.
 """
 import argparse
@@ -74,14 +75,15 @@ def main():
     ap.add_argument("char_json")
     ap.add_argument("char_dir")
     ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 4) - 3))
-    ap.add_argument("--work", default=os.path.join(sc.ROOT, "runs", "sram_char", "schematic"))
+    ap.add_argument("--work", default=os.path.join(sc.ROOT, "runs", "sram_char", "schematic") if sc.NETLIST == sc.PDK_NETLIST
+                    else os.path.join(sc.ROOT, "runs", "sram_char", sc.MACRO, "schematic"))
     a = ap.parse_args()
     sc.ensure_ngspice()
     doc = json.load(open(a.char_json))
     work = os.path.abspath(a.work)
     trimmed = os.path.join(work, "trimmed.spice")
     os.makedirs(work, exist_ok=True)
-    kept, _ = sc.trim_schematic(sc.PDK_NETLIST, trimmed)
+    kept, _ = sc.trim_schematic(sc.NETLIST, trimmed)
     if kept != doc["trim"]["kept"]:
         print(f"confirm_char_lib: FAIL - trim kept {kept}, char.json {doc['trim']['kept']}")
         return 1

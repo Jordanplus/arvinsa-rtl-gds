@@ -30,6 +30,24 @@ Each case injects one fault and passes only when the named check reports it:
   N15 a cached simulation that failed part way (error in    the cache is not reused and the read checks raise
       ngspice.log, waveform cut short)                      instead of judging past the waveform's end
   N16 characterization with one PVT failing                 characterize.py FAIL and <out.json> unchanged
+  N17 power.json from another netlist, or with a negative  gen_char_lib.py --power FAIL for each (positive
+      energy (ADR-0018 decision 10)                         control first: the .lib says its power is measured)
+  N18 measured power in the .lib: one value edited by hand, check_char_lib.py power FAIL for each (positive
+      gen_char_lib.py with read and write swapped,           control first)
+      power.json removed while the .lib says measured
+  N19 power.py arithmetic on a made-up waveform with known  every energy, the clk1 share, the dout load share,
+      energies per edge, a static current that ramps 100x   the static current and the standby leakage
+      over the run, dout load, and a leakage deck with a    recovered within 1 %
+      burst at the parked edge
+  N20 leakage window with a latch falling to one side      power.unsettled for the step, the slope, the rise
+      inside it, or a 20 % slope; a 6 % rise below           and the large fall (positive controls: flat, 1 %
+      LEAK_FLAT_ABS; a 6 % fall above it; a netlist with     settling, a step before the window, a 6 % fall of
+      one bitcell removed (ADR-0018 decisions 13, 14)        4.6 nW as at ss -40C PASS); sramchar.bitcell_ic
+                                                            FAILs on the missing bitcell (positive control: one
+                                                            .ic line per PDK bitcell)
+  N21 single-bitcell leakage deck without its gmin option   power.cell_gmin_problem reports it against the
+      (ngspice's default 1e-12 S; ADR-0018 decision 15)      CELL_GMIN_CHECK deck (positive control: CELL_GMIN
+                                                            PASS)
 N1 and N2 simulate tt_025C_1v80 (about 10 minutes each, run in parallel), N3 about 20 minutes; the
 others take seconds (N14 needs the committed confirm.json).
 Prints one line per case and `neg-char: PASS n/n` or `neg-char: FAIL ...`; exit 0 only on PASS.
@@ -413,13 +431,208 @@ def n16(work):
         f"rc {cp.returncode}, {cp.stdout.strip()[:160]}; out.json unchanged: {same}"
 
 
+def fake_power(real, sha=None, negative=False):
+    """power.json for the real char.json: different energies per PVT and kind, so a swapped mapping shows."""
+    pv = {}
+    for i, (p, (m, v, tmp)) in enumerate(sc.PVTS.items()):
+        x = {"leakage_mw": 0.01 + 0.001 * i}
+        for j, kind in enumerate(("write", "read", "idle0", "idle1")):
+            for rf in ("rise", "fall"):
+                x[f"{kind}_{rf}"] = round(5.0 + 3 * j + 0.5 * i + (0.25 if rf == "fall" else 0), 6)
+        if negative and i == 1:
+            x["read_fall"] = -0.5
+        pv[p] = {"pvt": p, "model": m, "vdd": v, "temp": tmp, "measured": x}
+    return {"macro": sc.MACRO, "netlist_sha256": sha or real["netlist_sha256"], "pvts": pv}
+
+
+def n17(work):
+    real = json.load(open(REAL_JSON))
+    out = []
+    for name, kw, want in (("positive control", {}, None), ("another netlist", {"sha": "1" * 64}, "another netlist"),
+                           ("negative energy", {"negative": True}, "negative")):
+        pj, d = os.path.join(work, f"n17_{name[:3]}.json"), os.path.join(work, f"n17_{name[:3]}_lib")
+        json.dump(fake_power(real, **kw), open(pj, "w"))
+        cp = gen([REAL_JSON, PDK_LIB, d, "--power", pj])
+        if want is None:
+            ok = cp.returncode == 0 and cc.MEASURED_MARK in open(os.path.join(d, f"{sc.MACRO}__tt_025C_1v80.lib")).read()
+        else:
+            ok = cp.returncode == 1 and want in cp.stdout
+        out.append((name, ok))
+    missed = [n for n, ok in out if not ok]
+    return not missed, "positive control PASS and 2/2 power.json faults reported" if not missed else f"missed {missed}"
+
+
+def n18(work):
+    real = json.load(open(REAL_JSON))
+    src = open(os.path.join(HERE, "gen_char_lib.py")).read()
+    swap = ('("clk0", "!csb0 & !web0"): "write", ("clk0", "!csb0 & web0"): "read"',
+            '("clk0", "!csb0 & !web0"): "read", ("clk0", "!csb0 & web0"): "write"')
+    if src.count(swap[0]) != 1:
+        return False, "injection point not found: POWER_MAP"
+    res = []
+    for name in ("positive control", "value edited", "read/write swapped", "power.json removed"):
+        d = os.path.join(work, "n18_" + name.split()[0].replace("/", "_"))
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        for f in ("sramchar.py", "characterize.py"):
+            shutil.copy(os.path.join(HERE, f), d)
+        open(os.path.join(d, "gen_char_lib.py"), "w").write(src.replace(*swap) if name == "read/write swapped" else src)
+        pj = os.path.join(d, "out", "power.json")
+        os.makedirs(os.path.dirname(pj))
+        json.dump(fake_power(real), open(pj, "w"))
+        cp = subprocess.run([sys.executable, os.path.join(d, "gen_char_lib.py"), REAL_JSON, PDK_LIB, os.path.join(d, "out"),
+                             "--power", pj], capture_output=True, text=True)
+        if cp.returncode != 0:
+            return False, f"{name}: generation failed: {cp.stdout.strip()}"
+        lib = os.path.join(d, "out", f"{sc.MACRO}__ss_100C_1v60.lib")
+        if name == "value edited":
+            text = open(lib).read()
+            m = re.search(r'(when : "!csb0 & !web0";\s*rise_power\(scalar\)\{\s*values\(")([\d.]+)', text)
+            if not m:
+                return False, "injection point not found: write rise_power"
+            open(lib, "w").write(text[:m.start(2)] + f"{float(m.group(2)) + 0.5:.6f}" + text[m.end(2):])
+        if name == "power.json removed":
+            os.remove(pj)
+        r = check([REAL_JSON, os.path.join(d, "out"), "--no-confirm"])
+        rows = failed_rows(r.stdout)
+        res.append((name, r.returncode == 0 if name == "positive control" else (r.returncode == 1 and rows == {"power"})))
+    missed = [n for n, ok in res if not ok]
+    return not missed, "positive control PASS and 3/3 power faults reported" if not missed else f"missed {missed}"
+
+
+def n19(work):
+    import power
+    s, cyc, stop, leak = power.sequence("tt_025C_1v80")
+    rise, fall = s.edges()
+    half = s.clk_slew / 0.8 / 2
+    vdd, i0, i1 = s.vdd, 5e-6, 500e-6               # A: the static current ramps from i0 to i1 over the run
+                                                     # (like the floating port 1, ADR-0018 decision 11)
+    e1 = {"rise": 0.7, "fall": 0.3}                  # pJ per clk1 edge (phases A and B)
+    ek = {"write": (9.0, 4.0), "read": (6.0, 2.5), "idle0": (1.2, 0.4)}
+    kind_of = {k: kind for kind, ks in cyc.items() if kind != "idle1" for k in ks}    # phase B: clk1 only
+    for kind in ("write", "read", "idle0"):         # every phase A cycle of that block, not only the averaged ones
+        for k in range(min(cyc[kind]) - 1, max(cyc[kind]) + 1):
+            kind_of.setdefault(k, kind)
+    step = 0.005
+    n = int(rise[-1] / step) + 2
+    ts = [i * step for i in range(n)]
+    tend = ts[-1]
+
+    def i_static(t):
+        return i0 + (i1 - i0) * t / tend
+    cur = [-i_static(x) for x in ts]
+    dout = [0.0] * n
+
+    def pulse(t0, energy_pj):                      # 1 ns rectangle starting at t0 (inside the window)
+        a = energy_pj * 1e-3 / vdd                   # pJ = A x V x ns x 1e3
+        for i in range(int(round(t0 / step)), int(round((t0 + 1.0) / step))):
+            cur[i] -= a
+    for k in range(len(s.cycles)):
+        a0, b0 = rise[k] - half + 0.5, fall[k] - half + 0.5
+        kind = kind_of.get(k)
+        if kind:
+            pulse(a0, ek[kind][0]); pulse(b0, ek[kind][1])
+        if rise[k] < stop["clk1"]:
+            pulse(a0 + 2.0, e1["rise"]); pulse(b0 + 2.0, e1["fall"])
+    rk = cyc["read"][0]                              # one dout bit rises in the first averaged read: its load energy
+    load_pj = s.load_ff * 1e-3 * vdd ** 2
+    t_up = fall[rk] + 1.0
+    for i in range(int(round(t_up / step)), n):
+        dout[i] = vdd
+    pulse(fall[rk] - half + 4.0, load_pj)
+    w = {"time": ts, "i(vvdd)": cur, **{f"do{b}": (dout if b == 0 else [0.0] * n) for b in range(sc.WORD_BITS)}}
+    got = power.energies(s, w, cyc, leak)
+    b_last = rise[-1] - half                         # the last window boundary: the highest settled level
+    want = {"static_mw": vdd * i_static(sum(leak) / 2) * 1e3, "static_max_mw": vdd * i_static(b_last - power.QUIET / 2) * 1e3,
+            "idle1_rise": e1["rise"], "idle1_fall": e1["fall"]}
+    for kind, (er, ef) in ek.items():
+        want[f"{kind}_rise"], want[f"{kind}_fall"] = er, ef
+    ls, park, lwin = power.leak_sequence("tt_025C_1v80")     # leakage deck: a 50 pJ burst at the parked edge
+    lrise, _ = ls.edges()                                    # must stay out of the window
+    i_stby = 2e-7
+    ln = int(lrise[-1] / step) + 2
+    lcur = [-i_stby] * ln
+    for i in range(int(round(lrise[park["clk0"]] / step)), int(round((lrise[park["clk0"]] + 1.0) / step))):
+        lcur[i] -= 50.0 * 1e-3 / vdd
+    got["leakage_mw"] = power.mean_mw({"time": [i * step for i in range(ln)], "i(vvdd)": lcur}, vdd, lwin)
+    want["leakage_mw"] = vdd * i_stby * 1e3
+    bad = {k: (round(got[k], 6), v) for k, v in want.items() if abs(got[k] - v) > 0.01 * max(abs(v), 1e-6)}
+    return not bad, ("every energy, the clk1 share, the dout load share, a ramping static current and the "
+                     "standby leakage recovered within 1 %") if not bad else f"wrong (got, want): {bad}"
+
+
+def n20(work):
+    import power
+    ls, park, (t0, t1) = power.leak_sequence("tt_025C_1v80")
+    vdd, step, i_stby = ls.vdd, 0.005, 2e-7
+    ts = [i * step for i in range(int(ls.edges()[0][-1] / step) + 2)]
+
+    def drift(c):
+        return power.unsettled(*power.leakage({"time": ts, "i(vvdd)": [-c(x) for x in ts]}, vdd, (t0, t1))[1:])
+    mid = (t0 + t1) / 2
+    i_low = 4.6e-9 / 0.06 / vdd                                  # A: mean whose 6 % is 4.6 nW
+    i_big = 2.5 * power.LEAK_FLAT_ABS * 1e-3 / 0.06 / vdd       # A: mean whose 6 % is 2.5 x LEAK_FLAT_ABS
+    cases = {   # name: (current in A at time t, must the window check FAIL)
+        "flat": (lambda x: i_stby, False),
+        "settling 1 % over the window": (lambda x: i_stby * (1 - 0.01 * (x - t0) / (t1 - t0)), False),
+        "latch step before the window": (lambda x: i_stby * (10 if x > t0 - 5 else 1), False),
+        "latch step inside the window": (lambda x: i_stby * (10 if x > mid + 2 else 1), True),
+        "slope 20 % over the window": (lambda x: i_stby * (1 + 0.2 * (x - t0) / (t1 - t0)), True),
+        # LEAK_FLAT_ABS: a slow fall is allowed (an upper bound), a rise never (ADR-0018 decision 14)
+        "fall 6 %, 4.6 nW (ss -40C)": (lambda x: i_low * (1.06 - 0.12 * (x - t0) / (t1 - t0)), False),
+        "rise 6 %, 4.6 nW": (lambda x: i_low * (0.94 + 0.12 * (x - t0) / (t1 - t0)), True),
+        "fall 6 %, 2.5 x LEAK_FLAT_ABS": (lambda x: i_big * (1.06 - 0.12 * (x - t0) / (t1 - t0)), True),
+    }
+    got = {n: drift(c) for n, (c, _) in cases.items()}
+    wrong = [n for n, (_, want) in cases.items() if got[n] != want]
+    paths = sc.bitcell_paths(sc.PDK_NETLIST)                     # positive control: every bitcell gets its .ic
+    ic = sc.bitcell_ic(sc.PDK_NETLIST, vdd).splitlines()
+    if len(paths) != sc.ROWS * sc.COLS or len(ic) != len(paths) or not ic[0].endswith(f".q_bar)={vdd}"):
+        wrong.append(f"bitcell_ic gave {len(ic)} lines for {len(paths)} bitcells")
+    bad = os.path.join(work, "n20_missing_cell.spice")
+    text, n = re.subn(r"^Xbit_r5_c5 .*\n(\+.*\n)*", "", open(sc.PDK_NETLIST).read(), count=1, flags=re.M)
+    open(bad, "w").write(text)
+    try:
+        sc.bitcell_ic(bad, vdd)
+        wrong.append("bitcell_ic accepted a netlist with a bitcell removed")
+    except SystemExit as e:
+        if n != 1 or "expected" not in str(e):
+            wrong.append(f"bitcell_ic: {e}")
+    return not wrong, (f"positive controls PASS and {sum(w for _, w in cases.values())}/"
+                       f"{sum(w for _, w in cases.values())} unsettled leakage windows and the missing bitcell "
+                       f"reported") if not wrong else f"wrong: {wrong}"
+
+def n21(work):
+    import power
+    net = trimmed(work)
+    vdd = sc.PVTS[PVT][1]
+
+    def leak(name, deck):
+        w = sc.run(deck, os.path.join(work, "n21", name), 600)
+        return power.mean_mw(w, vdd, (power.CELL_TRAN / 2, power.CELL_TRAN))
+    good = power.cell_deck(PVT, net, 0)
+    bad, n = re.subn(r"^\.options gmin=\S+\n", "", good, flags=re.M)
+    if n != 1:
+        return False, f"cell_deck has {n} gmin option lines, expected 1"
+    check = leak("check", power.cell_deck(PVT, net, 0, power.CELL_GMIN_CHECK))
+    ok, nogmin = leak("cell_gmin", good), leak("no_gmin", bad)
+    wrong = []
+    if power.cell_gmin_problem(ok, check):
+        wrong.append(f"positive control: {power.cell_gmin_problem(ok, check)}")
+    if not power.cell_gmin_problem(nogmin, check):
+        wrong.append(f"the deck without gmin passed ({nogmin * 1e9:.4g} vs {check * 1e9:.4g} pW)")
+    return not wrong, (f"default gmin {nogmin * 1e9:.3g} pW vs {check * 1e9:.3g} pW at {power.CELL_GMIN_CHECK:g} reported; "
+                       f"CELL_GMIN {ok * 1e9:.3g} pW PASS") if not wrong else f"wrong: {wrong}"
+
+
 def gen_char_lib_placeholder_from():
     import gen_char_lib
     return gen_char_lib.PLACEHOLDER_FROM
 
 
 CASES = {"N1": n1, "N2": n2, "N3": n3, "N4": n4, "N5": n5, "N6": n6, "N7": n7, "N8": n8, "N9": n9, "N10": n10,
-         "N11": n11, "N12": n12, "N13": n13, "N14": n14, "N15": n15, "N16": n16}
+         "N11": n11, "N12": n12, "N13": n13, "N14": n14, "N15": n15, "N16": n16, "N17": n17, "N18": n18, "N19": n19,
+         "N20": n20, "N21": n21}
 
 
 def main():

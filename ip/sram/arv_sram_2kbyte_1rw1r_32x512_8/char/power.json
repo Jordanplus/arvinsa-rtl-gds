@@ -1,0 +1,179 @@
+{
+ "macro": "arv_sram_2kbyte_1rw1r_32x512_8",
+ "netlist_sha256": "368c74be15cf840c85d71a2ceadb95b0c466893aaf9ffd40426b13da4524a725",
+ "ngspice": "47",
+ "pdk": "8afc8346a57fe1ab7934ba5a6056ea8b43078e71",
+ "tstep": "100p",
+ "period_ns": 20.0,
+ "clk_slew_ns": 0.2,
+ "in_slew_ns": 0.2,
+ "load_pf": 0.02,
+ "bitcells": 16384,
+ "reps": 6,
+ "quiet_ns": 3.0,
+ "leak_window_ns": 20.0,
+ "park_settle_ns": 60.0,
+ "leak_flat": 0.05,
+ "leak_flat_abs_mw": 1e-05,
+ "cell_gmin": 1e-17,
+ "cell_gmin_check": 1e-18,
+ "cell_gmin_tol": 0.01,
+ "leak_trimmed_bitcells": 1264,
+ "date": "2026-10-10",
+ "units": {
+  "energy": "pJ per edge",
+  "leakage": "mW"
+ },
+ "pvts": {
+  "tt_025C_1v80": {
+   "pvt": "tt_025C_1v80",
+   "model": "tt",
+   "vdd": 1.8,
+   "temp": 25.0,
+   "measured": {
+    "leakage_mw": 0.00046188884149754393,
+    "write_rise": 12.180756678331294,
+    "write_fall": 12.332896681438038,
+    "read_rise": 12.287862143475254,
+    "read_fall": 6.1138500849796875,
+    "idle0_rise": 2.371847298748418,
+    "idle0_fall": 2.5710581384685893,
+    "idle1_rise": 1.0973924762473193,
+    "idle1_fall": 1.1719797719067164
+   },
+   "leakage_parts": {
+    "trimmed_mw": 0.00045383381480649376,
+    "drift": 0.02508790286504447,
+    "drift_mw": 1.1385738662737896e-05,
+    "cell_nw": [
+     0.0005327398731105,
+     0.0005327398479278817
+    ],
+    "cell_gmin_check_nw": 0.000532360771290819,
+    "cells_added": 15120
+   },
+   "static_mw": 0.006845432168306876,
+   "static_max_mw": 0.18787997729870143
+  },
+  "ss_100C_1v60": {
+   "pvt": "ss_100C_1v60",
+   "model": "ss",
+   "vdd": 1.6,
+   "temp": 100.0,
+   "measured": {
+    "leakage_mw": 0.001256378370095999,
+    "write_rise": 9.137658594795319,
+    "write_fall": 8.705593571715191,
+    "read_rise": 9.489343153212241,
+    "read_fall": 4.852415442080889,
+    "idle0_rise": 2.0122878839163056,
+    "idle0_fall": 2.1934488549114683,
+    "idle1_rise": 0.937765811734581,
+    "idle1_fall": 0.9925112280857379
+   },
+   "leakage_parts": {
+    "trimmed_mw": 0.0012411703361368252,
+    "drift": 0.0029370193515869014,
+    "drift_mw": 3.645341295849475e-06,
+    "cell_nw": [
+     0.0010058223678093238,
+     0.0010058223357850959
+    ],
+    "cell_gmin_check_nw": 0.0010055229431418637,
+    "cells_added": 15120
+   },
+   "static_mw": 0.0017366146093899704,
+   "static_max_mw": 0.15111015824312282
+  },
+  "ff_n40C_1v95": {
+   "pvt": "ff_n40C_1v95",
+   "model": "ff",
+   "vdd": 1.95,
+   "temp": -40.0,
+   "measured": {
+    "leakage_mw": 0.00025198216755547236,
+    "write_rise": 14.052686448543536,
+    "write_fall": 16.9524947884522,
+    "read_rise": 15.035026268715072,
+    "read_fall": 7.340755044750877,
+    "idle0_rise": 2.5592244268123348,
+    "idle0_fall": 2.835820175196724,
+    "idle1_rise": 1.1880564553362691,
+    "idle1_fall": 1.332403869365659
+   },
+   "leakage_parts": {
+    "trimmed_mw": 0.00024634360840893976,
+    "drift": 0.012407027201245506,
+    "drift_mw": 3.056391850382687e-06,
+    "cell_nw": [
+     0.00037292055756079994,
+     0.0003729205993879594
+    ],
+    "cell_gmin_check_nw": 0.00037247543693974235,
+    "cells_added": 15120
+   },
+   "static_mw": 0.2538652214766338,
+   "static_max_mw": 1.3421549428937916
+  },
+  "ss_n40C_1v60": {
+   "pvt": "ss_n40C_1v60",
+   "model": "ss",
+   "vdd": 1.6,
+   "temp": -40.0,
+   "measured": {
+    "leakage_mw": 8.068001217434688e-05,
+    "write_rise": 10.014933180483371,
+    "write_fall": 6.516759617751523,
+    "read_rise": 9.50556702985541,
+    "read_fall": 4.381529939495228,
+    "idle0_rise": 1.8621767191523482,
+    "idle0_fall": 2.026269967372122,
+    "idle1_rise": 0.9001717566566216,
+    "idle1_fall": 0.9055677314488804
+   },
+   "leakage_parts": {
+    "trimmed_mw": 7.752996189563078e-05,
+    "drift": 0.05952764482300122,
+    "drift_mw": -4.615176034863927e-06,
+    "cell_nw": [
+     0.00020833672733211556,
+     0.00020833658995837338
+    ],
+    "cell_gmin_check_nw": 0.0002080371349986803,
+    "cells_added": 15120
+   },
+   "static_mw": 0.0003028643169379479,
+   "static_max_mw": 0.029797677018058355
+  },
+  "ff_100C_1v95": {
+   "pvt": "ff_100C_1v95",
+   "model": "ff",
+   "vdd": 1.95,
+   "temp": 100.0,
+   "measured": {
+    "leakage_mw": 0.40914380821639196,
+    "write_rise": 15.9946419653463,
+    "write_fall": 19.233189689655287,
+    "read_rise": 16.611669004060513,
+    "read_fall": 8.908322159623552,
+    "idle0_rise": 2.9005310372884043,
+    "idle0_fall": 3.1273862974976403,
+    "idle1_rise": 1.3677695495730475,
+    "idle1_fall": 1.5616650515808637
+   },
+   "leakage_parts": {
+    "trimmed_mw": 0.40073326964168676,
+    "drift": 0.0012620309213266338,
+    "drift_mw": 0.0005057377774921323,
+    "cell_nw": [
+     0.5562525512772847,
+     0.5562525511969477
+    ],
+    "cell_gmin_check_nw": 0.5562521065189227,
+    "cells_added": 15120
+   },
+   "static_mw": 2.6917451006164694,
+   "static_max_mw": 5.338250254675729
+  }
+ }
+}

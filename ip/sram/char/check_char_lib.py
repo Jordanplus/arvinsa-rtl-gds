@@ -18,10 +18,16 @@ them with the numbers it parses from each <char_dir>/<macro>__<pvt>.lib:
               clk0 min_pulse_width and minimum_period; dout0 max_capacitance; addr0/wmask0
               max_transition. Each of these timing groups must appear exactly once per pin.
   provenance  char.json was made from the pinned PDK's schematic netlist (sha256 of the file under
-              the SKY130_PDK_HASH version of env/versions.mk), with ngspice >= NGSPICE_MIN, the trim
-              of rows 0/127 and the columns of bits 0 and 31 (1264 bitcells kept), and the settings
+              the SKY130_PDK_HASH version of env/versions.mk; with SRAM_CHAR_MACRO set to a self-generated
+              macro: ip/sram/<macro>/openram/<macro>.sp, which its summary.json must record; negative tests
+              neg_openram.py C1-C2), with
+              ngspice >= NGSPICE_MIN, the trim of rows 0/127 and the columns of bits 0 and 31 (1264 bitcells kept), and the settings
               of characterize.py (step, resolution, slews, loads, periods, ranges); each record is
               the PVT it is filed under; only the PVTs of PLACEHOLDER may be read_fail.
+  power       when <char_dir>/power.json exists (power.py, ADR-0018 decision 10), or a .lib says its power is
+              measured: power.json is from char.json's netlist and has every PVT, and every clk0/clk1
+              internal_power value and the leakage of each .lib equal its measured numbers under the mapping
+              written out again here (POWER_MAP); negative tests neg_char.py N17-N19
   confirm     <char_dir>/confirm.json (confirm_char_lib.py) simulated every setup/hold lane and the
               three clock pulse lanes of each characterized PVT at exactly the values of its .lib,
               all passed, and was made from this char.json (sha256): a bisection checks
@@ -37,7 +43,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
+PDK_MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
+# SRAM_CHAR_MACRO: a self-generated macro (Phase 6, ADR-0018), whose netlist is ip/sram/<macro>/openram/<macro>.sp
+MACRO = os.environ.get("SRAM_CHAR_MACRO", PDK_MACRO)
 
 # ADR-0010 user decisions (2026-10-05), written out here on purpose, not imported from gen_char_lib.py.
 PARASITIC, CONSTRAINT_ADD, HOLD_ARC_SCALE, DOUT_TRANSITION, INPUT_MAX_TRANSITION = 1.6, 0.10, 0.9, 0.5, 0.5
@@ -231,11 +239,23 @@ def provenance(doc):
     import characterize as ch
     out = []
     pdk_root = os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel"))
-    net = os.path.realpath(os.path.join(pdk_root, pin("PDK"), "libs.ref", "sky130_sram_macros", "spice", MACRO + ".spice"))
-    if f"/versions/{pin('SKY130_PDK_HASH')}/" not in net or not os.path.isfile(net):
-        out.append(f"PDK netlist {net} missing or not PDK version {pin('SKY130_PDK_HASH')[:12]}")
-    elif doc.get("netlist_sha256") != hashlib.sha256(open(net, "rb").read()).hexdigest():
-        out.append(f"netlist_sha256 {str(doc.get('netlist_sha256'))[:12]} is not the PDK netlist's")
+    if MACRO == PDK_MACRO:
+        net = os.path.realpath(os.path.join(pdk_root, pin("PDK"), "libs.ref", "sky130_sram_macros", "spice", MACRO + ".spice"))
+        if f"/versions/{pin('SKY130_PDK_HASH')}/" not in net or not os.path.isfile(net):
+            out.append(f"PDK netlist {net} missing or not PDK version {pin('SKY130_PDK_HASH')[:12]}")
+        elif doc.get("netlist_sha256") != hashlib.sha256(open(net, "rb").read()).hexdigest():
+            out.append(f"netlist_sha256 {str(doc.get('netlist_sha256'))[:12]} is not the PDK netlist's")
+    else:   # the committed OpenRAM netlist, which must be the one its generation run recorded
+        d = os.path.join(ROOT, "ip", "sram", MACRO, "openram")
+        net, summ = os.path.join(d, MACRO + ".sp"), os.path.join(d, "summary.json")
+        if not (os.path.isfile(net) and os.path.isfile(summ)):
+            out.append(f"{os.path.relpath(net, ROOT)} or summary.json missing")
+        else:
+            sha = hashlib.sha256(open(net, "rb").read()).hexdigest()
+            if doc.get("netlist_sha256") != sha:
+                out.append(f"netlist_sha256 {str(doc.get('netlist_sha256'))[:12]} is not {os.path.relpath(net, ROOT)}'s")
+            if json.load(open(summ)).get("outputs_sha256", {}).get(MACRO + ".sp") != sha:
+                out.append(f"{os.path.relpath(net, ROOT)} is not the netlist summary.json records")
     want = {"macro": MACRO, "netlist": "schematic", "pdk": pin("SKY130_PDK_HASH"), "trim": TRIM}
     settings = {"tstep": ch.TSTEP, "tmax": ch.TMAX, "resolution_ns": ch.RESOLUTION, "clk_slews_ns": ch.CLK_SLEWS,
                 "loads_pf": ch.LOADS, "clk_slew_mid_ns": ch.CLK_SLEW_MID, "in_slew_ns": ch.IN_SLEW,
@@ -256,6 +276,71 @@ def provenance(doc):
         if "read_fail" in r and p not in PLACEHOLDER:
             out.append(f"{p} is read_fail but has no placeholder source")
     return out
+
+
+# ---------------------------------------------------------------- measured power (ADR-0018 decision 10)
+
+POWER_MAP = {("clk0", "!csb0 & !web0"): "write", ("clk0", "!csb0 & web0"): "read", ("clk0", "csb0 & !web0"): "idle0",
+             ("clk0", "csb0 & web0"): "idle0", ("clk1", "csb1"): "idle1", ("clk1", "!csb1"): "read"}
+POWER_TOL = 1e-5     # pJ / mW: the .lib holds 6 decimals
+MEASURED_MARK = "internal power and leakage measured"
+
+
+def power_entries(text):
+    """{(pin, when, rise|fall): value} of the clk0/clk1 internal_power groups, and [leakage numbers]."""
+    def close(i):       # index after the brace block whose "{" is at i
+        depth = 0
+        while True:
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            i += 1
+            if depth == 0:
+                return i
+    out = {}
+    for pm in re.finditer(r"\bpin\s*\(\s*(clk0|clk1)\s*\)\s*\{", text):
+        end = close(pm.end() - 1)
+        for g in re.finditer(r"internal_power\s*\(\s*\)\s*\{", text[:end]):
+            if g.start() < pm.start():
+                continue
+            body = text[g.end():close(g.end() - 1)]
+            when = re.search(r'when\s*:\s*"([^"]*)"', body)
+            for rf, v in re.findall(r"(rise|fall)_power\s*\(\s*scalar\s*\)\s*\{\s*values\(\"([-\d.eE+]+)", body):
+                out[(pm.group(1), when.group(1) if when else None, rf)] = float(v)
+    leak = [float(v) for v in re.findall(r"(?<!\w)(?:leakage_power\s*\(\s*\)\s*\{\s*value|cell_leakage_power)\s*:\s*([-\d.eE+]+)", text)]
+    return out, leak
+
+
+def power_problems(doc, char_dir):
+    path = os.path.join(char_dir, "power.json")
+    libs = {p: os.path.join(char_dir, f"{MACRO}__{p}.lib") for p in PVT_COND}
+    marked = [p for p, f in libs.items() if os.path.isfile(f) and MEASURED_MARK in open(f).read()]
+    if not os.path.isfile(path):
+        return ([f"{', '.join(marked)} .lib say(s) the power is measured but {path} is missing"] if marked else []), False
+    pdoc = json.load(open(path))
+    out = []
+    if pdoc.get("netlist_sha256") != doc.get("netlist_sha256"):
+        out.append("power.json is from another netlist than char.json")
+    if set(pdoc.get("pvts", {})) != set(PVT_COND):
+        out.append(f"power.json PVTs {sorted(pdoc.get('pvts', {}))} != {sorted(PVT_COND)}")
+    for p, f in libs.items():
+        r = pdoc.get("pvts", {}).get(p)
+        if r is None or not os.path.isfile(f):
+            continue
+        if (r.get("pvt"), r.get("model"), r.get("vdd"), r.get("temp")) != (p, *PVT_COND[p]):
+            out.append(f"power.json record under {p} is {r.get('pvt')}")
+        x = r.get("measured", {})
+        have, leak = power_entries(open(f).read())
+        if sorted(have) != sorted((pin, w, rf) for (pin, w) in POWER_MAP for rf in ("rise", "fall")):
+            out.append(f"{p}: internal_power groups {sorted(have)[:3]}... do not match POWER_MAP")
+        for (pin, w, rf), v in have.items():
+            kind = POWER_MAP.get((pin, w))
+            want = x.get(f"{kind}_{rf}") if kind else None
+            if not isinstance(want, (int, float)) or abs(v - want) > POWER_TOL:
+                out.append(f"{p} {pin} {w!r} {rf}_power {v}, power.json {want}")
+        if len(leak) != 2 or any(not isinstance(x.get("leakage_mw"), (int, float)) or abs(v - x["leakage_mw"]) > POWER_TOL for v in leak):
+            out.append(f"{p} leakage {leak}, power.json {x.get('leakage_mw')}")
+        if p not in marked:
+            out.append(f"{p} .lib does not say its power is measured")
+    return out, True
 
 
 # ---------------------------------------------------------------- confirmation simulations
@@ -318,6 +403,9 @@ def main(argv):
             problems = [f"{os.path.basename(f)}: {e}"]
         row(f"values {p}", problems, "every number matches the ADR-0010 formulas recomputed from char.json"
             + (" (placeholder)" if "read_fail" in doc["pvts"].get(p, {}) else ""))
+    pw, has = power_problems(doc, char_dir)
+    if has or pw:
+        row("power", pw, "every clk0/clk1 internal_power and the leakage equal power.json (measured), from char.json's netlist")
     if "--no-confirm" not in argv:
         row("confirm", confirm_problems(doc_path, doc, char_dir, have),
             "every setup/hold and pulse lane passed in simulation at the .lib values")

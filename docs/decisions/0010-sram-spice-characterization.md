@@ -8,7 +8,7 @@
 
 STA 現在用的 `padded.lib` 全部是工程假設（ADR-0007）。例如 clk0 下降緣到 dout0 的延遲填 10 ns、setup 1 ns、最小週期 30 ns，沒有一個是量出來的。
 
-`project-plan.md` §8 原本的 Phase 3.5 做法是：在 x86 Linux（Colab 或 Lima VM）架好 OpenRAM，用它的 SPICE 特性化產生 TT／SS／FF 的 .lib。
+`project-plan.md` §8 原本的 Phase 3.5 做法是：在 x86 Linux（Colab 或 Lima VM）架好 OpenRAM，用它的 SPICE 特性化產生 TT／SS／FF 的 .lib。（2026-10-08 註：OpenRAM 其實可以在本機 macOS 原生執行，「只支援 x86 Linux」是官方打包的限制，見 ADR-0018。）
 
 ## 查證結果（2026-10-04）
 

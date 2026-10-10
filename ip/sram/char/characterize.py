@@ -21,7 +21,9 @@ Each PVT starts with the middle delay simulation; if any read in it is wrong, th
 work at that PVT: only those reads are recorded (read_fail) and gen_char_lib.py writes a
 placeholder .lib for it (ADR-0010).
 The netlist is the PDK's (schematic) or the Magic extraction of the PDK GDS (extracted, see
-extract_sram.sh), trimmed to rows/columns 0 and 127 (sramchar.trim_*).
+extract_sram.sh), trimmed to rows/columns 0 and 127 (sramchar.trim_*). With SRAM_CHAR_MACRO and
+SRAM_CHAR_NETLIST set, the schematic netlist of a self-generated macro is used instead (Phase 6,
+ADR-0018; simulations under runs/sram_char/<macro>/).
 Adds the PVTs to <out.json> (with the settings, tool versions and netlist hash; a file made with
 other settings is refused unless --fresh) only when every requested PVT finished, and keeps every
 simulation under --work (default runs/sram_char/<netlist>/), where an unchanged deck whose earlier
@@ -406,9 +408,12 @@ def main():
     ap.add_argument("--fresh", action="store_true", help="overwrite <out.json> instead of adding these PVTs to it")
     a = ap.parse_args()
     sc.ensure_ngspice()
-    work = os.path.abspath(a.work or os.path.join(sc.ROOT, "runs", "sram_char", a.netlist))
+    default_work = os.path.join(sc.ROOT, "runs", "sram_char", a.netlist)
+    if sc.NETLIST != sc.PDK_NETLIST:     # a self-generated macro (Phase 6) keeps its own simulations
+        default_work = os.path.join(sc.ROOT, "runs", "sram_char", sc.MACRO, a.netlist)
+    work = os.path.abspath(a.work or default_work)
     os.makedirs(work, exist_ok=True)
-    src = sc.PDK_NETLIST if a.netlist == "schematic" else a.extracted
+    src = sc.NETLIST if a.netlist == "schematic" else a.extracted
     if not os.path.isfile(src):
         print(f"characterize: FAIL - netlist {src} missing")
         return 1

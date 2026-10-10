@@ -11,12 +11,12 @@ its own `make <target>`, in this order, and the run stops at the first one that 
 targets use earlier results, e.g. eqy-soc uses the run of harden-soc):
   hazard3
   RTL and firmware             env-check-flow py-check lint synth-check fw core-hazard3 regress-rtl neg-rtl
-  checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook
+  checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook neg-openram neg-macro-views
   soc_top with Hazard3         harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr
   end                          provenance-final (HEAD unchanged, working tree still clean)
   picorv32
   RTL and firmware (Phase 1)   env-check-flow py-check lint synth-check fw core-stock regress-rtl neg-rtl
-  checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook
+  checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook neg-openram neg-macro-views
   soc_top (Phase 3, 4)         harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr
   PicoRV32 alone (Phase 2)     harden-core gl-core neg-gl-core eqy-core neg-eqy-core
   end                          provenance-final
@@ -44,7 +44,7 @@ from xml.sax.saxutils import escape
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUTS = {"hazard3": os.path.join(ROOT, "runs", "regress"), "picorv32": os.path.join(ROOT, "runs", "regress_picorv32")}
 SOC = ["harden-soc", "eqy-soc", "neg-eqy-soc", "gl-soc", "gl-soc-powered", "neg-gl-soc", "neg-pnr"]
-FLOW_CHECKERS = ["neg-provenance", "neg-run-guard", "neg-regress", "test-flow-retry", "test-review-hook"]
+FLOW_CHECKERS = ["neg-provenance", "neg-run-guard", "neg-regress", "test-flow-retry", "test-review-hook", "neg-openram", "neg-macro-views"]
 TARGET_LISTS = {
     "hazard3": ["env-check-flow", "py-check", "lint", "synth-check", "fw", "core-hazard3", "regress-rtl", "neg-rtl"]
                + FLOW_CHECKERS + SOC + ["provenance-final"],

@@ -1,0 +1,27 @@
+{
+  "result": "PASS",
+  "problems": [],
+  "minutes": 38.9,
+  "config": "ip/sram/openram/configs/arv_sram_2kbyte_1rw1r_32x512_8.py",
+  "config_sha256": "fab161175c3bd4b053d770e8921b8464849dc8b93ed7f2b2597b7549747dc317",
+  "openram_commit": "3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8",
+  "openram_patches": [
+    {
+      "file": "0001-sense-amp-input-precharge.patch",
+      "sha256": "8eb4c4a7868decb373c4303c1ce52ff535e74d42e228f787918e32de4126a32e"
+    }
+  ],
+  "sky130_fd_bd_sram_commit": "fc63b12883b4bf458ee8c756ba64c37063e1ffb9",
+  "openram_pdk_hash": "e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066",
+  "pythonhashseed": 0,
+  "drc_errors": 2,
+  "drc_max": 5,
+  "lvs": "Circuits match uniquely.",
+  "outputs_sha256": {
+    "arv_sram_2kbyte_1rw1r_32x512_8.gds": "073e81980c9bd4124b849967b096524a78523d08663bd6c4a5c3ae629c205f0d",
+    "arv_sram_2kbyte_1rw1r_32x512_8.lef": "b2e886d2ae9b9a625416810c1b33dd6589ef59f00ed4b97206b5d40b810feff5",
+    "arv_sram_2kbyte_1rw1r_32x512_8.sp": "368c74be15cf840c85d71a2ceadb95b0c466893aaf9ffd40426b13da4524a725",
+    "arv_sram_2kbyte_1rw1r_32x512_8.lvs.sp": "dd290ae852b5779b92a183a57cf694948b2d6249956d0f74309babf74c77609a",
+    "arv_sram_2kbyte_1rw1r_32x512_8.v": "966a4fccd7e8f8236a6f7104a830be88ce45191edfe6d76c0b96e0b7fe5e177a"
+  }
+}

@@ -73,7 +73,7 @@ make regress-picorv32  # PicoRV32 版 SoC 的全部檢查（Phase 1–4 的 make
 | RISC-V core | 先用 [PicoRV32](https://github.com/YosysHQ/picorv32)，再換 [Hazard3](https://github.com/Wren6991/Hazard3)，證明流程可以換 core |
 | 模擬 | Verilator、Icarus Verilog |
 | Firmware | riscv64-elf-gcc（rv32） |
-| 執行環境 | Apple Silicon macOS + Nix；OpenRAM 需要 x86_64 Linux |
+| 執行環境 | Apple Silicon macOS + Nix；OpenRAM 也在本機原生執行（官方環境是 x86_64 Linux，只用 Colab 對照，ADR-0018） |
 
 完整的工具與版本清單見 [toolchain.md](toolchain.md)，釘版值以 `env/versions.mk` 為準。
 
@@ -96,7 +96,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 完成（2026-10-05） |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
 | 5 | 換成 Hazard3 | 完成（2026-10-08） |
-| 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 未開始 |
+| 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 進行中（2026-10-08 起，ADR-0018） |
 | 7 | （可選）chip-level 整合，例如 ChipFoundry Caravel | 未開始 |
 
 各階段的 exit criteria 與工時估計見 project-plan.md 第 8 章。
@@ -111,13 +111,30 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 細節見 project-plan.md 第 6、7 章。
 
+## 流程（簡易版）
+
+完整、詳細的流程（每一步怎麼跑、怎麼判定 PASS、交給哪個 skill，以及在新專案怎麼沿用）在 **[arvinsa-rtl-gds-flow.md](arvinsa-rtl-gds-flow.md)**。
+
+1. 環境與釘版：工具、PDK、IP 釘版（`toolchain.md`、`env/versions.mk`），`make env-check-flow`。
+2. 規格與計畫：`project-plan.md` 分 Phase，重大選擇由使用者決定並記成 ADR。
+3. RTL 與 RTL 驗證：lint、合成檢查、self-checking 模擬與植入錯誤。
+4. macro：取得或產生 → 每個交付檔的 view QA → 整顆 macro 的 DRC → 各 corner 功能確認 → SPICE 特性化產生每個 PVT 的 .lib。
+5. 約束與 signoff 條件：週期、corner、SDC，推導每個 signoff 門檻。
+6. harden：輸入檢查 → LibreLane（floorplan、PDN、placement、CTS、routing）→ 每次跑完做 criteria review；第一次全部 PASS 後建立 golden。
+7. signoff：多 corner STA、DRC、LVS、antenna、IR drop，門檻有推導、有 golden。
+8. 網表驗證：等價證明、gate-level 模擬。
+9. 一鍵 regression 與來源追溯，乾淨 checkout 執行。
+10. Phase 收尾：獨立審查、exit review、經驗寫回 skill。
+
+每個 checker 都有 negative test（植入錯誤後必須 FAIL）。
+
 ## Claude Code skills（流程經驗庫）
 
 `.claude/skills/` 放了 21 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
 
 **Claude 怎麼挑 skill**：每次對話開始時，Claude 只看得到每個 skill 開頭的 `description`，也就是一段「什麼情況用」的說明。判斷和手上的任務相關，才讀整份 `SKILL.md`。所以 `description` 要寫出會遇到的情況與錯誤訊息。這一節是給人看的索引：先用「依情況找 skill」查，再看每個 skill 的說明。
 
-**只在本 repo 生效**：這些 skill 放在專案層，只有在這個 repo 裡用 Claude Code 才看得到。在其他專案使用的方法見本節最後「在其他專案使用」。
+**只在本 repo 生效**：這些 skill 放在專案層，只有在這個 repo 裡用 Claude Code 才看得到。在其他專案使用的方法見 [arvinsa-rtl-gds-flow.md](arvinsa-rtl-gds-flow.md) 第 1 節。
 
 **經驗怎麼累積**：
 - 每個 `SKILL.md` 結尾有「經驗紀錄」表。每次做完該任務，就把新遇到的現象寫一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理方式、證據路徑。
@@ -147,8 +164,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
-| 放進或換一顆 SRAM／IP macro；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
-| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
+| 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`）；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
+| SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix；用 OpenRAM 自產 macro（官方環境只有 x86_64-linux、要不要關 use_nix、words_per_row 與讀取電路）；OpenRAM 的 LVS 用新 PDK 報 `Netlists do not match`（`special_nfet_01v8`、`special_pfet_latch`）、log 有 `ERROR` 但 exit 0、`Custom cell pin names do not match spice file`、同一設定產生的 GDS 每次不同；`gen_char_lib` 報 `internal_power ... outside (0, 1000]`；用 SPICE 量 internal power 時漏電隨網表改變或外插成負值；漏電量測窗 `leakage window ... not settled`、bitcell 漏電不隨溫度變或 `bitcell leakage depends on gmin`、用 `.nodeset` 算 DC 工作點報 `doAnalyses: out of memory`；sky130 1RW 報 `must have an even number of cols including replica cols`、DRC／LVS 失敗 | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
@@ -165,34 +182,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ### 在流程中的位置
 
-```
-換 CPU core ............................ core-migration-hazard3
-RTL：合成、lint ........................ rtl-synthesis-lint
- └ floorplan、macro、IO pin ............ floorplan-congestion、hard-macro-integration
-    └ PDN .............................. pdn-ir-drop
-       └ placement、resizer ............ drv-timing-closure、floorplan-congestion（密度）
-          └ CTS ........................ cts-clock-tree
-             └ routing、antenna ........ drv-timing-closure、antenna-signoff、floorplan-congestion（繞路）
-                └ signoff
-                   ├ STA ............... multicorner-sta、timing-constraints-sdc、drv-timing-closure
-                   ├ DRC、XOR、密度 .... drc-signoff
-                   ├ LVS、連接性 ....... lvs-signoff
-                   └ IR、EM ............ pdn-ir-drop
-
-驗證（網表出來之後）
- ├ 等價證明 ............................ formal-equivalence-eqy
- └ 網表模擬 ............................ gate-level-simulation、dv-directed-tests
-
-PnR 各步驟用的 SDC 與 corner .......... timing-constraints-sdc、multicorner-sta
-
-signoff 條件的數值從哪來 ............... signoff-criteria
-每次 harden 後檢查 criteria ............. signoff-criteria（Stop hook 強制）
-macro 的時序模型（.lib）從哪來 ......... openram-macro-characterization
-貫穿全程 ............................... librelane-run-debug（執行與除錯）
-                                         signoff-checker-qualification（checker、golden、植入錯誤）
-                                         flow-regression-reproducibility（regression、來源追溯）
-                                         phase-exit-review（階段收尾）
-```
+每個 skill 在 RTL-to-GDS 流程中的位置（總覽圖）與逐步流程，見 [arvinsa-rtl-gds-flow.md](arvinsa-rtl-gds-flow.md) 第 3、4 節。
 
 ### 索引
 
@@ -277,15 +267,16 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 
 - **何時用**：把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
 - **重點**：
+  - 自建或收到 macro（任何產生工具或廠商）後，先檢查每個交付檔的內容：LEF、.lib、Verilog、SPICE 的名稱、腳位與方向一致，.lib 的數字在合理範圍、面積等於 LEF 尺寸，LEF 尺寸等於 GDS 外框。產生工具自己的 DRC、LVS 不看這些；OpenRAM dev 的 .lib power 錯了 10 個數量級仍然 DRC／LVS 全過。
   - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、每個 PVT 一份的 .lib（SPICE 實測，Phase 3.5 起）、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
   - .lib 少給一個 corner 時，那個 corner 會把 macro 當 black box，而且不報錯。所以 .lib 要每個 PVT 一份（用 SPICE 實測產生，看 openram-macro-characterization）；只有廠商的單一 TT 解析 .lib 時，暫時用一份保守的 padded .lib 給全部 corner，再用 STA hook 對 macro 加 derate（multicorner-sta）。
   - macro 的行為模型不能放進合成的檔案清單，合成用 blackbox；`VDD_NETS`／`GND_NETS` 要和 macro 的電源 pin 同名。
-  - 未用的 port 要 tie-off，checker 要檢查實際接的值。
+  - 未用的 port 要 tie-off，checker 要檢查實際接的值。例外：OpenRAM SRAM 未用 port 的時脈不能接常數（chip-select 靠時脈鎖存、沒有 reset），要接系統時脈、`csb` 接 1。
   - STA 的每個 corner 只能讀到一份 macro .lib：`LIB`、`EXTRA_LIBS` 也會被讀進每個 corner。檢查要打開 STA 讀的每個 .lib 看誰定義了 macro cell，並比完整路徑。
   - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫、以及 ss 1.60 V 室溫時會讀出前一次的值；corner 之間的溫度 STA 看不到，要另外模擬。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
   - macro 的 clock：CTS 預設會在 macro clock pin 前插 delay buffer 對齊 flip-flop 的 latency，對 SRAM 半週期讀出反而有害；soc_top 關掉了（ADR-0016，看 cts-clock-tree）。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
-- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、ADR-0006／0007／0008／0010／0016。negative test：P08、P09、P14、P16–P20、P30、P32。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、`scripts/check_macro_views.py`（`make macro-views`）、ADR-0006／0007／0008／0010／0016／0018。negative test：Q1–Q11（`make neg-macro-views`）、P08、P09、P14、P16–P20、P30、P32。
 
 #### openram-macro-characterization：SRAM macro 的 SPICE 特性化
 
@@ -296,17 +287,24 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
   - 量 macro 隨附的網表（和 GDS 同一顆電路），不要用重新產生的電路代替。
   - OpenRAM 自己的 SPICE 特性化有缺陷：setup/hold 只量輸入端那顆 DFF、只量第一個 corner、rise 抄 fall、pulse width 取週期一半、預設沒有走線 RC。
   - 2 KB 完整網表在 ngspice 光讀檔就超過 35 分鐘，要修剪成只留第一／最後一列與行，並和完整網表比對一次；模擬步長也要用小步長驗證。
+  - 完整網表每個 ngspice 約 4.2 GB；平行跑超過實體記憶體時，系統一直壓縮記憶體，每個時間點慢 10–40 倍、CPU 只吃到約 64%，看起來像卡住（24 GB 機器同時最多 3 個）。deck 用 `save` 只存要寫出的向量。
   - OpenRAM SRAM 的 dout 在上升緣後約 1 ns 就開始變化，廠商 .lib 沒有這條時序弧，STA 不會檢查接收端的 hold；新 .lib 要加上。
   - setup/hold 要在整顆 macro 上量：內部 clock buffer 讓 setup 變負、hold 變大，只量 DFF 的 hold 少算約 0.3 ns。
+  - 用 OpenRAM 自產 macro（Phase 6）：官方 nix 環境只有 x86_64-linux，但 `use_nix = False` 可用本機工具，macOS 已實測可行，要在官方環境產生同一顆比對；照預設設定，sense amp 與 column mux 和預建 macro 相同，讀取失敗不會自己消失；產生時間大部分是 LVS。
+  - 用 OpenRAM 產生 macro（Phase 6 實跑確認）：OpenRAM 自己的 DRC 只報 WARNING、不用 full 規則，整顆 GDS 要另跑 full 規則 DRC 並逐種類和預建 macro 比；改 OpenRAM 只用 repo 內的 patch，並檢查工作樹恰好是釘選 commit 加 patch；DRC／LVS 用 OpenRAM 自己釘的 PDK，新版 PDK 改了元件名稱，LVS 會不過；OpenRAM 在 LVS 失敗時 exit 0，要讀 log 與報告判斷；`make sky130-install` 可能少複製 cell 卻 exit 0，安裝後要逐一檢查；固定 `PYTHONHASHSEED=0` 才能每次產生相同的 GDS。
+  - OpenRAM dev 產生的解析 .lib，internal_power 全是 1e9–1e11 的同一個值（預建 macro 是 13.8），會原樣進每一份 .lib 和 IR drop 分析；當特性化範本前要換掉，`gen_char_lib` 會擋下超過上限的範本。
+  - 用 SPICE 量 internal power 與漏電時，沒用到的 port（例如 1rw1r 只用 port 0）從不 precharge，bitline 與 sense amp 浮接到中間電壓，sense amp 輸出反相器上下同時導通；漏出的電流隨網表與動作歷程改變，不能外插。.lib 的漏電要在所有 port 都 precharge、時脈停在高電位的待機狀態另外量，浮接造成的靜態電流會隨動作改變，讀寫能量要扣每個邊緣前後的局部基準，不能整段扣同一個值；它另記為已知限制。功耗不要用修剪網表外插（雜訊放大、漏電少一半），2 KB 完整網表直接量可行。
+  - sky130 的 1RW（單 port）macro 在釘住的 OpenRAM dev 產不出 DRC／LVS 乾淨的 layout（要加 spare column，column cap 把 BL、BR 接在一起），所以只用一個 port 時仍用 1rw1r；OpenRAM 換版時重跑試產設定再評估。
   - Magic 沒設 `PDK_ROOT` 時會 exit 0 但沒有輸出，要檢查輸出檔。萃取網表的基板網路 VSUBS 與被修剪 cell 的儲存節點會浮接（singular matrix），要接地；處理後仍有暫態不收斂的問題未解決。
   - 量測方法先驗證誤差（步長、修剪、初始條件、延遲表推算，都要偏保守；方向要對 .lib 實際用的那個量判斷，hold 弧和延遲的方向相反），再用植入錯誤證明腳本量得對；植入的字串要先確認找得到、改到預期的次數，否則植入什麼都沒做，測不到要測的東西。
   - 新加的 `rising_edge` 弧接進 SoC 後，要有 negative test 證明 STA 真的用到它。
   - .lib 延遲表的負載斜率會被 OpenROAD 當成 driver 強度。讀出穩定時間會隨負載跳動，照實寫進表裡等於 60–140 kΩ 的 driver，`repair_design` 會一直插 buffer。所以每列取負載中的最大延遲（hold 弧取最小），產生後先單步重跑 repair 確認時間正常。
   - 其他 PVT 的結果常在以 tt 為中心的搜尋範圍外：往外一次多測幾點（2 點、最多 3 次）再接著二分，不要整個重新二分（舊做法 ss 的最小週期預估近 20 小時）。
   - 產生 .lib 的程式本身也要有 checker：另寫一支不 import 它的程式，從量測 JSON 重算每個數字；在 .lib 採用的值上做確認模擬；檢查量測 JSON 的來源與數值、模擬快取是否完整。假的測試資料每格要不同，否則公式錯誤測不出來。
+  - 量漏電：ngspice 的 gmin（預設 1e-12 S）會蓋過 bitcell 的漏電（sky130 每顆約 13 pS，漏電幾乎不隨溫度變），單顆 bitcell deck 用 gmin 1e-17 並以 1e-18 核對（`bitcell leakage depends on gmin`）。不要用 DC 工作點（`.nodeset`＋`.op`）量：ngspice 直接疊代不收斂，退回的方法會翻掉鎖存器。低溫時量測窗的漏電一直緩降，平穩度判準只放行小幅下降（保守），短量測窗看不出窗後的緩慢漂移，要寫進已知限制。
   - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）與 ss 1.60 V 室溫（25°C）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
-- **本 repo 實例**：ADR-0010、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（結果）；植入錯誤 N1–N16（`make neg-char`）與 P04、P17、P30、P32–P36。
+- **本 repo 實例**：ADR-0010、ADR-0018、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`、`ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（結果）、`ip/sram/openram/`（產生 macro）；植入錯誤 N1–N21（`make neg-char`）、O1–O8、I1–I4、T1–T3、D1–D3、L1–L2 與 C1–C2（`make neg-openram`），以及 P04、P17、P30、P32–P36。
 
 #### drc-signoff：DRC、GDS 輸出、XOR
 
@@ -523,29 +521,7 @@ macro 的時序模型（.lib）從哪來 ......... openram-macro-characterizatio
 
 ### 在其他專案使用
 
-使用者的做法（2026-10-04）：開新專案時，請 Claude Code 或 Codex「使用 arvinsa-rtl-gds 這個 repo 的流程」。skill 不搬到使用者層，也不複製到新專案；新專案的 agent 直接讀這個 repo（本機 clone 或 GitHub）。所以這個 repo 要讓沒參與過的 agent 自己讀得懂：
-
-- **入口**：本節的「依情況找 skill」表，再讀對應的 `.claude/skills/<name>/SKILL.md`。SKILL.md 是一般的 Markdown，任何 agent 都能讀；只有在本 repo 裡開 Claude Code 時才會自動載入，在新專案裡要明確叫 agent 來讀。
-- **Codex**：讀的是 repo 根目錄的 `AGENTS.md`；本 repo 的 `AGENTS.md` 指回 CLAUDE.md 與本節，不另寫一份。
-- **可以直接沿用的流程骨架**：
-  - `scripts/regress.py`：一鍵 regression。
-  - `signoff/scripts/provenance.py`、`run_guard.py`：來源追溯，與下游拒絕過期的 run。
-  - `signoff/scripts/check_signoff.py` 加 `signoff/limits/*.toml` 的格式：signoff 門檻與 golden 比對。
-  - `pnr/librelane_flow.sh`：LibreLane 呼叫與有上限的重試。
-  - `pnr/librelane_plugin_arvinsa/`：不改 LibreLane、只換掉一個 step 的寫法（`meta.substituting_steps` 加 `PYTHONPATH`；ADR-0016 的 CTS）。
-  - `dv/scripts/dvlib.py`：模擬的 checker。
-  - `dv/monitors/gl_lockstep.v`：RTL 與網表 lockstep。
-  - `signoff/eqy/`：EQY 與它的植入錯誤。
-  - `env/versions.mk`、`env/check_env.sh`、`toolchain.md`：釘版與環境檢查。
-  - `scripts/check_py_names.py`、`scripts/check_skills.py`：開跑前的快速檢查。
-  - `scripts/progress.py` 加 `.claude/statusline-progress`：Claude Code 狀態列的第二行，顯示待辦剩幾項，以及執行中工作的進度百分比（regress 第幾項／共幾項、LibreLane 已完成 step／參考 run 的 step 數；其他 make target 只顯示「執行中」）。待辦清單在 `runs/todo.md`，不進版控，格式為 `- [ ]` 待辦、`- [~]` 進行中、`- [x]` 完成（CLAUDE.md 規則 11）。全域狀態列（claude-usage skill v1.6.0）遇到主 checkout 有可執行的 `.claude/statusline-progress` 才呼叫；`.claude/statusline-progress --json` 給全域的進度面板 mod（`/progress`，`~/.claude/skills/progress-pane/`）用，含已跑時間、預估剩餘時間與 GRT-0229 重試提醒。
-  - `.claude/guard.json`：全域 PreToolUse hook（`~/.claude/hooks/guard-bash.py`）讀的設定。這個 repo 是公開的：推送內容不能有本機絕對路徑或機密；harden 要在已 commit 的工作樹上開；同時最多 2 個 LibreLane／EQY；可用記憶體至少 4 GB。force push 一律擋（使用者自己做）。
-- **要依新設計重做的**：
-  - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，並用 `signoff-criteria` 重新推導。
-  - golden。
-  - 和設計綁在一起的植入錯誤案例，例如 `neg_pnr.py` 的 P01–P32。
-  - ADR、exit review 的內容。
-- **經驗寫回這裡**：新專案用到某個 skill 時發現的通用經驗，寫回本 repo 的 `SKILL.md`，並同步本節，維持單一來源；只屬於新設計的數字留在新專案的文件。
+開新專案時沿用這套流程的方法（入口、可直接沿用的骨架、要依新設計重做的、經驗寫回、新專案也要照做的 `CLAUDE.md` 規則）見 [arvinsa-rtl-gds-flow.md](arvinsa-rtl-gds-flow.md) 第 1、2 節。
 
 ## 授權
 

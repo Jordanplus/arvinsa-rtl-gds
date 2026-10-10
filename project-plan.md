@@ -17,7 +17,7 @@
   2. RISC-V core：第一階段 **PicoRV32**（純 Verilog、極小、記憶體介面最單純），
      第二階段換 **Hazard3**（活躍維護、RP2350 量產實證）驗證流程可換 core。
   3. RAM：第一階段用 **PDK 內附的預建 OpenRAM macro**（`sky130_sram_2kbyte_1rw1r_32x512_8`），
-     第二階段在 x86_64 Linux 用 **OpenRAM 自產**客製 SRAM 與多 corner .lib。
+     第二階段用 **OpenRAM 自產**客製 SRAM 與多 corner .lib（2026-10-08 實測：OpenRAM 在本機 macOS 原生可以執行，Colab 的 x86_64 Linux 只當對照，ADR-0018）。
 - **最重要的工程判斷**（來自審查，已查證）：預建 SRAM macro 的 .lib 是**解析模型（analytical model）、未經 SPICE 特性化**，
   數值明顯樂觀；因此 silicon 時序目標定 **40 ns（25 MHz）**，25 ns 為 stretch goal，並以保守 padded .lib 做 STA（§6.2）。
 - **工具鏈**：LibreLane 3.x（OpenLane 2 的後繼，Nix 原生跑在 Apple Silicon macOS）＋
@@ -57,7 +57,7 @@
 | 備援 flow | OpenROAD-flow-scripts（ORFS） | 活躍 | Linux／Docker；內建 `sky130hd/ibex`、`riscv32i` 範例可對照 | [ORFS sky130hd designs](https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts/tree/master/flow/designs/sky130hd) |
 | PDK | sky130A + `sky130_fd_sc_hd` | 由 `ciel` 下載 LibreLane 綁定版本（預設 `~/.ciel`）；**已含 `libs.ref/sky130_sram_macros`**（LibreLane CI 範例即引用 `pdk_dir::libs.ref/sky130_sram_macros/…`） | LibreLane 預設、hd 庫密度最高 | [LibreLane PDK 文件](https://librelane.readthedocs.io/en/latest/usage/about_pdks.html)、[librelane-ci-designs/test_sram_macro](https://github.com/librelane/librelane-ci-designs/tree/main/test_sram_macro) |
 | SRAM（第一階段） | PDK 內附預建 OpenRAM macro | open_pdks 現改從 **`fossi-foundation/sky130_sram_macros`** 安裝（`SRAM_URL = ${FOSSI_URL}/sky130_sram_macros`）；fossi fork 含 2025-05 dnwell 包覆 DRC 修正、2025-07 所有 LEF 加 `FOREIGN`；舊的 `efabless/sky130_sram_macros` 停在 2024-10，**不要直接用** | 每顆附 `.gds .lef .v .sp .lvs.sp .html .log` 與 **單一 TT corner** `.lib`（解析模型） | [open_pdks sky130/Makefile.in](https://github.com/fossi-foundation/open-pdks/blob/main/sky130/Makefile.in)、[fossi-foundation/sky130_sram_macros](https://github.com/fossi-foundation/sky130_sram_macros) |
-| SRAM（第二階段） | OpenRAM 自產 | stable 分支 2026-10 活躍；release v1.2.48（2024-01） | 可客製尺寸／port，可產 SS／FF .lib；但 `flake.nix` 只支援 **x86_64-linux**，Docker 已 deprecated → 需 Colab 或 Linux VM | [VLSIDA/OpenRAM](https://github.com/VLSIDA/OpenRAM)、[basic_setup.md](https://github.com/VLSIDA/OpenRAM/blob/stable/docs/source/basic_setup.md) |
+| SRAM（第二階段） | OpenRAM 自產 | stable 分支 2026-10 活躍；release v1.2.48（2024-01） | 可客製尺寸／port，可產 SS／FF .lib；但 `flake.nix` 只支援 **x86_64-linux**，Docker 已 deprecated → 需 Colab 或 Linux VM（2026-10-08 更正：這是打包的限制，OpenRAM 本身是純 Python，`use_nix=False` 時用 PATH 上的工具；實測本機 macOS 可以產生 macro，ADR-0018） | [VLSIDA/OpenRAM](https://github.com/VLSIDA/OpenRAM)、[basic_setup.md](https://github.com/VLSIDA/OpenRAM/blob/stable/docs/source/basic_setup.md) |
 | RISC-V core（第一階段） | **PicoRV32** | repo **2026-09 封存**（README：no longer under active development），ISC | Verilog-2005、RV32I/IM/IMC 可選、簡單 valid/ready 記憶體介面、附 firmware tests、`testbench.v`、rvfi monitor；封存不影響當 test vehicle | [YosysHQ/picorv32](https://github.com/YosysHQ/picorv32) |
 | RISC-V core（第二階段） | **Hazard3** | 2026-08 仍活躍，Apache-2.0 | RV32IMAC+Zb*、3-stage、AHB5；RP2350 量產實證；`hazard3_cpu_1port.v`／`hazard3_cpu_2port.v`、`example_soc/` 可參考 | [Wren6991/Hazard3](https://github.com/Wren6991/Hazard3) |
 | 未選 core | Ibex（lowRISC） | 活躍 | 驗證最完整、ORFS 有範例；但 SystemVerilog 需 sv2v／yosys-slang，首次打通流程摩擦較大 | [lowRISC/ibex](https://github.com/lowRISC/ibex) |
@@ -76,7 +76,7 @@
 | Verilator 5.050、Icarus 13.0、Python 3.14 | 已安裝 | — |
 | riscv64-elf-gcc 16.1 | 已安裝，rv32 可用 | 原廠 Makefile 有 `-Werror`，GCC 16 可能出新 warning，必要時覆寫 CFLAGS |
 | Docker | 未安裝 | 不需要（LibreLane 走 Nix） |
-| x86_64 Linux（OpenRAM 用） | 無 | Phase 6 用 Colab CLI（已有 `~/.local/bin/colab`）或 Lima VM |
+| x86_64 Linux（OpenRAM 官方環境） | 無 | 不需要：2026-10-08 實測 OpenRAM 在本機 macOS 原生可以執行；x86_64 Linux 只用來對照，用 Colab CLI（`~/.local/bin/colab`，ADR-0018） |
 
 ## 4. 專案目錄結構（規劃）
 
@@ -380,13 +380,21 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | P60 | 同上 | 多一個 `<n>-arvinsa-ctsnoinsertiondelay-1` 目錄 | `check_soc.py` `cts_macro_latency` |
 | P61 | 最壞組合 IR（ADR-0017） | `ir_worst.py` 讀 VDD 11 + GND 10 mV（各自 < 20，合計超過）；positive control 9 + 9 mV 要 PASS | `ir_worst.py` |
 | P62 | 最壞組合 IR 沒有跑 | `<run>_signoff` 沒有 `ir_worst.txt` | `review_criteria.py` `checkers_ran` |
+| O1–O8 | OpenRAM 產生 macro（Phase 6，ADR-0018） | 假 run 目錄：log 有 `ERROR` 行但 exit 0（O1，2026-10-08 實際遇到）、LVS `Netlists do not match.`、DRC 超過上限、DRC／LVS 報告缺結果行或缺檔、GDS 是空檔、exit 非 0、缺 LVS 網表；另有兩個正常對照（全部正常、DRC 在 `--drc-max` 內） | `ip/sram/openram/gen_macro.py` `judge()`（`make neg-openram`） |
+| I1–I4 | OpenRAM 的 cell 庫安裝（Phase 6） | 假安裝：cell GDS 沒複製進 `gds_lib`（2026-10-08 實際遇到：`make sky130-install` 用 `cp $?`，exit 0）、`.base.spice` 沒進 `sp_lib`、cell 庫是空的、`gds_lib` 不存在；一個正常對照 | `ip/sram/openram/check_install.py`（`make neg-openram`） |
+| T1–T3 | OpenRAM 工作樹＝釘選 commit＋repo patch（Phase 6，ADR-0018 決定 8） | 假 git repo：patch 以外的追蹤檔案修改、patch 沒套、HEAD 不是釘選 commit；一個正常對照（含沒進版控的安裝檔） | `ip/sram/openram/check_install.py` `tree_problems()`（`make neg-openram`） |
+| D1–D3 | 自產 macro 的整顆 full 規則 DRC（Phase 6） | 假 Magic log：出現預建 macro 沒有的錯誤種類（2026-10-08 實際遇到：met2.2、met3.2、via2.2、nwell.5a）、總數超過預建、Magic 沒跑完；一個正常對照 | `ip/sram/openram/macro_drc.py` `compare()`（`make neg-openram`） |
+| Q1–Q11 | macro 的 view QA（任何來源的 macro，CLAUDE.md 規則 12） | 一顆一致的小假 macro（正常對照）上逐一植入：internal_power 1.036316e+11（2026-10-08 實際遇到）、腳位電容單位錯、表格有 nan、負延遲、.lib 面積不等於 LEF 尺寸、GDS 外框不等於 LEF SIZE、Verilog 少一個 bus 位元、方向和 LEF 不同、SPICE 少一支電源腳位、.lib 的 cell 名稱不同、沒有 internal_power | `scripts/check_macro_views.py` `check()`（`make neg-macro-views`） |
+| L1–L2 | 自產 macro 的 .lib 範本（Phase 6） | OpenRAM dev 的 internal_power（1.036316e+11，2026-10-08 實際遇到）當範本、兩份 .lib 的 power 項目對不上；一個正常對照 | `ip/sram/char/gen_char_lib.py` `power_problems()`、`ip/sram/openram/lib_template.py` `make()`（`make neg-openram`） |
+| C1–C2 | 自產 macro 特性化的來源（Phase 6） | 假 repo 根目錄放一顆自產 macro：`char.json` 記錄的網表 sha256 不是 `ip/sram/<macro>/openram/<macro>.sp` 的、該網表不是 `summary.json` 記錄的那份；一個正常對照 | `ip/sram/char/check_char_lib.py` `provenance()`（`make neg-openram`） |
+| N17–N21 | 自產 macro 的量測 power（Phase 6，ADR-0018 決定 10–15） | `power.json` 來自另一份網表、有負能量；.lib 的量測 power 被手改、讀寫對調、`power.json` 被刪；合成波形的已知答案（每個邊緣的能量、clk1 的份、dout 負載、靜態電流、待機漏電）；漏電量測窗裡有階躍、斜率或上升，下降超過絕對門檻、少一顆 bitcell 的網表；單顆 bitcell deck 沒有小 gmin；各有正常對照 | `ip/sram/char/gen_char_lib.py` `power_record_problems()`、`check_char_lib.py` `power_problems()`、`power.py` `energies()`／`mean_mw()`／`leakage()`／`unsettled()`／`cell_gmin_problem()`、`sramchar.py` `bitcell_ic()`（`make neg-char`） |
 
 不採用「`CLOCK_PERIOD` 設 2 ns」：FAIL 位置不確定（resizer 跑很久、slew/cap 先爆、甚至 crash）且耗時，改用 P01。
 
 ### 7.4 回歸穩定性
 - `env/versions.mk` 釘住 LibreLane、PDK hash（ciel）、core／macro commit、toolchain；變動需同時更新 lock、golden 與 ADR。
 - 每個 job 輸出 `result.json`；**只認明確 PASS**，「沒看到 FAIL」不等於 PASS。
-- golden 更新需 `make golden-update` 明確執行並經 review。
+- golden 更新是手動步驟並經 review（`signoff-checker-qualification` 規則 6：先確認門檻與 checker 全部 PASS，逐項說明差異，複製並記 sha256，再跑一次確認 PASS；各 `signoff/golden/<tag>/README.md` 的「何時更新」）。原計畫的 `make golden-update` 沒有建立。
 
 ### 7.5 Makefile targets（分層）
 
@@ -402,7 +410,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | weekly／full | `make neg-pnr` | P01–P12（盡量只跑單一 step） | |
 | | `make regress-gl-full` | Verilator 多 seed | |
 | | `make sim-sdf` | 可選，CVC on x86 | |
-| 維護 | `make golden-update`、`make report` | 更新 golden（需 review）；彙整 PASS/FAIL 表與 JUnit | |
+| 維護 | 手動更新 golden（`signoff-checker-qualification` 規則 6）；`make regress` 的 `summary.md`、`junit.xml` | 更新 golden（需 review）；彙整 PASS/FAIL 表與 JUnit（原計畫的 `make golden-update`、`make report` 沒有建立，後者由 regress 取代） | |
 
 ## 8. 階段里程碑與 exit criteria
 
@@ -415,7 +423,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | **3.5（可選）OpenRAM .lib 校正** | 提前建 OpenRAM 環境（Phase 6 的環境），對同一 2 KB config 跑 SPICE 特性化產 TT/SS/FF .lib，取代 padded.lib 的假設值。**2026-10-04 使用者決定改為本機 ngspice 直接量 PDK 附的 macro 網表，5 個 PVT 全部實測，OpenRAM 環境延到 Phase 6（ADR-0010）。實際結果：ss −40°C 讀取失敗，用佔位 .lib（`docs/phase_exit/phase3_5.md`）** | 多 corner .lib 進版控；重跑 Phase 3 signoff PASS | 2–3 天（含數小時執行） |
 | **4 signoff 收斂與文件** | 嘗試壓到 25 ns；L4 EQY；L5 GL sim；IR drop／antenna checker；`make regress` 一鍵；README、ADR、phase_exit | `make regress` 全 PASS；第三人可依 README 重現 | 2–3 天 |
 | **5 換 Hazard3** | submodule Hazard3；**AHB5 寫入資料在 data phase，接 1RW SRAM 需 write buffer 或 wait state**；建議用 `hazard3_cpu_2port`，SRAM port 1 負責 I-fetch（1rw1r 的自然用法）；測試以 Hazard3 的 rvcpp ISS trace 比對；加裝 xPack toolchain（newlib） | L0–L5 全 PASS；flow 設定只需改 design 層 | 4–6 天 |
-| **6 OpenRAM 自產 SRAM** | x86_64 Linux（Colab 優先，備案 Lima）：`nix develop` + `make sky130-pdk` + `make sky130-install`（需 `sky130_fd_bd_sram`，不在 ciel 預設內）；產 2 KB（或客製）macro + 多 corner .lib；對 macro 跑 DRC／LVS；GDS cell 名稱衝突 checker（open_pdks 以 `gds_import_sram.tcl` 處理 SRAM 共用 cell 名）；取代預建 macro 重跑 Phase 3–4 | 自產 macro DRC／LVS 結果 ≤ 預建 baseline；SoC 以自產 macro 完成 signoff | 4–6 天（2 KB 解析模式即約 4.4 小時，SPICE 特性化更久） |
+| **6 OpenRAM 自產 SRAM** | **2026-10-08 依查證改寫（ADR-0018）**：OpenRAM dev `3608704c`，本機 macOS 原生（`use_nix=False`，用已有的 Magic／Netgen／KLayout／ngspice；步驟 1 已確認可行），Colab 裝官方 nix 環境（只支援 x86_64-linux）產生同一顆當對照；產 2 KB 1rw1r 32×512 macro，對 macro 跑 DRC／LVS，**並做 view QA（LEF／.lib／Verilog／SPICE／GDS 內容一致與數值範圍，`scripts/check_macro_views.py`；2026-10-09 使用者要求任何自建或收到的 macro 都要做，CLAUDE.md 規則 12）**；用 `ip/sram/char/` 在本機量 5 個 PVT，**internal_power 也用 SPICE 量（ADR-0018 決定 10）**：先確認預設設定是否重現 Phase 3.5 的讀取失敗，再試 `words_per_row = 1`（沒有 column mux），選定後產生 .lib；檢查最終 GDS 裡沒有前綴的 `sky130_fd_bd_sram__openram_*` cell 只有一份定義（OpenRAM 2022 起已加名稱前綴，原本的名稱衝突 checker 前提過時）；取代預建 macro 重跑 Phase 3–5 | 自產 macro DRC／LVS 結果 ≤ 預建 baseline；交給 flow 的每個 view 通過 view QA；**5 個 PVT 讀寫正確**（ADR-0010 決定 4）；SoC（Hazard3 與 PicoRV32）以自產 macro 完成 signoff | 4–6 天，修讀取電路另加 2–3 天（原寫「2 KB 解析模式約 4.4 小時」：其中 LVS 約 3.4 小時，時序計算只有 1 秒） |
 | **7 chip-level（可選）** | 把 SoC 放進 ChipFoundry Caravel 的使用者區，搭 MPW shuttle 下線；採扁平放法，PicoRV32 與 SRAM 直接放在 wrapper 層（理由見 §5.5）；TinyTapeout 為待確認的備選 | ChipFoundry 收件前的自動檢查（precheck）PASS | 另估（是否下線、梯次、費用未定） |
 
 ## 9. 風險與對策
@@ -428,7 +436,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | R4 | port 1 浮接 | DisconnectedPins FAIL、GL X、silicon 浮動輸入 | tie-off（§5.1）；P08 守住 |
 | R5 | PDN 未連到 macro；met4 pin 與 strap 衝突 | floorplan／LVS FAIL 或 silicon 無電 | USE_POWER_PINS + PDN_MACRO_CONNECTIONS；手動 placement 留 channel；PowerGridViolations + P05 |
 | R6 | SRAM LEF 無 ANTENNA 屬性 | antenna = 0 是假象 | heuristic diode insertion；自寫 wire length checker；P06 |
-| R7 | OpenRAM 只支援 x86_64-linux；本機 Apple Silicon | Phase 3.5/6 無法在本機跑 | Colab（x86 原生，但有斷線風險 → 分段執行、checkpoint）；備案 Lima（x86 模擬慢數倍）或雲端 x86 VM |
+| R7 | OpenRAM 官方環境只支援 x86_64-linux；本機 Apple Silicon | macOS 原生沒有官方支援，工具版本不同可能讓 LVS 等結果不同 | 本機 `use_nix=False`（2026-10-08 實測可行）；Colab 裝官方 nix 環境產生同一顆 macro 比對：小 macro 兩邊 GDS 相同、DRC／LVS 判定相同（ADR-0018） |
 | R8 | 2 KB 裝不下原廠 firmware | L1 設計失效 | §5.3 拆 L1a／L1b + size checker |
 | R9 | Icarus SDF sim 證據力弱 | L5 無法當 signoff | signoff 以 9 corner STA 為準；SDF 僅參考；CVC 可選 |
 | R10 | 40 ns 仍不收斂 | 時序 FAIL | 放寬 clock；`SYNTH_STRATEGY` 改 delay 導向；rdata register 已內建 |
@@ -446,7 +454,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 6. `versions.mk` 與 README 足以讓第三人在另一台 Apple Silicon Mac 重現。
 
 ## 11. 假設與待確認事項
-- （待確認）OpenRAM 在 Colab 安裝 Nix 的可行性（需 root 與 `/nix`）；備案 apt 安裝 ngspice／magic／netgen／klayout 或 Lima。
+- （已確認，2026-10-08）OpenRAM 在 macOS 原生（`use_nix=False`）可以產生 macro（2 KB 約 40 分鐘）；Colab 用 Determinate 安裝程式 `--init none` 可以裝 Nix 並跑官方環境（`docs/notes/openram_phase6_bringup.md`）。
 - （待確認）LibreLane 3.0.14 中 `SETUP_VIOLATION_CORNERS` 等變數的確切名稱與 `STA_EXTRA_CORNER_TCL_FILE` 的行為（文件標 Experimental）。
 - （待確認）PicoRV32 IMC+IRQ 在 sky130hd 的實際 cell 數與面積（Phase 2 實測後定 `DIE_AREA`）。
 - （待確認，僅在 Phase 7 考慮 TinyTapeout 時需要）§5.5 列出的四項條件：precheck 對 SRAM DRC 的處理、大格子費用、配電方式、I/O 腳數。

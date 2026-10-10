@@ -7,7 +7,10 @@ Model of the macro that the stimulus relies on (measured in the Phase 3.5 probe 
   - a read puts the data on dout0 after the falling edge; dout0 is pulled to 0 about 1 ns after
     every rising edge with csb0=0, so read data is checked just before the next rising edge
     (where the SoC's rdata register captures it);
-  - port 1 is idle as in the SoC (csb1=1, clk1=0, addr1=0).
+  - port 1 is idle as in the SoC (csb1=1, addr1=0) and clk1 is clk0 (ADR-0018 decision 9): port 1's
+    control logic latches csb1 into a DFF on the clk1 rising edge and wl_en1 = (NOT clk1) AND cs, with no
+    reset. With clk1 held at 0 the DFF never latches, cs keeps its power-up (here: DC operating point)
+    value, and with cs=1 a port-1 wordline stays on and port-0 writes to that row can fail.
 Rows: addr0[8:2]; data bit b of word addr0[1:0] = w sits in column 4b + w (column_mux_array:
 XXMUX<4b+w> connects bl_<4b+w> to bl_out_<b> with sel_<w>). The trimmed netlists keep rows 0 and 127
 (so only the addresses in USABLE hold data; every read must use them) and the columns of data bits
@@ -23,11 +26,23 @@ import subprocess
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 PDK_ROOT = os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel"))
 NGSPICE_DIR = os.path.join(PDK_ROOT, "sky130A", "libs.tech", "ngspice")
-MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
+# SRAM_CHAR_MACRO selects another macro of the same organisation (Phase 6: the OpenRAM self-generated one,
+# ip/sram/openram/read_check.py); the default is the PDK macro characterized in Phase 3.5.
+MACRO = os.environ.get("SRAM_CHAR_MACRO", "sky130_sram_2kbyte_1rw1r_32x512_8")
 PDK_NETLIST = os.path.join(PDK_ROOT, "sky130A", "libs.ref", "sky130_sram_macros", "spice", MACRO + ".spice")
-ROWS, COLS, WORDS_PER_ROW, WORD_BITS, ADDR_BITS, WMASK_BITS = 128, 128, 4, 32, 9, 4
+# SRAM_CHAR_NETLIST: the schematic netlist of a self-generated macro (Phase 6: ip/sram/<macro>/openram/<macro>.sp);
+# the default is the PDK netlist.
+NETLIST = os.environ.get("SRAM_CHAR_NETLIST", PDK_NETLIST)
+# OpenRAM with the 2022 PDK writes the latch PMOS under its old name; the flow PDK renamed it and its legacy
+# alias subckt fails in ngspice with "unknown subckt" (ADR-0018 decision 5). The PDK netlist has none.
+PFET_OLD, PFET_NEW = "sky130_fd_pr__special_pfet_pass", "sky130_fd_pr__special_pfet_latch"
+# SRAM_CHAR_WORDS_PER_ROW: 4 for the PDK macro; 1 for the Phase 6 variant without a column mux (512 rows x 32).
+WORD_BITS, ADDR_BITS, WMASK_BITS, WORDS = 32, 9, 4, 512
+WORDS_PER_ROW = int(os.environ.get("SRAM_CHAR_WORDS_PER_ROW", "4"))
+ROWS, COLS = WORDS // WORDS_PER_ROW, WORD_BITS * WORDS_PER_ROW
 MEAS_BITS = (0, WORD_BITS - 1)
-KEEP_ROWS = (0, ROWS - 1)
+SEQ_ADDRS = (0, 3, 508, 511)      # the addresses characterize.py's sequences use: their rows are kept
+KEEP_ROWS = tuple(sorted({a // WORDS_PER_ROW for a in SEQ_ADDRS}))
 KEEP_COLS = tuple(WORDS_PER_ROW * b + w for b in MEAS_BITS for w in range(WORDS_PER_ROW))
 USABLE = tuple(r * WORDS_PER_ROW + w for r in KEEP_ROWS for w in range(WORDS_PER_ROW))
 ONES = (1 << WORD_BITS) - 1
@@ -46,28 +61,45 @@ PVTS = {
 
 # ---------------------------------------------------------------- netlist trimming
 
-def _kept(r, c):
-    return r in KEEP_ROWS or c in KEEP_COLS
+def bit_cols(bits):
+    """Columns of data bits `bits` (column 4b + w for word w, see the module docstring)."""
+    return tuple(WORDS_PER_ROW * b + w for b in bits for w in range(WORDS_PER_ROW))
 
 
-def trim_schematic(src, dst):
-    """PDK netlist: comment out bitcells Xbit_r<r>_c<c> of subckt bitcell_array outside the kept rows/columns.
+def _kept(r, c, cols=KEEP_COLS):
+    return r in KEEP_ROWS or c in cols
+
+
+def trim_schematic(src, dst, bits=MEAS_BITS):
+    """OpenRAM schematic netlist: comment out bitcells Xbit_r<r>_c<c> of the bitcell array subckt outside the
+    kept rows/columns. The subckt is `bitcell_array` in the PDK macro and `<MACRO>_bitcell_array` in a macro
+    generated with uniquify (Phase 6), whose instances also continue on `+` lines (all of them are commented
+    out with the instance). PFET_OLD is renamed to PFET_NEW everywhere. bits: the data bits whose columns keep
+    all their bitcells (default MEAS_BITS; power.py passes every bit: the untrimmed netlist, only renamed).
     Returns (kept, dropped)."""
-    out, inside, kept, dropped = [], False, 0, 0
+    cols = bit_cols(bits)
+    head = re.compile(rf"\.SUBCKT (bitcell_array|{MACRO}_bitcell_array)\s")
+    out, inside, kept, dropped, drop_cont = [], False, 0, 0, False
     for line in open(src, encoding="utf-8"):
-        if line.startswith(".SUBCKT bitcell_array "):
+        line = line.replace(PFET_OLD, PFET_NEW)
+        if line.startswith("+") and drop_cont:
+            out.append("*TRIM " + line)
+            continue
+        drop_cont = False
+        if head.match(line):
             inside = True
         elif inside and line.startswith(".ENDS"):
             inside = False
-        m = re.match(r"Xbit_r(\d+)_c(\d+) ", line) if inside else None
+        m = re.match(r"Xbit_r(\d+)_c(\d+)\s", line) if inside else None
         if m:
-            if _kept(int(m.group(1)), int(m.group(2))):
+            if _kept(int(m.group(1)), int(m.group(2)), cols):
                 kept += 1
             else:
                 dropped += 1
                 line = "*TRIM " + line
+                drop_cont = True
         out.append(line)
-    _check_trim(src, kept, dropped)
+    _check_trim(src, kept, dropped, cols)
     open(dst, "w", encoding="utf-8").writelines(out)
     return kept, dropped
 
@@ -142,8 +174,8 @@ def trim_extracted(src, dst):
     return kept, dropped
 
 
-def _check_trim(src, kept, dropped):
-    want_kept = len(KEEP_ROWS) * COLS + len(KEEP_COLS) * ROWS - len(KEEP_ROWS) * len(KEEP_COLS)
+def _check_trim(src, kept, dropped, cols=KEEP_COLS):
+    want_kept = len(KEEP_ROWS) * COLS + len(cols) * ROWS - len(KEEP_ROWS) * len(cols)
     if kept != want_kept or kept + dropped != ROWS * COLS:
         raise SystemExit(f"trim: FAIL - {src}: kept {kept}, dropped {dropped}; expected kept {want_kept} "
                          f"of {ROWS * COLS} bitcells")
@@ -155,7 +187,56 @@ def subckt_ports(netlist):
     m = re.search(rf"^\.subckt\s+{MACRO}\s+(.*?)\n(?!\+)", text, re.I | re.M | re.S)
     if not m:
         raise SystemExit(f"sramchar: FAIL - no .subckt {MACRO} in {netlist}")
-    return m.group(1).replace("\n+", " ").split()
+    return [t for t in m.group(1).replace("\n+", " ").split() if t != "+"]  # a port list may start on a + line
+
+
+BITCELL = "sky130_fd_bd_sram__openram_dp_cell"
+
+
+def bitcell_paths(netlist, want=ROWS * COLS):
+    """ngspice instance paths (lower case, from the deck's Xsram) of every BITCELL below the macro subckt
+    (commented-out ones of a trimmed netlist do not count); FAILs unless there are `want` of them (ROWS x COLS
+    for the untrimmed netlist; trim_schematic's kept count for a trimmed one)."""
+    subs, cur = {}, None
+    for line in re.sub(r"\n\+", " ", open(netlist, encoding="utf-8").read()).splitlines():
+        tok = line.split()
+        if not tok:
+            continue
+        head = tok[0].lower()
+        if head == ".subckt":
+            cur = subs.setdefault(tok[1], [])
+        elif head == ".ends":
+            cur = None
+        elif cur is not None and head.startswith("x"):
+            cur.append((head, [t for t in tok[1:] if "=" not in t][-1]))
+
+    def walk(sub, path):
+        for inst, model in subs.get(sub, ()):
+            if model == BITCELL:
+                yield f"{path}.{inst}"
+            elif model in subs:
+                yield from walk(model, f"{path}.{inst}")
+    paths = list(walk(MACRO, "xsram"))
+    if len(paths) != want:
+        raise SystemExit(f"sramchar: FAIL - {netlist}: {len(paths)} {BITCELL} instances below {MACRO}, "
+                         f"expected {want}")
+    return paths
+
+
+def bitcell_ic(netlist, vdd, want=ROWS * COLS):
+    """.ic lines that hold every bitcell at Q = 0, Q_bar = vdd during the operating point. Without them the
+    operating point leaves each latch the sequence never writes balanced (Q = Q_bar near vdd / 2, both inverters
+    conducting); at ss -40C such latches took 75 ns to fall to one side and the step landed in the leakage
+    window (power.py, ADR-0018 decision 13). A real latch resolves at power-up."""
+    return "\n".join(f".ic v({p}.q)=0 v({p}.q_bar)={vdd}" for p in bitcell_paths(netlist, want))
+
+
+def subckt_text(netlist, name):
+    """The .subckt ... .ends block of `name` in netlist (any case)."""
+    m = re.search(rf"^\.subckt\s+{name}\s.*?^\.ends\b.*?$", open(netlist, encoding="utf-8").read(), re.I | re.M | re.S)
+    if not m:
+        raise SystemExit(f"sramchar: FAIL - no .subckt {name} in {netlist}")
+    return m.group(0)
 
 
 # ---------------------------------------------------------------- stimulus
@@ -234,22 +315,45 @@ class Seq:
             pts += [(t - ramp / 2, vals[k - 1]), (t + ramp / 2, vals[k])]
         return "PWL(" + " ".join(f"{t:.4f}n {v * self.vdd:.4f}" for t, v in pts) + ")"
 
-    def deck(self, netlist, tstep="100p", tmax=None, extra="", uic=False):
+    def deck(self, netlist, tstep="100p", tmax=None, extra="", uic=False, probes=(), clk_stop=None,
+             clk_park=None, csb1=1, save_only=False):
         """uic: skip the DC operating point (all nodes start at 0 V, the first writes set the state).
-        The Magic-extracted netlist needs it: its bitcell latches leave the operating point singular."""
+        The Magic-extracted netlist needs it: its bitcell latches leave the operating point singular.
+        probes: more vectors for wave.txt, e.g. "i(vvdd)" (power.py). clk_stop: {"clk0"|"clk1": t} - that
+        clock has no edge after t ns and stays low (t must fall in a low phase). clk_park: {"clk0"|"clk1": k}
+        - that clock rises at cycle k and stays high (power.py's leakage deck). csb1: 0 selects port 1
+        (it then reads addr1 = 0 at every clk1 edge). save_only: keep only the written vectors (`save`); without
+        it ngspice keeps every node of every time point, which for the untrimmed netlist grew to about 5 GB per
+        run and made 5 parallel runs swap (power.py). Without probes, clk_stop, clk_park, csb1 and save_only the
+        deck is the same as before they existed (cached simulations stay valid)."""
         rise, fall = self.edges()
         ramp = self.clk_slew / 0.8
         clk = [(0.0, 0)]
         for r, f in zip(rise, fall):
             clk += [(r - ramp / 2, 0), (r + ramp / 2, 1), (f - ramp / 2, 1), (f + ramp / 2, 0)]
+        clks = {}
+        for name in ("clk0", "clk1"):
+            stop, park = (clk_stop or {}).get(name), (clk_park or {}).get(name)
+            if stop is not None and park is not None:
+                raise ValueError(f"{name}: clk_stop and clk_park both given")
+            if park is not None and not 0 <= park < len(fall):
+                raise ValueError(f"{name} park at cycle {park}: the sequence has {len(fall)} cycles")
+            pts = clk if stop is None else [p for p in clk if p[0] <= stop]
+            nxt = clk[len(pts)][1] if len(pts) < len(clk) else 0
+            if stop is not None and (pts[-1][1] != 0 or nxt != 0):    # both neighbours low: inside a low phase
+                raise ValueError(f"{name} stop at {stop} ns is not in a low phase")
+            if park is not None:
+                pts = clk[:3 + 4 * park]                              # up to the end of cycle park's rising ramp
+            clks[name] = "PWL(" + " ".join(f"{t:.4f}n {v * self.vdd:.4f}" for t, v in pts) + ")"
         tend = rise[-1] + 0.5
         L = [f"* {MACRO} {self.pvt} characterization deck (ip/sram/char/sramchar.py)",
              f'.lib "{os.path.join(NGSPICE_DIR, "sky130.lib.spice")}" {self.corner}',
              f'.include "{netlist}"',
              f".temp {self.temp}",
              f"Vvdd vccd1 0 {self.vdd}", "Vvss vssd1 0 0",
-             "Vclk0 clk0 0 PWL(" + " ".join(f"{t:.4f}n {v * self.vdd:.4f}" for t, v in clk) + ")",
-             "Vclk1 clk1 0 0", f"Vcsb1 csb1 0 {self.vdd}"]
+             "Vclk0 clk0 0 " + clks["clk0"],
+             "Vclk1 clk1 0 " + clks["clk1"],
+             f"Vcsb1 csb1 0 {self.vdd if csb1 else 0}"]
         L += [f"Va1_{i} addr1[{i}] 0 0" for i in range(ADDR_BITS)]
         L.append(f"Vcsb0 csb0 0 {self._pwl('csb', 0, rise, fall)}")
         L.append(f"Vweb0 web0 0 {self._pwl('web', 0, rise, fall)}")
@@ -262,8 +366,10 @@ class Seq:
         L.append(extra)
         L.append(".options method=gear reltol=1e-3")
         L.append(f".tran {tstep} {tend:.4f}n" + (f" 0 {tmax or tstep} uic" if uic else f" 0 {tmax}" if tmax else ""))
-        L.append(".control\nset wr_singlescale\nset wr_vecnames\noption numdgt=9\nrun")
-        L.append("wrdata wave.txt v(clk0) " + " ".join(f"v(do{i})" for i in range(WORD_BITS)))
+        vecs = ["v(clk0)"] + [f"v(do{i})" for i in range(WORD_BITS)] + list(probes)
+        save = ("save " + " ".join(re.sub(r"^i\((.+)\)$", r"\1#branch", v) for v in vecs) + "\n") if save_only else ""
+        L.append(".control\nset wr_singlescale\nset wr_vecnames\noption numdgt=9\n" + save + "run")
+        L.append("wrdata wave.txt " + " ".join(vecs))
         L.append(".endc\n.end")
         return "\n".join(L) + "\n"
 
@@ -286,8 +392,11 @@ def run(deck_text, workdir, timeout=7200):
         os.remove(wave)
     open(os.path.join(workdir, "deck.sp"), "w", encoding="utf-8").write(deck_text)
     with open(os.path.join(workdir, "ngspice.log"), "w") as log:
-        rc = subprocess.run(["ngspice", "-b", "deck.sp"], cwd=workdir, stdout=log, stderr=subprocess.STDOUT,
-                            timeout=timeout).returncode
+        try:
+            rc = subprocess.run(["ngspice", "-b", "deck.sp"], cwd=workdir, stdout=log, stderr=subprocess.STDOUT,
+                                timeout=timeout).returncode
+        except subprocess.TimeoutExpired:      # the callers report RuntimeError as a FAIL line
+            raise RuntimeError(f"ngspice timed out after {timeout} s: {workdir}") from None
     errs = log_errors(workdir)
     if rc != 0 or errs or not os.path.isfile(wave):
         raise RuntimeError(f"ngspice rc={rc}, {len(errs)} error line(s) {errs[:2]}, wave "

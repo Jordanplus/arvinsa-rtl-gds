@@ -1,0 +1,1150 @@
+{
+ "macro": "arv_sram_2kbyte_1rw1r_32x512_8",
+ "netlist": "schematic",
+ "netlist_sha256": "368c74be15cf840c85d71a2ceadb95b0c466893aaf9ffd40426b13da4524a725",
+ "trim": {
+  "kept": 1264,
+  "dropped": 15120,
+  "rows": [
+   0,
+   127
+  ],
+  "columns": [
+   0,
+   1,
+   2,
+   3,
+   124,
+   125,
+   126,
+   127
+  ]
+ },
+ "ngspice": "47",
+ "pdk": "8afc8346a57fe1ab7934ba5a6056ea8b43078e71",
+ "tstep": "100p",
+ "tmax": null,
+ "resolution_ns": 0.04,
+ "clk_slews_ns": [
+  0.05,
+  0.2,
+  0.5
+ ],
+ "loads_pf": [
+  0.005,
+  0.02,
+  0.05
+ ],
+ "clk_slew_mid_ns": 0.2,
+ "in_slew_ns": 0.2,
+ "period_ns": 20.0,
+ "constraint_period_ns": {
+  "tt": 10.0,
+  "ff": 10.0,
+  "ss": 16.0
+ },
+ "brackets_ns": {
+  "setup": [
+   -1.0,
+   1.56
+  ],
+  "hold": [
+   -1.0,
+   1.56
+  ],
+  "pulse_high": [
+   0.2,
+   10.44
+  ],
+  "pulse_low": [
+   0.2,
+   10.44
+  ],
+  "pulse_period": [
+   1.0,
+   21.48
+  ]
+ },
+ "seed_half_width_ns": {
+  "constraints": 0.5,
+  "pulse": 1.0
+ },
+ "pvts": {
+  "tt_025C_1v80": {
+   "pvt": "tt_025C_1v80",
+   "model": "tt",
+   "vdd": 1.8,
+   "temp": 25.0,
+   "delay": {
+    "settle_max": [
+     [
+      2.50822,
+      2.65557,
+      2.86517
+     ],
+     [
+      2.52564,
+      2.6661,
+      2.87595
+     ],
+     [
+      2.53949,
+      2.69926,
+      2.9086
+     ]
+    ],
+    "d50_max": [
+     [
+      1.92879,
+      2.4724,
+      2.67592
+     ],
+     [
+      1.94838,
+      2.51072,
+      2.68658
+     ],
+     [
+      1.97053,
+      2.53306,
+      2.71933
+     ]
+    ],
+    "tran_max": [
+     [
+      1.06102,
+      1.05736,
+      1.10502
+     ],
+     [
+      1.05347,
+      1.04714,
+      1.09263
+     ],
+     [
+      1.05744,
+      1.05652,
+      1.10603
+     ]
+    ],
+    "depart_min": [
+     [
+      1.12617,
+      1.14285,
+      1.17481
+     ],
+     [
+      1.14238,
+      1.15803,
+      1.19364
+     ],
+     [
+      1.15813,
+      1.18084,
+      1.21264
+     ]
+    ],
+    "depart_max": [
+     [
+      11.54232,
+      11.67445,
+      11.87707
+     ],
+     [
+      11.55889,
+      11.69064,
+      11.88839
+     ],
+     [
+      11.58489,
+      11.716,
+      11.9169
+     ]
+    ],
+    "simulated": [
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      true,
+      true,
+      true
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.22,
+     "pass": -0.2
+    },
+    "csb_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "csb_hold_rise": {
+     "fail": 0.2,
+     "pass": 0.22
+    },
+    "csb_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "web_setup_rise": {
+     "fail": -0.24,
+     "pass": -0.22
+    },
+    "web_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "web_hold_rise": {
+     "fail": 0.22,
+     "pass": 0.24
+    },
+    "web_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "addr_setup_rise": {
+     "fail": -0.24,
+     "pass": -0.22
+    },
+    "addr_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "addr_hold_rise": {
+     "fail": 0.22,
+     "pass": 0.24
+    },
+    "addr_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "din_setup_rise": {
+     "fail": -0.24,
+     "pass": -0.22
+    },
+    "din_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "din_hold_rise": {
+     "fail": 0.22,
+     "pass": 0.24
+    },
+    "din_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    },
+    "wmask_setup_rise": {
+     "fail": -0.22,
+     "pass": -0.2
+    },
+    "wmask_setup_fall": {
+     "fail": -0.18,
+     "pass": -0.16
+    },
+    "wmask_hold_rise": {
+     "fail": 0.2,
+     "pass": 0.22
+    },
+    "wmask_hold_fall": {
+     "fail": 0.16,
+     "pass": 0.2
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 0.9,
+     "pass": 0.92
+    },
+    "pulse_low": {
+     "fail": 2.66,
+     "pass": 2.68
+    },
+    "pulse_period": {
+     "fail": 5.3,
+     "pass": 5.32
+    }
+   },
+   "seed": null,
+   "date": "2026-10-09"
+  },
+  "ss_100C_1v60": {
+   "pvt": "ss_100C_1v60",
+   "model": "ss",
+   "vdd": 1.6,
+   "temp": 100.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      3.62529,
+      4.98775,
+      5.38806
+     ],
+     [
+      3.66025,
+      5.02271,
+      5.42302
+     ],
+     [
+      3.70613,
+      5.06859,
+      5.4689
+     ]
+    ],
+    "d50_max": [
+     [
+      3.22316,
+      4.1362,
+      5.08019
+     ],
+     [
+      3.261,
+      4.17404,
+      5.11803
+     ],
+     [
+      3.31009,
+      4.22313,
+      5.16712
+     ]
+    ],
+    "tran_max": [
+     [
+      1.09507,
+      2.15667,
+      2.21753
+     ],
+     [
+      1.09483,
+      2.15643,
+      2.21729
+     ],
+     [
+      1.09419,
+      2.15579,
+      2.21665
+     ]
+    ],
+    "depart_min": [
+     [
+      2.07983,
+      2.1588,
+      2.22104
+     ],
+     [
+      2.11932,
+      2.1983,
+      2.26054
+     ],
+     [
+      2.19795,
+      2.27693,
+      2.33917
+     ]
+    ],
+    "depart_max": [
+     [
+      12.70799,
+      12.96279,
+      13.35976
+     ],
+     [
+      12.74732,
+      13.00211,
+      13.39908
+     ],
+     [
+      12.79646,
+      13.05126,
+      13.44822
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.4187,
+     "pass": -0.3875
+    },
+    "csb_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "csb_hold_rise": {
+     "fail": 0.4075,
+     "pass": 0.4387
+    },
+    "csb_hold_fall": {
+     "fail": 0.325,
+     "pass": 0.3562
+    },
+    "web_setup_rise": {
+     "fail": -0.4387,
+     "pass": -0.4075
+    },
+    "web_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "web_hold_rise": {
+     "fail": 0.3962,
+     "pass": 0.4275
+    },
+    "web_hold_fall": {
+     "fail": 0.325,
+     "pass": 0.3562
+    },
+    "addr_setup_rise": {
+     "fail": -0.4075,
+     "pass": -0.3762
+    },
+    "addr_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "addr_hold_rise": {
+     "fail": 0.3962,
+     "pass": 0.4275
+    },
+    "addr_hold_fall": {
+     "fail": 0.325,
+     "pass": 0.3562
+    },
+    "din_setup_rise": {
+     "fail": -0.4387,
+     "pass": -0.4075
+    },
+    "din_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "din_hold_rise": {
+     "fail": 0.3962,
+     "pass": 0.4275
+    },
+    "din_hold_fall": {
+     "fail": 0.2937,
+     "pass": 0.325
+    },
+    "wmask_setup_rise": {
+     "fail": -0.4187,
+     "pass": -0.3875
+    },
+    "wmask_setup_fall": {
+     "fail": -0.3475,
+     "pass": -0.3163
+    },
+    "wmask_hold_rise": {
+     "fail": 0.3762,
+     "pass": 0.4075
+    },
+    "wmask_hold_fall": {
+     "fail": 0.325,
+     "pass": 0.3562
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 1.8631,
+     "pass": 1.8916
+    },
+    "pulse_low": {
+     "fail": 4.2112,
+     "pass": 4.2425
+    },
+    "pulse_period": {
+     "fail": 8.4138,
+     "pass": 8.445
+    }
+   },
+   "seed": "ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-09"
+  },
+  "ff_n40C_1v95": {
+   "pvt": "ff_n40C_1v95",
+   "model": "ff",
+   "vdd": 1.95,
+   "temp": -40.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      1.57772,
+      1.61932,
+      1.77834
+     ],
+     [
+      1.57498,
+      1.61658,
+      1.7756
+     ],
+     [
+      1.59009,
+      1.63169,
+      1.79071
+     ]
+    ],
+    "d50_max": [
+     [
+      1.20794,
+      1.49724,
+      1.63499
+     ],
+     [
+      1.21173,
+      1.50102,
+      1.63877
+     ],
+     [
+      1.22181,
+      1.51111,
+      1.64886
+     ]
+    ],
+    "tran_max": [
+     [
+      0.64039,
+      0.63702,
+      0.74762
+     ],
+     [
+      0.62333,
+      0.61997,
+      0.73057
+     ],
+     [
+      0.61909,
+      0.61573,
+      0.72633
+     ]
+    ],
+    "depart_min": [
+     [
+      0.70805,
+      0.71597,
+      0.74254
+     ],
+     [
+      0.70094,
+      0.70886,
+      0.73543
+     ],
+     [
+      0.70072,
+      0.70864,
+      0.73521
+     ]
+    ],
+    "depart_max": [
+     [
+      10.9647,
+      11.02132,
+      11.11316
+     ],
+     [
+      10.97771,
+      11.03433,
+      11.12617
+     ],
+     [
+      11.00517,
+      11.06179,
+      11.15363
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.1375,
+     "pass": -0.1062
+    },
+    "csb_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "csb_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "csb_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "web_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "web_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "web_hold_rise": {
+     "fail": 0.115,
+     "pass": 0.1462
+    },
+    "web_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "addr_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "addr_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "addr_hold_rise": {
+     "fail": 0.115,
+     "pass": 0.1462
+    },
+    "addr_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "din_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "din_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "din_hold_rise": {
+     "fail": 0.115,
+     "pass": 0.1462
+    },
+    "din_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    },
+    "wmask_setup_rise": {
+     "fail": -0.1375,
+     "pass": -0.1062
+    },
+    "wmask_setup_fall": {
+     "fail": -0.1288,
+     "pass": -0.0975
+    },
+    "wmask_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "wmask_hold_fall": {
+     "fail": 0.075,
+     "pass": 0.1062
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 0.5266,
+     "pass": 0.555
+    },
+    "pulse_low": {
+     "fail": 1.6175,
+     "pass": 1.6488
+    },
+    "pulse_period": {
+     "fail": 3.2888,
+     "pass": 3.32
+    }
+   },
+   "seed": "ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-09"
+  },
+  "ss_n40C_1v60": {
+   "pvt": "ss_n40C_1v60",
+   "model": "ss",
+   "vdd": 1.6,
+   "temp": -40.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      5.06877,
+      5.31725,
+      5.80858
+     ],
+     [
+      5.12128,
+      5.36976,
+      5.86109
+     ],
+     [
+      5.24255,
+      5.49102,
+      5.98236
+     ]
+    ],
+    "d50_max": [
+     [
+      4.99994,
+      5.15761,
+      5.43766
+     ],
+     [
+      5.05243,
+      5.2101,
+      5.49015
+     ],
+     [
+      5.17371,
+      5.33138,
+      5.61143
+     ]
+    ],
+    "tran_max": [
+     [
+      0.20869,
+      0.44311,
+      0.96817
+     ],
+     [
+      0.20865,
+      0.44308,
+      0.96814
+     ],
+     [
+      0.20843,
+      0.44285,
+      0.96791
+     ]
+    ],
+    "depart_min": [
+     [
+      2.65226,
+      2.71894,
+      2.77449
+     ],
+     [
+      2.69829,
+      2.76498,
+      2.82052
+     ],
+     [
+      2.77651,
+      2.84319,
+      2.89873
+     ]
+    ],
+    "depart_max": [
+     [
+      14.89198,
+      14.96456,
+      15.03834
+     ],
+     [
+      14.94283,
+      15.0154,
+      15.08918
+     ],
+     [
+      15.06535,
+      15.13793,
+      15.21171
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.5437,
+     "pass": -0.5125
+    },
+    "csb_setup_fall": {
+     "fail": -0.3788,
+     "pass": -0.3475
+    },
+    "csb_hold_rise": {
+     "fail": 0.5325,
+     "pass": 0.5637
+    },
+    "csb_hold_fall": {
+     "fail": 0.3562,
+     "pass": 0.3875
+    },
+    "web_setup_rise": {
+     "fail": -0.5637,
+     "pass": -0.5325
+    },
+    "web_setup_fall": {
+     "fail": -0.3788,
+     "pass": -0.3475
+    },
+    "web_hold_rise": {
+     "fail": 0.49,
+     "pass": 0.5212
+    },
+    "web_hold_fall": {
+     "fail": 0.3562,
+     "pass": 0.3875
+    },
+    "addr_setup_rise": {
+     "fail": -0.5325,
+     "pass": -0.5012
+    },
+    "addr_setup_fall": {
+     "fail": -0.3788,
+     "pass": -0.3475
+    },
+    "addr_hold_rise": {
+     "fail": 0.5212,
+     "pass": 0.5525
+    },
+    "addr_hold_fall": {
+     "fail": 0.3562,
+     "pass": 0.3875
+    },
+    "din_setup_rise": {
+     "fail": -0.5637,
+     "pass": -0.5325
+    },
+    "din_setup_fall": {
+     "fail": -0.3788,
+     "pass": -0.3475
+    },
+    "din_hold_rise": {
+     "fail": 0.5525,
+     "pass": 0.5837
+    },
+    "din_hold_fall": {
+     "fail": 0.3562,
+     "pass": 0.3875
+    },
+    "wmask_setup_rise": {
+     "fail": -0.5437,
+     "pass": -0.5125
+    },
+    "wmask_setup_fall": {
+     "fail": -0.3788,
+     "pass": -0.3475
+    },
+    "wmask_hold_rise": {
+     "fail": 0.5012,
+     "pass": 0.5325
+    },
+    "wmask_hold_fall": {
+     "fail": 0.3562,
+     "pass": 0.3875
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 1.3512,
+     "pass": 1.3797
+    },
+    "pulse_low": {
+     "fail": 5.2112,
+     "pass": 5.2425
+    },
+    "pulse_period": {
+     "fail": 10.4138,
+     "pass": 10.445
+    }
+   },
+   "seed": "ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-09"
+  },
+  "ff_100C_1v95": {
+   "pvt": "ff_100C_1v95",
+   "model": "ff",
+   "vdd": 1.95,
+   "temp": 100.0,
+   "search": {
+    "max_extend": 3,
+    "extend_points": 2,
+    "pulse_floor_ns": {
+     "pulse_high": 0.4,
+     "pulse_low": 0.4,
+     "pulse_period": 0.8
+    }
+   },
+   "delay": {
+    "settle_max": [
+     [
+      1.21363,
+      1.37536,
+      1.66033
+     ],
+     [
+      1.22203,
+      1.38375,
+      1.66873
+     ],
+     [
+      1.19927,
+      1.361,
+      1.64598
+     ]
+    ],
+    "d50_max": [
+     [
+      1.14544,
+      1.25093,
+      1.41797
+     ],
+     [
+      1.15431,
+      1.25979,
+      1.42683
+     ],
+     [
+      1.13148,
+      1.23697,
+      1.40401
+     ]
+    ],
+    "tran_max": [
+     [
+      0.21485,
+      0.3632,
+      0.66987
+     ],
+     [
+      0.21733,
+      0.36567,
+      0.67235
+     ],
+     [
+      0.2154,
+      0.36375,
+      0.67042
+     ]
+    ],
+    "depart_min": [
+     [
+      0.72959,
+      0.74519,
+      0.76917
+     ],
+     [
+      0.74102,
+      0.75661,
+      0.7806
+     ],
+     [
+      0.74625,
+      0.76185,
+      0.78583
+     ]
+    ],
+    "depart_max": [
+     [
+      11.04662,
+      11.08236,
+      11.13047
+     ],
+     [
+      11.0546,
+      11.09034,
+      11.13845
+     ],
+     [
+      11.03488,
+      11.07062,
+      11.11873
+     ]
+    ],
+    "simulated": [
+     [
+      false,
+      true,
+      false
+     ],
+     [
+      true,
+      true,
+      true
+     ],
+     [
+      false,
+      true,
+      false
+     ]
+    ]
+   },
+   "constraints": {
+    "csb_setup_rise": {
+     "fail": -0.1687,
+     "pass": -0.1375
+    },
+    "csb_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "csb_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "csb_hold_fall": {
+     "fail": 0.1375,
+     "pass": 0.1687
+    },
+    "web_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "web_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "web_hold_rise": {
+     "fail": 0.1462,
+     "pass": 0.1775
+    },
+    "web_hold_fall": {
+     "fail": 0.1375,
+     "pass": 0.1687
+    },
+    "addr_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "addr_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "addr_hold_rise": {
+     "fail": 0.1462,
+     "pass": 0.1775
+    },
+    "addr_hold_fall": {
+     "fail": 0.1375,
+     "pass": 0.1687
+    },
+    "din_setup_rise": {
+     "fail": -0.1575,
+     "pass": -0.1262
+    },
+    "din_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "din_hold_rise": {
+     "fail": 0.1462,
+     "pass": 0.1775
+    },
+    "din_hold_fall": {
+     "fail": 0.1375,
+     "pass": 0.1687
+    },
+    "wmask_setup_rise": {
+     "fail": -0.1687,
+     "pass": -0.1375
+    },
+    "wmask_setup_fall": {
+     "fail": -0.16,
+     "pass": -0.1288
+    },
+    "wmask_hold_rise": {
+     "fail": 0.1262,
+     "pass": 0.1575
+    },
+    "wmask_hold_fall": {
+     "fail": 0.1375,
+     "pass": 0.1687
+    }
+   },
+   "pulse": {
+    "pulse_high": {
+     "fail": 0.6972,
+     "pass": 0.7256
+    },
+    "pulse_low": {
+     "fail": 1.305,
+     "pass": 1.3363
+    },
+    "pulse_period": {
+     "fail": 2.6325,
+     "pass": 2.6638
+    }
+   },
+   "seed": "ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/char.json",
+   "date": "2026-10-09"
+  }
+ }
+}

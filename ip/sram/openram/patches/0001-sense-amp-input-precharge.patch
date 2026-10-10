@@ -1,0 +1,202 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: arvinsa-rtl-gds <noreply@invalid>
+Date: Thu, 8 Oct 2026 21:54:06 +0800
+Subject: [PATCH] sky130 port_data: precharge the sense amp inputs (column mux
+ outputs)
+
+With only an NMOS column mux, the sense amp's internal nodes are restored only
+to VDD - Vt between reads; at low temperature or ss low voltage the sense amp
+keeps the previous read. Add a precharge_array at the column mux outputs, one
+cell per data bit at the sense amp position, enabled by p_en_bar like the
+bitline precharge. precharge_array gets mirror_stride for the left/right
+mirroring of cells placed every words_per_row columns; the bank connects every
+p_en_bar pin of port_data. Not used without a column mux or with spare columns.
+(arvinsa-rtl-gds ADR-0018 decision 8)
+---
+ compiler/modules/bank.py            |  5 ++-
+ compiler/modules/port_data.py       | 62 +++++++++++++++++++++++++++--
+ compiler/modules/precharge_array.py |  8 +++-
+ 3 files changed, 67 insertions(+), 8 deletions(-)
+
+diff --git a/compiler/modules/bank.py b/compiler/modules/bank.py
+index 42fd96d3..b749b365 100644
+--- a/compiler/modules/bank.py
++++ b/compiler/modules/bank.py
+@@ -1082,8 +1082,9 @@ class bank(design):
+         # Connection from the central bus to the main control block crosses
+         # pre-decoder and this connection is in metal3
+         connection = []
+-        connection.append((self.prefix + "p_en_bar{}".format(port),
+-                           self.port_data_inst[port].get_pin("p_en_bar")))
++        # port_data has two p_en_bar pins when it has a precharge array at the sense amp inputs
++        for pin in self.port_data_inst[port].get_pins("p_en_bar"):
++            connection.append((self.prefix + "p_en_bar{}".format(port), pin))
+ 
+         if port in self.write_ports:
+             connection.append((self.prefix + "w_en{}".format(port),
+diff --git a/compiler/modules/port_data.py b/compiler/modules/port_data.py
+index aa39256a..6f887043 100644
+--- a/compiler/modules/port_data.py
++++ b/compiler/modules/port_data.py
+@@ -107,6 +107,11 @@ class port_data(design):
+         else:
+             self.column_mux_array_inst = None
+ 
++        if self.sense_precharge_array:
++            self.create_sense_precharge_array()
++        else:
++            self.sense_precharge_array_inst = None
++
+     def create_layout(self):
+         self.compute_instance_offsets()
+         self.place_instances()
+@@ -243,6 +248,21 @@ class port_data(design):
+         else:
+             self.column_mux_array = None
+ 
++        # A second precharge array at the column mux outputs (the sense amp inputs), one cell per data bit at
++        # the sense amp's position. With only an NMOS column mux the sense amp's internal nodes are restored
++        # only to VDD - Vt between reads, and at low temperature or ss low voltage the sense amp keeps the
++        # previous read (arvinsa-rtl-gds ADR-0010, ADR-0018 decision 8). Not with spare columns (not needed).
++        if self.col_addr_size > 0 and self.port in self.read_ports and not self.num_spare_cols:
++            self.sense_precharge_array = factory.create(module_type="precharge_array",
++                                                        columns=self.word_size,
++                                                        offsets=[self.bit_offsets[b * self.words_per_row]
++                                                                 for b in range(self.word_size)],
++                                                        bitcell_bl=self.bl_names[self.port],
++                                                        bitcell_br=self.br_names[self.port],
++                                                        mirror_stride=self.words_per_row)
++        else:
++            self.sense_precharge_array = None
++
+         if self.port in self.write_ports:
+             # RBLs dont get a write driver
+             self.write_driver_array = factory.create(module_type="write_driver_array",
+@@ -342,6 +362,20 @@ class port_data(design):
+         temp.append("gnd")
+         self.connect_inst(temp)
+ 
++    def create_sense_precharge_array(self):
++        """ Precharge of the sense amp inputs (bl_out/br_out), same enable as the bitline precharge """
++        self.sense_precharge_array_inst = self.add_inst(name="sense_precharge_array{}".format(self.port),
++                                                        mod=self.sense_precharge_array)
++        temp = []
++        for bit in range(self.word_size):
++            temp.append("bl_out_{0}".format(bit))
++            temp.append("br_out_{0}".format(bit))
++        temp.extend(["p_en_bar", "vdd"])
++        self.connect_inst(temp)
++
++    def place_sense_precharge_array(self, offset):
++        self.sense_precharge_array_inst.place(offset=offset, mirror="MX")
++
+     def place_column_mux_array(self, offset):
+         """ Placing Column Mux when words_per_row > 1 . """
+         if self.col_addr_size == 0:
+@@ -443,11 +477,12 @@ class port_data(design):
+         vertical_port_order = []
+         vertical_port_order.append(self.precharge_array_inst)
+         vertical_port_order.append(self.column_mux_array_inst)
++        vertical_port_order.append(self.sense_precharge_array_inst)
+         vertical_port_order.append(self.sense_amp_array_inst)
+         vertical_port_order.append(self.write_driver_array_inst)
+         vertical_port_order.append(self.write_mask_and_array_inst)
+ 
+-        vertical_port_offsets = 5 * [None]
++        vertical_port_offsets = 6 * [None]
+         self.width = 0
+         self.height = 0
+         for i, p in enumerate(vertical_port_order):
+@@ -458,9 +493,10 @@ class port_data(design):
+             vertical_port_offsets[i] = vector(0, self.height)
+ 
+         # Reversed order
+-        self.write_mask_and_offset = vertical_port_offsets[4]
+-        self.write_driver_offset = vertical_port_offsets[3]
+-        self.sense_amp_offset = vertical_port_offsets[2]
++        self.write_mask_and_offset = vertical_port_offsets[5]
++        self.write_driver_offset = vertical_port_offsets[4]
++        self.sense_amp_offset = vertical_port_offsets[3]
++        self.sense_precharge_offset = vertical_port_offsets[2]
+         self.column_mux_offset = vertical_port_offsets[1]
+         self.precharge_offset = vertical_port_offsets[0]
+ 
+@@ -479,6 +515,8 @@ class port_data(design):
+             self.place_precharge_array(self.precharge_offset)
+         if self.column_mux_offset:
+             self.place_column_mux_array(self.column_mux_offset)
++        if self.sense_precharge_offset:
++            self.place_sense_precharge_array(self.sense_precharge_offset)
+ 
+     def route_sense_amp_out(self, port):
+         """ Add pins for the sense amp output """
+@@ -554,6 +592,17 @@ class port_data(design):
+         """ Routing of BL and BR between sense_amp and column mux or precharge array """
+         inst2 = self.sense_amp_array_inst
+ 
++        if self.sense_precharge_array_inst:
++            # column mux -> sense amp input precharge -> sense amp (ADR-0018 decision 8)
++            self.connect_bitlines(inst1=self.column_mux_array_inst,
++                                  inst1_bls_template="{inst}_out_{bit}",
++                                  inst2=self.sense_precharge_array_inst,
++                                  num_bits=self.word_size)
++            self.connect_bitlines(inst1=self.sense_precharge_array_inst,
++                                  inst2=inst2,
++                                  num_bits=self.word_size)
++            return
++
+         if self.col_addr_size>0:
+             # Sense amp is connected to the col mux
+             inst1 = self.column_mux_array_inst
+@@ -728,6 +777,9 @@ class port_data(design):
+         """ Add the control pins: s_en, p_en_bar, w_en """
+         if self.precharge_array_inst:
+             self.copy_layout_pin(self.precharge_array_inst, "en_bar", "p_en_bar")
++        if self.sense_precharge_array_inst:
++            # a second p_en_bar pin; the bank connects every p_en_bar pin to its control bus
++            self.copy_layout_pin(self.sense_precharge_array_inst, "en_bar", "p_en_bar")
+         if self.column_mux_array_inst:
+             sel_names = ["sel_{}".format(x) for x in range(self.num_col_addr_lines)]
+             for pin_name in sel_names:
+@@ -849,6 +901,8 @@ class port_data(design):
+         """Precharge adds a loop between bitlines, can be excluded to reduce complexity"""
+         if self.precharge_array_inst:
+             self.graph_inst_exclude.add(self.precharge_array_inst)
++        if self.sense_precharge_array_inst:
++            self.graph_inst_exclude.add(self.sense_precharge_array_inst)
+ 
+     def graph_exclude_column_mux(self, column_include_num):
+         """
+diff --git a/compiler/modules/precharge_array.py b/compiler/modules/precharge_array.py
+index 75dc7b1c..937a7dcf 100644
+--- a/compiler/modules/precharge_array.py
++++ b/compiler/modules/precharge_array.py
+@@ -18,7 +18,8 @@ class precharge_array(design):
+     of bit line columns, height is the height of the bit-cell array.
+     """
+ 
+-    def __init__(self, name, columns, offsets=None, size=1, bitcell_bl="bl", bitcell_br="br", column_offset=0):
++    def __init__(self, name, columns, offsets=None, size=1, bitcell_bl="bl", bitcell_br="br", column_offset=0,
++                 mirror_stride=1):
+         super().__init__(name)
+         debug.info(1, "Creating {0}".format(self.name))
+         self.add_comment("cols: {0} size: {1} bl: {2} br: {3}".format(columns, size, bitcell_bl, bitcell_br))
+@@ -29,6 +30,9 @@ class precharge_array(design):
+         self.bitcell_bl = bitcell_bl
+         self.bitcell_br = bitcell_br
+         self.column_offset = column_offset
++        # Column index of cell i is i * mirror_stride (+ column_offset) for the left/right mirroring of
++        # the bitcells; a row of cells at every words_per_row-th column (sense amp pitch) uses words_per_row.
++        self.mirror_stride = mirror_stride
+ 
+         if OPTS.tech_name == "sky130":
+             self.en_bar_layer = "m3"
+@@ -117,7 +121,7 @@ class precharge_array(design):
+             self.offsets = [n * self.pc_cell.width for n in range(self.columns)]
+ 
+         for i, xoffset in enumerate(self.offsets):
+-            if self.cell.mirror.y and (i + self.column_offset) % 2:
++            if self.cell.mirror.y and (i * self.mirror_stride + self.column_offset) % 2:
+                 mirror = "MY"
+                 tempx = xoffset + self.pc_cell.width
+             else:
