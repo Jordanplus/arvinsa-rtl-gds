@@ -67,40 +67,40 @@
     "GND_NETS": [
         "vssd1"
     ],
-    "//MACROS": "Prebuilt OpenRAM macro: GDS from the PDK; LEF = the PDK LEF plus ANTENNAGATEAREA on the 59 input pins, from the macro's SPICE netlist (ip/sram/.../gen_antenna_lef.py, docs/decisions/0008-sram-antenna-lef.md), so OpenROAD's antenna check and repair see the nets on SRAM inputs. Timing: one .lib per PVT from the ngspice characterization of the PDK's SRAM netlist (ip/sram/.../char/, docs/decisions/0010-sram-spice-characterization.md); each '*_<pvt>' key matches exactly the three RC corners of that PVT. Placement: top-right corner, orientation N (docs/decisions/0006-soc-die-area.md). x and y are on the core site grid (core origin 5.52, 10.88; site 0.46 x 2.72) and chosen so that the 10 um macro halo reaches past the core's right and top edges: no standard cell rows are left between the SRAM and those edges. A 6 um row strip there could not be connected to the power grid (PDN-0179 'Unable to repair all channels'). The SRAM is 15.14 um from the right die edge and 18.98 um from the top.",
+    "//MACROS": "OpenRAM self-generated macro (Phase 6, ADR-0018): GDS, LEF and netlist are the OpenRAM outputs in ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/openram/ (sha256 in summary.json); LEF = that LEF plus ANTENNAGATEAREA on the 59 input pins, from the macro's SPICE netlist (ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/gen_antenna_lef.py, docs/decisions/0008-sram-antenna-lef.md), so OpenROAD's antenna check and repair see the nets on SRAM inputs. Timing and power: one .lib per PVT from the ngspice characterization of that netlist (ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/, docs/decisions/0010-sram-spice-characterization.md, ADR-0018 decisions 10-15); each '*_<pvt>' key matches exactly the three RC corners of that PVT. Placement: top-right corner, orientation N (docs/decisions/0006-soc-die-area.md). x and y are on the core site grid (core origin 5.52, 10.88; site 0.46 x 2.72) and chosen so that the 10 um macro halo reaches past the core's right and top edges: no standard cell rows are left between the SRAM and those edges. A 6 um row strip there could not be connected to the power grid (PDN-0179 'Unable to repair all channels'). The macro (694.27 x 428.415 um) is 15.01 um from the right die edge and 17.985 um from the top: its right and top edges are where the prebuilt macro's were (984.86, 781.02), rounded outward to the site grid (ADR-0018 decision 16).",
     "MACROS": {
-        "sky130_sram_2kbyte_1rw1r_32x512_8": {
+        "arv_sram_2kbyte_1rw1r_32x512_8": {
             "gds": [
-                "pdk_dir::libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds"
+                "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/openram/arv_sram_2kbyte_1rw1r_32x512_8.gds"
             ],
             "lef": [
-                "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef"
+                "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.lef"
             ],
             "vh": [
-                "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
+                "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.bb.v"
             ],
             "lib": {
                 "*_tt_025C_1v80": [
-                    "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib"
+                    "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib"
                 ],
                 "*_ss_100C_1v60": [
-                    "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib"
+                    "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib"
                 ],
                 "*_ff_n40C_1v95": [
-                    "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib"
+                    "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib"
                 ],
                 "*_ss_n40C_1v60": [
-                    "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib"
+                    "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib"
                 ],
                 "*_ff_100C_1v95": [
-                    "dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib"
+                    "dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib"
                 ]
             },
             "instances": {
                 "sram0": {
                     "location": [
-                        301.76,
-                        364.48
+                        290.72,
+                        353.6
                     ],
                     "orientation": "N"
                 }

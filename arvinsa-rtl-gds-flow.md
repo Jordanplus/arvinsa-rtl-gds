@@ -69,7 +69,7 @@ SKILL.md 是一般的 Markdown，任何 agent 都能讀。它們放在專案層�
 - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，用 `signoff-criteria` 重新推導。
 - `pnr/<design>/run.sh` 與設計專屬的 checker：本 repo 的 `check_inputs.py`（harden 前的輸入檢查）、`check_soc.py`（SRAM 擺放、未用 port 的接法、斷線 pin、STA 設定、macro clock 前有沒有 delay buffer、Magic DRC 對 SRAM 單獨的結果）、`sram_drc_alone.py`、`ir_worst.py`（最壞情況的靜態 IR）。
 - golden。
-- 和設計綁在一起的植入錯誤案例，例如 `pnr/soc_top/neg_pnr.py` 的 P00–P62（PnR 與 signoff checker 的植入錯誤）。
+- 和設計綁在一起的植入錯誤案例，例如 `pnr/soc_top/neg_pnr.py` 的 P00–P66（PnR 與 signoff checker 的植入錯誤）。
 - ADR、exit review 的內容。
 
 ### 1.6 經驗寫回這裡
@@ -178,7 +178,7 @@ signoff（harden 結尾自動執行）
 
 ### 4.6 harden 與 signoff（floorplan → PDN → placement → CTS → routing → signoff）
 
-- 開跑前：`pnr/<design>/check_inputs.py` 檢查輸入。本 repo 檢查 RTL 檔案清單與 config 一致、兩顆 CPU 的 config 只差 RTL（本 repo 專屬）、macro 的 .lib 與 antenna LEF 是產生器的最新輸出、.lib 的數字由 `check_char_lib.py` 獨立重算、STA 每個 corner 只讀到一份 macro .lib、`LIB`／`EXTRA_LIBS` 沒有帶進別的 macro .lib、弱 cell。harden 只能在已 commit 的工作樹上開（來源追溯）。
+- 開跑前：`pnr/<design>/check_inputs.py` 檢查輸入。本 repo 檢查 RTL 檔案清單與 config 一致、兩顆 CPU 的 config 只差 RTL（本 repo 專屬）、macro 產生器的輸出沒被改過（sha256 對產生紀錄）、flow 讀的 macro view 通過 view QA、macro 的 .lib、antenna LEF 與模擬模型是產生器的最新輸出、.lib 的數字由 `check_char_lib.py` 獨立重算、STA 每個 corner 只讀到一份 macro .lib、`LIB`／`EXTRA_LIBS` 沒有帶進別的 macro .lib、弱 cell。harden 只能在已 commit 的工作樹上開（來源追溯）。
 - 怎麼跑：`make harden-soc`（本 repo 要加 `CPU=hazard3`）。它呼叫 `pnr/soc_top/run.sh`：LibreLane（`pnr/librelane_flow.sh` 對已知的偶發錯誤做有上限的重試），接著自動執行 signoff 的全部 checker：
   - `check_signoff.py`：`signoff/limits/<tag>.toml` 的門檻（多 corner 的 setup、hold、slew、cap，DRC、LVS、antenna、IR）與 golden 比對；
   - `check_soc.py`（加 `sram_drc_alone.py`）、`check_inputs.py --resolved`（這次 run 真的用了這些輸入）、`ir_worst.py`、`provenance.py --verify`、`review_criteria.py`。
@@ -186,7 +186,7 @@ signoff（harden 結尾自動執行）
 - 每一步的設定與已知問題：`floorplan-congestion`、`pdn-ir-drop`、`drv-timing-closure`、`cts-clock-tree`、`antenna-signoff`、`multicorner-sta`、`drc-signoff`、`lvs-signoff`；執行與除錯看 `librelane-run-debug`。
 - 跑完（PASS 或 FAIL）：`CLAUDE.md` 規則 9 的 criteria review（`signoff-criteria`「每次 harden 後的檢查」，寫 `runs/<tag>_signoff/criteria_review.md`），學到的數字寫進該製程的 knowledge 檔。
 - **golden**：第一次 signoff 全部 PASS、criteria review 也確認後，把那次 run 的 metrics 存成 golden（`signoff/golden/<tag>/`）。之後改了工具、PDK、RTL、config、SDC、macro 的產生檔，golden 比對一定 FAIL，要照 `signoff-checker-qualification` 規則 6 更新：先確認所有門檻與 checker PASS，逐項說明差異，複製並記 sha256，再跑一次確認 PASS。同樣設定重跑的差異怎麼給誤差也在該 skill。
-- negative test：`make neg-pnr`（本 repo P00–P62）。
+- negative test：`make neg-pnr`（本 repo P00–P66）。
 
 ### 4.7 網表驗證
 

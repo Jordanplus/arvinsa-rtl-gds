@@ -292,10 +292,13 @@ def fail_names(eqy_dir):
     return names
 
 
+SRAM = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
+
+
 def sram_pin_const0(pin):
     """sram0 connection .<pin>({... net ...}) or .<pin>(net): one bit replaced by 1'b0."""
     bus, idx = re.fullmatch(r"(\w+)\[(\d+)\]", pin).groups()
-    rx = re.compile(r"(sky130_sram_2kbyte_1rw1r_32x512_8 sram0 \(.*?\." + bus + r"\(\{)([^}]*)(\}\))", re.S)
+    rx = re.compile(r"(" + SRAM + r" sram0 \(.*?\." + bus + r"\(\{)([^}]*)(\}\))", re.S)
 
     def repl(m):
         bits = [b.strip() for b in m.group(2).split(",")]
@@ -305,7 +308,7 @@ def sram_pin_const0(pin):
 
 
 def sram_pin_inverted(pin, net="neg_eqy_inv"):
-    rx = re.compile(r"(sky130_sram_2kbyte_1rw1r_32x512_8 sram0 \(.*?\." + pin + r"\()([^)]+)(\))", re.S)
+    rx = re.compile(r"(" + SRAM + r" sram0 \(.*?\." + pin + r"\()([^)]+)(\))", re.S)
     return rx, lambda m: (m.group(1) + net + m.group(3))
 
 

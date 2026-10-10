@@ -8,6 +8,7 @@ error and must FAIL with the expected reason:
   Q5 .lib area that is not the LEF size         Q6 GDS box not the LEF SIZE  Q7 a bus bit missing in the Verilog
   Q8 a direction that differs from the LEF      Q9 a power pin missing in the SPICE
   Q10 a view with another top name              Q11 no internal_power at all
+  Q12 LEF DATABASE MICRONS 2000 (OpenRAM dev; OpenROAD ODB-0292 discards the LEF), with a 1000 positive control
 Prints PASS n/n; exit 0 only when every case behaves as expected.
 """
 import os
@@ -149,6 +150,9 @@ def main():
     check("Q10 another top name in the .lib", run(lib=sub(LIB, "cell (neg_mac){", "cell (neg_mac2){")), "top names neg.lib=neg_mac2")
     check("Q11 no internal_power", run(lib=sub(LIB, "rise_power(scalar)", "rise_xx(scalar)").replace("fall_power(scalar)", "fall_xx(scalar)")),
           "no internal_power values")
+    units = "UNITS\n  DATABASE MICRONS {} ;\nEND UNITS\n"
+    check("Q12a LEF DATABASE MICRONS 1000 (positive control)", run(lef=units.format(1000) + LEF), None)
+    check("Q12 LEF DATABASE MICRONS 2000", run(lef=units.format(2000) + LEF), "LEF DATABASE MICRONS 2000 > the tech LEF's 1000")
     print(f"neg-macro-views: {'PASS' if all(results) else 'FAIL'} {sum(results)}/{len(results)}")
     return 0 if all(results) else 1
 

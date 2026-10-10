@@ -13,7 +13,10 @@ Checks (each prints a PASS/FAIL row):
                net has exactly one point, and the voltage column is > 0 for VDD_NETS and 0 for
                GND_NETS. A point that misses its stripe would silently remove a supply (Phase 4).
   port1_tieoff sram0 port 1 is tied off in the final netlist: csb1 to a tie-high (conb_1 HI),
-               clk1 and addr1[8:0] to tie-low (conb_1 LO) (§5.1); dout1 is left unconnected
+               addr1[8:0] to tie-low (conb_1 LO) (§5.1); dout1 is left unconnected. clk1 must be
+               the system clock: through buffers and an even number of inverters back to the top-level
+               port clk, never a constant (OpenRAM latches csb1 on clk1 with no reset; a constant
+               clk1 can leave a wordline on after power-up, ADR-0018 decision 9)
   disconnected LibreLane's Odb.ReportDisconnectedPins finds no disconnected pin (log line
                "Found 0 disconnected pin(s), of which 0 are critical." and no table). sram0
                dout1 is connected to the RTL wires unused_sram_dout1[31:0], so it is not reported.
@@ -32,7 +35,8 @@ Checks (each prints a PASS/FAIL row):
                docs/phase_exit/phase3.md).
   sta_setup    OpenSTA `check_setup` (unconstrained endpoints, unclocked registers, missing input
                delays, loops, multiple clocks) in every signoff STA corner: the only allowed warning
-               is the unclocked sram0/clk1 (port 1 clock tied to 0). project-plan.md §7.2
+               was the unclocked sram0/clk1 while clk1 was tied to 0, before Phase 6 (ADR-0018
+               decision 9); now none is allowed. project-plan.md §7.2
                "no unconstrained endpoint". The section must be present in every corner of
                STA_CORNERS in the config, and no other corner may be there.
   pulse_width  minimum pulse width and minimum period (<corner>/pulse_width.rpt, written by
@@ -69,7 +73,7 @@ import os
 import re
 import sys
 
-MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
+MACRO = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
 INST = "sram0"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 LIB_LINE = re.compile(r"^Reading (?:cell|extra timing|timing) library for the '([^']*)' corner at '(.*?)'", re.M)
@@ -78,6 +82,24 @@ CTS_LINE = "[INFO] arvinsa: clock_tree_synthesis -no_insertion_delay"
 SRAM_CLK_CHAIN_MAX = 2   # single-fanout clock buffers in a row above sram0/clk0 (measured 0 / 11-12)
 CLK_BUF = re.compile(r"sky130_fd_sc_hd__(?:clkbuf|buf|clkdlybuf\w*|dlygate\w*|dlymetal\w*|clkinv|clkinvlp|inv)_\d+$")
 _DEFINES = {}
+
+
+def clock_source(nl, pin):
+    """(net, inverters) at the top of the buffer/inverter chain above sram0/<pin> (any fanout), or (None, 0)."""
+    drv, start = {}, None
+    for m in re.finditer(r"^\s*(\S+)\s+(\\\S+|\S+)\s*\((.*?)\);", nl, re.M | re.S):
+        cell, name, body = m.groups()
+        pins = {k: v.strip() for k, v in re.findall(r"\.(\w+)\(\s*(\\\S+\s|[^()\s]+)\s*\)", body)}
+        if CLK_BUF.match(cell) and (pins.get("X") or pins.get("Y")):
+            drv[pins.get("X") or pins.get("Y")] = (cell, pins.get("A"))
+        if name == INST:
+            start = pins.get(pin)
+    net, inv, seen = start, 0, set()
+    while net in drv and net not in seen:
+        seen.add(net)
+        cell, net = drv[net]
+        inv += "inv" in cell
+    return net, inv
 
 
 def sram_clock_chain(nl):
@@ -112,11 +134,20 @@ def defines_sram(path):
             _DEFINES[path] = None
     return _DEFINES[path]
 TIE_HI = ["csb1"]
-TIE_LO = ["clk1"] + [f"addr1[{i}]" for i in range(9)]
+TIE_LO = [f"addr1[{i}]" for i in range(9)]
+CLK_PORT = "clk"     # sram0/clk1 must come from it (ADR-0018 decision 9)
 WIDTH = {"wmask0": 4, "addr0": 9, "din0": 32, "dout0": 32, "addr1": 9, "dout1": 32}
 
 
-SRAM_W, SRAM_H = 683.1, 416.54   # LEF SIZE
+
+
+def lef_size(path):
+    """(width, height) um of the LEF SIZE of MACRO."""
+    m = re.search(r"MACRO\s+" + re.escape(MACRO) + r"\b.*?SIZE\s+([\d.]+)\s+BY\s+([\d.]+)", open(path).read(), re.S)
+    return float(m.group(1)), float(m.group(2))
+
+
+SRAM_W, SRAM_H = lef_size(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "ip", "sram", MACRO, f"{MACRO}.lef"))
 BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "signoff", "waivers",
                         "soc_top", "sram_magic_drc_baseline.json")
 # Enlargement (nm) of the SRAM-alone boxes in the position comparison. Measured on the Phase 3
@@ -228,7 +259,7 @@ def read_magic_drc(path, outline=None):
 
 
 # check_setup warnings that are expected in soc_top: (warning text, set of listed pins)
-CHECK_SETUP_ALLOWED = {("There is 1 unclocked register/latch pin.", ("sram0/clk1",))}
+CHECK_SETUP_ALLOWED = set()   # Phase 3-5 allowed the unclocked sram0/clk1 (tied to 0); ADR-0018 decision 9
 
 
 def read_check_setup(sta_dir):
@@ -387,8 +418,11 @@ def main(run_dir, config_path, sram_drc):
     if conns is not None:
         hi, lo = tie_nets(nl)
         bad = [p for p in TIE_HI if conns.get(p) not in hi] + [p for p in TIE_LO if conns.get(p) not in lo]
-        row("port1_tieoff", not bad, "csb1 tie-high, clk1 and addr1[8:0] tie-low" if not bad
-            else f"not tied as required: {', '.join(f'{p}={conns.get(p)}' for p in bad)}")
+        src, inv = clock_source(nl, "clk1")
+        if conns.get("clk1") in hi | lo or src != CLK_PORT or inv % 2:
+            bad.append(f"clk1 (net {conns.get('clk1')}, from {src} through {inv} inverter(s); must come from {CLK_PORT})")
+        row("port1_tieoff", not bad, f"csb1 tie-high, addr1[8:0] tie-low, clk1 from the clock port {CLK_PORT}" if not bad
+            else f"not tied as required: {', '.join(p if p.startswith('clk1 ') else f'{p}={conns.get(p)}' for p in bad)}")
 
     # disconnected pins
     steps = glob.glob(os.path.join(run_dir, "*-odb-reportdisconnectedpins"))

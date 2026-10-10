@@ -26,7 +26,7 @@ OUT=runs/rtl/lint
 FILELIST=rtl/rtl.f
 FILELIST_H3=rtl/rtl_hazard3.f
 WAIVERS=rtl/lint/waivers.vlt
-SRAM_BB=ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v
+SRAM_BB=ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.bb.v
 OWN_SRC="rtl/soc rtl/bus rtl/periph rtl/cpu"
 BUGS_TOML=dv/bugs.toml
 BUGS=$( (grep -oE '^[[:space:]]*define[[:space:]]*=[[:space:]]*"BUG_[A-Za-z0-9_]+"' "$BUGS_TOML" || true) \

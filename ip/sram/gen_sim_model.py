@@ -9,6 +9,8 @@ Transformations (each must apply exactly once, otherwise the script fails):
   3. Move the `mem` array declaration before its first use. Upstream references
      mem[...] inside $display before declaring it; Icarus Verilog 13 rejects
      that ("Scope index expression is not constant"), Verilator accepts it.
+     Skipped when the upstream model already declares it before its first use
+     (OpenRAM dev, the Phase 6 self-generated macro); it must still be declared once.
 
 Usage: gen_sim_model.py <upstream.v> <sim.v> [--check]
 """
@@ -32,8 +34,9 @@ def transform(src: str) -> str:
         if src.count(needle) != 1:
             raise SystemExit(f"gen_sim_model: expected exactly one occurrence of {needle!r}")
     out = src.replace(VERBOSE_OLD, VERBOSE_NEW)
-    out = out.replace(MEM_DECL, "")
-    out = out.replace(FIRST_REG, MEM_MOVED + FIRST_REG)
+    if src.index(MEM_DECL) > src.index("mem["):
+        out = out.replace(MEM_DECL, "")
+        out = out.replace(FIRST_REG, MEM_MOVED + FIRST_REG)
     return HEADER + out
 
 

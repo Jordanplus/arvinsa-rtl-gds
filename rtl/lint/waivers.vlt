@@ -23,8 +23,8 @@ lint_off -rule UNUSEDSIGNAL -file "*third_party/picorv32/picosoc/simpleuart.v"
 
 // SRAM macro blackbox (ip/, read-only): an empty module body by design, so its
 // inputs are never read and its outputs are never driven.
-lint_off -rule UNUSEDSIGNAL -file "*ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
-lint_off -rule UNDRIVEN     -file "*ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v"
+lint_off -rule UNUSEDSIGNAL -file "*ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.bb.v"
+lint_off -rule UNDRIVEN     -file "*ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.bb.v"
 
 // Hazard3 core (third_party, read-only submodule, tag v1.1.1; Phase 5, ADR-0011): only unused
 // parameters (its shared .vh headers declare every opcode, CSR address and configuration

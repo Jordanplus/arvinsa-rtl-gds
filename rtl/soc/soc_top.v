@@ -242,11 +242,14 @@ module soc_top (
     );
 
     // ------------------------------------------------------------------
-    // SRAM macro (instance name fixed: sram0). Port 1 is tied off.
+    // SRAM macro (instance name fixed: sram0): the OpenRAM self-generated one (Phase 6, ADR-0018).
+    // Port 1 is unused: csb1 = 1 and addr1 = 0, but clk1 gets the system clock. OpenRAM latches
+    // csb1 on clk1 with no reset, so a constant clk1 can leave a wordline on after power-up
+    // (ADR-0018 decision 9).
     // ------------------------------------------------------------------
     wire [31:0] unused_sram_dout1;
 
-    sky130_sram_2kbyte_1rw1r_32x512_8 sram0 (
+    arv_sram_2kbyte_1rw1r_32x512_8 sram0 (
 `ifdef USE_POWER_PINS
         .vccd1  (vccd1),
         .vssd1  (vssd1),
@@ -258,7 +261,7 @@ module soc_top (
         .addr0  (sram_addr0),
         .din0   (sram_din0),
         .dout0  (sram_dout0),
-        .clk1   (1'b0),
+        .clk1   (clk),
         .csb1   (1'b1),
         .addr1  (9'd0),
         .dout1  (unused_sram_dout1)

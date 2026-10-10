@@ -106,7 +106,7 @@ help:
 	@echo "  make openram-setup         install the pinned OpenRAM, sky130_fd_bd_sram, OpenRAM's own PDK and a venv into .tools/"
 	@echo "  make openram-macro OPENRAM_CONFIG=<cfg>  generate a macro, check OpenRAM's DRC/LVS (summary.json), the contents of every view (views.json), then the full-deck Magic DRC rule by rule against the prebuilt macro (macro_drc.json); about 45 min for 2 KB"
 	@echo "  make macro-views          QA of the SRAM views the SoC uses: names, pins and directions agree in LEF/.lib/Verilog/SPICE, .lib numbers in range, area and GDS box = LEF SIZE (seconds)"
-	@echo "  make neg-macro-views      bug injection into that QA, Q1-Q11 (seconds; part of make regress)"
+	@echo "  make neg-macro-views      bug injection into that QA, Q1-Q12 (seconds; part of make regress)"
 	@echo "  make neg-openram          bug injection into the OpenRAM run, install, patch, macro DRC, .lib template and characterization provenance checkers O1-O8, I1-I4, T1-T3, D1-D3, L1-L2, C1-C2 (seconds; part of make regress)"
 	@echo "  make openram-lib-template  the .lib template of $(OR_SRAM): OpenRAM's TT .lib with the PDK macro's internal_power values"
 	@echo "  make openram-char          ngspice characterization of $(OR_SRAM) (tt, then four PVTs), then openram-lib and openram-confirm (hours)"
@@ -260,23 +260,26 @@ neg-openram:
 OPENRAM_NAME = $(basename $(notdir $(OPENRAM_CONFIG)))
 # Three checks after OpenRAM: its own DRC/LVS (gen_macro), the contents of every delivered view (check_macro_views,
 # skill hard-macro-integration) and the full-deck DRC against the prebuilt macro; all run, any FAIL fails.
+# OpenRAM's LEF has DATABASE MICRONS 2000 (--dbu 2000 here): the flow reads the LEF that gen_antenna_lef.py
+# rewrites to 1000, which check_inputs.py macro_views checks with the default --dbu 1000 (OpenROAD ODB-0292).
 OPENRAM_OUT = runs/openram/$(OPENRAM_NAME)/macro/$(OPENRAM_NAME)
 openram-macro:
 	$(PY) ip/sram/openram/gen_macro.py $(OPENRAM_CONFIG) runs/openram/$(OPENRAM_NAME) --drc-max $(OPENRAM_DRC_MAX)
 	rc=0; \
 	$(PY) scripts/check_macro_views.py --name $(OPENRAM_NAME) --lef $(OPENRAM_OUT).lef --lib $(OPENRAM_OUT)_TT_1p8V_25C.lib \
-	  --verilog $(OPENRAM_OUT).v --spice $(OPENRAM_OUT).sp --gds $(OPENRAM_OUT).gds --json runs/openram/$(OPENRAM_NAME)/views.json || rc=1; \
+	  --verilog $(OPENRAM_OUT).v --spice $(OPENRAM_OUT).sp --gds $(OPENRAM_OUT).gds --dbu 2000 --json runs/openram/$(OPENRAM_NAME)/views.json || rc=1; \
 	$(PY) ip/sram/openram/macro_drc.py $(OPENRAM_OUT).gds $(OPENRAM_NAME) runs/openram/$(OPENRAM_NAME)/macro_drc.json || rc=1; \
 	exit $$rc
 
-# View QA of the SRAM the SoC uses now: the repo LEF (antenna added) and the five characterized .lib, with the
-# PDK's Verilog, SPICE and GDS (skill hard-macro-integration). Seconds.
-SRAM_REF = $${PDK_ROOT:-$$HOME/.ciel}/sky130A/libs.ref/sky130_sram_macros
-SRAM_NAME = sky130_sram_2kbyte_1rw1r_32x512_8
+# View QA of the SRAM the SoC uses now (Phase 6: the OpenRAM self-generated one, ADR-0018): the repo LEF
+# (antenna added), the five characterized .lib, and OpenRAM's Verilog, SPICE and GDS (skill
+# hard-macro-integration). Seconds. check_inputs.py macro_views runs the same before every harden.
+SRAM_NAME = arv_sram_2kbyte_1rw1r_32x512_8
 macro-views:
 	$(PY) scripts/check_macro_views.py --name $(SRAM_NAME) --lef ip/sram/$(SRAM_NAME)/$(SRAM_NAME).lef \
 	  $(foreach f,$(wildcard ip/sram/$(SRAM_NAME)/char/*.lib),--lib $(f)) \
-	  --verilog $(SRAM_REF)/verilog/$(SRAM_NAME).v --spice $(SRAM_REF)/spice/$(SRAM_NAME).spice --gds $(SRAM_REF)/gds/$(SRAM_NAME).gds
+	  --verilog ip/sram/$(SRAM_NAME)/upstream/$(SRAM_NAME).v --spice ip/sram/$(SRAM_NAME)/openram/$(SRAM_NAME).sp \
+	  --gds ip/sram/$(SRAM_NAME)/openram/$(SRAM_NAME).gds
 
 neg-macro-views:
 	$(PY) scripts/neg_macro_views.py

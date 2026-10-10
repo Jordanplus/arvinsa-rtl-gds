@@ -5,7 +5,7 @@
 #   1. Read rtl/rtl.f (+incdir+ -> -I) and the SRAM blackbox.
 #   2. Run rtl/scripts/synth_check.ys: exactly one SRAM instance and
 #      check -assert on the elaborated RTL; then synth -flatten, assert no
-#      latch cells, exactly one sky130_sram_2kbyte_1rw1r_32x512_8 cell
+#      latch cells, exactly one arv_sram_2kbyte_1rw1r_32x512_8 cell
 #      (soc_top/sram0), check -assert on the flattened netlist.
 #   3. Any "Warning:" line in the Yosys log is a FAIL (the design currently
 #      synthesizes with zero warnings; a new one must be looked at). Only for
@@ -33,7 +33,7 @@ case "$CPU" in
     hazard3)  OUT=runs/rtl/synth_hazard3;  FILELIST=rtl/rtl_hazard3.f; DEFS=" -DSOC_CPU_HAZARD3" ;;
     *) echo "SYNTH-CHECK: FAIL (CPU must be picorv32 or hazard3, not $CPU)"; exit 1 ;;
 esac
-SRAM_BB=ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.bb.v
+SRAM_BB=ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.bb.v
 YS=rtl/scripts/synth_check.ys
 READ_YS="$OUT/read_rtl.ys"
 LOG="$OUT/yosys.log"
@@ -107,7 +107,7 @@ fi
 # Cell-count summary (from 'stat' after flatten).
 echo "  PASS  RTL: exactly one SRAM instance, check -assert"
 echo "  PASS  netlist: no latch cells"
-echo "  PASS  netlist: exactly one sky130_sram_2kbyte_1rw1r_32x512_8 cell (soc_top/sram0)"
+echo "  PASS  netlist: exactly one arv_sram_2kbyte_1rw1r_32x512_8 cell (soc_top/sram0)"
 echo "  PASS  netlist: check -assert"
 echo "  PASS  0 Yosys warnings$( [ "$nallowed" -gt 0 ] && echo " (and $nallowed allowed third_party/hazard3 warnings, see the header)")"
 awk '
@@ -118,7 +118,7 @@ awk '
         else                       logic += $1
         next
     }
-    NF == 2 && $1 ~ /^[0-9]+$/ && $2 == "sky130_sram_2kbyte_1rw1r_32x512_8" { sram += $1 }
+    NF == 2 && $1 ~ /^[0-9]+$/ && $2 == "arv_sram_2kbyte_1rw1r_32x512_8" { sram += $1 }
     END {
         printf "  cell summary (flattened soc_top, Yosys generic cells):\n"
         printf "    total cells        %7d\n", total

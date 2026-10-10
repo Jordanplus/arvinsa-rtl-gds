@@ -3,7 +3,7 @@
 harden): check the contents of every delivered file, not only that it exists. Skill hard-macro-integration.
 
     python3 scripts/check_macro_views.py --name <top> --lef <lef> --lib <lib> [--lib <lib> ...] --verilog <v>
-                                         --spice <netlist> [--gds <gds>] [--power-max PJ] [--cap-max PF] [--json out.json]
+                                         --spice <netlist> [--gds <gds>] [--power-max PJ] [--cap-max PF] [--dbu N] [--json out.json]
 
 Why (2026-10-08, ADR-0018): OpenRAM's own checks (DRC, LVS, files present) let a .lib with every internal_power
 ten orders of magnitude off (1.036316e+11) through, and the SoC IR-drop analysis reads those numbers. LVS ties
@@ -16,6 +16,8 @@ the GDS to the SPICE netlist only; nothing tied the LEF, the .lib and the Verilo
           leakage >= 0; delays and transitions >= 0; area = LEF width x height (AREA_TOL)
   size    with --gds: LEF SIZE = the bounding box of the GDS top cell, at the origin (KLayout from LibreLane's
           nix-shell, scripts/gds_bbox.py; SIZE_TOL um)
+  units   LEF DATABASE MICRONS <= the tech LEF's (--dbu, sky130 1000): OpenROAD discards a finer macro LEF
+          ("[ODB-0292] LEF data from ... is discarded due to errors"; OpenRAM dev writes 2000, Phase 6)
 Units: a .lib with capacitive_load_unit(1, pF) and voltage 1V gives internal power in pJ per transition.
 Prints PASS/FAIL with the reasons; exit 0 only on PASS. Negative tests: scripts/neg_macro_views.py (make neg-macro-views).
 """
@@ -34,6 +36,7 @@ POWER_MAX = 1000.0   # pJ per clock edge: the sky130 2 KB SRAM's analytical valu
 CAP_MAX = 1.0        # pF: a macro input pin is a few fF; 1 pF would be a unit or model error
 AREA_TOL = 1e-3      # relative
 SIZE_TOL = 0.005     # um, the sky130 manufacturing grid
+TECH_DBU = 1000      # DATABASE MICRONS of the sky130 tech LEF
 NUM = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
 DIRS = {"INPUT": "input", "OUTPUT": "output", "INOUT": "inout", "input": "input", "output": "output", "inout": "inout"}
 
@@ -176,7 +179,7 @@ def gds_bbox(gds, name):
     return tuple(float(x) for x in m.groups()) if m else None
 
 
-def check(name, texts, bbox=None, power_max=POWER_MAX, cap_max=CAP_MAX):
+def check(name, texts, bbox=None, power_max=POWER_MAX, cap_max=CAP_MAX, dbu=TECH_DBU):
     """texts: {"lef": str, "lib": {label: str}, "verilog": str, "spice": str}; bbox: GDS box or None (not checked).
     Returns (problems, details)."""
     lef_top, lef_sig, lef_pwr, size = read_lef(texts["lef"])
@@ -195,6 +198,9 @@ def check(name, texts, bbox=None, power_max=POWER_MAX, cap_max=CAP_MAX):
         out.append("no signal pins in the LEF")
     else:
         out += compare_pins(views)
+    units = re.search(r"^\s*DATABASE\s+MICRONS\s+(\d+)", texts["lef"], re.M)
+    if units and int(units.group(1)) > dbu:
+        out.append(f"LEF DATABASE MICRONS {units.group(1)} > the tech LEF's {dbu} (OpenROAD ODB-0292 discards it)")
     if size is None:
         out.append("no SIZE in the LEF")
     else:
@@ -222,6 +228,7 @@ def main(argv=None):
     ap.add_argument("--gds")
     ap.add_argument("--power-max", type=float, default=POWER_MAX)
     ap.add_argument("--cap-max", type=float, default=CAP_MAX)
+    ap.add_argument("--dbu", type=int, default=TECH_DBU, help="DATABASE MICRONS of the tech LEF")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     paths = [a.lef, *a.lib, a.verilog, a.spice] + ([a.gds] if a.gds else [])
@@ -236,7 +243,7 @@ def main(argv=None):
         bbox = gds_bbox(a.gds, a.name) if a.gds else None
         if a.gds and bbox is None:
             probs.append("could not read the GDS top-cell box (KLayout)")
-        p, details = check(a.name, texts, bbox, a.power_max, a.cap_max)
+        p, details = check(a.name, texts, bbox, a.power_max, a.cap_max, a.dbu)
         probs += p
     res = {"name": a.name, "result": "FAIL" if probs else "PASS", "problems": probs,
            "files": [os.path.relpath(os.path.abspath(p), ROOT) if os.path.abspath(p).startswith(ROOT) else os.path.basename(p)

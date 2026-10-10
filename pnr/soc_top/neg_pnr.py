@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P62).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P66).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -84,13 +84,14 @@ step re-run one step on a copy of that step's saved config and input state
        into a second falling_edge arc                names the tt .lib (an extra file in the directory
                                                      also FAILs that row; Phase 3.5 review)
   P18  SRAM LEF: one ANTENNAGATEAREA line dropped    check_inputs.py antenna_lef
-  P19  config.json: MACROS lib = the PDK TT .lib     check_inputs.py macro_lib
-  P20  resolved.json: MACROS lib = the PDK TT .lib   check_inputs.py --resolved
-  P35  config.json: EXTRA_LIBS = the PDK TT SRAM     check_inputs.py other_libs (each variant)
+  P19  config.json: MACROS lib = OpenRAM's TT .lib   check_inputs.py macro_lib
+  P20  resolved.json: MACROS lib = OpenRAM's TT .lib check_inputs.py --resolved
+  P35  config.json: EXTRA_LIBS = OpenRAM's TT SRAM   check_inputs.py other_libs (each variant)
        .lib; or LIB of ss_n40C plus the ss_100C char .lib
-  P36  resolved.json: EXTRA_LIBS = the PDK TT .lib   check_inputs.py --resolved
+  P36  resolved.json: EXTRA_LIBS = OpenRAM's TT .lib check_inputs.py --resolved
   P33  nom_ss_n40C sta.log: also an extra timing     check_soc.py sram_lib
-       library line for the PDK TT SRAM .lib (the way LibreLane logs EXTRA_LIBS; Phase 3.5 review)
+       library line for OpenRAM's TT SRAM .lib (the way LibreLane logs EXTRA_LIBS; Phase 3.5 review;
+       until Phase 5 the PDK TT .lib of the prebuilt macro, whose cell name the new one does not share)
   P34  nom_tt sta.log: the tt char .lib of another   check_soc.py sram_lib
        checkout (same file name, other real path)
   P37  the CPU's config: CLOCK_PERIOD + 1 ns          check_inputs.py cpu_config (a flow setting that
@@ -165,6 +166,12 @@ step re-run one step on a copy of that step's saved config and input state
   P61  ir_worst.py on a result of VDD 11 mV and     ir_worst.py drop (each below 20 mV, the sum
        GND 10 mV (positive control: 9 + 9 mV)       above; Phase 5: the worst-case IR check)
   P62  <run>_signoff without ir_worst.txt           review_criteria.py checkers_ran
+  P63  openram/ copy with one GDS byte changed        check_inputs.py macro_source (the GDS is not the
+                                                     one summary.json recorded; Phase 6, ADR-0018)
+  P64  SRAM sim model with VERBOSE back to 1          check_inputs.py sim_model
+  P65  final netlist: sram0 clk1 on a conb_1 LO      check_soc.py port1_tieoff (a constant clk1 can
+                                                     leave a wordline on, ADR-0018 decision 9)
+  P66  SRAM LEF with SIZE 10 um wider                 check_inputs.py macro_views (LEF SIZE != GDS box)
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
@@ -197,9 +204,12 @@ REVIEW = os.path.join(ROOT, "signoff", "scripts", "review_criteria.py")
 TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
 CPU = "picorv32"
 CONFIG = os.path.join(ROOT, "pnr", "soc_top", "config.json")
-SRAM = "sky130_sram_2kbyte_1rw1r_32x512_8"
+SRAM = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
 SRAM_IP = os.path.join(ROOT, "ip", "sram", SRAM)
-PDK_TT_LIB = f"pdk_dir::libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
+# the wrong SRAM .lib the cases inject: OpenRAM's own analytical TT .lib of the same macro (the one most
+# likely to be picked up by mistake; until Phase 5 the PDK TT .lib of the prebuilt macro)
+OR_TT_LIB = f"dir::ip/sram/{SRAM}/openram/{SRAM}_TT_1p8V_25C.lib"
+OR_TT_ABS = os.path.join(SRAM_IP, "openram", f"{SRAM}_TT_1p8V_25C.lib")
 NUM_RE = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
 LIMITS = os.path.join(ROOT, "signoff", "limits", "soc_top.toml")
 GOLDEN = os.path.join(ROOT, "signoff", "golden", "soc_top", "metrics.json")
@@ -651,7 +661,7 @@ def p32(run, d):
 def p33(run, d):
     """An extra SRAM .lib in one corner's STA, logged the way LibreLane logs EXTRA_LIBS."""
     res = json.load(open(os.path.join(run, "resolved.json")))
-    extra = res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"
+    extra = OR_TT_ABS
     c = "nom_ss_n40C_1v60"
     line = f"Reading cell library for the '{c}' corner at '{os.path.join(SRAM_IP, 'char', f'{SRAM}__ss_n40C_1v60.lib')}'"
     rel, sta = sta_dir_with(run, d, c, lambda t: edit_once(
@@ -660,7 +670,7 @@ def p33(run, d):
         "the ss_n40C SRAM .lib line in sta.log"))
     ok, out = soc_case(run, d, "sram_lib", links={rel: sta})
     return ok and f"{c}: [" in out and f"{SRAM}_TT_1p8V_25C.lib" in out, \
-        "check_soc.py sram_lib: nom_ss_n40C_1v60 also read the PDK TT SRAM .lib as an extra library (only row FAIL)"
+        "check_soc.py sram_lib: nom_ss_n40C_1v60 also read OpenRAM's TT SRAM .lib as an extra library (only row FAIL)"
 
 
 def p34(run, d):
@@ -678,7 +688,7 @@ def p34(run, d):
 def p35(run, d):
     """config.json brings another SRAM .lib in through EXTRA_LIBS, or through LIB."""
     caught = []
-    for name, edit in (("EXTRA_LIBS", lambda c: c.update(EXTRA_LIBS=[PDK_TT_LIB])),
+    for name, edit in (("EXTRA_LIBS", lambda c: c.update(EXTRA_LIBS=[OR_TT_LIB])),
                        ("LIB", lambda c: c["LIB"]["*_ss_n40C_1v60"].append(f"dir::ip/sram/{SRAM}/char/{SRAM}__ss_100C_1v60.lib"))):
         sub = os.path.join(d, name)
         os.makedirs(sub)
@@ -690,7 +700,7 @@ def p35(run, d):
 def p36(run, d):
     """The run's resolved.json has EXTRA_LIBS (an SRAM .lib read in every corner)."""
     res = json.load(open(os.path.join(run, "resolved.json")))
-    res["EXTRA_LIBS"] = [res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"]
+    res["EXTRA_LIBS"] = [OR_TT_ABS]
     p = os.path.join(d, "resolved.json")
     json.dump(res, open(p, "w"), indent=1)
     rc, out = inputs_check(d, "--resolved", p)
@@ -724,7 +734,7 @@ def p06(run, d):
     """The antenna checker sees the nets on SRAM inputs: OpenROAD check_antennas on the final layout
     with the flow's SRAM LEF (expected 0 violations) and with its ANTENNAGATEAREA divided by 1000
     (expected > 0)."""
-    lef_src = os.path.join(ROOT, "ip", "sram", "sky130_sram_2kbyte_1rw1r_32x512_8", "sky130_sram_2kbyte_1rw1r_32x512_8.lef")
+    lef_src = os.path.join(SRAM_IP, f"{SRAM}.lef")
     text = open(lef_src).read()
     new, n = re.subn(r"ANTENNAGATEAREA ([\d.]+) ;", lambda m: f"ANTENNAGATEAREA {float(m.group(1)) / 1000:.6f} ;", text)
     if n != 59:
@@ -741,7 +751,7 @@ def p06(run, d):
 def p08(run, d):
     rel = "final/nl/soc_top.nl.v"
     nl = open(os.path.join(run, rel)).read()
-    new, n = re.subn(r"(sky130_sram_2kbyte_1rw1r_32x512_8\s+sram0\s*\(.*?\.csb1\()[^)]+(\))", r"\1neg_pnr_floating\2", nl, count=1, flags=re.S)
+    new, n = re.subn(r"(" + SRAM + r"\s+sram0\s*\(.*?\.csb1\()[^)]+(\))", r"\1neg_pnr_floating\2", nl, count=1, flags=re.S)
     if n != 1:
         return False, "csb1 connection not found"
     ok, _ = soc_case(run, d, "port1_tieoff", replace={rel: new})
@@ -751,7 +761,7 @@ def p08(run, d):
 def p09(run, d):
     rel = "final/def/soc_top.def"
     df = open(os.path.join(run, rel)).read()
-    new, n = re.subn(r"(-\s+sram0\s+sky130_sram_2kbyte_1rw1r_32x512_8\s*\+\s*\w+\s*\(\s*)(\d+)",
+    new, n = re.subn(r"(-\s+sram0\s+" + SRAM + r"\s*\+\s*\w+\s*\(\s*)(\d+)",
                      lambda m: m.group(1) + str(int(m.group(2)) + 10000), df, count=1)
     if n != 1:
         return False, "sram0 component not found"
@@ -877,6 +887,46 @@ def edit_once(text, pattern, repl, what):
     if n != 1:
         raise RuntimeError(f"injection point not found: {what}")
     return new
+
+
+def p63(run, d):
+    src = os.path.join(SRAM_IP, "openram")
+    dst = os.path.join(d, "openram")
+    shutil.copytree(src, dst)
+    gds = os.path.join(dst, f"{SRAM}.gds")
+    data = bytearray(open(gds, "rb").read())
+    data[len(data) // 2] ^= 0x01
+    open(gds, "wb").write(data)
+    rc, out = inputs_check(d, "--openram", dst)
+    return inputs_failed(rc, out, "macro_source") and "'gds'" in out, "check_inputs.py macro_source names the GDS"
+
+
+def p64(run, d):
+    f = os.path.join(d, f"{SRAM}.v")
+    open(f, "w").write(edit_once(open(os.path.join(SRAM_IP, "sim", f"{SRAM}.v")).read(),
+                                 r"parameter VERBOSE = 0 ;", "parameter VERBOSE = 1 ;", "VERBOSE = 0"))
+    rc, out = inputs_check(d, "--sim-model", f)
+    return inputs_failed(rc, out, "sim_model"), "check_inputs.py sim_model (STALE)"
+
+
+def p65(run, d):
+    rel = "final/nl/soc_top.nl.v"
+    nl = open(os.path.join(run, rel)).read()
+    new, n = re.subn(r"(" + SRAM + r"\s+sram0\s*\(.*?\.clk1\()[^)]+(\))", r"\1neg_pnr_const\2", nl, count=1, flags=re.S)
+    if n != 1:
+        return False, "clk1 connection not found"
+    new = edit_once(new, r"^endmodule", "  sky130_fd_sc_hd__conb_1 neg_pnr_tie (.LO(neg_pnr_const));\nendmodule", "endmodule")
+    ok, out = soc_case(run, d, "port1_tieoff", replace={rel: new})
+    return ok and "clk1 (net neg_pnr_const" in out, "check_soc.py port1_tieoff: clk1 on a tie-low (only row FAIL)"
+
+
+def p66(run, d):
+    text = open(os.path.join(SRAM_IP, f"{SRAM}.lef")).read()
+    new = edit_once(text, r"SIZE ([\d.]+) BY", lambda m: f"SIZE {float(m.group(1)) + 10:.3f} BY", "LEF SIZE")
+    p = os.path.join(d, f"{SRAM}.lef")
+    open(p, "w").write(new)
+    rc, out = inputs_check(d, "--lef", p)
+    return inputs_failed(rc, out, "macro_views"), "check_inputs.py macro_views (LEF SIZE != GDS box)"
 
 
 def p14(run, d):
@@ -1023,7 +1073,7 @@ def p18(run, d):
 
 
 def p19(run, d):
-    cfg = config_with(d, lambda c: c["MACROS"][SRAM].update(lib={"*": [PDK_TT_LIB]}))
+    cfg = config_with(d, lambda c: c["MACROS"][SRAM].update(lib={"*": [OR_TT_LIB]}))
     rc, out = inputs_check(d, "--config", cfg)
     return inputs_failed(rc, out, "macro_lib"), "check_inputs.py macro_lib"
 
@@ -1033,7 +1083,7 @@ def p20(run, d):
     lib = res["MACROS"][SRAM]["lib"]
     if "*_tt_025C_1v80" not in lib:
         return False, f"unexpected resolved MACROS lib {lib}"
-    lib["*_tt_025C_1v80"] = [res["PDK_ROOT"] + f"/sky130A/libs.ref/sky130_sram_macros/lib/{SRAM}_TT_1p8V_25C.lib"]
+    lib["*_tt_025C_1v80"] = [OR_TT_ABS]
     p = os.path.join(d, "resolved.json")
     json.dump(res, open(p, "w"), indent=1)
     rc, out = inputs_check(d, "--resolved", p)
@@ -1352,7 +1402,8 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P31", p31), ("P32", p32), ("P33", p33), ("P34", p34), ("P35", p35), ("P36", p36),
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
          ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
-         ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62)]
+         ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
+         ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66)]
 
 
 def main():

@@ -41,6 +41,10 @@
 
 與上表「右、上各 25 µm channel」的差異：第一次試跑把 SRAM 放在離 die 右、上各約 25 µm（core 邊界內還剩 6–10 µm 的 standard cell row），PDN 在這條窄 row 上放不下電源 strap，OpenROAD 報 `PDN-0179 Unable to repair all channels` 而中止。改成讓 SRAM 的 10 µm halo 蓋過 core 的右、上邊界，這兩側就沒有 standard cell row；port 1 的 tie-off 線改在 core 外、die 內的空間繞，實測 routing DRC = 0、LVS PASS。logic 區只剩 SRAM 左側（約 276 µm 寬）與下方（約 344 µm 高）的 L 形區域，使用率仍在 50% 左右（Phase 3 exit review 有實測值）。
 
+## Phase 6 的 SRAM 位置（2026-10-10 補充）
+
+OpenRAM 自產 macro（ADR-0018）是 694.27 × 428.415 µm，比預建的 683.1 × 416.54 µm 寬 11.17、高 11.875 µm。照上面同一個原則：右緣與上緣維持在預建 macro 的位置（984.86、781.02 µm），往外取到 site 格點，得到 `location = [290.72, 353.6]`（第 620 個 site、第 126 條 row），右緣 984.99、上緣 782.015 µm，離 die 右邊 15.01、上邊 17.985 µm，10 µm halo 仍蓋過 core 的右、上邊界。logic 區的 L 形變窄：SRAM 左側約 275 µm（原 286）、下方約 333 µm（原 344）。只跑到 PDN 的試跑（`runs/p6_fp_pico`）沒有 PDN 錯誤，SRAM 右邊沒有 standard cell row。使用率是否仍在上面的範圍內，看 Phase 6 的 harden。
+
 ## 重新檢討的條件（Phase 3）
 
 - PnR 後 logic 區使用率 > 65%（上面的公式，不是 `design__instance__utilization`），或 global routing 報告 congestion overflow，就改成 1000 × 900。

@@ -81,6 +81,12 @@
     - 快速量法對完整網表（skill 規則 27 的「驗證一次」）：完整網表用預設 gmin，只有 gmin 影響可忽略的 ff 100°C 能比——完整網表舊波形（`runs/.../power/full/ff_100C_1v95/leak`，量測窗前後半差 0.24%）404.30 µW，快速量法 409.14 µW，+1.2%。其他 corner 的完整網表值含 16384 顆 × gmin，不能當參考。
     - 結果（`ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/power.json`）：整顆漏電 tt 462 nW（原 1099）、ss 100°C 1256（1760）、ff −40°C 252（999）、ss −40°C 81（584）、ff 100°C 409.1 µW（409.9）。
 
+16. **（2026-10-10，步驟 4 開始前）步驟 4–5 的事先授權**。使用者說「這一輪浪費太多時間」，要求先規劃再做，並一次決定以下四項（選項與理由見當天的對話；超出範圍的情況才停下來問）：
+    - floorplan：die 維持 1000 × 800 µm（ADR-0006），自產 macro 比預建大（694.27 × 428.415 對 683.1 × 416.54 µm），直接照 skill `floorplan-congestion` 調 macro 位置與 halo；放不下或壅塞超標才問。位置與依據寫進本 ADR。
+    - golden：第一次 signoff 與 criteria review 都 PASS 的 harden 直接重建 golden，依設計結構推導的上限照推導規則重算；新舊差異寫進 Phase 6 exit review。
+    - harden FAIL：照 skill 調 flow 設定（resizer、CTS、繞線後修復、macro clock）可以直接做；改週期、SDC 餘量、signoff 標準，或任何讓 checker 變寬的修改，一定先問。
+    - 乾淨 checkout 的兩輪 regress：兩個設計各一個 worktree 平行跑（記憶體夠的話），排在晚上（skill `overnight-run`）。
+
 ## 計畫
 
 0. skill `openram-macro-characterization` 補自產 macro 的一節；本 ADR；`project-plan.md` §8、§11 與 `toolchain.md` 更正。

@@ -137,7 +137,7 @@ arvinsa-rtl-gds/
   - LEF 尺寸 **683.1 × 416.54 µm**；power pin `vccd1`/`vssd1` 在 met3 與 met4；OBS 佈滿 met1–met4；**LEF 無 ANTENNA 屬性**。
   - port 0（1RW）pin 在左邊（met3：clk0、csb0、web0、addr0[8:2]）與下邊（met4：din0、dout0、wmask0、addr0[1:0]）；
     port 1 pin 在右邊與上邊。
-  - **只用 port 0**；port 1 **必須 tie-off**：`csb1=1`、`clk1=0`、`addr1=0`，`dout1` 不接（LibreLane CI 範例作法）。
+  - **只用 port 0**；port 1 **必須 tie-off**：`csb1=1`、`clk1=0`、`addr1=0`，`dout1` 不接（LibreLane CI 範例作法）。**Phase 6 改為 `clk1` 接系統時脈**：OpenRAM 的 chip-select 由該 port 的時脈鎖存、沒有 reset，`clk1=0` 時上電可能讓一條 wordline 一直開著（ADR-0018 決定 9）。
     浮接會觸發 `Checker.DisconnectedPins` FAIL、GL sim 出 X、silicon 上是浮動 CMOS 輸入。
   - **SRAM instance 直接放在 `soc_top` 這一層，名稱 `sram0`**，讓 RTL 後門路徑、GL 網表名稱、`MACROS.instances` 三處一致，避免 flatten 後出現 escaped name。
   - **dout0 之後加一級 rdata register（多一個 wait state）**：行為模型在每個 posedge 後 `#(T_HOLD) dout0 = 32'bx`，
@@ -380,11 +380,12 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | P60 | 同上 | 多一個 `<n>-arvinsa-ctsnoinsertiondelay-1` 目錄 | `check_soc.py` `cts_macro_latency` |
 | P61 | 最壞組合 IR（ADR-0017） | `ir_worst.py` 讀 VDD 11 + GND 10 mV（各自 < 20，合計超過）；positive control 9 + 9 mV 要 PASS | `ir_worst.py` |
 | P62 | 最壞組合 IR 沒有跑 | `<run>_signoff` 沒有 `ir_worst.txt` | `review_criteria.py` `checkers_ran` |
+| P63–P66 | 自產 SRAM 換進 SoC（Phase 6 步驟 4a） | `openram/` 的 GDS 改一個 byte；模擬模型 `VERBOSE` 改回 1；最終網表 `sram0/clk1` 接 `conb_1` LO；LEF SIZE 加寬 10 µm | `check_inputs.py` `macro_source`／`sim_model`／`macro_views`、`check_soc.py` `port1_tieoff` |
 | O1–O8 | OpenRAM 產生 macro（Phase 6，ADR-0018） | 假 run 目錄：log 有 `ERROR` 行但 exit 0（O1，2026-10-08 實際遇到）、LVS `Netlists do not match.`、DRC 超過上限、DRC／LVS 報告缺結果行或缺檔、GDS 是空檔、exit 非 0、缺 LVS 網表；另有兩個正常對照（全部正常、DRC 在 `--drc-max` 內） | `ip/sram/openram/gen_macro.py` `judge()`（`make neg-openram`） |
 | I1–I4 | OpenRAM 的 cell 庫安裝（Phase 6） | 假安裝：cell GDS 沒複製進 `gds_lib`（2026-10-08 實際遇到：`make sky130-install` 用 `cp $?`，exit 0）、`.base.spice` 沒進 `sp_lib`、cell 庫是空的、`gds_lib` 不存在；一個正常對照 | `ip/sram/openram/check_install.py`（`make neg-openram`） |
 | T1–T3 | OpenRAM 工作樹＝釘選 commit＋repo patch（Phase 6，ADR-0018 決定 8） | 假 git repo：patch 以外的追蹤檔案修改、patch 沒套、HEAD 不是釘選 commit；一個正常對照（含沒進版控的安裝檔） | `ip/sram/openram/check_install.py` `tree_problems()`（`make neg-openram`） |
 | D1–D3 | 自產 macro 的整顆 full 規則 DRC（Phase 6） | 假 Magic log：出現預建 macro 沒有的錯誤種類（2026-10-08 實際遇到：met2.2、met3.2、via2.2、nwell.5a）、總數超過預建、Magic 沒跑完；一個正常對照 | `ip/sram/openram/macro_drc.py` `compare()`（`make neg-openram`） |
-| Q1–Q11 | macro 的 view QA（任何來源的 macro，CLAUDE.md 規則 12） | 一顆一致的小假 macro（正常對照）上逐一植入：internal_power 1.036316e+11（2026-10-08 實際遇到）、腳位電容單位錯、表格有 nan、負延遲、.lib 面積不等於 LEF 尺寸、GDS 外框不等於 LEF SIZE、Verilog 少一個 bus 位元、方向和 LEF 不同、SPICE 少一支電源腳位、.lib 的 cell 名稱不同、沒有 internal_power | `scripts/check_macro_views.py` `check()`（`make neg-macro-views`） |
+| Q1–Q12 | macro 的 view QA（任何來源的 macro，CLAUDE.md 規則 12） | 一顆一致的小假 macro（正常對照）上逐一植入：internal_power 1.036316e+11（2026-10-08 實際遇到）、腳位電容單位錯、表格有 nan、負延遲、.lib 面積不等於 LEF 尺寸、GDS 外框不等於 LEF SIZE、Verilog 少一個 bus 位元、方向和 LEF 不同、SPICE 少一支電源腳位、.lib 的 cell 名稱不同、沒有 internal_power、LEF `DATABASE MICRONS 2000`（2026-10-10 實際遇到，OpenROAD `ODB-0292`；1000 為正常對照） | `scripts/check_macro_views.py` `check()`（`make neg-macro-views`） |
 | L1–L2 | 自產 macro 的 .lib 範本（Phase 6） | OpenRAM dev 的 internal_power（1.036316e+11，2026-10-08 實際遇到）當範本、兩份 .lib 的 power 項目對不上；一個正常對照 | `ip/sram/char/gen_char_lib.py` `power_problems()`、`ip/sram/openram/lib_template.py` `make()`（`make neg-openram`） |
 | C1–C2 | 自產 macro 特性化的來源（Phase 6） | 假 repo 根目錄放一顆自產 macro：`char.json` 記錄的網表 sha256 不是 `ip/sram/<macro>/openram/<macro>.sp` 的、該網表不是 `summary.json` 記錄的那份；一個正常對照 | `ip/sram/char/check_char_lib.py` `provenance()`（`make neg-openram`） |
 | N17–N21 | 自產 macro 的量測 power（Phase 6，ADR-0018 決定 10–15） | `power.json` 來自另一份網表、有負能量；.lib 的量測 power 被手改、讀寫對調、`power.json` 被刪；合成波形的已知答案（每個邊緣的能量、clk1 的份、dout 負載、靜態電流、待機漏電）；漏電量測窗裡有階躍、斜率或上升，下降超過絕對門檻、少一顆 bitcell 的網表；單顆 bitcell deck 沒有小 gmin；各有正常對照 | `ip/sram/char/gen_char_lib.py` `power_record_problems()`、`check_char_lib.py` `power_problems()`、`power.py` `energies()`／`mean_mw()`／`leakage()`／`unsettled()`／`cell_gmin_problem()`、`sramchar.py` `bitcell_ic()`（`make neg-char`） |

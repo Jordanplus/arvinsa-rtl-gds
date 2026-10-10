@@ -1,6 +1,7 @@
 # Cut one cell (with its children) out of a GDS: klayout -b -rd src=<gds> -rd cell=<name> -rd dst=<gds> -r extract_cell.py
 # (ip/sram/openram/setup.sh, for the dlxtn_1 cell that OpenRAM's sky130-install copies).
 import pya
+src, cell, dst = (globals()[k] for k in ("src", "cell", "dst"))   # set by klayout -rd (make py-check sees them bound)
 ly = pya.Layout(); ly.read(src)
 c = ly.cell(cell)
 keep = set([c.cell_index()]) | set(c.called_cells())

@@ -37,8 +37,8 @@ value (FLOOR) and the characterized value with a parasitic allowance. For each P
   clk0 minimum_period / min_pulse_width  -> max(FLOOR, first passing value x PARASITIC)
   dout0 max_capacitance                  -> the largest characterized load
   addr0 / wmask0 max_transition          -> INPUT_MAX_TRANSITION
-Port 1 (addr1 csb1 clk1 dout1) keeps the template's analytical numbers: the SoC ties it off and STA
-has no clock on clk1. The template's internal_power values must be in (0, POWER_MAX]. Each kind of change must hit the expected number of places, counted per pin
+Port 1 (addr1 csb1 clk1 dout1) keeps the template's analytical numbers: the SoC does not use it (csb1 = 1,
+addr1 = 0; Phase 6: clk1 gets the system clock, ADR-0018 decision 9, so STA times clk1 with these numbers). The template's internal_power values must be in (0, POWER_MAX]. Each kind of change must hit the expected number of places, counted per pin
 and per rise/fall (a total over the five pins let one pin lose its setup arc while another got two),
 else FAIL. Before that, char.json must be sound: each record is the PVT it is filed under (model,
 VDD, temperature of sramchar.PVTS), and every number used is finite, delays and pulses > 0, and each

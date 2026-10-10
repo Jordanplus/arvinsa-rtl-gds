@@ -1,4 +1,4 @@
-# soc_top：整合預建 SRAM macro 的 harden（Phase 3，Phase 4 更新）
+# soc_top：整合 SRAM macro 的 harden（Phase 3，Phase 4 更新；Phase 6 換成 OpenRAM 自產 macro）
 
 `make harden-soc`（`run.sh`）用釘版的 LibreLane Classic flow harden `soc_top`（PicoRV32 + 2 KB SRAM macro + Boot ROM + 周邊），週期 44 ns（Phase 5 使用者決定，ADR-0004 的 Phase 5 補充；Phase 3.5 是 43 ns；Phase 4 是 42 ns、Phase 3 是 40 ns），再用下列 checker 判定。本機約 20–30 分鐘（正式 run 1、2 分別 28 與 18 分鐘；其中 Magic 全 GDS DRC 約 3–4.5 分鐘）。
 
@@ -6,9 +6,9 @@
 
 | 檢查 | 程式 | PASS 條件 |
 |---|---|---|
-| 輸入一致 | `check_inputs.py` | `config.json` 的 RTL 檔案清單 = `rtl/rtl.f`；SRAM 的 5 份 .lib（ADR-0010，由 `ip/sram/char/gen_char_lib.py` 從 `char.json` 與釘版 PDK 產生）與 SRAM LEF（ADR-0008）是最新版本；`MACROS` 的每個 PVT 用自己那份 .lib，並用這個 LEF；resizer 可用的 cell 在 resizer 的每個 corner 都推得動一顆最小 buffer（`weak_cells`，`pnr/check_weak_cells.py`，ADR-0012）。flow 跑完後再比對 run 實際用的（`resolved.json`） |
+| 輸入一致 | `check_inputs.py` | `config.json` 的 RTL 檔案清單 = `rtl/rtl.f`；SRAM（Phase 6 起是 OpenRAM 自產的 `arv_sram_2kbyte_1rw1r_32x512_8`，ADR-0018）的 OpenRAM 交付檔 sha256 等於 `summary.json` 的紀錄（`macro_source`）、模擬模型是最新的（`sim_model`）、flow 讀的 view 通過 view QA（`macro_views`，CLAUDE.md 規則 12）；5 份 .lib（ADR-0010，由 `ip/sram/char/gen_char_lib.py` 從 `char.json`、OpenRAM 的 .lib 範本與 `power.json` 產生）與 SRAM LEF（ADR-0008；`DATABASE MICRONS` 改成 1000）是最新版本；`MACROS` 的每個 PVT 用自己那份 .lib，並用這個 LEF 與 repo 裡的 GDS；resizer 可用的 cell 在 resizer 的每個 corner 都推得動一顆最小 buffer（`weak_cells`，`pnr/check_weak_cells.py`，ADR-0012）。flow 跑完後再比對 run 實際用的（`resolved.json`） |
 | LibreLane 內建 checker | flow 本身 | lint、合成、routing DRC、KLayout DRC、LVS、XOR、15 個 corner 的 setup／hold／max slew／max cap；任何一項 FAIL 時 flow 就中止，但 `run.sh` 之後的 checker 仍會對已產生的結果執行，整體判 FAIL（2026-10-07 起）。Magic DRC 例外，見下一列與「設定與理由」 |
-| soc 專用 | `sram_drc_alone.py` + `check_soc.py` | SRAM 只有一顆、名稱 `sram0`；最終 DEF 中 `sram0` 是 FIXED，座標與方向等於 `config.json`；port 1 有 tie-off（`csb1` 接 tie-high，`clk1`、`addr1[8:0]` 接 tie-low）；沒有任何斷線 pin；`check_setup` 在 `STA_CORNERS` 的每個 corner 只有預期的 `sram0/clk1`；min pulse width 與 min period 的 slack ≥ duty cycle 與 jitter 的預算（Phase 4）；每個 corner 的 STA 只讀了它那個 PVT 的 SRAM .lib（`sram_lib`，Phase 3.5）；IR 的電壓源每條 met5 strap 剛好一點，大小不超過 strap 寬度，位置在 strap 左端（`ir_sources`，Phase 4）；Magic DRC（完整 GDS）在 SRAM 外框之外是 0，框內**每一個**違規都在 SRAM 單獨檢查時同規則違規的位置（Phase 4；只有 li.5 與 diff/tap.9 容許 0.1 µm，這兩條規則在乾淨的 run 中量到最多凸出 85 nm；SRAM 單獨的報告每次 harden 重新產生，規則數量與 `signoff/waivers/soc_top/sram_magic_drc_baseline.json` 相同） |
+| soc 專用 | `sram_drc_alone.py` + `check_soc.py` | SRAM 只有一顆、名稱 `sram0`；最終 DEF 中 `sram0` 是 FIXED，座標與方向等於 `config.json`；port 1 有 tie-off（`csb1` 接 tie-high，`addr1[8:0]` 接 tie-low），`clk1` 經過 buffer 與偶數個反相器接到頂層的 `clk`，不能是常數（Phase 6，ADR-0018 決定 9；Phase 5 之前 `clk1` 接 tie-low）；沒有任何斷線 pin；`check_setup` 在 `STA_CORNERS` 的每個 corner 沒有任何警告（Phase 5 之前容許 `clk1` 接地造成的 `sram0/clk1` 沒有時脈）；min pulse width 與 min period 的 slack ≥ duty cycle 與 jitter 的預算（Phase 4）；每個 corner 的 STA 只讀了它那個 PVT 的 SRAM .lib（`sram_lib`，Phase 3.5）；IR 的電壓源每條 met5 strap 剛好一點，大小不超過 strap 寬度，位置在 strap 左端（`ir_sources`，Phase 4）；Magic DRC（完整 GDS）在 SRAM 外框之外是 0，框內**每一個**違規都在 SRAM 單獨檢查時同規則違規的位置（Phase 4；只有 li.5 與 diff/tap.9 容許 0.1 µm，這兩條規則在乾淨的 run 中量到最多凸出 85 nm；SRAM 單獨的報告每次 harden 重新產生，規則數量與 `signoff/waivers/soc_top/sram_magic_drc_baseline.json` 相同） |
 | 最壞組合 IR（Phase 5，ADR-0017） | `ir_worst.py` | 用同一個 run 的 `OpenROAD.IRDropReport` 單步重跑一次，改成 ff 電流（`max_ff_n40C_1v95`）+ ss 金屬電阻（`LAYERS_RC` 的 `*ff*` 換成 `*ss*`）、供電點 1.95 V；log 確實讀了 ff_n40C_1v95 的 .lib，且 VDD 降壓 + GND 抬升 ≤ 20 mV（與 nom_tt 同一個 `[max_sum]`）。flow 的 IR step 只跑 nom_tt（P61、P62） |
 | 來源追溯 | `signoff/scripts/provenance.py`（flow 開始前與結束後各一次） | 工作目錄已全部 commit（含未追蹤檔）、submodule 在記錄的 commit、LibreLane 與 PDK 是 `env/versions.mk` 釘的版本、LibreLane clone 沒有改過的檔、PDK 6 個目錄的內容與 `env/pdk_content.sha256` 相同（Phase 4）；結束時 HEAD 不變，`resolved.json` 實際用的版本也對、讀的 PDK 檔都在檢查過的目錄裡（`project-plan.md` §7.2）。不乾淨時 flow 照跑、整體判 FAIL |
 | signoff criteria 有沒有被執行（2026-10-07 起） | `signoff/scripts/review_criteria.py` → `runs/<tag>_signoff/criteria_review.txt` | config 的每個設定都進了 `resolved.json` 與每個 step；`clock_uncertainty.sdc` 的值出現在每個時序 step 與 signoff corner；STA 報告裡每條 signoff 路徑實際套到的 uncertainty（`uncertainty_applied`：同緣 setup 0.25、半週期 2.45、hold 0.25 ns，Phase 5）；signoff corner = `STA_CORNERS`；上面各 checker 都留下結果行。之後由 Claude 依 skill `signoff-criteria` 寫 `criteria_review.md`（合不合理），Stop hook 強制 |
@@ -25,6 +25,10 @@ Phase 5 exit review 的獨立審查（2026-10-08）新增的 negative test：
 - P60：多一個 `<n>-arvinsa-ctsnoinsertiondelay-1` 目錄 → `cts_macro_latency`。
 - P61：`ir_worst.py` 讀 VDD 11 + GND 10 mV → FAIL；positive control 9 + 9 mV → PASS。
 - P62：`<run>_signoff` 沒有 `ir_worst.txt` → `review_criteria.py checkers_ran`。
+- P63：`openram/` 的 GDS 改一個 byte → `check_inputs.py macro_source`（Phase 6）。
+- P64：SRAM 模擬模型的 `VERBOSE` 改回 1 → `check_inputs.py sim_model`。
+- P65：最終網表的 `sram0/clk1` 接到 `conb_1` 的 LO → `check_soc.py port1_tieoff`（常數 `clk1` 可能讓一條 wordline 一直開著，ADR-0018 決定 9）。
+- P66：SRAM LEF 的 SIZE 加寬 10 µm → `check_inputs.py macro_views`（LEF SIZE 與 GDS 外框不符）。
 
 ## Hazard3 版（Phase 5，ADR-0011）
 
@@ -43,7 +47,7 @@ Phase 5 exit review 的獨立審查（2026-10-08）新增的 negative test：
 ## 名詞
 
 - **halo**：macro 周圍不放 standard cell 的保留區，這裡 10 µm（LibreLane 預設 `FP_MACRO_HORIZONTAL_HALO`／`VERTICAL_HALO`）。
-- **SRAM .lib**：每個 PVT 一份，`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`（ADR-0010）。PDK 原本的 .lib 是解析模型、數字過度樂觀；Phase 3 用保守假設值的 padded.lib（ADR-0007），Phase 3.5 改成以 ngspice 實測為基礎、以 padded.lib 的數值為下限，並加上 dout0 在上升緣後開始變化的 hold 時序弧。
+- **SRAM .lib**：每個 PVT 一份，Phase 6 起是 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/`（ADR-0018；Phase 5 之前 `ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`，ADR-0010）。PDK 原本的 .lib 是解析模型、數字過度樂觀；Phase 3 用保守假設值的 padded.lib（ADR-0007），Phase 3.5 改成以 ngspice 實測為基礎、以 padded.lib 的數值為下限，並加上 dout0 在上升緣後開始變化的 hold 時序弧。
 - **antenna LEF**：補上 `ANTENNAGATEAREA` 的 SRAM LEF（ADR-0008）。PDK 原本的 LEF 沒有 antenna 資料，antenna 檢查看不到接到 SRAM 輸入的線。
 - **abstract DRC／完整 GDS DRC**：前者只用各 cell 的 LEF 外形檢查，後者讀完整 GDS 連電晶體層一起檢查。
 
@@ -52,7 +56,7 @@ Phase 5 exit review 的獨立審查（2026-10-08）新增的 negative test：
 | 設定 | 值 | 為什麼 |
 |---|---|---|
 | `FP_SIZING`、`DIE_AREA` | absolute、1000 × 800 µm | ADR-0006 |
-| `MACROS` | GDS 用 PDK 原檔；LEF 用 antenna LEF；`lib`：`*_<pvt>` 各指到自己的特性化 .lib（5 個 PVT）；`sram0` 在 (301.76, 364.48)、N | 每個 corner（Phase 4 起 15 個）都要有 SRAM 時序模型，少一個 corner 會被當 black box 且不報錯（`project-plan.md` §6.2）。座標見 ADR-0006 的 Phase 3 補充：讓 halo 蓋過 core 右、上邊界，避免留下 PDN 接不到的窄 row |
+| `MACROS` | Phase 6 起：OpenRAM 自產 macro，GDS 用 repo 裡的 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/openram/` 原檔；LEF 用 antenna LEF；`lib`：`*_<pvt>` 各指到自己的特性化 .lib（5 個 PVT）；`sram0` 在 (290.72, 353.6)、N（Phase 5 之前是預建 macro，PDK 的 GDS，(301.76, 364.48)） | 每個 corner（Phase 4 起 15 個）都要有 SRAM 時序模型，少一個 corner 會被當 black box 且不報錯（`project-plan.md` §6.2）。座標見 ADR-0006 的 Phase 3 補充：讓 halo 蓋過 core 右、上邊界，避免留下 PDN 接不到的窄 row；Phase 6 的 macro 大了 11–12 µm，右緣與上緣維持原位置、往外取到 site 格點（ADR-0018 決定 16），只跑到 PDN 的試跑（`runs/p6_fp_pico`）沒有錯誤，SRAM 右邊沒有 row |
 | `VDD_NETS`／`GND_NETS`、`PDN_MACRO_CONNECTIONS` | `vccd1`／`vssd1`；`sram0 vccd1 vssd1 vccd1 vssd1` | 與 SRAM 電源 pin 及 RTL 的 `USE_POWER_PINS` port 同名 |
 | `IO_PIN_ORDER_CFG` | `pin_order.cfg`：pin 只在左、下兩邊；`clk` 在下邊中段 | 遠離 SRAM（§5.4）。`clk` 原本在左邊最下方，到第一級 clock buffer 有 660 µm 的線，ss corner 的 slew 0.92 ns 超標 |
 | `SETUP/HOLD/MAX_SLEW/MAX_CAP_VIOLATION_CORNERS` | `["*"]` | 每個 corner 都判 FAIL（LibreLane 對 sky130 預設只判 tt 的 setup） |

@@ -5,7 +5,7 @@ usage: sram_drc_alone.py <soc_top LibreLane run> <out dir>
 
 Re-runs LibreLane's Magic.DRC step with the configuration of the run's own Magic.DRC step
 (MAGIC_DRC_USE_GDS = true, same Magic, tech file and DRC style), except DESIGN_NAME = the SRAM
-cell, on the PDK GDS of the SRAM (MACROS gds of the run). The report is
+cell, on the GDS of the SRAM (MACROS gds of the run). The report is
 <out>/step/reports/drc.magic.rpt. It takes about 2.5 minutes and writes about 1.5 GB (the
 report and a KLayout marker database). check_soc.py compares every violation inside the
 sram0 outline with this report, and this report with the reviewed rule counts in
@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-MACRO = "sky130_sram_2kbyte_1rw1r_32x512_8"
+MACRO = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
 
 
 def main(run, out):
