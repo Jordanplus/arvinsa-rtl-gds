@@ -107,7 +107,7 @@ help:
 	@echo "  make openram-macro OPENRAM_CONFIG=<cfg>  generate a macro, check OpenRAM's DRC/LVS (summary.json), the contents of every view (views.json), then the full-deck Magic DRC rule by rule against the prebuilt macro (macro_drc.json); about 45 min for 2 KB"
 	@echo "  make macro-views          QA of the SRAM views the SoC uses: names, pins and directions agree in LEF/.lib/Verilog/SPICE, .lib numbers in range, area and GDS box = LEF SIZE (seconds)"
 	@echo "  make neg-macro-views      bug injection into that QA, Q1-Q12 (seconds; part of make regress)"
-	@echo "  make neg-openram          bug injection into the OpenRAM run, install, patch, macro DRC, .lib template and characterization provenance checkers O1-O8, I1-I4, T1-T3, D1-D3, L1-L2, C1-C2 (seconds; part of make regress)"
+	@echo "  make neg-openram          bug injection into the OpenRAM run, install, patch, macro DRC, .lib template and characterization provenance checkers O1-O8, I1-I4, T1-T3, D1-D3, K1-K6, L1-L2, C1-C5 (seconds; part of make regress)"
 	@echo "  make openram-lib-template  the .lib template of $(OR_SRAM): OpenRAM's TT .lib with the PDK macro's internal_power values"
 	@echo "  make openram-char          ngspice characterization of $(OR_SRAM) (tt, then four PVTs), then openram-lib and openram-confirm (hours)"
 	@echo "  make openram-power         ngspice internal power and standby leakage of $(OR_SRAM), five PVTs on the untrimmed netlist, 3 runs at a time (about 4.2 GB each; several hours)"
@@ -258,18 +258,24 @@ neg-openram:
 	$(PY) ip/sram/openram/neg_openram.py
 
 OPENRAM_NAME = $(basename $(notdir $(OPENRAM_CONFIG)))
-# Three checks after OpenRAM: its own DRC/LVS (gen_macro), the contents of every delivered view (check_macro_views,
-# skill hard-macro-integration) and the full-deck DRC against the prebuilt macro; all run, any FAIL fails.
+# Four checks after OpenRAM: its own DRC/LVS (gen_macro), the contents of every delivered view (check_macro_views,
+# skill hard-macro-integration), the Magic full-deck DRC against the prebuilt macro, and the flow's KLayout DRC deck
+# with 0 errors (ADR-0018 decision 17); all run, any FAIL fails.
 # OpenRAM's LEF has DATABASE MICRONS 2000 and no FOREIGN (--dbu 2000 --no-foreign here): the flow reads the LEF
 # that gen_antenna_lef.py rewrites to 1000 with FOREIGN added, which check_inputs.py macro_views checks with the
 # defaults (OpenROAD ODB-0292; KLayout stream-out leaves a macro without FOREIGN empty).
+# The .lib checked is the characterization template made from OpenRAM's TT .lib (internal_power from the prebuilt
+# macro): OpenRAM dev writes internal_power 1e9-1e11 (skill openram-macro-characterization rule 24), its .lib never
+# goes to the flow, and the template is the .lib the flow's .lib files are made from (user 2026-10-10).
 OPENRAM_OUT = runs/openram/$(OPENRAM_NAME)/macro/$(OPENRAM_NAME)
 openram-macro:
 	$(PY) ip/sram/openram/gen_macro.py $(OPENRAM_CONFIG) runs/openram/$(OPENRAM_NAME) --drc-max $(OPENRAM_DRC_MAX)
 	rc=0; \
-	$(PY) scripts/check_macro_views.py --name $(OPENRAM_NAME) --lef $(OPENRAM_OUT).lef --lib $(OPENRAM_OUT)_TT_1p8V_25C.lib \
+	$(PY) ip/sram/openram/lib_template.py $(OPENRAM_OUT)_TT_1p8V_25C.lib "$(SRAM_PDK_LIB)" $(OPENRAM_OUT)_TT_template.lib || rc=1; \
+	$(PY) scripts/check_macro_views.py --name $(OPENRAM_NAME) --lef $(OPENRAM_OUT).lef --lib $(OPENRAM_OUT)_TT_template.lib \
 	  --verilog $(OPENRAM_OUT).v --spice $(OPENRAM_OUT).sp --gds $(OPENRAM_OUT).gds --dbu 2000 --no-foreign --json runs/openram/$(OPENRAM_NAME)/views.json || rc=1; \
 	$(PY) ip/sram/openram/macro_drc.py $(OPENRAM_OUT).gds $(OPENRAM_NAME) runs/openram/$(OPENRAM_NAME)/macro_drc.json || rc=1; \
+	$(PY) ip/sram/openram/macro_klayout_drc.py $(OPENRAM_OUT).gds $(OPENRAM_NAME) runs/openram/$(OPENRAM_NAME)/macro_klayout_drc.json || rc=1; \
 	exit $$rc
 
 # View QA of the SRAM the SoC uses now (Phase 6: the OpenRAM self-generated one, ADR-0018): the repo LEF

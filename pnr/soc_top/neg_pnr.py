@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P69).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P70).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -179,6 +179,10 @@ step re-run one step on a copy of that step's saved config and input state
   P69  Magic DRC report without the boxes inside      check_soc.py magic_drc (inside < DRC_IN_MIN_FRAC of the
        the SRAM outline (COUNT adjusted)             SRAM alone: no SRAM in the checked GDS; it passed with
                                                      inside 0 in Phase 6)
+  P70  openram/ copy with the SPICE subcircuits in      check_inputs.py macro_source (the netlist is
+       another order and one transistor W changed     neither the recorded file nor the same circuit:
+                                                     ADR-0018 decision 17 lets only order and comments
+                                                     differ)
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
@@ -963,6 +967,23 @@ def p68(run, d):
     return ok and "other contents" in out and cell in out, f"check_soc.py macro_gds names {cell} (other contents)"
 
 
+def p70(run, d):
+    src = os.path.join(SRAM_IP, "openram")
+    dst = os.path.join(d, "openram")
+    shutil.copytree(src, dst)
+    sp = os.path.join(dst, f"{SRAM}.sp")
+    text = open(sp).read()
+    blocks = re.findall(r"^\.subckt\s.*?^\.ends\b[^\n]*\n", text, re.M | re.S | re.I)
+    if len(blocks) < 2:
+        raise RuntimeError("injection point not found: two subcircuits in the SRAM netlist")
+    text = text.replace(blocks[0], "", 1) + blocks[0]   # order alone is allowed; the W change below is not
+    text = edit_once(text, r"(sky130_fd_pr__nfet_01v8\S*\s+[^\n]*?W=)([\d.]+)", lambda m: m.group(1) + str(float(m.group(2)) * 2),
+                     "an nfet W in the SRAM netlist")
+    open(sp, "w").write(text)
+    rc, out = inputs_check(d, "--openram", dst)
+    return inputs_failed(rc, out, "macro_source") and "'sp'" in out, "check_inputs.py macro_source names the SPICE netlist"
+
+
 def p69(run, d):
     rel = magic_rel(run)
     loc = json.load(open(CONFIG))["MACROS"][SRAM]["instances"]["sram0"]["location"]
@@ -1459,7 +1480,8 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
          ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
          ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
-         ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69)]
+         ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69),
+         ("P70", p70)]
 
 
 def main():

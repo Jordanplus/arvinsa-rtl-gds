@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: arvinsa-rtl-gds <noreply@invalid>
+Date: Sat, 10 Oct 2026 15:30:00 +0800
+Subject: [PATCH] sky130 add_dnwell: N-well moat 0.42 um outside, 1.03 um inside
+
+The moat path is centred on the deep N-well edge, so the N-well overlaps it by
+half the path width (0.42 um) inside; sky130 nwell.5a needs 1.03 um inside and
+0.4 um outside (Magic full DRC: 10 boxes around the macro). Draw the moat as a
+ring of four rectangles, 0.42 um outside and 1.03 um inside, as in the prebuilt
+sky130 macros. Other technologies keep the path.
+(arvinsa-rtl-gds ADR-0018 decisions 6 and 17)
+---
+  compiler/base/hierarchy_layout.py | 14 +++++++++++++-
+  1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/compiler/base/hierarchy_layout.py b/compiler/base/hierarchy_layout.py
+index 599ce7d2..6731b8c7 100644
+--- a/compiler/base/hierarchy_layout.py
++++ b/compiler/base/hierarchy_layout.py
+@@ -2121,7 +2121,19 @@ class layout():
+                       width=ur.x - ll.x)
+ 
+         # Add the moat
+-        self.add_path("nwell", [ll, lr, ur, ul, ll - vector(0, 0.5 * self.nwell_width)])
++        # arvinsa patch 0002: the moat path is centred on the dnwell edge, so the nwell overlaps it by half the
++        # path width (0.42 um) on each side; sky130 nwell.5a needs 0.4 um outside and 1.03 um inside (the
++        # prebuilt sky130 macros have 0.42 / 1.03). Draw the moat as a ring of rectangles with that overlap.
++        if OPTS.tech_name == "sky130":
++            outside = 0.5 * self.nwell_width
++            inside = max(0.5 * self.nwell_width, 1.03)
++            w = outside + inside
++            self.add_rect("nwell", offset=ll - vector(outside, outside), width=ur.x - ll.x + 2 * outside, height=w)
++            self.add_rect("nwell", offset=vector(ll.x - outside, ur.y - inside), width=ur.x - ll.x + 2 * outside, height=w)
++            self.add_rect("nwell", offset=ll - vector(outside, outside), width=w, height=ur.y - ll.y + 2 * outside)
++            self.add_rect("nwell", offset=vector(ur.x - inside, ll.y - outside), width=w, height=ur.y - ll.y + 2 * outside)
++        else:
++            self.add_path("nwell", [ll, lr, ur, ul, ll - vector(0, 0.5 * self.nwell_width)])
+ 
+         # Add the taps
+         layer_stack = self.active_stack

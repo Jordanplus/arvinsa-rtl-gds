@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: arvinsa-rtl-gds <noreply@invalid>
+Date: Sat, 10 Oct 2026 15:30:00 +0800
+Subject: [PATCH] sram_1bank: one M2 pitch between col addr and write mask flops
+
+The write mask flops abut the column address flops. The col addr channel
+route's M2 drop at their boundary lands 0.055 um from the first write mask pin
+via (sky130 met2.2 needs 0.14 um; Magic full DRC: 13 boxes). Place the write
+mask and data flops one M2 pitch to the right of the col addr flops, and fill
+the gap with what abutment gave: the M3 clk rail and the flop nwell, nsdm and
+psdm that reach past the cell edge (else: clk open in LVS, nwell.2a, nsdm.1,
+psdm.1).
+(arvinsa-rtl-gds ADR-0018 decisions 6 and 17)
+---
+ compiler/modules/sram_1bank.py | 40 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 39 insertions(+), 1 deletion(-)
+
+diff --git a/compiler/modules/sram_1bank.py b/compiler/modules/sram_1bank.py
+index cfa0b99b..594f87ab 100644
+--- a/compiler/modules/sram_1bank.py
++++ b/compiler/modules/sram_1bank.py
+@@ -910,7 +910,10 @@ class sram_1bank(design, verilog, lef):
+             self.col_addr_pos[port] = vector(x_offset,
+                                              y_offset)
+             self.col_addr_dff_insts[port].place(self.col_addr_pos[port])
+-            x_offset = self.col_addr_dff_insts[port].rx()
++            # arvinsa patch 0003: one M2 pitch between the col addr and the write mask/data flops. Abutted, the
++            # col addr channel route's M2 drop at the col addr flops' right edge is 0.055 um from the write mask
++            # flops' first pin via (sky130 met2.2 needs 0.14 um; ADR-0018 decision 17).
++            x_offset = self.col_addr_dff_insts[port].rx() + self.m2_pitch
+         else:
+             self.col_addr_pos[port] = vector(x_offset, 0)
+ 
+@@ -1256,6 +1259,8 @@ class sram_1bank(design, verilog, lef):
+                 mid_pos = vector(clk_steiner_pos.x, dff_clk_pos.y)
+                 self.add_wire(self.m2_stack[::-1],
+                               [dff_clk_pos, mid_pos, clk_steiner_pos])
++                if port == 0 and port in self.write_ports:
++                    self.bridge_col_addr_dff_gap(port)
+             elif port in self.write_ports:
+                 data_dff_clk_pin = self.data_dff_insts[port].get_pin("clk")
+                 data_dff_clk_pos = data_dff_clk_pin.center()
+@@ -1268,6 +1273,39 @@ class sram_1bank(design, verilog, lef):
+                 self.add_wire(self.m2_stack[::-1],
+                               [data_dff_clk_pos, mid_pos, clk_steiner_pos])
+ 
++    def bridge_col_addr_dff_gap(self, port):
++        """
++        arvinsa patch 0003: the write mask/data flops sit one M2 pitch right of the col addr flops (see
++        place_dffs). Abutted, their M3 clk rails touched and the flop's nwell/implants, which reach past the
++        cell edge, merged; across the gap the clk is open (LVS) and the wells/implants are too close (nwell.2a,
++        nsdm.1, psdm.1). Fill the gap with what abutment gave.
++        """
++        from openram.tech import layer as tech_layer
++        left = self.col_addr_dff_insts[port]
++        if self.write_size != self.word_size:
++            right = self.wmask_dff_insts[port]
++        else:
++            right = self.data_dff_insts[port]
++        left_clk, right_clk = left.get_pin("clk"), right.get_pin("clk")
++        debug.check(left_clk.layer == right_clk.layer and left_clk.by() == right_clk.by(),
++                    "col addr and write mask/data flop clk rails not aligned")
++        self.add_rect(layer=left_clk.layer,
++                      offset=vector(left_clk.rx(), left_clk.by()),
++                      width=right_clk.lx() - left_clk.rx(),
++                      height=left_clk.height())
++        debug.check(left.by() == right.by(), "col addr and write mask/data flops not in one row")
++        for name in ("nwell", "nimplant", "pimplant"):
++            if name not in tech_layer:
++                continue
++            for shape in self.dff.gds.getAllShapes(tech_layer[name]):
++                xs, ys = shape[0::2], shape[1::2]
++                # a shape across the whole flop sticks out on both sides; abutted, it merged with the neighbour's
++                if min(xs) < 0 and max(xs) > self.dff.width:
++                    self.add_rect(layer=name,
++                                  offset=vector(left.rx(), left.by() + min(ys)),
++                                  width=right.lx() - left.rx(),
++                                  height=max(ys) - min(ys))
++
+     def route_control_logic(self):
+         """
+         Route the control logic pins that are not inputs

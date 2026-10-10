@@ -21,7 +21,9 @@ Checks:
               either.
   macro_source the OpenRAM outputs in ip/sram/<macro>/openram/ (GDS, LEF, SPICE, Verilog) have the
               sha256 that summary.json recorded when make openram-macro made them (Phase 6, ADR-0018),
-              and upstream/<macro>.v is the same file as openram/<macro>.v
+              and upstream/<macro>.v is the same file as openram/<macro>.v; the SPICE netlist may instead have
+              the spice_content_sha256 that summary.json recorded (same subcircuits in another order, the netlist
+              the .lib was characterized from; ADR-0018 decision 17)
   sim_model   sim/<macro>.v is what ip/sram/gen_sim_model.py makes from upstream/<macro>.v
   macro_views scripts/check_macro_views.py on the views the flow reads: the antenna LEF, the five char
               .lib, the Verilog model, the SPICE netlist and the GDS (names, pins and directions, .lib
@@ -93,6 +95,18 @@ def sha256(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
+def spice_content_sha256(path):
+    """sha256 of a SPICE netlist's sorted .subckt blocks (exact text) and sorted non-comment lines outside them: the
+    same for the same circuit written in another order or with other comments (same definition as gen_macro.py,
+    written again here so the check does not import the generator)."""
+    import hashlib
+    text = open(path, encoding="utf-8", errors="replace").read()
+    pat = re.compile(r"^\.subckt\s.*?^\.ends\b[^\n]*", re.M | re.S | re.I)
+    blocks = sorted(m.group(0) for m in pat.finditer(text))
+    rest = sorted(ln for ln in pat.sub("", text).splitlines() if ln.strip() and not ln.lstrip().startswith("*"))
+    return hashlib.sha256(("\0".join(blocks) + "\1" + "\0".join(rest)).encode()).hexdigest()
+
+
 def dir_path(v):
     """'dir::x' -> absolute path below the repo root (run.sh passes --design-dir = repo root)."""
     return os.path.normpath(os.path.join(ROOT, v[len("dir::"):])) if v.startswith("dir::") else v
@@ -143,12 +157,21 @@ def main(argv):
         if not differ and not bad_def else "; ".join(([f"other keys differ: {differ}"] if differ else []) + bad_def))
 
     try:
-        want_sha = json.load(open(os.path.join(args.openram, "summary.json"), encoding="utf8"))["outputs_sha256"]
+        summ = json.load(open(os.path.join(args.openram, "summary.json"), encoding="utf8"))
+        want_sha = summ["outputs_sha256"]
         bad_sha = [e for e in ("gds", "lef", "sp", "v")
                    if sha256(os.path.join(args.openram, f"{MACRO}.{e}")) != want_sha.get(f"{MACRO}.{e}")]
+        # the netlist may be the earlier run's that the .lib was characterized from, when it is the same circuit
+        # (same subcircuits, word for word; only order and comments differ; ADR-0018 decision 17)
+        sp_same = "sp" in bad_sha and summ.get("spice_content_sha256") == spice_content_sha256(
+            os.path.join(args.openram, f"{MACRO}.sp"))
+        if sp_same:
+            bad_sha.remove("sp")
         same_v = sha256(os.path.join(IP, "upstream", f"{MACRO}.v")) == sha256(os.path.join(args.openram, f"{MACRO}.v"))
         row("macro_source", not bad_sha and same_v,
-            "openram/ GDS, LEF, SPICE and Verilog match summary.json; upstream/ model = openram/ model" if not bad_sha and same_v
+            "openram/ GDS, LEF, SPICE and Verilog match summary.json"
+            + (" (SPICE: same subcircuits, other order/comments)" if sp_same else "") + "; upstream/ model = openram/ model"
+            if not bad_sha and same_v
             else f"sha256 differs from summary.json: {bad_sha}" + ("" if same_v else "; upstream/ model differs from openram/"))
     except (OSError, KeyError, ValueError) as e:
         row("macro_source", False, f"cannot read {args.openram}: {e}")

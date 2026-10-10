@@ -10,10 +10,15 @@ and must FAIL with the expected reason; the clean templates must PASS (positive 
          (a patch not applied, another edit, another HEAD)
   D1-D3  macro_drc.parse/compare: a rule category the prebuilt macro does not have (the 2026-10-08 case:
          nwell.5a and routing spacing), a higher total, Magic not finishing
+  K0-K6  macro_klayout_drc: an error in the report, no report, front-end rules not run, a cell name the KLayout
+         deck excludes; two real runs on a tiny GDS (psdm 0.26 um apart: the 2026-10-10 case; the same under an
+         excluded name)
   L1-L2  the .lib template: gen_char_lib.power_problems refuses OpenRAM dev's internal_power 1.036316e+11
          (2026-10-08); lib_template.make refuses .lib files whose power entries differ
-  C1-C2  check_char_lib.provenance for a self-generated macro: char.json made from another netlist than
-         ip/sram/<macro>/openram/<macro>.sp, and that netlist not the one its summary.json records
+  C1-C5  check_char_lib.provenance for a self-generated macro: char.json made from another netlist than
+         ip/sram/<macro>/openram/<macro>.sp, and that netlist not the one its summary.json records; an earlier
+         run's netlist of the same circuit in another order passes (C3), one with a transistor changed or a
+         subcircuit missing does not (C4, C5; ADR-0018 decision 17)
 Prints PASS n/n; exit 0 only when every case behaves as expected.
 """
 import os
@@ -26,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_install  # noqa: E402
 import gen_macro  # noqa: E402
 import macro_drc  # noqa: E402
+import macro_klayout_drc  # noqa: E402
 import lib_template  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "char"))
 import gen_char_lib  # noqa: E402
@@ -174,8 +180,56 @@ def main():
             json.dump({"outputs_sha256": {"neg_sram.sp": "1" * 64}}, open(summ, "w"))
             check("C2 the netlist is not the one summary.json records", netrows({"netlist_sha256": sha}),
                   "is not the netlist summary.json records")
+            # a later run wrote the same circuit in another order (2026-10-10): summary.json records that run's
+            # sha256 and its spice_content_sha256; the committed netlist is the earlier one the .lib came from
+            two = "* header\n.SUBCKT neg_sram a b\nX1 a b inv\n.ENDS\n.subckt inv a b\nM1 b a 0 0 nfet W=1\n.ends\n"
+            later = os.path.join(root, "later.sp")
+            open(later, "w").write("* other header\n.subckt inv a b\nM1 b a 0 0 nfet W=1\n.ends\n"
+                                   ".SUBCKT neg_sram a b\nX1 a b inv\n.ENDS\n")
+            for case, text, want in (("C3 earlier netlist, same subcircuits in another order (positive control)", two, None),
+                                     ("C4 earlier netlist with one transistor width changed", two.replace("W=1", "W=2"),
+                                      "is not the netlist summary.json records"),
+                                     ("C5 earlier netlist with one subcircuit missing", two.split(".subckt")[0],
+                                      "is not the netlist summary.json records")):
+                open(net, "w").write(text)
+                sha = hashlib.sha256(text.encode()).hexdigest()
+                json.dump({"outputs_sha256": {"neg_sram.sp": "2" * 64},
+                           "spice_content_sha256": gen_macro.spice_content_sha256(later)}, open(summ, "w"))
+                check(case, netrows({"netlist_sha256": sha}), want)
         finally:
             check_char_lib.ROOT, check_char_lib.MACRO = saved
+
+    # macro_klayout_drc: report parsing (K0-K3), the deck's name exclusion (K4), and one real KLayout run each on a
+    # tiny GDS with two psdm 0.26 um apart (psdm.1 needs 0.38; the 2026-10-10 case) under a plain name and under a
+    # name the deck excludes (K5, K6)
+    rule = "  <category>\n   <name>{r}</name>\n  </category>\n"
+    def rdb(top="m", rules=macro_klayout_drc.REQUIRED, items=()):
+        return (f"<report-database>\n <top-cell>{top}</top-cell>\n <categories>\n" + "".join(rule.format(r=r) for r in rules)
+                + " </categories>\n <items>\n" + "".join(f"  <item>\n   <category>'{r}'</category>\n   <cell>{c}</cell>\n  </item>\n"
+                                                      for r, c in items) + " </items>\n</report-database>\n")
+    with tempfile.TemporaryDirectory() as t:
+        p = os.path.join(t, "r.lyrdb")
+        open(p, "w").write(rdb())
+        check("K0 report with every required rule and no item (positive control)", macro_klayout_drc.parse(p, "m")[0], None)
+        open(p, "w").write(rdb(items=[("psdm.1", "m_delay_chain")]))
+        check("K1 one error in the report", macro_klayout_drc.parse(p, "m")[0], "errors per rule: psdm.1 1")
+        check("K2 no report (KLayout did not finish)", macro_klayout_drc.parse(os.path.join(t, "none.lyrdb"), "m")[0],
+              "wrote no report")
+        open(p, "w").write(rdb(rules=("m2.2", "li.1")))
+        check("K3 front-end rules missing (feol off)", macro_klayout_drc.parse(p, "m")[0], "not in the report")
+    check("K4 a cell name the deck leaves out of its nwell/nsdm/psdm checks",
+          ["excluded"] if macro_klayout_drc.excluded(["arv_x", "sky130_sram_2kbyte_1rw1r_32x512_8_bank"]) else [], "excluded")
+    with tempfile.TemporaryDirectory() as t:
+        mk = os.path.join(t, "mk.py")
+        open(mk, "w").write("import pya\nly = pya.Layout()\nly.dbu = 0.001\nc = ly.create_cell(top)\nli = ly.layer(94, 20)\n"
+                            "c.shapes(li).insert(pya.Box(0, 0, 1000, 1000))\nc.shapes(li).insert(pya.Box(1260, 0, 2260, 1000))\n"
+                            "ly.write(dst)\n")
+        for case, top, want in (("K5 two psdm 0.26 um apart (real KLayout run)", "neg_psdm", "errors per rule: psdm.1"),
+                                ("K6 the same under a name the deck excludes (real KLayout run)", "neg_sky130_sram_1kbyte_x",
+                                 "match the deck's exclusion")):
+            gds = os.path.join(t, top + ".gds")
+            macro_klayout_drc.nix(f"klayout -b -rd top={top} -rd dst='{gds}' -r '{mk}'", os.path.join(t, "mk.log"))
+            check(case, macro_klayout_drc.run(gds, top, os.path.join(t, top + ".json"))["problems"], want)
 
     print(f"neg-openram: {'PASS' if all(results) else 'FAIL'} {sum(results)}/{len(results)}")
     return 0 if all(results) else 1

@@ -2,6 +2,7 @@
 """Generate an SRAM macro with the pinned OpenRAM (Phase 6, ADR-0018) and check OpenRAM's own DRC/LVS.
 
     python3 ip/sram/openram/gen_macro.py <config.py> <out_dir> [--drc-max N]
+    python3 ip/sram/openram/gen_macro.py <config.py> <out_dir> --judge-only   # re-judge a finished run
 
 - Needs `make openram-setup`. OpenRAM must be OPENRAM_COMMIT plus ip/sram/openram/patches/*.patch (check_install). Runs OpenRAM's sram_compiler.py inside LibreLane's nix-shell (Magic, Netgen,
   KLayout on PATH) with the .tools/openram-venv Python, PDK_ROOT = OpenRAM's own pinned PDK (decision 5).
@@ -12,6 +13,11 @@
 - PASS needs all of: no "ERROR" line in the OpenRAM log (OpenRAM exits 0 even on an LVS mismatch, item 2),
   "Total DRC errors found: N" with N <= --drc-max, LVS "Final result: Circuits match uniquely.", and the
   GDS/LEF/SPICE/Verilog outputs present. Writes <out_dir>/summary.json (pins, config, results, sha256).
+- spice_content_sha256: a hash of the SPICE netlist that does not change with the order of its subcircuits or its
+  comment lines (OpenRAM writes the same circuit in another order after a layout-only patch, 2026-10-10). The
+  committed netlist the .lib was characterized from may be an earlier run's when this hash is the same
+  (ADR-0018 decision 17; checked by check_inputs.py macro_source and check_char_lib.py provenance).
+- --judge-only re-judges <out_dir> as it is and rewrites its summary.json, keeping the run's recorded settings.
 - The contents of the views are not judged here: make openram-macro runs scripts/check_macro_views.py next
   (CLAUDE.md rule 12).
 """
@@ -44,6 +50,15 @@ def sha256(path):
         for block in iter(lambda: f.read(1 << 20), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def spice_content_sha256(path):
+    """sha256 of the sorted .subckt blocks (exact text) and the sorted non-comment lines outside them."""
+    text = open(path, encoding="utf-8", errors="replace").read()
+    pat = re.compile(r"^\.subckt\s.*?^\.ends\b[^\n]*", re.M | re.S | re.I)
+    blocks = sorted(m.group(0) for m in pat.finditer(text))
+    rest = sorted(ln for ln in pat.sub("", text).splitlines() if ln.strip() and not ln.lstrip().startswith("*"))
+    return hashlib.sha256(("\0".join(blocks) + "\1" + "\0".join(rest)).encode()).hexdigest()
 
 
 def judge(out, name, rc, drc_max):
@@ -86,7 +101,10 @@ def main():
     ap.add_argument("config")
     ap.add_argument("out_dir")
     ap.add_argument("--drc-max", type=int, default=0, help="OpenRAM's Magic DRC count allowed (default 0)")
+    ap.add_argument("--judge-only", action="store_true", help="re-judge a finished run in out_dir, do not run OpenRAM")
     a = ap.parse_args()
+    if a.judge_only:
+        return rejudge(a.config, os.path.abspath(a.out_dir))
 
     tools = os.path.join(ROOT, ".tools")
     or_dir = os.path.join(tools, "openram")
@@ -137,7 +155,7 @@ def main():
     minutes = round((time.time() - t0) / 60, 1)
 
     problems, drc, lvs, files = judge(out, name, rc, a.drc_max)
-    summary = {
+    summary = {"openram_rc": rc,
         "result": "FAIL" if problems else "PASS", "problems": problems, "minutes": minutes,
         "config": os.path.relpath(os.path.abspath(a.config), ROOT), "config_sha256": sha256(a.config),
         "openram_commit": pin("OPENRAM_COMMIT"),
@@ -145,10 +163,33 @@ def main():
         "sky130_fd_bd_sram_commit": pin("SKY130_FD_BD_SRAM_COMMIT"),
         "openram_pdk_hash": pin("OPENRAM_PDK_HASH"), "pythonhashseed": 0,
         "drc_errors": drc, "drc_max": a.drc_max, "lvs": lvs, "outputs_sha256": files,
+        "spice_content_sha256": spice_content_sha256(os.path.join(out, "macro", name + ".sp")) if name + ".sp" in files else None,
     }
     json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=2)
     print(f"gen_macro: {summary['result']} - {name}, {minutes} min, DRC {drc}, LVS {lvs}"
           + (f"; {'; '.join(problems)}" if problems else "") + f" ({out}/summary.json)")
+    return 1 if problems else 0
+
+
+def rejudge(config, out):
+    """Judge the finished run in out again and rewrite its summary.json (settings as the run recorded them)."""
+    path = os.path.join(out, "summary.json")
+    summary = json.load(open(path))
+    name = re.search(r'^output_name\s*=\s*"([^"]+)"', open(config, encoding="utf-8").read(), re.M).group(1)
+    if summary.get("config_sha256") != sha256(config):
+        print(f"gen_macro: FAIL - {config} is not the config of the run in {out}")
+        return 1
+    rc = summary.get("openram_rc")
+    if rc is None:   # summaries before 2026-10-10 recorded the exit code only as a problem when it was not 0
+        m = [p for p in summary.get("problems", []) if p.startswith("OpenRAM exit ")]
+        rc = int(m[0].split()[2]) if m else 0
+    problems, drc, lvs, files = judge(out, name, rc, summary["drc_max"])
+    summary.update(openram_rc=rc, result="FAIL" if problems else "PASS", problems=problems, drc_errors=drc, lvs=lvs,
+                   outputs_sha256=files,
+                   spice_content_sha256=spice_content_sha256(os.path.join(out, "macro", name + ".sp")) if name + ".sp" in files else None)
+    json.dump(summary, open(path, "w"), indent=2)
+    print(f"gen_macro: {summary['result']} (judged again) - {name}, DRC {drc}, LVS {lvs}"
+          + (f"; {'; '.join(problems)}" if problems else "") + f" ({path})")
     return 1 if problems else 0
 
 

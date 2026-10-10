@@ -87,6 +87,19 @@
     - harden FAIL：照 skill 調 flow 設定（resizer、CTS、繞線後修復、macro clock）可以直接做；改週期、SDC 餘量、signoff 標準，或任何讓 checker 變寬的修改，一定先問。
     - 乾淨 checkout 的兩輪 regress：兩個設計各一個 worktree 平行跑（記憶體夠的話），排在晚上（skill `overnight-run`）。
 
+17. **（2026-10-10，步驟 4b 兩輪 harden 之後；執行決定 6）macro 的 DRC 用 OpenRAM patch 修，範圍包括 KLayout deck；Magic 的 licon.14 加進位置比對的 100 nm 容許清單**。依據（`docs/notes/openram_phase6_bringup.md` 步驟 4b）：
+    - 決定 6 寫「選定 macro 後只修那一顆」，但待辦清單漏了這一項，選定的 macro（patch 0001）仍有 Magic full 規則的 met2.2 13、nwell.5a 10。
+    - met2.2 根因（KLayout 查 GDS）：write mask DFF 緊貼 column address DFF 擺放（`sram_1bank.place_dffs`），column address channel route（`cr_3`）的垂直 met2 離 write mask DFF 第一支腳的 via 墊片 0.055 µm（規則 0.14）。nwell.5a 根因：`add_dnwell` 的保護環 path 中心線壓在 Deep N-well 邊界，內側只有 0.42 µm（規則 1.03）。
+    - 第二輪 harden（SRAM 真的進了最終 GDS）多出 KLayout DRC 27：nwell.6 4（保護環四邊）、psdm.1 22、m2.2 1（write mask DFF 那一處）；預建 macro 是 0（改名後重跑也是 0：deck 依名稱 `*sky130_sram_*kbyte_*` 無條件排除的只有 nwell.6，nsdm／psdm 要 `sram_exclude=true` 才排除，flow 用預設 false）。步驟 2 只用 Magic deck 比過。
+    - psdm.1 根因（KLayout 攤平 `pinv` 量形狀，筆記步驟 3m）：`pgate.add_pwell_contact` 用 NMOS 源汲極接點的 active 高度（0.29 µm）算 tap 接點的中心，tap 接點（directions V、V）實際 0.41 µm，active 底邊低了 0.06 µm，psdm 壓進 gnd 軌下的 nimplant 帶；對 gnd 軌鏡像的兩排（delay chain、control logic、predecoder）兩塊 psdm 只隔 0.26 µm（規則 0.38）。patch 0004 改用 tap 接點自己的高度。
+    - patch 0003 的副作用（第一次重產：OpenRAM LVS 不一致、KLayout nwell.2a 2、nsdm.1 2）：DFF 的 M3 clk 軌與超出 cell 邊界 0.18 µm 的 nwell／nsdm／psdm，原本靠緊貼相接；留了 0.46 µm 的間隙後 write mask／data DFF 的 clk 斷開，井與 implant 只隔 0.06 µm。patch 0003 補上：在間隙補 M3 clk 與這三層（形狀從 DFF 的 GDS 讀，只補橫跨整個 cell 的那幾塊）。小 macro（16×64、words_per_row 2、write_size 8）驗證：OpenRAM DRC 0、LVS match、KLayout DRC 0，2.4 分鐘。
+    - 使用者 2026-10-10 選擇：met2.2 用「OpenRAM patch 修繞線」（patch 0003：column address 與 write mask DFF 之間留一個 met2 pitch）；nwell.5a 用 patch 0002（保護環外 0.42、內 1.03 µm，sky130 才套用）；KLayout 的 27 個「一起用 OpenRAM patch 修」（psdm.1 用 patch 0004），macro 的檢查加上 KLayout deck，對預建的 0。
+    - Magic 在晶片裡切框：licon.14 有 195 個框（SRAM 內 y = 157.255 µm 一列）比 SRAM 單獨檢查長 60–90 nm，兩個 CPU 相同。使用者選擇「加進 100 nm 容許清單」：licon.14 能藏新違規的面積從 SRAM 的 0.65% 變成 3.32%（li.5 1.29%、diff/tap.9 8.71%）。
+    - 重新產生後要確認：電路圖網表 sha256 不變（不變就不用重做特性化）、OpenRAM LVS match、Magic full DRC 對預建 baseline、KLayout DRC 0，然後兩個 CPU 重新 harden，那一輪才重建 golden、SRAM DRC 參考檔與 unannotated 上限。
+    - 結果（2026-10-10，patch 0001–0004，51 分鐘）：OpenRAM DRC 0、LVS `Circuits match uniquely.`；Magic full 2,234,528 個、29 種（預建 2,235,078、30 種），PASS；KLayout 0。LEF 外框不變，`din0`／`wmask0` 等腳位右移 0.42 µm；OpenRAM 的 TT .lib、Verilog 與前一版逐位元相同。電路圖網表 97 個子電路逐字相同、子電路外只有註解，但順序與檔頭不同，sha256 變了（`368c74be…` → `92b73250…`）。
+    - 使用者 2026-10-10 選擇（網表）：「保留舊 .sp＋逐子電路比對」。repo 保留特性化用的 `368c74be…` 網表；`gen_macro.py` 在 `summary.json` 多記 `spice_content_sha256`（排序後的子電路全文＋子電路外的非註解行），`check_inputs.py macro_source` 與 `check_char_lib.py` 的來源檢查接受「sha256 相同，或內容雜湊相同」。negative test：`neg-openram` C3（只換順序，PASS）、C4（改一個電晶體寬度）、C5（少一個子電路），`neg-pnr` P70。不選「重做特性化」：電路相同，數字應該相同，要多花數小時。
+    - 使用者 2026-10-10 選擇（view QA）：「QA 改檢查 .lib 範本」。`make openram-macro` 的 view QA 原本檢查 OpenRAM 的原始 TT .lib，它的 internal_power 是 1.036316e+11（OpenRAM dev 的缺陷，原始 .lib 不交給 flow），2 KB 一定 FAIL；改成先用 `lib_template.py` 產生範本（internal_power 換成預建 macro 的值）再檢查範本。這次產生的範本與 repo 的逐位元相同。
+
 ## 計畫
 
 0. skill `openram-macro-characterization` 補自產 macro 的一節；本 ADR；`project-plan.md` §8、§11 與 `toolchain.md` 更正。

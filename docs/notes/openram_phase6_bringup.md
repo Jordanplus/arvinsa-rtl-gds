@@ -374,3 +374,24 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 - 根因（已驗證）：LibreLane `scripts/klayout/stream_out.py` 先用 LEF＋DEF 建 cell、清空，再合併 GDS；OpenRAM 的 LEF 沒有 `FOREIGN`，SRAM 不是 ghost cell，GDS 的同名 cell 被 `RenameCell` 改名後沒被引用；缺 GDS 的檢查只看 ghost cell，log 印 `All LEF cells have matching GDS cells`。單步重跑 `KLayout.StreamOut`、LEF 加 `FOREIGN` 後 169 個 cell 全部相同（`scripts/check_macro_gds.py` PASS）。
 - 連帶發現：Magic DRC 讀的是同一份 GDS，`magic_drc` 框內 0 個違規仍 PASS（比對的集合是空的）。
 - 處理（commit `3ceca55`）：`add_foreign()`、view QA `foreign`（Q13）、`check_macro_gds.py`＋`check_soc.py macro_gds`（步驟 3d）、`magic_drc` 框內下限 50%，P67–P69；P21 的注入點改成 (20, 20)（KLayout 掃描新 GDS）。兩個 CPU 重新 harden。
+
+## 步驟 4b 第二輪 harden（2026-10-10，commit `3ceca55`，兩個 CPU 平行）
+
+- `FOREIGN` 修正有效：XOR 0、`macro_gds` PASS。SRAM 真的進了最終 GDS 之後，flow 的 KLayout DRC 在 SRAM 裡報 27 個：nwell.6 4、psdm.1 22、m2.2 1；預建 macro 單獨跑是 0（改名成不符合 deck 排除樣式後也是 0）。
+- Magic DRC 在晶片裡切框：licon.14 有 195 個框比 SRAM 單獨檢查長 60–90 nm（兩個 CPU 相同），使用者選擇加進 100 nm 容許清單（ADR-0018 決定 17）。
+- 兩份 `criteria_review.md` 在 `runs/{soc_top,soc_top_hazard3}_signoff/`。
+
+## 步驟 3m：修自產 macro 的 DRC（ADR-0018 決定 6、17，2026-10-10）
+
+- KLayout 單獨檢查 macro（`sky130A_mr.drc`，與 flow 同參數，約 45 秒）：自產 27 = nwell.6 4（保護環）＋psdm.1 22（delay_chain 20、control_logic_rw 1、hierarchical_predecode2x4_0 1）＋m2.2 1（write mask DFF）；Magic full 另有 met2.2 13、nwell.5a 10。
+- patch 0002（保護環）與 patch 0003 第一版（column address 與 write mask DFF 之間留一個 met2 pitch）重產 2 KB（45.4 分鐘）：nwell.5a、nwell.6、met2.2、m2.2 消失，但 OpenRAM LVS 不一致，最上層 `data_dff_0/clk` 是另一個 net（write mask 與 data DFF 的 clk）；KLayout 多了 nwell.2a 2、nsdm.1 2，Magic 多了 nwell.2a 1。另外 30 個子電路層級的不一致，舊版也有、攤平後一致，不是問題。
+  - 根因（已驗證，KLayout 讀 DFF 的 GDS）：DFF 陣列的 M3 clk 軌橫跨整個陣列，nwell（y 3.38–7.335）、nsdm（0.385–1.635）、psdm（3.435–6.685）都超出 cell 邊界 0.18 µm；緊貼時互相接上，拉開 0.46 µm 後 clk 斷開、井與 implant 只隔 0.06 µm。
+  - patch 0003 補上：間隙補 M3 clk 與這三層（`bridge_col_addr_dff_gap`，形狀用 `getAllShapes` 從 DFF 的 GDS 讀，只取橫跨整個 cell 的）。
+- psdm.1 根因（已驗證，KLayout 攤平 `pinv_17`）：tap 的 active 在 y 0.255–0.665、psdm 0.13–0.79，gnd 軌下的 nimplant 是 −0.19–0.19，重疊 0.06 µm；對 gnd 軌鏡像的兩排 psdm 只隔 0.26 µm（規則 0.38）。`pgate.add_pwell_contact` 用 NMOS 源汲極接點的 `first_layer_height`（0.29）算中心，tap 接點（directions V、V）是 0.41。ntap 那邊受 PMOS 頂端限制，剛好沒事。patch 0004：用 tap 接點自己的高度（`factory.create` 同參數，快取到同一個 module）。
+- 小 macro 驗證（`runs/p6_drcfix/arv_small_1rw1r_16x64_8.py`：16×64、words_per_row 2、write_size 8）：patch 0002＋0003（含補洞）OpenRAM DRC 0、LVS match，KLayout 只剩 psdm.1 22；加 patch 0004 後 KLayout 0。每次 2.4 分鐘。電路圖網表的子電路內容不變（92 個逐字相同；第一次只數大寫 `.SUBCKT`，漏了 DFF 等小寫的 3 個），檔頭與順序會變。
+- checker：`ip/sram/openram/macro_klayout_drc.py`（flow 的 KLayout deck，要 0；cell 名稱符合 deck 排除樣式 `*sky130_sram_*kbyte_*` 就 FAIL），接在 `make openram-macro`；`neg-openram` K0–K6（K5、K6 真的跑 KLayout，15 秒）。對 patch 0004 之前的小 macro FAIL（psdm.1 22）、之後 PASS。
+- deck 的名稱排除（`sky130A_mr.drc` 第 299 行起）：nwell.6 無條件排除，nsdm／psdm 只在 `sram_exclude=true` 時排除（預設與 flow 都是 false）。
+- 2 KB 重產（patch 0001–0004，51 分鐘）：OpenRAM DRC 0、LVS match；Magic full 2,234,528、29 種（預建 2,235,078、30 種）PASS；KLayout 0（`macro_klayout_drc.py`）。LEF 外框不變、`din0`／`wmask0` 等腳位右移 0.42 µm；TT .lib、Verilog 逐位元相同。網表 97 個子電路逐字相同、子電路外只有註解，sha256 不同（`368c74be…` → `92b73250…`）。
+- 使用者選「保留舊 .sp＋逐子電路比對」：`spice_content_sha256`（`gen_macro.py`，這次 run 用 `--judge-only` 補記，只多了這個欄位與 `openram_rc`）；`check_inputs.py macro_source`、`check_char_lib.py` 各自獨立實作同一定義。C3–C5、P70，另做對照（只換順序 → `macro_source` PASS）。
+- 使用者選「QA 改檢查 .lib 範本」：`make openram-macro` 的 view QA 原本對 OpenRAM 原始 .lib 報 `internal_power 1.036316e+11 outside (0, 1000]`（10-09 接上之後 2 KB 第一次經過），改成檢查 `lib_template.py` 的範本；這次的範本與 repo 逐位元相同，四項檢查全部 PASS。
+- 換進 repo：`openram/` 的 GDS、LEF、Verilog、`summary.json`；flow LEF 重新產生；`make macro-views`、兩個 CPU 的 `check_inputs.py`（rc 0）、`openram-check-lib`、`neg-openram` 39/39、P63、P70 PASS。

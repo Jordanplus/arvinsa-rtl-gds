@@ -6,7 +6,7 @@
 
 | 檔案 | 內容 |
 |---|---|
-| `arv_sram_2kbyte_1rw1r_32x512_8.sp` | 電晶體級網表，SPICE 特性化的輸入；sha256 必須等於 `summary.json` 記錄的值（`check_char_lib.py` 的來源檢查） |
+| `arv_sram_2kbyte_1rw1r_32x512_8.sp` | 電晶體級網表，SPICE 特性化的輸入；sha256 等於 `summary.json` 記錄的值，或內容雜湊等於 `spice_content_sha256`（`check_char_lib.py` 的來源檢查、`check_inputs.py macro_source`）。目前這份是 patch 0001 那次產生的（特性化用的），patch 0002–0004 只改 layout，那次 run 寫出的網表子電路逐字相同、順序不同（ADR-0018 決定 17） |
 | `summary.json` | 產生紀錄：OpenRAM commit、patch 檔名與 sha256、設定檔 sha256、OpenRAM 的 DRC／LVS 結果、各產出檔 sha256 |
 | `arv_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib` | OpenRAM 的解析 .lib，原樣保存；internal_power 是錯的（1.036316e+11），不能直接用 |
 | `arv_sram_2kbyte_1rw1r_32x512_8_TT_template.lib` | 特性化用的 .lib 範本：上一個檔案把 internal_power 換成預建 macro 的值（`make openram-lib-template`，skill `openram-macro-characterization` 規則 24） |

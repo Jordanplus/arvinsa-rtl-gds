@@ -234,6 +234,18 @@ def pin(name):
     raise KeyError(name)
 
 
+def spice_content_sha256(path):
+    """sha256 of a SPICE netlist's sorted .subckt blocks (exact text) and sorted non-comment lines outside them: the
+    same for the same circuit written in another order or with other comments (same definition as gen_macro.py,
+    written again here so the check does not import the generator)."""
+    import hashlib
+    text = open(path, encoding="utf-8", errors="replace").read()
+    pat = re.compile(r"^\.subckt\s.*?^\.ends\b[^\n]*", re.M | re.S | re.I)
+    blocks = sorted(m.group(0) for m in pat.finditer(text))
+    rest = sorted(ln for ln in pat.sub("", text).splitlines() if ln.strip() and not ln.lstrip().startswith("*"))
+    return hashlib.sha256(("\0".join(blocks) + "\1" + "\0".join(rest)).encode()).hexdigest()
+
+
 def provenance(doc):
     sys.path.insert(0, HERE)
     import characterize as ch
@@ -254,7 +266,10 @@ def provenance(doc):
             sha = hashlib.sha256(open(net, "rb").read()).hexdigest()
             if doc.get("netlist_sha256") != sha:
                 out.append(f"netlist_sha256 {str(doc.get('netlist_sha256'))[:12]} is not {os.path.relpath(net, ROOT)}'s")
-            if json.load(open(summ)).get("outputs_sha256", {}).get(MACRO + ".sp") != sha:
+            rec = json.load(open(summ))
+            # an earlier run's netlist of the same circuit (subcircuits word for word; ADR-0018 decision 17)
+            if rec.get("outputs_sha256", {}).get(MACRO + ".sp") != sha and \
+                    rec.get("spice_content_sha256") != spice_content_sha256(net):
                 out.append(f"{os.path.relpath(net, ROOT)} is not the netlist summary.json records")
     want = {"macro": MACRO, "netlist": "schematic", "pdk": pin("SKY130_PDK_HASH"), "trim": TRIM}
     settings = {"tstep": ch.TSTEP, "tmax": ch.TMAX, "resolution_ns": ch.RESOLUTION, "clk_slews_ns": ch.CLK_SLEWS,

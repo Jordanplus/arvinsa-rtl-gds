@@ -26,7 +26,7 @@ Checks (each prints a PASS/FAIL row):
   magic_drc    Magic DRC on the full GDS (*-magic-drc/reports/drc.magic.rpt): no violation outside
                the SRAM outline, and every violation inside it is one of the SRAM alone: its box
                lies in the union of the same-rule boxes of the SRAM-alone report, moved to the
-               sram0 origin (li.5 and diff/tap.9 boxes enlarged by DRC_POS_TOL). The SRAM bitcells follow the sky130 SRAM
+               sram0 origin (li.5, diff/tap.9 and, since Phase 6, licon.14 boxes enlarged by DRC_POS_TOL). The SRAM bitcells follow the sky130 SRAM
                rules, so the standard deck flags millions of shapes inside it (project-plan.md
                §6.3). Magic splits the same error into different boxes when the SRAM is checked
                inside soc_top (5,579,161 boxes alone, 4,665,810 inside soc_top), so the boxes are
@@ -168,8 +168,12 @@ BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", 
 # 85 nm (li.5 and diff/tap.9: the same error drawn longer); 100 nm covers all of them. Only those
 # two rules get it (Phase 4 review): for the others it would hide a new violation of the same rule
 # in a 5-7 times larger area, e.g. li.3 from 0.9 % to 6.5 % of the SRAM.
+# Phase 6 (OpenRAM self-generated SRAM, user decision 2026-10-10, ADR-0018 decision 17): licon.14 too. 195 boxes
+# on one row inside the SRAM (y = 157.255 um SRAM-local), identical in both CPUs, each touching a same-rule
+# SRAM-alone box and sticking out by 60-90 nm (60 nm: 195 unexplained, 90 nm: 0). +100 nm makes licon.14 cover
+# 3.32 % of the SRAM instead of 0.65 % (li.5 1.29 %, diff/tap.9 8.71 %).
 DRC_POS_TOL = 100
-DRC_POS_TOL_RULES = ("(li.5)", "(diff/tap.9)")
+DRC_POS_TOL_RULES = ("(li.5)", "(diff/tap.9)", "(licon.14)")
 NUM = re.compile(r"^ (-?[\d.]+)um (-?[\d.]+)um (-?[\d.]+)um (-?[\d.]+)um$")
 
 

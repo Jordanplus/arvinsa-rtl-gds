@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: arvinsa-rtl-gds <noreply@invalid>
+Date: Sat, 10 Oct 2026 17:00:00 +0800
+Subject: [PATCH] pgate: place the pwell tap by its own contact height
+
+add_pwell_contact centres the tap contact with half the nmos source/drain
+contact's active height (sky130: 0.29 um), but the tap contact (directions
+V, V) is 0.41 um tall. Its active starts 0.06 um below contact_yoffset, so its
+psdm overlaps the nimplant under the gnd rail, and in rows mirrored about that
+rail (delay chain, control logic, predecoders) the two taps' psdm are 0.26 um
+apart (sky130 psdm.1 needs 0.38 um; KLayout sky130A_mr.drc: 22 boxes). Use
+the tap contact's own height.
+(arvinsa-rtl-gds ADR-0018 decisions 6 and 17)
+---
+ compiler/modules/pgate.py | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/compiler/modules/pgate.py b/compiler/modules/pgate.py
+index d0afd12e..fcc0808f 100644
+--- a/compiler/modules/pgate.py
++++ b/compiler/modules/pgate.py
+@@ -329,8 +329,19 @@ class pgate(design):
+         contact_offset = vector(contact_xoffset, contact_yoffset)
+ 
+         # Offset by half a contact
++        # arvinsa patch 0004: half of the tap contact's own active height, not the nmos source/drain contact's.
++        # The tap contact (directions V, V) is taller (sky130: 0.41 vs 0.29 um), so its active started 0.06 um
++        # below contact_yoffset and its psdm overlapped the nimplant under the rail; in rows mirrored about the
++        # gnd rail the two psdm were 0.26 um apart (psdm.1 needs 0.38; ADR-0018 decision 17).
++        from openram.sram_factory import factory
++        tap_contact = factory.create(module_type="contact",
++                                     layer_stack=layer_stack,
++                                     dimensions=[1, 1],
++                                     directions=("V", "V"),
++                                     implant_type="p",
++                                     well_type="p")
+         contact_offset += vector(0.5 * nmos.active_contact.first_layer_width,
+-                                 0.5 * nmos.active_contact.first_layer_height)
++                                 0.5 * tap_contact.first_layer_height)
+         self.pwell_contact= self.add_via_center(layers=layer_stack,
+                                                 offset=contact_offset,
+                                                 implant_type="p",

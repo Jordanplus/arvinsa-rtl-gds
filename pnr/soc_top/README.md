@@ -32,6 +32,7 @@ Phase 5 exit review 的獨立審查（2026-10-08）新增的 negative test：
 - P67：最終 GDS 的 SRAM cell 被清空 → `check_soc.py macro_gds`（Phase 6 第一輪 harden 實際發生：OpenRAM 的 LEF 沒有 `FOREIGN`，KLayout 輸出空的 SRAM）。
 - P68：最終 GDS 的 bitcell `sky130_fd_bd_sram__openram_dp_cell` 多一個方塊 → `macro_gds`（內容和 macro 的 GDS 不同）。
 - P69：Magic DRC 報告拿掉 SRAM 框內的違規 → `magic_drc`（框內少於 SRAM 單獨的 50%：被檢查的 GDS 裡沒有 SRAM）。
+- P70：`openram/` 的網表換子電路順序並改一個電晶體寬度 → `check_inputs.py macro_source`（只換順序與註解可以，ADR-0018 決定 17）。
 
 ## Hazard3 版（Phase 5，ADR-0011）
 
