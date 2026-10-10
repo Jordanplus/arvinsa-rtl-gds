@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P66).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P69).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -172,6 +172,13 @@ step re-run one step on a copy of that step's saved config and input state
   P65  final netlist: sram0 clk1 on a conb_1 LO      check_soc.py port1_tieoff (a constant clk1 can
                                                      leave a wordline on, ADR-0018 decision 9)
   P66  SRAM LEF with SIZE 10 um wider                 check_inputs.py macro_views (LEF SIZE != GDS box)
+  P67  final GDS with the SRAM cell emptied          check_soc.py macro_gds (Phase 6: an OpenRAM LEF without
+                                                     FOREIGN did this in KLayout's stream-out, no flow error)
+  P68  final GDS with one box added in the bitcell    check_soc.py macro_gds (a cell with other contents than
+       sky130_fd_bd_sram__openram_dp_cell             the macro GDS: a same-named cell from another GDS)
+  P69  Magic DRC report without the boxes inside      check_soc.py magic_drc (inside < DRC_IN_MIN_FRAC of the
+       the SRAM outline (COUNT adjusted)             SRAM alone: no SRAM in the checked GDS; it passed with
+                                                     inside 0 in Phase 6)
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
@@ -513,11 +520,12 @@ def p10(run, d):
 
 
 # SRAM-local point (um) with no li1, licon, mcon, diff, poly or tap within 2 um in x and from 2 um
-# below to 7 um above (KLayout scan of the PDK GDS, 2026-10-04). Two 0.5 um li1 squares there,
+# below to 7 um above, nor around the points 1 um away (KLayout scan of the OpenRAM self-generated GDS,
+# 2026-10-10, Phase 6; the prebuilt macro's (5.0, 5.0) of 2026-10-04 has li1, licon, mcon and tap there). Two 0.5 um li1 squares there,
 # 0.1 um apart, violate li.3 (li spacing 0.17 um), a rule the SRAM alone also violates. First try,
 # a 0.05 um wide li1 line, gave li.c1 (core li width), which the SRAM alone does not violate, so
 # the Phase 3 rule-type check would have caught it too and the case would not test the position.
-P21_SRAM_LOCAL = (5.0, 5.0)
+P21_SRAM_LOCAL = (20.0, 20.0)
 
 
 def p21(run, d):
@@ -571,7 +579,7 @@ def fake_run(run, d, replace, links=None):
     links = links or {}
     fr = os.path.join(d, "run")
     sta = os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run)
-    for rel in ["final/nl/soc_top.nl.v", "final/def/soc_top.def", sta] + \
+    for rel in ["final/nl/soc_top.nl.v", "final/def/soc_top.def", "final/gds/soc_top.gds", sta] + \
             [os.path.relpath(p, run) for p in glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "*.log"))
              + glob.glob(os.path.join(run, "*-magic-drc", "reports", "drc.magic.rpt"))
              + glob.glob(os.path.join(run, "*-arvinsa-ctsnoinsertiondelay", "*.log"))]:
@@ -927,6 +935,54 @@ def p66(run, d):
     open(p, "w").write(new)
     rc, out = inputs_check(d, "--lef", p)
     return inputs_failed(rc, out, "macro_views"), "check_inputs.py macro_views (LEF SIZE != GDS box)"
+
+
+def gds_edit(run, d, body, what):
+    """Copy of the run's final GDS with `body` (Python, `ly` and `M` defined) applied; returns its path or None."""
+    src, dst = os.path.join(run, "final", "gds", "soc_top.gds"), os.path.join(d, "soc_top.gds")
+    script = os.path.join(d, "edit_gds.py")
+    open(script, "w").write(f"import pya\nly = pya.Layout()\nly.read({src!r})\nM = {SRAM!r}\n{body}\nly.write({dst!r})\n"
+                            f"print('neg_pnr: {what}')\n")
+    return dst if nix(f"klayout -b -r '{script}'", os.path.join(d, "run.log")) == 0 and os.path.isfile(dst) else None
+
+
+def p67(run, d):
+    g = gds_edit(run, d, "ly.cell(M).clear()", "SRAM cell emptied")
+    if g is None:
+        return False, "could not edit the GDS"
+    ok, out = soc_case(run, d, "macro_gds", links={"final/gds/soc_top.gds": g})
+    return ok and "missing below" in out, "check_soc.py macro_gds: the SRAM cells are missing (only row FAIL)"
+
+
+def p68(run, d):
+    cell = "sky130_fd_bd_sram__openram_dp_cell"
+    g = gds_edit(run, d, f"c = ly.cell({cell!r})\nc.shapes(ly.layer(67, 20)).insert(pya.Box(0, 0, 100, 100))", f"box added in {cell}")
+    if g is None:
+        return False, "could not edit the GDS"
+    ok, out = soc_case(run, d, "macro_gds", links={"final/gds/soc_top.gds": g})
+    return ok and "other contents" in out and cell in out, f"check_soc.py macro_gds names {cell} (other contents)"
+
+
+def p69(run, d):
+    rel = magic_rel(run)
+    loc = json.load(open(CONFIG))["MACROS"][SRAM]["instances"]["sram0"]["location"]
+    w, h = (float(v) for v in re.search(r"SIZE\s+([\d.]+)\s+BY\s+([\d.]+)", open(os.path.join(SRAM_IP, f"{SRAM}.lef")).read()).groups())
+    x0, y0, x1, y1 = loc[0], loc[1], loc[0] + w, loc[1] + h
+    out_lines, kept = [], 0
+    for line in open(os.path.join(run, rel), errors="replace"):
+        m = re.match(r"^ (-?[\d.]+)um (-?[\d.]+)um (-?[\d.]+)um (-?[\d.]+)um$", line.rstrip("\n"))
+        if m:
+            a, b, c, e = (float(v) for v in m.groups())
+            if a >= x0 and b >= y0 and c <= x1 and e <= y1:
+                continue
+            kept += 1
+        if line.startswith("[INFO] COUNT:"):
+            line = f"[INFO] COUNT: {kept}\n"
+        out_lines.append(line)
+    rpt = os.path.join(d, "drc.magic.rpt")
+    open(rpt, "w").writelines(out_lines)
+    ok, out = soc_case(run, d, "magic_drc", links={rel: rpt})
+    return ok and "the SRAM is missing from the checked GDS" in out, "check_soc.py magic_drc: inside below half of the SRAM alone"
 
 
 def p14(run, d):
@@ -1403,7 +1459,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P37", p37), ("P38", p38), ("P39", p39), ("P40", p40), ("P41", p41), ("P42", p42),
          ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
          ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
-         ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66)]
+         ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69)]
 
 
 def main():

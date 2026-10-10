@@ -260,14 +260,15 @@ neg-openram:
 OPENRAM_NAME = $(basename $(notdir $(OPENRAM_CONFIG)))
 # Three checks after OpenRAM: its own DRC/LVS (gen_macro), the contents of every delivered view (check_macro_views,
 # skill hard-macro-integration) and the full-deck DRC against the prebuilt macro; all run, any FAIL fails.
-# OpenRAM's LEF has DATABASE MICRONS 2000 (--dbu 2000 here): the flow reads the LEF that gen_antenna_lef.py
-# rewrites to 1000, which check_inputs.py macro_views checks with the default --dbu 1000 (OpenROAD ODB-0292).
+# OpenRAM's LEF has DATABASE MICRONS 2000 and no FOREIGN (--dbu 2000 --no-foreign here): the flow reads the LEF
+# that gen_antenna_lef.py rewrites to 1000 with FOREIGN added, which check_inputs.py macro_views checks with the
+# defaults (OpenROAD ODB-0292; KLayout stream-out leaves a macro without FOREIGN empty).
 OPENRAM_OUT = runs/openram/$(OPENRAM_NAME)/macro/$(OPENRAM_NAME)
 openram-macro:
 	$(PY) ip/sram/openram/gen_macro.py $(OPENRAM_CONFIG) runs/openram/$(OPENRAM_NAME) --drc-max $(OPENRAM_DRC_MAX)
 	rc=0; \
 	$(PY) scripts/check_macro_views.py --name $(OPENRAM_NAME) --lef $(OPENRAM_OUT).lef --lib $(OPENRAM_OUT)_TT_1p8V_25C.lib \
-	  --verilog $(OPENRAM_OUT).v --spice $(OPENRAM_OUT).sp --gds $(OPENRAM_OUT).gds --dbu 2000 --json runs/openram/$(OPENRAM_NAME)/views.json || rc=1; \
+	  --verilog $(OPENRAM_OUT).v --spice $(OPENRAM_OUT).sp --gds $(OPENRAM_OUT).gds --dbu 2000 --no-foreign --json runs/openram/$(OPENRAM_NAME)/views.json || rc=1; \
 	$(PY) ip/sram/openram/macro_drc.py $(OPENRAM_OUT).gds $(OPENRAM_NAME) runs/openram/$(OPENRAM_NAME)/macro_drc.json || rc=1; \
 	exit $$rc
 

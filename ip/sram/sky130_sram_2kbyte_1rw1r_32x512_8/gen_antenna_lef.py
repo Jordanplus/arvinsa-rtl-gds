@@ -19,6 +19,12 @@ rewritten to TECH_DBU: OpenROAD discards it otherwise ("[ODB-0292] LEF data from
 errors" after ODB-0205). Every coordinate must lie on the 1/TECH_DBU um grid, or the script FAILs (the
 rewrite would move a shape); OpenRAM's sky130 LEF is on the 0.005 um manufacturing grid.
 
+A LEF without `FOREIGN <macro> ;` gets one after its CLASS line. LibreLane's KLayout stream-out builds the
+macro cell from the LEF, clears it, then merges the macro GDS; without FOREIGN the LEF cell is not a ghost
+cell, the GDS cell of the same name is renamed (KLAYOUT_CONFLICT_RESOLUTION RenameCell) and dropped, and
+the final GDS has an empty macro with no error (Phase 6, 2026-10-10: XOR 5.69 million; OpenRAM dev writes no
+FOREIGN, the PDK's prebuilt LEF has one).
+
 Usage: gen_antenna_lef.py <pdk.lef> <pdk.spice> <out.lef> [--check]
   --check   exit 1 if <out.lef> differs from what would be generated (stale copy)
 """
@@ -45,6 +51,17 @@ def tech_units(lef):
     return lef[:m.start(2)] + str(TECH_DBU) + lef[m.end(2):]
 
 
+def add_foreign(lef, macro):
+    """The LEF with `FOREIGN <macro> ;` after the CLASS line of the macro, if it has none."""
+    if re.search(r"^\s*FOREIGN\s+" + re.escape(macro) + r"\b", lef, re.M):
+        return lef
+    new, n = re.subn(r"^(\s*MACRO\s+" + re.escape(macro) + r"\s*\n(\s*)CLASS[^\n]*\n)", r"\1\2FOREIGN " + macro + " ;\n",
+                     lef, count=1, flags=re.M)
+    if n != 1:
+        raise SystemExit(f"gen_antenna_lef: FAIL - no CLASS line right after MACRO {macro} to put FOREIGN after")
+    return new
+
+
 def lef_macro(lef):
     names = re.findall(r"^\s*MACRO\s+(\S+)", lef, re.M)
     if len(names) != 1:
@@ -64,7 +81,7 @@ def lef_inputs(lef):
     return out
 
 
-def transform(lef, areas, rescaled=False):
+def transform(lef, areas, rescaled=False, foreign=False):
     out, done = [], set()
     pin = None
     for line in lef.splitlines(keepends=True):
@@ -89,6 +106,8 @@ def transform(lef, areas, rescaled=False):
               "# Adds ANTENNAGATEAREA to the input pins; nothing else differs. Do not edit by hand.\n")
     if rescaled:
         header += f"# DATABASE MICRONS rewritten to {TECH_DBU} (every coordinate is on that grid; OpenROAD ODB-0292).\n"
+    if foreign:
+        header += "# FOREIGN added (KLayout stream-out would otherwise leave the macro empty in the final GDS).\n"
     return header + "".join(out)
 
 
@@ -100,6 +119,7 @@ def main(argv):
     raw = lef.read_text(encoding="utf-8")
     text = tech_units(raw)
     macro = lef_macro(text)
+    text = add_foreign(text, macro)
     sc = gate_area.parse(str(spice))
     if macro not in sc:
         raise SystemExit(f"gen_antenna_lef: FAIL - no .SUBCKT {macro} in {spice}")
@@ -112,7 +132,8 @@ def main(argv):
         if missing or not pins:
             raise SystemExit(f"gen_antenna_lef: FAIL - LEF input pins not ports of {macro} in {spice}: {missing or 'none'}")
     areas = {p: ga.get(p, 0.0) for p in pins}
-    want = transform(text, areas, rescaled=text != raw)
+    want = transform(text, areas, rescaled="DATABASE MICRONS 2000" in raw and "DATABASE MICRONS 2000" not in text,
+                     foreign="FOREIGN" not in raw)
     if len(argv) == 5:
         have = dst.read_text(encoding="utf-8") if dst.exists() else ""
         if have != want:

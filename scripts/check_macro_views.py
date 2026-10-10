@@ -3,7 +3,7 @@
 harden): check the contents of every delivered file, not only that it exists. Skill hard-macro-integration.
 
     python3 scripts/check_macro_views.py --name <top> --lef <lef> --lib <lib> [--lib <lib> ...] --verilog <v>
-                                         --spice <netlist> [--gds <gds>] [--power-max PJ] [--cap-max PF] [--dbu N] [--json out.json]
+                                         --spice <netlist> [--gds <gds>] [--power-max PJ] [--cap-max PF] [--dbu N] [--no-foreign] [--json out.json]
 
 Why (2026-10-08, ADR-0018): OpenRAM's own checks (DRC, LVS, files present) let a .lib with every internal_power
 ten orders of magnitude off (1.036316e+11) through, and the SoC IR-drop analysis reads those numbers. LVS ties
@@ -18,6 +18,8 @@ the GDS to the SPICE netlist only; nothing tied the LEF, the .lib and the Verilo
           nix-shell, scripts/gds_bbox.py; SIZE_TOL um)
   units   LEF DATABASE MICRONS <= the tech LEF's (--dbu, sky130 1000): OpenROAD discards a finer macro LEF
           ("[ODB-0292] LEF data from ... is discarded due to errors"; OpenRAM dev writes 2000, Phase 6)
+  foreign the LEF has `FOREIGN <top>`: without it LibreLane's KLayout stream-out leaves the macro empty in the
+          final GDS, with no error (Phase 6: XOR 5.69 million; --no-foreign for a raw generator LEF)
 Units: a .lib with capacitive_load_unit(1, pF) and voltage 1V gives internal power in pJ per transition.
 Prints PASS/FAIL with the reasons; exit 0 only on PASS. Negative tests: scripts/neg_macro_views.py (make neg-macro-views).
 """
@@ -179,7 +181,7 @@ def gds_bbox(gds, name):
     return tuple(float(x) for x in m.groups()) if m else None
 
 
-def check(name, texts, bbox=None, power_max=POWER_MAX, cap_max=CAP_MAX, dbu=TECH_DBU):
+def check(name, texts, bbox=None, power_max=POWER_MAX, cap_max=CAP_MAX, dbu=TECH_DBU, foreign=True):
     """texts: {"lef": str, "lib": {label: str}, "verilog": str, "spice": str}; bbox: GDS box or None (not checked).
     Returns (problems, details)."""
     lef_top, lef_sig, lef_pwr, size = read_lef(texts["lef"])
@@ -201,6 +203,8 @@ def check(name, texts, bbox=None, power_max=POWER_MAX, cap_max=CAP_MAX, dbu=TECH
     units = re.search(r"^\s*DATABASE\s+MICRONS\s+(\d+)", texts["lef"], re.M)
     if units and int(units.group(1)) > dbu:
         out.append(f"LEF DATABASE MICRONS {units.group(1)} > the tech LEF's {dbu} (OpenROAD ODB-0292 discards it)")
+    if foreign and not re.search(r"^\s*FOREIGN\s+" + re.escape(name) + r"\b", texts["lef"], re.M):
+        out.append(f"LEF has no FOREIGN {name} (KLayout stream-out would leave the macro empty in the final GDS)")
     if size is None:
         out.append("no SIZE in the LEF")
     else:
@@ -229,6 +233,7 @@ def main(argv=None):
     ap.add_argument("--power-max", type=float, default=POWER_MAX)
     ap.add_argument("--cap-max", type=float, default=CAP_MAX)
     ap.add_argument("--dbu", type=int, default=TECH_DBU, help="DATABASE MICRONS of the tech LEF")
+    ap.add_argument("--no-foreign", action="store_true", help="a raw generator LEF without FOREIGN (not the flow's LEF)")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     paths = [a.lef, *a.lib, a.verilog, a.spice] + ([a.gds] if a.gds else [])
@@ -243,7 +248,7 @@ def main(argv=None):
         bbox = gds_bbox(a.gds, a.name) if a.gds else None
         if a.gds and bbox is None:
             probs.append("could not read the GDS top-cell box (KLayout)")
-        p, details = check(a.name, texts, bbox, a.power_max, a.cap_max, a.dbu)
+        p, details = check(a.name, texts, bbox, a.power_max, a.cap_max, a.dbu, not a.no_foreign)
         probs += p
     res = {"name": a.name, "result": "FAIL" if probs else "PASS", "problems": probs,
            "files": [os.path.relpath(os.path.abspath(p), ROOT) if os.path.abspath(p).startswith(ROOT) else os.path.basename(p)

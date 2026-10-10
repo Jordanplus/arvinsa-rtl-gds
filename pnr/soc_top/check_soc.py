@@ -32,7 +32,8 @@ Checks (each prints a PASS/FAIL row):
                inside soc_top (5,579,161 boxes alone, 4,665,810 inside soc_top), so the boxes are
                compared by area, not one to one. Phase 3 compared only the rule types, which let a
                new violation of an existing rule pass (known limitation 14 of
-               docs/phase_exit/phase3.md).
+               docs/phase_exit/phase3.md). The inside count must be at least DRC_IN_MIN_FRAC of the SRAM
+               alone: with no SRAM in the checked GDS the row passed with 0 inside (Phase 6).
   sta_setup    OpenSTA `check_setup` (unconstrained endpoints, unclocked registers, missing input
                delays, loops, multiple clocks) in every signoff STA corner: the only allowed warning
                was the unclocked sram0/clk1 while clk1 was tied to 0, before Phase 6 (ADR-0018
@@ -45,6 +46,11 @@ Checks (each prints a PASS/FAIL row):
                (duty cycle distortion + half-period jitter for the pulse width, period jitter for
                the period; values from clock_uncertainty.sdc). The SRAM clk0 limits are in its
                characterized .lib (ADR-0010).
+  macro_gds    scripts/check_macro_gds.py: the SRAM in the final GDS (final/gds, KLayout's stream-out) has
+               exactly the cells of the macro GDS of config MACROS, each with the same contents, and no
+               renamed copy of one (Phase 6: an OpenRAM LEF without FOREIGN left the SRAM empty there,
+               with no flow error; only the Magic/KLayout XOR showed it). Magic's own GDS renames the
+               SRAM sub-cells (T2_*, EN_*) and is not the deliverable.
   sram_lib     in every corner of STA_CORNERS, of all the .lib files <corner>/sta.log reads (LibreLane
                logs them as "Reading cell library", "Reading extra timing library" or "Reading timing
                library ... for the '<corner>' corner at '<path>'"), exactly one defines the SRAM cell,
@@ -71,6 +77,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import sys
 
 MACRO = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
@@ -79,6 +86,11 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 LIB_LINE = re.compile(r"^Reading (?:cell|extra timing|timing) library for the '([^']*)' corner at '(.*?)'", re.M)
 CTS_STEP = "Arvinsa.CTSNoInsertionDelay"
 CTS_LINE = "[INFO] arvinsa: clock_tree_synthesis -no_insertion_delay"
+# The violations inside the SRAM outline must be at least this fraction of the SRAM alone, or the GDS that Magic
+# checked has no SRAM in it and the row would pass with nothing to compare (Phase 6: an OpenRAM LEF without FOREIGN
+# left the SRAM empty, inside 0). Magic splits the same errors into fewer boxes in soc_top (Phase 4: 4,665,810 of
+# 5,579,161, 84 %).
+DRC_IN_MIN_FRAC = 0.5
 SRAM_CLK_CHAIN_MAX = 2   # single-fanout clock buffers in a row above sram0/clk0 (measured 0 / 11-12)
 CLK_BUF = re.compile(r"sky130_fd_sc_hd__(?:clkbuf|buf|clkdlybuf\w*|dlygate\w*|dlymetal\w*|clkinv|clkinvlp|inv)_\d+$")
 _DEFINES = {}
@@ -469,7 +481,7 @@ def main(run_dir, config_path, sram_drc):
     missing = [c for c, ws in cs.items() if ws is None] + sorted(set(corners) - set(cs))
     bad = {c: ws for c, ws in bad.items() if ws}
     ok = bool(corners) and sorted(cs) == sorted(corners) and not missing and not bad
-    row("sta_setup", ok, f"check_setup in {len(cs)} corners: only the expected unclocked sram0/clk1" if ok else
+    row("sta_setup", ok, f"check_setup in {len(cs)} corners: no warning" if ok else
         f"{len(cs)} corners ({len(corners)} in STA_CORNERS), section missing in {missing}, unexpected warnings {dict(list(bad.items())[:2])}")
 
     # minimum pulse width and minimum period
@@ -491,6 +503,16 @@ def main(run_dir, config_path, sram_drc):
         if corners and not problems else
         f"{len(problems)} problem(s) [{', '.join(kinds)}], e.g. {'; '.join(problems[:2])}" if corners
         else "STA_CORNERS missing in the config")
+
+    # the SRAM in the final GDS is the macro's own GDS
+    mgds = [os.path.join(ROOT, g[len("dir::"):]) if g.startswith("dir::") else g for g in cfg["MACROS"][MACRO].get("gds", [])]
+    fgds = os.path.join(run_dir, "final", "gds", "soc_top.gds")
+    if len(mgds) != 1 or not os.path.isfile(fgds):
+        row("macro_gds", False, f"need one MACROS gds ({mgds}) and {fgds}")
+    else:
+        cp = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "check_macro_gds.py"), "--cell", MACRO,
+                             "--macro-gds", mgds[0], "--final-gds", fgds], capture_output=True, text=True)
+        row("macro_gds", cp.returncode == 0, (cp.stdout.strip() or cp.stderr.strip()[-300:])[:400])
 
     # SRAM .lib per corner: the STA of corner <rc>_<pvt> reads one SRAM .lib, the characterized one of <pvt>
     problems = []
@@ -533,7 +555,9 @@ def main(run_dir, config_path, sram_drc):
         outline = (origin[0], origin[1], round((x + SRAM_W) * 1000), round((y + SRAM_H) * 1000))
         n_in, outside, unexplained, how = drc_position_compare(sram_drc, rpts[0], origin, outline)
         total = how["count"]
-        ok = outside == 0 and not unexplained and total == n_in + outside
+        alone = read_magic_drc(sram_drc)[2]
+        enough = n_in >= DRC_IN_MIN_FRAC * alone
+        ok = outside == 0 and not unexplained and total == n_in + outside and enough
         ex = "; ".join(f"{r!r} at ({b[0] / 1000}, {b[1] / 1000})-({b[2] / 1000}, {b[3] / 1000}) um" for r, b in unexplained[:2])
         row("magic_drc", ok, f"{outside} violations outside the SRAM outline; inside {n_in}, "
             + (f"all at the position of a violation of the SRAM alone ({how['exact']} identical boxes, "
@@ -541,7 +565,9 @@ def main(run_dir, config_path, sram_drc):
                if not unexplained else
                f"{len(unexplained)} not at the position of a same-rule violation of the SRAM alone "
                f"[rules: {' | '.join(sorted({r for r, _ in unexplained}))}], e.g. {ex}")
-            + ("" if total == n_in + outside else f"; report COUNT {total} != {n_in + outside} parsed"))
+            + ("" if total == n_in + outside else f"; report COUNT {total} != {n_in + outside} parsed")
+            + ("" if enough else f"; only {n_in} inside, < {DRC_IN_MIN_FRAC:.0%} of the SRAM alone ({alone}): "
+               f"the SRAM is missing from the checked GDS"))
 
     ok = all(rows) and rows
     print(f"soc-checks: {'PASS' if ok else 'FAIL'}")

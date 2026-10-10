@@ -9,6 +9,7 @@ error and must FAIL with the expected reason:
   Q8 a direction that differs from the LEF      Q9 a power pin missing in the SPICE
   Q10 a view with another top name              Q11 no internal_power at all
   Q12 LEF DATABASE MICRONS 2000 (OpenRAM dev; OpenROAD ODB-0292 discards the LEF), with a 1000 positive control
+  Q13 LEF without FOREIGN (OpenRAM dev; KLayout stream-out then leaves the macro empty in the final GDS)
 Prints PASS n/n; exit 0 only when every case behaves as expected.
 """
 import os
@@ -20,6 +21,7 @@ import check_macro_views as cmv  # noqa: E402
 NAME = "neg_mac"
 LEF = """MACRO neg_mac
    CLASS BLOCK ;
+   FOREIGN neg_mac ;
    SIZE 10.0 BY 20.0 ;
    PIN din0[0]
       DIRECTION INPUT ;
@@ -153,6 +155,7 @@ def main():
     units = "UNITS\n  DATABASE MICRONS {} ;\nEND UNITS\n"
     check("Q12a LEF DATABASE MICRONS 1000 (positive control)", run(lef=units.format(1000) + LEF), None)
     check("Q12 LEF DATABASE MICRONS 2000", run(lef=units.format(2000) + LEF), "LEF DATABASE MICRONS 2000 > the tech LEF's 1000")
+    check("Q13 LEF without FOREIGN", run(lef=sub(LEF, "   FOREIGN neg_mac ;\n", "")), "LEF has no FOREIGN neg_mac")
     print(f"neg-macro-views: {'PASS' if all(results) else 'FAIL'} {sum(results)}/{len(results)}")
     return 0 if all(results) else 1
 

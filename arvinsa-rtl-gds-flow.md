@@ -159,6 +159,12 @@ signoff（harden 結尾自動執行）
 
 ### 4.3 macro：取得或產生、QA、特性化
 
+**SRAM 的來源：建議一開始就用 OpenRAM 自己產生，不要先用 PDK 預建的再換**（使用者 2026-10-10：「直接使用已經有的OpenRAM macro，其實還是用自己產生的也沒慢多少」；依據是本 repo 一顆設計的經驗，下一顆設計要再確認）：
+- 花時間的工作兩種都要做：每個 PVT 的 SPICE 特性化、view QA、換進 SoC 後的 signoff。預建 macro 的 .lib 是解析模型，一樣要自己量（Phase 3.5，2026-10-04 到 10-05）。
+- 自己產生多出來的是一次性成本：OpenRAM 環境、DRC／LVS 對照、工具的小毛病（LVS 元件改名、LEF 單位 `ODB-0292`、網表沒有 `PININFO`）。本 repo 在 2026-10-08 一天內完成環境、產生、DRC／LVS 與讀取修正；這些現在都是 `openram-macro-characterization`、`hard-macro-integration` 的規則與 checker。
+- 自己產生才修得了電路：sky130 預建 2 KB SRAM 在 ss −40°C 讀出前一次的值，Phase 3.5 只能給佔位 .lib、列為下線風險；自產時加了 sense amp 輸入端預充電（ADR-0018 決定 8），5 個 PVT 都讀對。未用 port 的時脈接法、量測的功耗、外框尺寸也因為有產生流程才查得清楚。
+- 本 repo 的歷程（ADR-0007、0010、0018）：Phase 3 預建＋保守 .lib → Phase 3.5 實測 .lib → Phase 6 換成自產，同樣的特性化與整合做了兩次。
+
 1. **取得或產生**：PDK 預建 macro、memory compiler（本 repo：OpenRAM，`make openram-macro`）、廠商 IP。產生工具自己的 DRC／LVS 要讀報告判斷，不能只看 exit code（OpenRAM 在 LVS 不一致時仍 exit 0）。本 repo 對 OpenRAM 執行結果、安裝、patch、macro DRC 比對、.lib 範本與自產 macro 特性化來源的 negative test：`make neg-openram`。
 2. **view QA**（`CLAUDE.md` 規則 12，`hard-macro-integration` 清單第 0 項）：`scripts/check_macro_views.py` 檢查 LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF 尺寸等於 GDS 外框。產生 macro 的 target 要接這一步；整合中的 macro 用 `make macro-views`。FAIL 的 view 修正或替換後重跑到 PASS，做法記進該 macro 的 README 或 ADR。negative test：`make neg-macro-views`。
 3. **整顆 macro 的 DRC**：用 full 規則，逐種類和已知 baseline 比較，不只比總數（`ip/sram/openram/macro_drc.py`；negative test 在 `neg-openram` 的 D1–D3）。
