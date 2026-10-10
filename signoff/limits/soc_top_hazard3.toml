@@ -36,14 +36,15 @@
 "design__max_cap_violation__count" = 0
 "design__max_fanout_violation__count" = 0
 # Drivers without extracted parasitics (STA report_parasitic_annotation), all of them driving no
-# routed wire. Derived for Hazard3 (2026-10-07, harden 10 at 2caad0e, ADR-0016: CTS without macro
-# latency balancing): 126 = 82 CTS dummy-load (clkload*) outputs + 32 unused SRAM read-port outputs
-# (sram0/dout1[31:0], connected to the RTL wires unused_sram_dout1) + 12 unused tie-cell outputs
-# (12 conb_1: 11 use LO and leave HI open, 1 uses HI and leaves LO open). Checked in
-# runs/soc_top_hazard3/*-openroad-stapostpnr/*/checks.rpt (126 in all 15 corners). Same structure
-# as PicoRV32 (118 = 75 + 32 + 11); the clock tree and the tie cells differ. Any other unannotated
-# driver changes the count and FAILs. (Harden 5 at 3a28d54, before ADR-0016: 125 with 81 dummy loads.)
-"timing__unannotated_net__count" = 126
+# routed wire. Derived for Hazard3 (2026-10-10, Phase 6 at ad184f5: the OpenRAM self-generated SRAM with
+# clk1 on the system clock, ADR-0018 decisions 9 and 16): 152 = 109 CTS dummy-load (clkload*) outputs + 32
+# unused SRAM read-port outputs (sram0/dout1[31:0], connected to the RTL wires unused_sram_dout1) + 11
+# unused tie-cell outputs (11 conb_1: 10 use LO and leave HI open (addr1[8:0] and one in the core), 1 uses
+# HI and leaves LO open (csb1)). Checked in runs/soc_top_hazard3/*-openroad-stapostpnr/*/checks.rpt (152 in
+# all 15 corners). Same structure as PicoRV32 (144 = 102 + 32 + 10); the clock tree and the tie cells
+# differ. Any other unannotated driver changes the count and FAILs. (Harden 5 at 3a28d54, before ADR-0016:
+# 125 with 81 dummy loads; harden 10 at 2caad0e, the prebuilt SRAM: 126 with 82 and 12 tie outputs.)
+"timing__unannotated_net__count" = 152
 "timing__unannotated_net_filtered__count" = 0
 
 # §7.2 also asked for "nom_tt setup worst slack >= 10 % of the clock period" (4 ns). Removed

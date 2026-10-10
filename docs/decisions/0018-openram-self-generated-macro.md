@@ -99,6 +99,7 @@
     - 結果（2026-10-10，patch 0001–0004，51 分鐘）：OpenRAM DRC 0、LVS `Circuits match uniquely.`；Magic full 2,234,528 個、29 種（預建 2,235,078、30 種），PASS；KLayout 0。LEF 外框不變，`din0`／`wmask0` 等腳位右移 0.42 µm；OpenRAM 的 TT .lib、Verilog 與前一版逐位元相同。電路圖網表 97 個子電路逐字相同、子電路外只有註解，但順序與檔頭不同，sha256 變了（`368c74be…` → `92b73250…`）。
     - 使用者 2026-10-10 選擇（網表）：「保留舊 .sp＋逐子電路比對」。repo 保留特性化用的 `368c74be…` 網表；`gen_macro.py` 在 `summary.json` 多記 `spice_content_sha256`（排序後的子電路全文＋子電路外的非註解行），`check_inputs.py macro_source` 與 `check_char_lib.py` 的來源檢查接受「sha256 相同，或內容雜湊相同」。negative test：`neg-openram` C3（只換順序，PASS）、C4（改一個電晶體寬度）、C5（少一個子電路），`neg-pnr` P70。不選「重做特性化」：電路相同，數字應該相同，要多花數小時。
     - 使用者 2026-10-10 選擇（view QA）：「QA 改檢查 .lib 範本」。`make openram-macro` 的 view QA 原本檢查 OpenRAM 的原始 TT .lib，它的 internal_power 是 1.036316e+11（OpenRAM dev 的缺陷，原始 .lib 不交給 flow），2 KB 一定 FAIL；改成先用 `lib_template.py` 產生範本（internal_power 換成預建 macro 的值）再檢查範本。這次產生的範本與 repo 的逐位元相同。
+    - 第三輪 harden（`ad184f5`）：兩個 CPU 的 KLayout DRC、XOR、LVS、antenna 都是 0，FAIL 只有 golden、SRAM DRC 參考檔與 unannotated 上限；依決定 16 重算上限（PicoRV32 144 = 102 + 32 + 10、Hazard3 152 = 109 + 32 + 11）並重建 golden 與參考檔（筆記步驟 4b 第三輪）。
 
 ## 計畫
 

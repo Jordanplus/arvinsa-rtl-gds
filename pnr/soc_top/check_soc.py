@@ -584,8 +584,8 @@ def make_baseline(rpt, out):
     if total != n:
         print(f"check_soc: FAIL - report COUNT {total} != {n} parsed boxes")
         return 1
-    json.dump({"source": "Magic DRC (LibreLane 3.0.14 Magic.DRC step, MAGIC_DRC_USE_GDS = true) on the PDK GDS of "
-               f"{MACRO} alone (pnr/soc_top/README.md)", "count": n, "rules": rules},
+    json.dump({"source": "Magic DRC (LibreLane 3.0.14 Magic.DRC step, MAGIC_DRC_USE_GDS = true) on the GDS of "
+               f"{MACRO} alone, the one config.json MACROS names (pnr/soc_top/README.md)", "count": n, "rules": rules},
               open(out, "w"), indent=1, sort_keys=True)
     print(f"check_soc: wrote {out} ({n} violations in {len(rules)} rule types)")
     return 0

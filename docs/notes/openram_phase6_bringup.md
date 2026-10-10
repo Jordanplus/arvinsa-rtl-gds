@@ -395,3 +395,13 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 - 使用者選「保留舊 .sp＋逐子電路比對」：`spice_content_sha256`（`gen_macro.py`，這次 run 用 `--judge-only` 補記，只多了這個欄位與 `openram_rc`）；`check_inputs.py macro_source`、`check_char_lib.py` 各自獨立實作同一定義。C3–C5、P70，另做對照（只換順序 → `macro_source` PASS）。
 - 使用者選「QA 改檢查 .lib 範本」：`make openram-macro` 的 view QA 原本對 OpenRAM 原始 .lib 報 `internal_power 1.036316e+11 outside (0, 1000]`（10-09 接上之後 2 KB 第一次經過），改成檢查 `lib_template.py` 的範本；這次的範本與 repo 逐位元相同，四項檢查全部 PASS。
 - 換進 repo：`openram/` 的 GDS、LEF、Verilog、`summary.json`；flow LEF 重新產生；`make macro-views`、兩個 CPU 的 `check_inputs.py`（rc 0）、`openram-check-lib`、`neg-openram` 39/39、P63、P70 PASS。
+
+## 步驟 4b 第三輪 harden（2026-10-10，commit `ad184f5`，兩個 CPU 平行）
+
+- 簽核結果：KLayout DRC 0（上一輪 SRAM 裡 27）、XOR 0、LVS 0、antenna 0、`magic_drc`（SRAM 外 0）、`macro_gds`、`port1_tieoff`、`sta_setup`、`ir_worst`（PicoRV32 5.87 mV、Hazard3 14.74 mV）PASS。最差 setup：PicoRV32 +0.769、Hazard3 +0.656 ns（都是 SRAM 半週期讀出）；最差 hold +0.082／+0.126 ns。
+- FAIL 只有預期的三類：golden（134／100 列，設計改變）、`sram_drc_ref`（參考檔是預建 macro 的）、`timing__unannotated_net__count`（144／上限 118、152／126）。
+- unannotated 逐一分類（`57-openroad-stapostpnr/*/checks.rpt`，15 個 corner 相同）：PicoRV32 102 CTS 假負載 + 32 `dout1` + 10 tie 空端；Hazard3 109 + 32 + 11。三類都在推導裡，照決定 16 把上限改成 144、152（`signoff/limits/*.toml` 的註解寫組成）。
+- 依決定 16 重建：golden（兩個 CPU，`signoff/golden/*/README.md` 寫出處與逐項差異；signoff dir 另存 `runs/p6_3m_{pico,h3}_signoff/`）、SRAM DRC 參考檔（`signoff/waivers/soc_top/sram_magic_drc_baseline.json`：5,576,010、29 種；兩個 CPU 的 SRAM 單獨報告逐位元相同；比預建少的只有 `Can't overlap those layers` 161）。用新檔對這一輪重判：signoff PASS、soc-checks PASS。
+- 觀察：detailed routing 25 行 `DRT-0418 ... has no pins on routing grid`（SRAM 的 `addr0` 3、`addr1` 2、`clk0`、`web0`、`dout1` 18），第二輪起就有、預建 macro 沒有，最終 DRC／LVS 0；根因未查（推測腳位沒有對齊繞線格點），記在 `hard-macro-integration` 經驗紀錄。
+- 功耗：power__total PicoRV32 8.73 → 9.47 mW、Hazard3 19.33 → 20.41 mW（SRAM internal power 換成實測值、`clk1` 打時脈）。
+- `check_soc.py --make-drc-baseline` 寫的 `source` 原本是「PDK GDS」，改成「config.json MACROS 指的 GDS」。

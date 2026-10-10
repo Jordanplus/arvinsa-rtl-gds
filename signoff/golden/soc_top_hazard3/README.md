@@ -6,13 +6,24 @@
 
 | 項目 | 值 |
 |---|---|
-| 產生方式 | `make harden-soc CPU=hazard3`（tag `soc_top_hazard3`）的 `runs/soc_top_hazard3_signoff/metrics.json`（之後改名為 `runs/p5_h3_pdn_signoff/`），原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-08（Phase 5），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 5 獨立審查後的修正（使用者決定 2026-10-08）：`PDN_HWIDTH` 4.8（met5 strap 1.6 → 4.8 µm）、最壞組合 IR 檢查（`pnr/soc_top/ir_worst.py`）後的第一次 harden，commit `1dee974`（worktree `../arvinsa-rtl-gds-p5h3`；log `runs/p5_pdn_harden_hazard3.log`）。`check_signoff.py` 只有與舊 golden 比對 FAIL（預期）；其他 limits、`check_soc.py`、`ir_worst.py`（14.13 mV）、`review_criteria.py` 全部 PASS |
-| signoff criteria 檢查 | `runs/p5_h3_pdn_signoff/criteria_review.md`（p5h3 worktree） |
-| LibreLane／PDK／Hazard3／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config_hazard3.json` sha256 `fdd383f80470ebd409f1313983029816ff5236d5c481accee154e6f58ee24293`（含 `PDN_HWIDTH` 4.8 與 `meta.substituting_steps`） |
-| 本檔 sha256 | `d2147738f94e1eb1fdccb130a6d84eb8071d3e46391bd82c6e8a94c0c6ae745c` |
+| 產生方式 | `make harden-soc CPU=hazard3`（tag `soc_top_hazard3`）的 `runs/soc_top_hazard3_signoff/metrics.json`（另存為 `runs/p6_3m_h3_signoff/`），原檔複製，沒有修改 |
+| 日期／平台 | 2026-10-10（Phase 6），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 6 第三輪 harden（OpenRAM 自產 SRAM，patch 0001–0004），commit `ad184f5`；log `runs/p6_3m_harden_h3.log`。`check_signoff.py` 在上限檔照推導重算 unannotated 之後，只有與舊 golden 的比對 FAIL（100 列，設計改變）。使用者 2026-10-10 事先授權：第一次 signoff 與 criteria review 都 PASS 的 harden 直接重建 golden（ADR-0018 決定 16） |
+| signoff criteria 檢查 | `runs/p6_3m_h3_signoff/criteria_review.md` |
+| LibreLane／PDK／Hazard3／SRAM macro | 同 `env/versions.mk`；SRAM 是 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（`openram/summary.json`） |
+| flow 設定 | `pnr/soc_top/config_hazard3.json` sha256 `00913556771dbd51d53cf1c1c025d80054aadc6b318a87d7d0a45d539d0fa8e1` |
+| 本檔 sha256 | `c5df427d9b32fd4bc0a6f79af102b191af4b7671b74ce4f89c925e18f368f7df` |
+
+## 與 Phase 5 golden（`1dee974`）的差異（逐項檢視過，2026-10-10）
+
+- 原因：同 PicoRV32 版（`signoff/golden/soc_top/README.md`）：SRAM 換成 OpenRAM 自產（ADR-0018），沒有逐項分開實驗。
+- metrics 436 → 441 個：多了 `flow__warnings__count:DRT-0418`（同 PicoRV32 的 25 行 SRAM 腳位不在繞線格點上）與 `route__drc_errors__iter:6`、`:7`、`route__wirelength__iter:6`、`:7`（detailed routing 多跑兩輪，最終 DRC 0）。共有的 436 個中 256 個相同、180 個改變。
+- timing：最差 setup +1.114 → **+0.656 ns**（SRAM 半週期讀出，launch clock 與 hold buffer 佔掉差距；Phase 6 第二輪 +0.643）；hold +0.109 → +0.126 ns。
+- 功耗：power__total 19.33 → **20.41 mW**（+5.6%，同 PicoRV32 的原因）；IR（nom_tt）5.02 → 5.23 mV，最壞組合 14.74 mV（上限 20）。
+- cell：standard cell 30,423 → 30,406；clock buffer 445 → 454；antenna diode 108 → 99；stdcell 面積 238,995 → 240,768 µm²；utilization 0.681 → 0.700。
+- Magic DRC 4,746,079 → 4,770,846（全部在 SRAM 框內、對得上位置）。
+- unannotated 126 → **152**（109 CTS 假負載 + 32 `dout1` + 11 tie 空端；決定 16）。
+- 沒變的：KLayout DRC 0、LVS 0、XOR 0、antenna 0。
 
 ## 與第 5 次 harden 的 golden 的差異（逐項檢視過，2026-10-07）
 

@@ -6,13 +6,24 @@
 
 | 項目 | 值 |
 |---|---|
-| 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`（之後改名為 `runs/p5_pico_pdn_signoff/`），原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-08（Phase 5），Apple Silicon macOS（arm64） |
-| 來源 run | Phase 5 獨立審查後的修正（使用者決定 2026-10-08）：`PDN_HWIDTH` 4.8（met5 strap 1.6 → 4.8 µm）、最壞組合 IR 檢查（`pnr/soc_top/ir_worst.py`）後的第一次 harden，commit `1dee974`（p5h3 worktree；log `runs/p5_pdn_harden_picorv32.log`）。`check_signoff.py` 只有與舊 golden 比對 FAIL（預期）；其他全部 PASS |
-| signoff criteria 檢查 | p5h3 worktree `runs/p5_pico_pdn_signoff/criteria_review.md` |
-| LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk` |
-| flow 設定 | `pnr/soc_top/config.json` sha256 `959f20ffea4f0b7458538bd9df9e2c1c1990419f10fcf7a0ecd43513ff910be1`（含 `PDN_HWIDTH` 4.8 與 `meta.substituting_steps`） |
-| 本檔 sha256 | `002cadb49718fb375618d3499eae9336dfbd30f6f228e79709d88720c86b89fb` |
+| 產生方式 | `make harden-soc`（tag `soc_top`）的 `runs/soc_top_signoff/metrics.json`（另存為 `runs/p6_3m_pico_signoff/`），原檔複製，沒有修改 |
+| 日期／平台 | 2026-10-10（Phase 6），Apple Silicon macOS（arm64） |
+| 來源 run | Phase 6 第三輪 harden（OpenRAM 自產 SRAM，patch 0001–0004），commit `ad184f5`；log `runs/p6_3m_harden_pico.log`。`check_signoff.py` 在上限檔照推導重算 unannotated 之後，只有與舊 golden 的比對 FAIL（134 列，設計改變）。使用者 2026-10-10 事先授權：第一次 signoff 與 criteria review 都 PASS 的 harden 直接重建 golden（ADR-0018 決定 16） |
+| signoff criteria 檢查 | `runs/p6_3m_pico_signoff/criteria_review.md` |
+| LibreLane／PDK／PicoRV32／SRAM macro | 同 `env/versions.mk`；SRAM 是 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（`openram/summary.json`） |
+| flow 設定 | `pnr/soc_top/config.json` sha256 `c145155ccf0cfba14b31285e3c2455b65bdb52aaa521ec29692d346e54420be4` |
+| 本檔 sha256 | `9fa39e38a3191806c5c018f99ce85582f28b6d65bf6987c4066ef81b4baaa030` |
+
+## 與 Phase 5 golden（`1dee974`）的差異（逐項檢視過，2026-10-10）
+
+- 原因：SRAM 換成 OpenRAM 自產的 `arv_sram_2kbyte_1rw1r_32x512_8`（ADR-0018）：macro 大 11 × 12 µm、位置 (290.72, 353.6)、`clk1` 接系統時脈（決定 9）、.lib 是 5 個 PVT 的實測特性化（含量測的 internal power 與漏電）、patch 0002–0004 修掉 macro 的 DRC。沒有逐項分開實驗。
+- metrics 435 → 435 個：少了 `flow__warnings__count:GRT-0243`，多了 `flow__warnings__count:DRT-0418`（25 行：SRAM 的 `addr0` 3、`addr1` 2、`clk0`、`web0` 與沒繞線的 `dout1` 18 支腳位不在繞線格點上；自產 SRAM 第一輪就有，最終 DRC、LVS 都是 0）。共有的 434 個中 253 個相同、181 個改變。
+- timing：最差 setup +0.789 → **+0.769 ns**（同一類 SRAM 半週期讀出）；hold +0.080 → +0.082 ns。
+- 功耗：power__total 8.73 → **9.47 mW**（+8.5%：SRAM 的 internal power 換成實測值，`clk1` 也打時脈）；IR（nom_tt）2.03 → 2.09 mV，最壞組合 5.72 → 5.87 mV。
+- cell：standard cell 31,966 → 32,070；clock buffer 508 → 521；antenna diode 120 → 140；stdcell 面積 254,358 → 256,786 µm²；utilization 0.701 → 0.721（macro 變大）。
+- Magic DRC 4,746,079 → 4,770,846：全部在 SRAM 框內、位置對得上 SRAM 單獨檢查（`check_soc.py magic_drc`）。
+- unannotated 118 → **144**（102 CTS 假負載 + 32 `dout1` + 10 tie 空端；上限檔照推導重算，決定 16）。
+- 沒變的：KLayout DRC 0、LVS 0、XOR 0、antenna 0。
 
 ## 與 ADR-0016 golden 的差異（逐項檢視過，2026-10-08）
 
