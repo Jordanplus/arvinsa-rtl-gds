@@ -108,6 +108,7 @@
     - 接著 PicoRV32 的 `o21ai_swap`（第一個 o21ai `_10082_`）在切分步驟被拒：它的 OR 在 gold 端與 `_19506_` 合併，衝突在內部節點 `_10082_.or0_out`，沒有走到證明。使用者 2026-10-10 選擇：「挑不共用 OR 的 o21ai」，REQUIRE 維持證明失敗。條件是沒有別的 cell 同時讀它的 A1、A2 來源，正好預測到兩次實際的共用（`_19506_`、`_10043_`），每個設計還有 120 個以上可選；條件漏掉別種共用時 REQUIRE 會報 FAIL，不會放過。不選「證明失敗或內部節點衝突都算」：PicoRV32 就證明不了「證明步驟」抓得到。
     - 同一步驟發現 checker 漏洞（沒有選擇，直接修）：`run_eqy.py` 的網表解析只認 `sky130_` 開頭的 cell，從步驟 4a 換成 `arv_sram_*` 起，`sram0/clk0`、`clk1` 的 clock 來源檢查沒執行，PicoRV32 `eqy-soc` 照樣 PASS。改成任何 cell 名稱，並要求 config `MACROS` 的 instance 被解析到。修正後兩個 CPU 的 `sram0/clk0`、`clk1` 都追到 `clk`。`din5_stuck0` 的植入程式沒處理跳脫名稱（`\sram_din0[31] `）的結尾空白，一併修正。
     - 使用者 2026-10-10 選擇（4d）：「依序跑兩輪」。兩輪平行時，各自的 `neg-pnr`（預設 `-j 4`）會同時開 8 個 LibreLane run，這台 24 GB 的機器在步驟 4c 就是這樣被系統中止；Phase 5 結案也因 neg-eqy 與 gate-level 模擬的負載疊加而依序跑。這項取代決定 16 的「平行跑」。
+    - 4d 結果（2026-10-11，`4713c5f`）：Hazard3 `regress` 23/23、PicoRV32 `regress-picorv32` 28/28；三次 harden 的 golden 逐值相同，網表、DEF 逐位元相同，GDS 只差日期記錄；`neg-eqy` 14/14、10/10、core 12/12（筆記步驟 4d）。
 
 ## 計畫
 

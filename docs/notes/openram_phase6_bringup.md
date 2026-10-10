@@ -422,3 +422,14 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
   - PicoRV32 第一次挑到 `_10082_`：OR 與 `_19506_` 合併，切分時 `conflicting matches for gold bit \_10082_.or0_out`，不是證明失敗。使用者選「挑不共用 OR 的 o21ai」：沒有別的 cell 同時讀它的 A1、A2 來源（正好預測到 `_19506_`、`_10043_`）；新挑選：PicoRV32 `_10135_`、Hazard3 `_10144_`、picorv32_core `_08326_`。
 - 第二輪結果（`runs/p6_4c3_summary.txt`、`runs/p6_4c4_summary.txt`）：PicoRV32 `neg-eqy-soc` 9/10（只有 `o21ai_swap`，見上），交叉檢查 60 組 PASS；`neg-gl-soc` Hazard3 8/8（14 分鐘）、PicoRV32 8/8（6 分鐘）。改挑選條件後只跑 `o21ai_swap`：Hazard3 `_10144_` 2/16222、PicoRV32 `_10135_` 2/18156 個分區證明失敗（各是被改 cell 的 `or0_out` 與輸出負載），位置檢查 PASS。
 - 尚未在同一份程式上完整跑過的：Hazard3 `neg-eqy-soc` 的 14 個一起跑（交叉檢查含新規則）、`neg-eqy-core`（`picorv32_core` 的 harden 不是這個 commit 的，`run_guard` 拒絕）。這些在 4d 的兩輪 regress 裡跑。
+
+## 步驟 4d：乾淨 worktree 兩輪 regress（2026-10-11，commit `4713c5f`，依序跑）
+
+- 做法：`git worktree add --detach` 建 `../arvinsa-rtl-gds-p6final_{h3,pico}`、`submodule update --init --recursive`，先 `make regress`（Hazard3）再 `make regress-picorv32`；摘要 `runs/p6final_summary.txt`，各 target 的 log 在 worktree 的 `runs/regress/`、`runs/regress_picorv32/`。
+- 結果：Hazard3 `regress: PASS 23/23`（152 分鐘）、PicoRV32 `regress: PASS 28/28`（135 分鐘），00:14 到 05:06，沒有重試、沒有被系統中止。
+- harden（三次，`criteria_review.md` 都寫了，`criteria-review: PASS`）：
+  - golden：Hazard3 441、PicoRV32 soc_top 435、picorv32_core 325 個 metrics 全部逐值相同。
+  - 和 4b 的確認 harden（core 是 Phase 5 結案那次）比：最終網表、DEF 的 sha256 相同；GDS 的 sha256 不同，但把 BGNLIB／BGNSTR 記錄（只存日期）清成零後 sha256 相同。所以版圖在不同 worktree 逐位元重現，GDS 不能直接比 sha256。
+- EQY：Hazard3 16222/16222（pin swap 仍是 `_10787_` A↔B、`_10793_` A1↔A2，和 4c 相同）、PicoRV32 soc_top 18156/18156、picorv32_core 15137/15137（都沒有 pin swap）。
+- negative test：`neg-eqy-soc` Hazard3 14/14（交叉檢查 170 組）、PicoRV32 10/10（78 組）；`neg-eqy-core` 12/12（126 組）。三個設計的 `o21ai_swap` 都是 2 個分區證明失敗，位置是被改的 o21ai 與它的輸出負載（Hazard3 `_10144_`／`_10149_`、PicoRV32 `_10135_`／`_10136_`、core `_08326_`／`_08354_`）。4c 待驗的兩項（Hazard3 14 個一起跑、`neg-eqy-core`）都 PASS。
+- 其他：`neg-pnr` 兩個 CPU 71/71（P05 拿掉 8 個 via、LVS FAIL）；`gl-soc`、`gl-soc-powered` 15/15；`neg-gl-soc` 8/8；`gl-core` PASS、`neg-gl-core` 2/2；`neg-rtl` 36/36（Hazard3）；`neg-openram` 39/39；`neg-macro-views` 15/15。
