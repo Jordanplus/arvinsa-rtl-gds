@@ -405,3 +405,20 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 - 觀察：detailed routing 25 行 `DRT-0418 ... has no pins on routing grid`（SRAM 的 `addr0` 3、`addr1` 2、`clk0`、`web0`、`dout1` 18），第二輪起就有、預建 macro 沒有，最終 DRC／LVS 0；根因未查（推測腳位沒有對齊繞線格點），記在 `hard-macro-integration` 經驗紀錄。
 - 功耗：power__total PicoRV32 8.73 → 9.47 mW、Hazard3 19.33 → 20.41 mW（SRAM internal power 換成實測值、`clk1` 打時脈）。
 - `check_soc.py --make-drc-baseline` 寫的 `source` 原本是「PDK GDS」，改成「config.json MACROS 指的 GDS」。
+
+## 步驟 4c：下游驗證（2026-10-10，harden 用 commit `940e395`；checker 修正在工作樹上驗，之後一起 commit）
+
+- `neg-pnr`：兩個 CPU 同時跑、各 `-j 4`，被系統以記憶體不足中止（24 GB）。使用者選「一次一個 CPU，-j 2」：PicoRV32 22 分鐘、Hazard3 25 分鐘，兩個都是 70/71。沒抓到的 P05（拿掉 SRAM 電源的 via，LVS 應 FAIL）是 negative test 本身的問題：它把預建 macro 的外框座標寫死，自產 macro 的位置與尺寸不同，舊範圍只蓋到 4 個多餘的 via。改成從 `config.json` 與 LEF 讀外框後，兩個 CPU 都拿掉 8 個 via、LVS 照預期 FAIL（`pnr/soc_top/neg_pnr.py` P05）。
+- 第一輪（`runs/p6_4c_summary.txt`，依序跑）：`gl-soc`、`gl-soc-powered` 兩個 CPU 都是 15/15 PASS（PicoRV32 8／11 分鐘，Hazard3 13／22 分鐘）；PicoRV32 `eqy-soc` PASS；Hazard3 `eqy-soc` FAIL；`neg-eqy-soc`、`neg-gl-soc` 兩個 CPU 都以 `KeyError: 'sram0'` 中止。
+- `KeyError: 'sram0'` 的根因：`run_eqy.py` 的網表解析只認 `sky130_` 開頭的 cell，自產 macro `arv_sram_2kbyte_1rw1r_32x512_8` 整個被略過。這也表示從步驟 4a 起，EQY 的 SRAM `clk0`／`clk1` clock 來源檢查沒有執行（PicoRV32 的 PASS 裡 `clock_pins` 沒有 `sram0`）。解析改成任何 cell 名稱（排除 Verilog 關鍵字；5 份網表只多出 `sram0`），並要求 config `MACROS` 的 instance 在兩份網表都被解析到。修正後兩個 CPU 的 `sram0/clk0`、`clk1` 都追到 `clk`（設計本身沒問題，只是檢查沒做）。
+- Hazard3 `eqy-soc` 的根因：`conflicting matches for gold bit \_10711_.A: \_10711_.A vs \_10711_.B`。兩份網表裡 `_10711_` 的連線相同。比對每個 cell 往回追到的輸入來源，只有 `_10787_`（or2，A↔B）與 `_10793_`（o21ai，A1↔A2）的輸入換了順序，對應 `resizertimingpostcts`／`postgrt` log 的 `RSZ-0043 Swapped pins on 1 instances`（OpenROAD `repair_timing` 的 `SwapPinsMove`）。EQY 用展平後的「instance.腳位」名稱對應，`_10787_.A` 在 gold 接 `fetch[0]`、在 gate 接 `fetch[1]`，造成矛盾。
+  - 實驗（scratchpad，`[match soc_top]` 的 `gold-nomatch`／`gate-nomatch`，每行一個名稱；一行多個是語法錯誤）：排除這 4 個名稱後 16222/16222 證明，224 秒。
+  - 另一做法：`repair_timing -skip_pin_swap`（OpenROAD 2026-02-17 `help repair_timing` 有），LibreLane 的 `rsz_timing_post*.tcl` 沒有對應變數。
+  - 使用者選「EQY 端排除被對調的腳位」（ADR-0018 決定 18）：`run_eqy.py` 的 `pin_swaps()`。正式 run：Hazard3 16222/16222（308 秒）、clock pin 2154 個（多出 SRAM 兩個）；PicoRV32 沒有 pin swap，18156/18156（438 秒）、clock pin 2641 個。
+- negative test 的修正與新案例：
+  - `din5_stuck0` 的植入程式把 `\sram_din0[31] ` 結尾的空白去掉，逗號併進跳脫名稱，EQY 讀檔語法錯誤；checker 正確判成沒抓到（Hazard3 12/13）。修正後 Hazard3 PASS（1/16222 沒證明＋常數）。
+  - 新增 `o21ai_swap`：o21ai 的 A1↔B1 對調，功能不同，但一定會被 `pin_swaps()` 排除；`REQUIRE` 要求證明失敗。`mux_swap` 也會被排除，但 mux2 模型有別名 wire（`_10612_.mux_2to10.A0`），仍在切分步驟被拒，證明不了這件事。
+  - Hazard3 第一次挑到 `_10077_`：3 個分區沒證明，其中 `_10099_.A`（輸出負載）與 `_17299_.C`（or3 `_10043_`，EQY 的 `opt` 讓它和 o21ai 共用 OR）不在被改的 net 上，位置檢查 FAIL；三個分區的輸入都讀 `_10077_.or0_out`。使用者選「分區輸入讀被改 cell 也算」（`partition_reads()`，交叉檢查同規則）。
+  - PicoRV32 第一次挑到 `_10082_`：OR 與 `_19506_` 合併，切分時 `conflicting matches for gold bit \_10082_.or0_out`，不是證明失敗。使用者選「挑不共用 OR 的 o21ai」：沒有別的 cell 同時讀它的 A1、A2 來源（正好預測到 `_19506_`、`_10043_`）；新挑選：PicoRV32 `_10135_`、Hazard3 `_10144_`、picorv32_core `_08326_`。
+- 第二輪結果（`runs/p6_4c3_summary.txt`、`runs/p6_4c4_summary.txt`）：PicoRV32 `neg-eqy-soc` 9/10（只有 `o21ai_swap`，見上），交叉檢查 60 組 PASS；`neg-gl-soc` Hazard3 8/8（14 分鐘）、PicoRV32 8/8（6 分鐘）。改挑選條件後只跑 `o21ai_swap`：Hazard3 `_10144_` 2/16222、PicoRV32 `_10135_` 2/18156 個分區證明失敗（各是被改 cell 的 `or0_out` 與輸出負載），位置檢查 PASS。
+- 尚未在同一份程式上完整跑過的：Hazard3 `neg-eqy-soc` 的 14 個一起跑（交叉檢查含新規則）、`neg-eqy-core`（`picorv32_core` 的 harden 不是這個 commit 的，`run_guard` 拒絕）。這些在 4d 的兩輪 regress 裡跑。

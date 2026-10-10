@@ -196,7 +196,7 @@ signoff（harden 結尾自動執行）
 
 ### 4.7 網表驗證
 
-- 等價證明：合成網表對最終網表（`make eqy-soc`，`formal-equivalence-eqy`），negative test `make neg-eqy-soc`。**限制**：RTL 到合成網表這一段沒有 formal 證明（合成會重新編碼狀態機），由 gate-level 模擬加 directed 測試補（README「專案狀態」、`formal-equivalence-eqy`）。
+- 等價證明：合成網表對最終網表（`make eqy-soc`，`formal-equivalence-eqy`），negative test `make neg-eqy-soc`。OpenROAD 時序修復對調的等價輸入（pin swap）只排除那幾個腳位名稱的對應，cell 輸出照樣證明（negative test `o21ai_swap`）；config 列出的 macro instance 必須在網表中被解析到，macro 的 clock 檢查才不會被略過（Phase 6）。**限制**：RTL 到合成網表這一段沒有 formal 證明（合成會重新編碼狀態機），由 gate-level 模擬加 directed 測試補（README「專案狀態」、`formal-equivalence-eqy`）。
 - gate-level 模擬：RTL 與網表 lockstep（`make gl-soc`），含電源腳位的網表（`make gl-soc-powered`），negative test `make neg-gl-soc`（`gate-level-simulation`）。
 
 ### 4.8 一鍵 regression 與來源追溯

@@ -42,6 +42,17 @@ PASS 需要全部成立：
 5. 切分紀錄沒有 `ERROR: conflicting ... for`。這表示 EQY 在切分時遇到互相矛盾的名稱對應而中止（試做時看過 `conflicting matches for gold bit eoi[0]`），沒有做任何證明。
 6. **兩份網表的 sequential cell（flip-flop、latch、clock gate）是同樣的 instance、同樣的功能**，只允許 drive strength 不同（Phase 4）。這一項在 EQY 之外比對，因為 EQY 的 `sat` strategy 證不到 flip-flop 本身的行為：把一顆 `dfxtp_2` 換成 reset 時會清除的 `dfrtp_2`（RESET_B 接 `resetn`），EQY 仍是 18100/18100 個分區證明通過（`neg_eqy.py flop_async_reset`）。原因推測是含 flip-flop 的分區，初始狀態的約束本身無解，base case 什麼都沒證（agent 實驗，紀錄沒有存進 repo）；soc_top 的 2639 個含 flip-flop 的分區每個都只有 2 顆 `$dff`。flip-flop 周圍的邏輯仍由 EQY 證明。
 7. **每個 sequential cell 的 clock pin 與 macro 的 `clk*` pin，在兩份網表追到同一個來源**（Phase 4 獨立審查後加）：從 pin 往回走，只穿過 buffer／inverter（含 CTS 的 clkbuf、delay buffer），走到 input port、常數或其他 cell 的輸出為止，並記下反相次數的奇偶。EQY 也看不到 clock：`sat` strategy 會先做 `formalff -clk2ff`，把所有 flip-flop 改成同一個隱含的 clock；第 6 點只比 cell 種類。審查者實測：讓一顆 flip-flop 的 CLK 經過一顆新加的反相器（變成下降緣取樣），第 6 點照樣 2639/2639 相同，切分出的 18100 個分區沒有一個以 CLK 為邊界。soc_top 是 2639 個 CLK 與 `sram0/clk0` 都追到 `clk`、`sram0/clk1` 追到常數 0；picorv32 是 2382 個 CLK 都追到 `clk`。
+8. **config 的 `MACROS` 列出的每個 instance，在兩份網表都要被解析到**（Phase 6 加）。網表的 instance 解析原本只認 `sky130_` 開頭的 cell；換成自產 macro `arv_sram_2kbyte_1rw1r_32x512_8` 之後，`sram0` 整個被略過，第 7 點的 `sram0/clk0`、`clk1` 沒有檢查，`eqy-soc` 照樣 PASS（2026-10-10，`neg-eqy-soc` 的 `clk0_inverted` 因為找不到 `sram0` 而中止時發現）。解析改成接受任何 cell 名稱；這一點是防止以後換 macro 名稱時又悄悄漏掉。修正後兩個 CPU 的 `sram0/clk0`、`clk1` 都追到 `clk`（Phase 6 起 clk1 接系統時脈，ADR-0018）。
+
+## OpenROAD 對調等價輸入（pin swap）
+
+OpenROAD 的 `repair_timing` 會把可互換的輸入對調，讓關鍵訊號走比較快的腳位（log：`RSZ-0043 Swapped pins on N instances`）。功能不變，但 EQY 展平 cell 模型之後，會用「instance.腳位」這類名稱（`_10787_.A`）做對應：對調之後，gold 的同一個訊號對到 gate 的兩條不同訊號，EQY 在切分步驟就停下（`ERROR: conflicting matches for gold bit \_10711_.A: \_10711_.A vs \_10711_.B`），一個分區都沒證。Phase 6 的 Hazard3 harden 遇到兩個：`_10787_`（or2，A↔B）、`_10793_`（o21ai，A1↔A2）。
+
+`run_eqy.py` 的 `pin_swaps()`：每個組合邏輯 cell 的輸入，穿過非反相 buffer 往回追到來源（input port、常數或驅動 cell 的輸出）；同一個 instance、同樣的 cell 功能，而且被改的那幾個腳位只是同一組來源換了順序，才算 pin swap。這些腳位名稱在兩邊都寫成 EQY 的 `gold-nomatch`／`gate-nomatch`，不做名稱對應；名稱必須是單純字元（EQY 的對應規則是萬用字元模式），否則 FAIL。結果記在 `summary.json` 的 `pin_swaps`。
+
+- 為什麼不會放過真的錯誤：cell 的輸出和內部節點仍照名稱對應並證明。對調如果改變功能，輸出所在的分區會證明失敗。negative test `o21ai_swap` 把一個 o21ai 的 A1 與 B1 對調（Y = !((A1 | A2) & B1)，功能不同），它會被當成 pin swap 排除，`REQUIRE` 規定它必須被證明抓到（分區沒證明）；挑選的 o21ai 不能和別的 cell 共用內部的 OR（見下方 Phase 6 案例）。`mux_swap` 也會被當成 pin swap，但 mux2 的模型裡有別名 wire（`_10612_.mux_2to10.A0`），仍在切分步驟被拒，不能用來證明這件事。
+- 實測（2026-10-10，Hazard3 `940e395` 的網表）：排除這 4 個腳位名稱後，16222/16222 個分區全部證明，沒有常數對應，308 秒；PicoRV32 這次沒有 pin swap。
+- 另一個選項是讓 OpenROAD 不做 pin swap（`repair_timing -skip_pin_swap`，這版 OpenROAD 有，但 LibreLane 沒有開放這個參數，要寫 plugin）。使用者 2026-10-10 選了在 EQY 端處理（ADR-0018 決定 18）。
 
 ## Negative test（`make neg-eqy-core`、`make neg-eqy-soc`）
 
@@ -58,9 +69,14 @@ Phase 4 獨立審查後再加兩個案例：
 - **`flop_clk_inverted`**（兩個設計）：第一顆 `dfxtp_2` 的 CLK 改經過一顆新加的 `clkinv_1`。EQY 的分區全部證明通過，第 6 點也相同，只有第 7 點抓得到。
 - **`clk0_inverted`**（soc_top）：`sram0` 的 `clk0` 改經過一顆新加的 `clkinv_1`。
 
-Phase 5 的 Hazard3 版（`make neg-eqy-soc CPU=hazard3`，`--design soc_top_hazard3`，13 個）：
+Phase 6 再加一個案例，並修一個植入程式的錯誤：
+- **`o21ai_swap`**（三個設計）：第一顆 A1、B1 來源不同、而且沒有別的 cell 同時讀它 A1 與 A2 來源的 o21ai（依 instance 名稱排序），A1 與 B1 對調。後一個條件是因為 EQY 的 `opt` 會把兩個 cell 裡相同的 OR 合併：PicoRV32 第一次挑到的 `_10082_` 和 `_19506_` 共用 OR，對調後在切分步驟以 `conflicting matches for gold bit \_10082_.or0_out` 被拒，沒有走到證明（使用者 2026-10-10 選擇改挑不共用的；這個條件正好也排除了 Hazard3 的 `_10077_`）。用來證明被 `pin_swaps()` 排除的腳位如果對調得不對，證明仍然抓得到（見上一節；`REQUIRE` 要求「分區沒證明」）。
+- **位置檢查也看分區的輸入**（使用者 2026-10-10 選擇）：Hazard3 的 `o21ai_swap`（`_10077_`）有 3 個分區沒證明：`_10077_.or0_out`、它輸出的負載 `_10099_.A`，以及 `_17299_.C`。最後這個是 or3 `_10043_` 的輸出，EQY 的 `opt` 讓它和 o21ai 裡的 OR 共用邏輯。三個分區的輸入都讀 `_10077_.or0_out`，但後兩個不在被改的 net 上，原本判成「不在植入點」。現在一個沒證明的分區，只要輸入（`work/partitions/<分區>.sv` 的 `__pi_<名稱>__assume`）有被改 instance 的節點，也算在植入點；只放寬到直接讀被改 cell 的那一層。案例之間的交叉檢查用同一個規則。
+- **`din5_stuck0` 的植入程式**：Hazard3 新網表的 `din0` 有跳脫名稱（`\sram_din0[31] `），Verilog 的跳脫名稱以空白結束；植入程式把每個 bit 的空白去掉再用逗號接回，逗號變成名稱的一部分，EQY 讀檔時語法錯誤。`neg_eqy.py` 判成「沒抓到」（12/13），checker 本身沒問題；改成跳脫名稱後面保留空白。
 
-- soc_top 的 9 個；
+Phase 5 的 Hazard3 版（`make neg-eqy-soc CPU=hazard3`，`--design soc_top_hazard3`，Phase 6 起 14 個）：
+
+- soc_top 的 10 個（Phase 6 起含 `o21ai_swap`）；
 - `mcycleh13_stuck1`、`minstreth8_stuck1`、`irq0_stuck0`：flip-flop 的 D 接成常數，對應 picorv32_core 那三個 GL 模擬漏掉的案例；
 - `reset_b_tied1`：第一顆 `dfrtp` 的 RESET_B 接 1，永遠不 reset。
 

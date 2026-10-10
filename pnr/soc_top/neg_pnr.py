@@ -478,7 +478,13 @@ def p05(run, d):
     power ring (special-net vias inside the SRAM outline); Magic extraction + Netgen LVS must FAIL."""
     src_state = json.load(open(os.path.join(step_dir(run, "Magic.SpiceExtraction"), "state_in.json")))
     text = open(src_state["def"]).read()
-    x0, y0, x1, y1 = 301760, 364480, 301760 + 683100, 364480 + 416540   # sram0 outline (DEF units)
+    # sram0 outline in DEF units (1000 per um) from config.json and the SRAM LEF: until 2026-10-10 this was the
+    # prebuilt macro's outline written out, and with the self-generated macro (other place and size) only 4
+    # redundant vias fell inside it and LVS still matched
+    loc = json.load(open(CONFIG))["MACROS"][SRAM]["instances"]["sram0"]["location"]
+    w, h = (float(v) for v in re.search(r"SIZE\s+([\d.]+)\s+BY\s+([\d.]+)", open(os.path.join(SRAM_IP, f"{SRAM}.lef")).read()).groups())
+    x0, y0 = round(loc[0] * 1000), round(loc[1] * 1000)
+    x1, y1 = x0 + round(w * 1000), y0 + round(h * 1000)
     head, rest = text.split("SPECIALNETS", 1)
     body, tail = rest.split("END SPECIALNETS", 1)
     kept, removed = [], 0
@@ -514,7 +520,7 @@ def p10(run, d):
         return False, "Checker.KLayoutDRC: KLayout DRC errors found"
     # Magic DRC on the same GDS: ERROR_ON_MAGIC_DRC is false in soc_top, so the checker is
     # check_soc.py magic_drc (no violation outside the SRAM outline). The box is at (2, 2) um,
-    # far from the SRAM at (301.76, 364.48).
+    # far from the SRAM (config.json MACROS location, Phase 6: (290.72, 353.6)).
     rpt = magic_on(run, d, bad, log)
     if rpt is None:
         return False, "Magic.DRC re-run failed"

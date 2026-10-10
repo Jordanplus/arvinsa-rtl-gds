@@ -171,7 +171,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
 | LVS 失敗、斷線 pin、電源 pin 有沒有真的接上 | lvs-signoff | pdn-ir-drop |
 | 合成設定、lint 警告、狀態機被重新編碼（formal 因此對不上） | rtl-synthesis-lint | formal-equivalence-eqy |
-| 證明兩份網表等價、EQY 當機或證不出來 | formal-equivalence-eqy | — |
+| 證明兩份網表等價、EQY 當機或證不出來、EQY 在切分步驟停下（`conflicting matches`，例如 OpenROAD 對調了輸入腳位） | formal-equivalence-eqy | — |
 | 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
 | gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
@@ -320,14 +320,16 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 #### formal-equivalence-eqy：formal equivalence
 
 - **名詞**：formal equivalence 是用數學證明兩份電路在所有輸入與狀態下行為相同。
-- **何時用**：用 EQY 證明兩份網表（或 RTL 與網表）等價；EQY 當機（SIGSEGV）或分區證不出來；設計 EQY 的 negative test。
+- **何時用**：用 EQY 證明兩份網表（或 RTL 與網表）等價；EQY 當機（SIGSEGV）、分區證不出來，或在切分步驟停下（`conflicting matches`）；設計 EQY 的 negative test。
 - **重點**：
   - 目前可用的組合是合成網表 vs 最終網表。必要設定：加大 stack（`ulimit -s`）、`insbuf off`、刪掉 `$scopeinfo`。
   - EQY 會靜默略過三種情況，都要另外補：被換成常數的 bit（看 log 的 `found constant`）、flip-flop 本身的種類、clock 接線（`sat` 先把所有 flip-flop 改成同一個隱含 clock）。後兩項用 EQY 以外的結構比對。
   - negative test 要分清楚錯誤是被哪一種機制抓到的：分區證明失敗、常數規則、或名稱對應矛盾。而且要有一個非常數的錯誤，證明「證明步驟」本身有效。FAIL 的位置要在植入點附近（被接成常數的腳只往上游追，否則大扇出的 reset 樹會整棵算進來），並在案例之間做交叉檢查。
   - RTL 對合成網表：LibreLane 一定會重新編碼狀態機，目前沒有可用的做法，靠 gate-level 模擬與 directed 測試補。
   - 改到 reset 連接的錯誤（接常數、接 tie cell、繞過同步器）都在分區步驟被拒絕，不會走到證明；negative test 用 `REQUIRE` 斷言抓到的機制（Phase 5）。
-- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 9 種、Hazard3 版 soc_top 13 種、picorv32 11 種）。
+  - OpenROAD 時序修復會對調可互換的輸入（pin swap，`RSZ-0043`），EQY 依「instance.腳位」名稱對應時互相矛盾而停下；`run_eqy.py` 只把這些腳位名稱排除在名稱對應外，cell 輸出照樣證明，negative test `o21ai_swap` 確認對調錯誤仍被證明抓到（Phase 6）。
+  - 網表解析要涵蓋任何名稱的 macro：Phase 6 換成 `arv_sram_*` 後，SRAM 的 clock 檢查曾被悄悄略過；現在 config 列出的 macro instance 沒被解析到就 FAIL。
+- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 10 種、Hazard3 版 soc_top 14 種、picorv32 12 種）。
 
 #### antenna-signoff：antenna
 

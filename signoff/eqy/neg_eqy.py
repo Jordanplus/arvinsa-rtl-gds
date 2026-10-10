@@ -37,13 +37,21 @@ Cases (the same kinds of error as the Phase 2 GL qualification, docs/phase_exit/
                           same name and connections: a wrong function that is neither a constant
                           nor a name conflict, so only the proof step can catch it (Phase 3
                           review, docs/notes/phase3_review/eqy_nand2nor.log)
-  soc_top
+    o21ai_swap            first o21ai (by instance name) whose A1 and B1 come from different
+                          sources, and whose A1 and A2 sources no other cell reads both of (so
+                          EQY cannot merge its OR with another), gets A1 and B1 swapped: not an equivalent permutation
+                          (Y = !((A1 | A2) & B1)), but the same sources in another order, so
+                          run_eqy.py pin_swaps leaves the two pin names out of the name matching
+                          as it does for an OpenROAD pin swap. Only the proof may catch it
+                          (REQUIRE): it shows that a wrong permutation of the pins left out is
+                          still found (Phase 6). mux_swap does not show it: the mux2 model has
+                          wires that alias A0 and A1, and EQY refuses those at the partition step
     din5_stuck0           the net on sram0.din0[5] driven by constant 0
     csb0_inverted         sram0.csb0 driven through an extra inverter
     host_rdata7_inverted  the buffer that drives port host_rdata[7] becomes an inverter
     clk0_inverted         sram0.clk0 driven through an extra clkinv_1
     mux_swap              as for picorv32_core
-    nand2_to_nor2         as for picorv32_core
+    nand2_to_nor2, o21ai_swap   as for picorv32_core
     flop_q_inverted, flop_async_reset, flop_clk_inverted   as for picorv32_core
   soc_top_hazard3 (soc_top with Hazard3, Phase 5): the soc_top cases, plus the Hazard3
   counterparts of the picorv32_core flip-flop cases and one for its asynchronous reset
@@ -75,7 +83,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RUNNER = os.path.join(ROOT, "signoff", "eqy", "run_eqy.py")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
-from run_eqy import VERDICT, instances  # noqa: E402  (same directory as this script)
+from run_eqy import VERDICT, data_sources, instances  # noqa: E402  (same directory as this script)
 CELL = r"(sky130_fd_sc_hd__\w+)"
 
 
@@ -166,6 +174,28 @@ def nand2_to_nor2(text):
     size, name = cands[0]
     rx = re.compile(r"sky130_fd_sc_hd__nand2_" + size + r"( " + re.escape(name) + r" \()")
     return rx, lambda m: "sky130_fd_sc_hd__nor2_" + size + m.group(1)
+
+
+def o21ai_swap(text):
+    """First o21ai instance (sorted by name) whose A1 and B1 reach different sources and whose OR of
+    A1 and A2 no other cell can share: A1 and B1 swapped. If another cell reads both the A1 and the A2
+    source, EQY's opt may merge the two ORs in the synthesized netlist, and the swap is then refused at
+    the partition step on the shared node instead of failing the proof (Phase 6: PicoRV32 _10082_
+    with _19506_, conflicting matches for gold bit _10082_.or0_out; Hazard3 _10077_ with the or3
+    _10043_, whose partition failed reading _10077_.or0_out). User 2026-10-10: pick such an o21ai and
+    keep REQUIRE on the proof."""
+    src = data_sources(text)
+    readers = {}
+    for name, (_, pins) in src.items():
+        for s in set(pins.values()):
+            readers.setdefault(s, set()).add(name)
+    cands = sorted(name for name, (cell, pins) in src.items()
+                   if re.fullmatch(r"sky130_fd_sc_hd__o21ai", cell) and pins.get("A1") != pins.get("B1")
+                   and not (readers.get(pins.get("A1"), set()) & readers.get(pins.get("A2"), set())) - {name})
+    if not cands:
+        return re.compile(r"(?!x)x"), None
+    rx = re.compile(r"(sky130_fd_sc_hd__o21ai_\d+ " + re.escape(cands[0]) + r" \(\.A1\()([^)]*)(\),\s*\.A2\([^)]*\),\s*\.B1\()([^)]*)(\))")
+    return rx, lambda m: m.group(1) + m.group(4) + m.group(3) + m.group(2) + m.group(5)
 
 
 BUFFER = re.compile(r"sky130_fd_sc_hd__(buf|clkbuf|inv|clkinv|clkinvlp|bufinv|bufbuf|dlygate4sd\d|dlymetal6s\ds|"
@@ -266,6 +296,27 @@ def neighborhood(orig_text, new_text):
     return found
 
 
+def partition_reads(eqy_dir):
+    """{name: instances} for each partition EQY failed to prove: the name as fail_names() gives it,
+    and the instances whose nodes the partition reads (its inputs, the `__pi_<name>__assume` wires of
+    work/partitions/<module>.<partition>.sv). A failed partition that reads a node of an instance the
+    edit changed is at the injection although it is not on the edited nets (user 2026-10-10): Phase 6
+    Hazard3 o21ai_swap failed _10077_.or0_out, the load of the o21ai output (_10099_.A) and an or3
+    whose OR EQY's opt shares with the o21ai's (_17299_.C); all three read _10077_.or0_out."""
+    log = os.path.join(eqy_dir, "eqy_run.log")
+    text = open(log, errors="replace").read() if os.path.isfile(log) else ""
+    out = {}
+    for part in set(re.findall(r"Failed to prove equivalence of partition (\S+)", text)):
+        sv = os.path.join(eqy_dir, "work", "partitions", part + ".sv")
+        if not os.path.isfile(sv):
+            continue
+        r = part.split(".", 1)[1]
+        name = re.sub(r"\.(\d+)$", r"[\1]", r) if re.fullmatch(r"[^.\[]+\.\d+", r) else r.split(".")[0]
+        reads = {w.split(".")[0] for w in re.findall(r"__pi_(\S+?)__assume\b", open(sv, errors="replace").read())}
+        out.setdefault(name, set()).update(reads)
+    return out
+
+
 def fail_names(eqy_dir):
     """Names (instance or net, without the backslash, bus index as [n]) in the EQY reasons for FAIL:
     partitions not proved, constant matches, conflicting matches. Constants are not names: EQY writes
@@ -303,7 +354,9 @@ def sram_pin_const0(pin):
     def repl(m):
         bits = [b.strip() for b in m.group(2).split(",")]
         bits[len(bits) - 1 - int(idx)] = "1'b0"   # concatenation is MSB first
-        return m.group(1) + ",\n    ".join(bits) + m.group(3)
+        # An escaped name (\sram_din0[31] , Hazard3 Phase 6) ends at whitespace: keep the space
+        # before the comma, or the comma becomes part of the name (syntax error at the next bit).
+        return m.group(1) + ",\n    ".join(b + " " if b.startswith("\\") else b for b in bits) + m.group(3)
     return rx, repl
 
 
@@ -322,6 +375,7 @@ CASES = {
         ("x8_bit24_stuck0", lambda t: flop_d_const(r"\cpuregs[8][24] ", 0)),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
+        ("o21ai_swap", o21ai_swap),
         ("flop_q_inverted", flop_q_inverted),
         ("flop_async_reset", flop_async_reset),
         ("flop_clk_inverted", flop_clk_inverted),
@@ -333,6 +387,7 @@ CASES = {
         ("host_rdata7_inverted", lambda t: buf_inverted("host_rdata[7]")),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
+        ("o21ai_swap", o21ai_swap),
         ("flop_q_inverted", flop_q_inverted),
         ("flop_async_reset", flop_async_reset),
         ("flop_clk_inverted", flop_clk_inverted),
@@ -346,7 +401,7 @@ CASES["soc_top_hazard3"] = CASES["soc_top"] + [
 ]
 
 # Cases that count only with this reason (the check the case is about must be the one that caught it).
-REQUIRE = {"reset_b_tied1": "mapped to a constant"}
+REQUIRE = {"reset_b_tied1": "mapped to a constant", "o21ai_swap": "partitions not proved"}
 
 # Cases whose edit points a pin at a new net: (instance it belongs to, pin, inverter cell, new net).
 # edit() drives the new net from the pin's original net through that inverter (instance <net>_cell).
@@ -438,7 +493,7 @@ def main():
                                 stdout=log, stderr=subprocess.STDOUT).returncode
         return name, case_dir, rc
 
-    caught, found = 0, {}
+    caught, found, reads = 0, {}, {}
     with ThreadPoolExecutor(max_workers=max(1, args.j)) as ex:
         for name, case_dir, rc in ex.map(one, jobs):
             text_log = open(os.path.join(case_dir, "run.log")).read()
@@ -458,7 +513,8 @@ def main():
                 reasons.append(f"clock source differs: {', '.join(summ['clock_mismatch'][:3])}")
             names = (fail_names(os.path.join(case_dir, "eqy")) | set(summ.get("sequential_mismatch") or [])
                      | set(summ.get("clock_mismatch") or []))
-            outside = sorted(names - near[name])
+            reads[name] = partition_reads(os.path.join(case_dir, "eqy"))
+            outside = sorted(names - near[name] - {n for n, r in reads[name].items() if r & edits[name]})
             if name in REQUIRE and not any(REQUIRE[name] in x for x in reasons):
                 msg = f"eqy FAILed without '{REQUIRE[name]}' ({'; '.join(reasons) or 'no reason'}): not caught by the check this case is about"
                 errors.append(f"{name}: {msg}")
@@ -486,7 +542,7 @@ def main():
             if b_name == a_name or edits[a_name] & edits[b_name]:
                 continue
             pairs += 1
-            if a_names <= near[b_name]:
+            if a_names <= near[b_name] | {n for n, r in reads[a_name].items() if r & edits[b_name]}:
                 errors.append(f"location check does not tell {a_name} from {b_name}: all FAIL names of "
                               f"{a_name} ({', '.join(sorted(a_names)[:3])}) are also at the injection of {b_name}")
                 print(f"  [FAIL] {errors[-1]}")

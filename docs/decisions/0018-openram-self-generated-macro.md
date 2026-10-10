@@ -101,6 +101,14 @@
     - 使用者 2026-10-10 選擇（view QA）：「QA 改檢查 .lib 範本」。`make openram-macro` 的 view QA 原本檢查 OpenRAM 的原始 TT .lib，它的 internal_power 是 1.036316e+11（OpenRAM dev 的缺陷，原始 .lib 不交給 flow），2 KB 一定 FAIL；改成先用 `lib_template.py` 產生範本（internal_power 換成預建 macro 的值）再檢查範本。這次產生的範本與 repo 的逐位元相同。
     - 第三輪 harden（`ad184f5`）：兩個 CPU 的 KLayout DRC、XOR、LVS、antenna 都是 0，FAIL 只有 golden、SRAM DRC 參考檔與 unannotated 上限；依決定 16 重算上限（PicoRV32 144 = 102 + 32 + 10、Hazard3 152 = 109 + 32 + 11）並重建 golden 與參考檔（筆記步驟 4b 第三輪）。
 
+18. **（2026-10-10，步驟 4c 下游驗證；決定 16 的「讓 checker 變寬一定先問」）EQY 遇到 OpenROAD 對調等價輸入時，只把被對調的腳位名稱排除在名稱對應之外；negative test 的位置檢查也看分區的輸入；4d 的兩輪 regress 依序跑**。依據（`docs/notes/openram_phase6_bringup.md` 步驟 4c）：
+    - Hazard3 `eqy-soc` FAIL：`conflicting matches for gold bit \_10711_.A: \_10711_.A vs \_10711_.B`，0 個分區。根因：OpenROAD `repair_timing` 的 pin swap（`RSZ-0043`）把 `_10787_`（or2）的 A↔B、`_10793_`（o21ai）的 A1↔A2 對調，功能等價；EQY 用「instance.腳位」名稱做對應，gold 的 `fetch[0]` 對到 gate 兩條不同的訊號。這版 OpenROAD 有 `-skip_pin_swap`，但 LibreLane 沒開放。
+    - 使用者 2026-10-10 選擇：「EQY 端排除被對調的腳位」。`run_eqy.py` 的 `pin_swaps()` 只認同一個 instance、同樣 cell 功能、輸入來源只換了順序的 cell；cell 輸出仍照名稱證明。實驗：排除 4 個名稱後 16222/16222 證明。不選「流程關掉 pin swap」：要多維護一個 plugin，還會少掉一項時序最佳化。
+    - 新 negative test `o21ai_swap`（三個設計）：o21ai 的 A1↔B1 對調（功能不同），一定會被當成 pin swap 排除，`REQUIRE` 要求它被證明抓到。Hazard3 抓到（3 個分區沒證明），但其中 `_10099_.A`、`_17299_.C` 不在被改的 net 上：三個分區的輸入都讀 `_10077_.or0_out`，`_17299_` 是 EQY 的 `opt` 與它共用 OR 的 or3。使用者 2026-10-10 選擇：「分區輸入讀被改 cell 也算」（`neg_eqy.py` 的 `partition_reads()`，交叉檢查同一規則）。不選「換一個 o21ai」：共不共用取決於每次的網表，等於挑案例避開 checker。
+    - 接著 PicoRV32 的 `o21ai_swap`（第一個 o21ai `_10082_`）在切分步驟被拒：它的 OR 在 gold 端與 `_19506_` 合併，衝突在內部節點 `_10082_.or0_out`，沒有走到證明。使用者 2026-10-10 選擇：「挑不共用 OR 的 o21ai」，REQUIRE 維持證明失敗。條件是沒有別的 cell 同時讀它的 A1、A2 來源，正好預測到兩次實際的共用（`_19506_`、`_10043_`），每個設計還有 120 個以上可選；條件漏掉別種共用時 REQUIRE 會報 FAIL，不會放過。不選「證明失敗或內部節點衝突都算」：PicoRV32 就證明不了「證明步驟」抓得到。
+    - 同一步驟發現 checker 漏洞（沒有選擇，直接修）：`run_eqy.py` 的網表解析只認 `sky130_` 開頭的 cell，從步驟 4a 換成 `arv_sram_*` 起，`sram0/clk0`、`clk1` 的 clock 來源檢查沒執行，PicoRV32 `eqy-soc` 照樣 PASS。改成任何 cell 名稱，並要求 config `MACROS` 的 instance 被解析到。修正後兩個 CPU 的 `sram0/clk0`、`clk1` 都追到 `clk`。`din5_stuck0` 的植入程式沒處理跳脫名稱（`\sram_din0[31] `）的結尾空白，一併修正。
+    - 使用者 2026-10-10 選擇（4d）：「依序跑兩輪」。兩輪平行時，各自的 `neg-pnr`（預設 `-j 4`）會同時開 8 個 LibreLane run，這台 24 GB 的機器在步驟 4c 就是這樣被系統中止；Phase 5 結案也因 neg-eqy 與 gate-level 模擬的負載疊加而依序跑。這項取代決定 16 的「平行跑」。
+
 ## 計畫
 
 0. skill `openram-macro-characterization` 補自產 macro 的一節；本 ADR；`project-plan.md` §8、§11 與 `toolchain.md` 更正。
