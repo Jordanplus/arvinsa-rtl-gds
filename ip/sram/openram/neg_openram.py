@@ -8,17 +8,21 @@ and must FAIL with the expected reason; the clean templates must PASS (positive 
   I1-I4  check_install.problems: `make sky130-install` leaving cells out while exiting 0
   T1-T3  check_install.tree_problems: OpenRAM's tracked files must be the pinned commit plus the repo patches
          (a patch not applied, another edit, another HEAD)
-  D1-D3  macro_drc.parse/compare: a rule category the prebuilt macro does not have (the 2026-10-08 case:
+  D1-D8  macro_drc.parse/compare (merged regions per rule, area within AREA_TOL): a rule category the prebuilt macro does not have (the 2026-10-08 case:
          nwell.5a and routing spacing), a higher total, Magic not finishing
-  K0-K6  macro_klayout_drc: an error in the report, no report, front-end rules not run, a cell name the KLayout
+  K0-K8  macro_klayout_drc: an error in the report, no report, front-end rules not run, a cell name the KLayout
          deck excludes; two real runs on a tiny GDS (psdm 0.26 um apart: the 2026-10-10 case; the same under an
-         excluded name)
+         excluded name); K7 the same under a sky130_fd_io name the deck leaves out of nwell.6 (Phase 6 independent
+         review H5: only the SRAM pattern was known); K8 the deck's selections parsed from a deck text
   L1-L2  the .lib template: gen_char_lib.power_problems refuses OpenRAM dev's internal_power 1.036316e+11
          (2026-10-08); lib_template.make refuses .lib files whose power entries differ
   C1-C5  check_char_lib.provenance for a self-generated macro: char.json made from another netlist than
          ip/sram/<macro>/openram/<macro>.sp, and that netlist not the one its summary.json records; an earlier
          run's netlist of the same circuit in another order passes (C3), one with a transistor changed or a
          subcircuit missing does not (C4, C5; ADR-0018 decision 17)
+  C6-C7  check_char_lib.power_problems on a copy of the self-generated macro's char/: a clk0 internal_power table
+         with a second number 1e11 (C6), or with an index_1 (C7), FAILs; the copy as is passes (C6a). Until the
+         Phase 6 independent review (H7) only the first number was read
 Prints PASS n/n; exit 0 only when every case behaves as expected.
 """
 import os
@@ -134,16 +138,49 @@ def main():
         git("commit", "-q", "-am", "patch as a commit")
         check("T3 HEAD is not the pinned commit", check_install.tree_problems(repo, pinned, [patch]), "HEAD is")
 
-    base = {"total": 100, "rules": {"Local interconnect width < 0.17um (li.1)": 60, "Diffusion width < 0.15um (diff/tap.1)": 40}}
+    li1, dt1 = "Local interconnect width < 0.17um (li.1)", "Diffusion width < 0.15um (diff/tap.1)"
+    base = {"total": 100, "rules": {li1: 60, dt1: 40},
+            "merged": {li1: {"polygons": 30, "area": 900}, dt1: {"polygons": 20, "area": 400}}}
     log = ("Loading DRC CIF style.\nTotal DRC errors found: {t}\nWHY {a} Local interconnect width < 0.17um (li.1)\n"
            "WHY {b} Diffusion width < 0.15um (diff/tap.1)\n{extra}MAGIC_DRC_DONE\n")
-    check("D0 same categories, total within the baseline (positive control)",
-          macro_drc.compare(*macro_drc.parse(log.format(t=95, a=55, b=40, extra="")), base), None)
+    same = {li1: {"polygons": 30, "area": 900}, dt1: {"polygons": 20, "area": 400}}
+    def md(text, merged=same):
+        return macro_drc.compare(*macro_drc.parse(text), merged, base)
+    check("D0 same categories and merged regions (positive control)", md(log.format(t=95, a=55, b=40, extra="")), None)
     check("D1 a rule category the baseline does not have",
-          macro_drc.compare(*macro_drc.parse(log.format(t=97, a=55, b=40, extra="WHY 2 Metal2 spacing < 0.14um (met2.2)\n")), base),
+          md(log.format(t=97, a=55, b=40, extra="WHY 2 Metal2 spacing < 0.14um (met2.2)\n"), {**same, "Metal2 spacing < 0.14um (met2.2)": {"polygons": 2, "area": 8}}),
           "rule categories not in the baseline: Metal2 spacing")
-    check("D2 total above the baseline", macro_drc.compare(*macro_drc.parse(log.format(t=101, a=61, b=40, extra="")), base), "total 101 > baseline 100")
-    check("D3 Magic did not finish", macro_drc.compare(*macro_drc.parse("Loading DRC CIF style.\nTotal DRC errors found: 0\n"), base), "did not finish")
+    check("D2 one more merged region of a rule", md(log.format(t=97, a=57, b=40, extra=""), {**same, li1: {"polygons": 31, "area": 900}}),
+          "more merged error regions, or area above the baseline + 0.05%: Local interconnect width")
+    check("D3 Magic did not finish", md("Loading DRC CIF style.\nTotal DRC errors found: 0\n"), "did not finish")
+    check("D4 merged area 0.25 % above the baseline", md(log.format(t=100, a=60, b=40, extra=""), {**same, dt1: {"polygons": 20, "area": 401}}),
+          "Diffusion width < 0.15um (diff/tap.1): 20 regions, area 401 > baseline 20, 400")
+    check("D8 merged area 0.1 % above the baseline", md(log.format(t=100, a=60, b=40, extra=""), {**same, li1: {"polygons": 30, "area": 900.9}}),
+          "area above the baseline + 0.05%")
+    check("D8a merged area 0.03 % above the baseline (Magic's cut lines; positive control)",
+          md(log.format(t=100, a=60, b=40, extra=""), {**same, li1: {"polygons": 30, "area": 900.27}}), None)
+    check("D5 more boxes, same merged regions (Phase 6: Magic cut boxes on another line; positive control)",
+          md(log.format(t=230, a=60, b=170, extra="")), None)
+    check("D6 a rule with errors but no merged regions (KLayout did not run)", md(log.format(t=95, a=55, b=40, extra=""), {li1: same[li1]}),
+          "no merged regions for 1 rule(s)")
+    # D7: one real Magic + KLayout run on a tiny GDS: two li1 pairs 0.10 um apart (li.3 needs 0.17) must have more
+    # merged li.3 regions than a baseline made from one pair
+    with tempfile.TemporaryDirectory() as t:
+        mk = os.path.join(t, "mk.py")
+        open(mk, "w").write("import pya\nly = pya.Layout()\nly.dbu = 0.001\nc = ly.create_cell(top)\nli = ly.layer(67, 20)\n"
+                            "for i in range(int(pairs)):\n    y = 4000 * i\n    c.shapes(li).insert(pya.Box(0, y, 1000, y + 1000))\n"
+                            "    c.shapes(li).insert(pya.Box(1100, y, 2100, y + 1000))\nly.write(dst)\n")
+        got = {}
+        for pairs in ("1", "2"):
+            gds = os.path.join(t, f"p{pairs}.gds")
+            macro_klayout_drc.nix(f"klayout -b -rd top=neg_li -rd pairs={pairs} -rd dst='{gds}' -r '{mk}'", os.path.join(t, "mk.log"))
+            logf = os.path.join(t, f"p{pairs}.magic.log")
+            total, rules = macro_drc.parse(macro_drc.run_magic(gds, "neg_li", logf))
+            got[pairs] = (total, rules, macro_drc.merge(logf + ".boxes.tsv", logf + ".merged.json"))
+        base7 = {"total": got["1"][0], "rules": got["1"][1], "merged": got["1"][2]}
+        check("D7 one more li.3 error than the baseline (real Magic and KLayout run)",
+              macro_drc.compare(*got["2"], base7) if got["1"][2] else ["the baseline run merged nothing"],
+              "more merged error regions, or area above the baseline + 0.05%: Local interconnect spacing")
 
     def lib(power, extra_when=False):
         groups = [("!csb0 & !web0", power), ("csb0 & web0", power)] + ([("!csb0 & web0", power)] if extra_when else [])
@@ -199,6 +236,31 @@ def main():
         finally:
             check_char_lib.ROOT, check_char_lib.MACRO = saved
 
+    # check_char_lib.power_problems on the self-generated macro's char/ (C6, C7: Phase 6 independent review H7)
+    macro = "arv_sram_2kbyte_1rw1r_32x512_8"
+    src = os.path.join(check_char_lib.ROOT, "ip", "sram", macro, "char")
+    saved = check_char_lib.MACRO
+    check_char_lib.MACRO = macro
+    try:
+        doc = json.load(open(os.path.join(src, "char.json")))
+        one = 'rise_power(scalar){\n                values("12.180757");'
+        for case, new, want in (("C6a the macro's char/ as is (positive control)", one, None),
+                                ("C6 a clk0 internal_power table with a second number 1e11",
+                                 'rise_power(scalar){\n                values("12.180757, 1.0e11");', "rise_power nan"),
+                                ("C7 a clk0 internal_power table with an index_1",
+                                 'rise_power(scalar){\n                index_1("0.01");\n                values("12.180757");', "rise_power nan")):
+            with tempfile.TemporaryDirectory() as t:
+                d = os.path.join(t, "char")
+                shutil.copytree(src, d)
+                f = os.path.join(d, f"{macro}__tt_025C_1v80.lib")
+                text = open(f).read()
+                if text.count(one) != 1:
+                    raise SystemExit(f"neg_openram: injection point not found once in {f}")
+                open(f, "w").write(text.replace(one, new))
+                check(case, check_char_lib.power_problems(doc, d)[0], want)
+    finally:
+        check_char_lib.MACRO = saved
+
     # macro_klayout_drc: report parsing (K0-K3), the deck's name exclusion (K4), and one real KLayout run each on a
     # tiny GDS with two psdm 0.26 um apart (psdm.1 needs 0.38; the 2026-10-10 case) under a plain name and under a
     # name the deck excludes (K5, K6)
@@ -217,8 +279,14 @@ def main():
               "wrote no report")
         open(p, "w").write(rdb(rules=("m2.2", "li.1")))
         check("K3 front-end rules missing (feol off)", macro_klayout_drc.parse(p, "m")[0], "not in the report")
+    deck = open(os.path.join(macro_klayout_drc.PDK_ROOT, macro_klayout_drc.DECK), encoding="utf-8").read()
+    pats = macro_klayout_drc.deck_patterns(deck)
     check("K4 a cell name the deck leaves out of its nwell/nsdm/psdm checks",
-          ["excluded"] if macro_klayout_drc.excluded(["arv_x", "sky130_sram_2kbyte_1rw1r_32x512_8_bank"]) else [], "excluded")
+          ["excluded"] if macro_klayout_drc.excluded(["arv_x", "sky130_sram_2kbyte_1rw1r_32x512_8_bank"], pats) else [], "excluded")
+    fake = 'x = layout(source.cell_obj).select(\n  "-*io_pad*",\n  "-cmux"\n)\n# y = layout(source.cell_obj).select("-*commented*")\n'
+    got = macro_klayout_drc.deck_patterns(fake)
+    check("K8 the deck's selections parsed (two patterns, not the commented one)",
+          [] if got == ["*io_pad*", "cmux"] else [f"parsed {got}"], None)
     with tempfile.TemporaryDirectory() as t:
         mk = os.path.join(t, "mk.py")
         open(mk, "w").write("import pya\nly = pya.Layout()\nly.dbu = 0.001\nc = ly.create_cell(top)\nli = ly.layer(94, 20)\n"
@@ -226,7 +294,9 @@ def main():
                             "ly.write(dst)\n")
         for case, top, want in (("K5 two psdm 0.26 um apart (real KLayout run)", "neg_psdm", "errors per rule: psdm.1"),
                                 ("K6 the same under a name the deck excludes (real KLayout run)", "neg_sky130_sram_1kbyte_x",
-                                 "match the deck's exclusion")):
+                                 "match a name the deck treats specially"),
+                                ("K7 the same under a sky130_fd_io name the deck leaves out of nwell.6 (real KLayout run)",
+                                 "neg_sky130_fd_io__simple_pad_and_busses", "match a name the deck treats specially")):
             gds = os.path.join(t, top + ".gds")
             macro_klayout_drc.nix(f"klayout -b -rd top={top} -rd dst='{gds}' -r '{mk}'", os.path.join(t, "mk.log"))
             check(case, macro_klayout_drc.run(gds, top, os.path.join(t, top + ".json"))["problems"], want)

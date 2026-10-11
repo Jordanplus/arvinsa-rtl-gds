@@ -19,15 +19,21 @@ Checks:
               flow settings of the PicoRV32 run (Phase 5 exit criterion "flow 設定只需改 design 層").
               Checked for both CPUs, so a setting changed in one config only FAILs the next harden of
               either.
-  macro_source the OpenRAM outputs in ip/sram/<macro>/openram/ (GDS, LEF, SPICE, Verilog) have the
-              sha256 that summary.json recorded when make openram-macro made them (Phase 6, ADR-0018),
+  macro_source the OpenRAM outputs in ip/sram/<macro>/openram/ (GDS, LEF, SPICE, Verilog, TT .lib) have the
+              sha256 that summary.json recorded when make openram-macro made them (Phase 6, ADR-0018;
+              the TT .lib since the Phase 6 independent review, H3),
               and upstream/<macro>.v is the same file as openram/<macro>.v; the SPICE netlist may instead have
               the spice_content_sha256 that summary.json recorded (same subcircuits in another order, the netlist
               the .lib was characterized from; ADR-0018 decision 17)
   sim_model   sim/<macro>.v is what ip/sram/gen_sim_model.py makes from upstream/<macro>.v
   macro_views scripts/check_macro_views.py on the views the flow reads: the antenna LEF, the five char
               .lib, the Verilog model, the SPICE netlist and the GDS (names, pins and directions, .lib
-              numbers and area, LEF SIZE = GDS box; CLAUDE.md rule 12)
+              numbers and area, LEF SIZE = GDS box, LEF pin RECTs at the GDS pin texts, GDS routing metal
+              inside the LEF OBS and pins; CLAUDE.md rule 12)
+  lib_template openram/<macro>_TT_template.lib is what ip/sram/openram/lib_template.py makes from the OpenRAM
+              TT .lib and the PDK macro's TT .lib: the template's pins, capacitances, area and port 1
+              timing go into the five char .lib unchecked otherwise (Phase 6 independent review H3: input
+              capacitances / 10 in the template passed every row)
   char_lib    the five ip/sram/.../char/<macro>__<pvt>.lib are what ip/sram/char/gen_char_lib.py makes
               from char/char.json (the ngspice characterization, ADR-0010), the .lib template
               openram/<macro>_TT_template.lib and char/power.json (ADR-0018 decisions 10-15); the char
@@ -70,6 +76,9 @@ IP = os.path.join(ROOT, "ip", "sram", MACRO)
 OPENRAM = os.path.join(IP, "openram")
 CHAR_DIR = os.path.join(IP, "char")
 GEN_ANTENNA_LEF = os.path.join(ROOT, "ip", "sram", "sky130_sram_2kbyte_1rw1r_32x512_8", "gen_antenna_lef.py")
+PDK_SRAM_TT = "libs.ref/sky130_sram_macros/lib/sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib"   # = Makefile SRAM_PDK_LIB
+sys.path.insert(0, os.path.join(ROOT, "ip", "sram", "openram"))
+import lib_template  # noqa: E402
 # the characterization scripts pick the macro and its netlist from these (Makefile OR_SRAM_ENV)
 CHAR_ENV = dict(os.environ, SRAM_CHAR_MACRO=MACRO, SRAM_CHAR_NETLIST=os.path.join(OPENRAM, MACRO + ".sp"))
 PVTS = ("tt_025C_1v80", "ss_100C_1v60", "ff_n40C_1v95", "ss_n40C_1v60", "ff_100C_1v95")
@@ -159,8 +168,9 @@ def main(argv):
     try:
         summ = json.load(open(os.path.join(args.openram, "summary.json"), encoding="utf8"))
         want_sha = summ["outputs_sha256"]
-        bad_sha = [e for e in ("gds", "lef", "sp", "v")
-                   if sha256(os.path.join(args.openram, f"{MACRO}.{e}")) != want_sha.get(f"{MACRO}.{e}")]
+        files = {"gds": f"{MACRO}.gds", "lef": f"{MACRO}.lef", "sp": f"{MACRO}.sp", "v": f"{MACRO}.v",
+                 "tt_lib": f"{MACRO}_TT_1p8V_25C.lib"}
+        bad_sha = [e for e, f in files.items() if sha256(os.path.join(args.openram, f)) != want_sha.get(f)]
         # the netlist may be the earlier run's that the .lib was characterized from, when it is the same circuit
         # (same subcircuits, word for word; only order and comments differ; ADR-0018 decision 17)
         sp_same = "sp" in bad_sha and summ.get("spice_content_sha256") == spice_content_sha256(
@@ -169,7 +179,7 @@ def main(argv):
             bad_sha.remove("sp")
         same_v = sha256(os.path.join(IP, "upstream", f"{MACRO}.v")) == sha256(os.path.join(args.openram, f"{MACRO}.v"))
         row("macro_source", not bad_sha and same_v,
-            "openram/ GDS, LEF, SPICE and Verilog match summary.json"
+            "openram/ GDS, LEF, SPICE, Verilog and TT .lib match summary.json"
             + (" (SPICE: same subcircuits, other order/comments)" if sp_same else "") + "; upstream/ model = openram/ model"
             if not bad_sha and same_v
             else f"sha256 differs from summary.json: {bad_sha}" + ("" if same_v else "; upstream/ model differs from openram/"))
@@ -186,6 +196,15 @@ def main(argv):
     row("macro_views", cp.returncode == 0, (cp.stdout.strip() or cp.stderr.strip())[-300:])
 
     template = os.path.join(args.openram, f"{MACRO}_TT_template.lib")
+    pdk_dir = os.path.join(os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel")), pin("PDK"))
+    try:
+        made, probs = lib_template.make(open(os.path.join(args.openram, f"{MACRO}_TT_1p8V_25C.lib"), encoding="utf8").read(),
+                                        open(os.path.join(pdk_dir, PDK_SRAM_TT), encoding="utf8").read())
+        same = made is not None and made == open(template, encoding="utf8").read()
+        row("lib_template", same, "openram/ TT template = lib_template.py(OpenRAM TT .lib, PDK macro TT .lib)" if same
+            else "; ".join(probs) or "the template differs from what lib_template.py makes (edited by hand, or stale)")
+    except OSError as e:
+        row("lib_template", False, f"cannot read: {e}")
     power = os.path.join(args.char_dir, "power.json")
     cp = subprocess.run([sys.executable, os.path.join(ROOT, "ip", "sram", "char", "gen_char_lib.py"),
                          os.path.join(args.char_dir, "char.json"), template, args.char_dir, "--power", power, "--check"],
@@ -215,8 +234,6 @@ def main(argv):
     row("other_libs", cfg.get("LIB") == want_std and not cfg.get("EXTRA_LIBS"),
         f"LIB = the sky130_fd_sc_hd .lib of each PVT, EXTRA_LIBS unset" if cfg.get("LIB") == want_std and not cfg.get("EXTRA_LIBS")
         else f"LIB = {cfg.get('LIB')}, EXTRA_LIBS = {cfg.get('EXTRA_LIBS')}")
-
-    pdk_dir = os.path.join(os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel")), pin("PDK"))
 
     def weak_cells(name, cfg_path):
         cp = subprocess.run([sys.executable, WEAK_CELLS, cfg_path, "--pdk-dir", pdk_dir], capture_output=True, text=True)

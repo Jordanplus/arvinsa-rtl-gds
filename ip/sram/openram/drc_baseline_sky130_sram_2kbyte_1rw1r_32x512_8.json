@@ -2,7 +2,7 @@
  "gds": "sky130_sram_2kbyte_1rw1r_32x512_8.gds",
  "top": "sky130_sram_2kbyte_1rw1r_32x512_8",
  "pdk": "open_pdks 8afc8346a57fe1ab7934ba5a6056ea8b43078e71",
- "minutes": 4.8,
+ "minutes": 4.6,
  "total": 2235078,
  "rules": {
   "Can't overlap those layers": 161,
@@ -35,5 +35,157 @@
   "poly overlap of poly contact < 0.08um in one direction (licon.8a)": 136236,
   "poly spacing < 0.21um (poly.2)": 59215,
   "poly spacing to Diffusion < 0.075um (poly.4)": 269368
+ },
+ "merged": {
+  "Can't overlap those layers": {
+   "area": 1028160,
+   "boxes": 161,
+   "polygons": 160
+  },
+  "Core local interconnect spacing < 0.14um (li.c2)": {
+   "area": 6190824,
+   "boxes": 133396,
+   "polygons": 33284
+  },
+  "Diffusion contact to SRAM gate < 0.04um (licon.11)": {
+   "area": 1926600,
+   "boxes": 127010,
+   "polygons": 50700
+  },
+  "Diffusion width < 0.15um (diff/tap.1)": {
+   "area": 9119816,
+   "boxes": 366254,
+   "polygons": 83210
+  },
+  "Local interconnect overlap of diffusion contact < 0.08um in one direction (li.5)": {
+   "area": 10134024,
+   "boxes": 66962,
+   "polygons": 66830
+  },
+  "Local interconnect spacing < 0.17um (li.3)": {
+   "area": 98165548,
+   "boxes": 185648,
+   "polygons": 143394
+  },
+  "Local interconnect width < 0.17um (li.1)": {
+   "area": 45825172,
+   "boxes": 458635,
+   "polygons": 185516
+  },
+  "Metal1 overlap of local interconnect contact < 0.03um (met1.4)": {
+   "area": 26432280,
+   "boxes": 169264,
+   "polygons": 169004
+  },
+  "N-Diffusion overhang of nFET < 0.25um (poly.7)": {
+   "area": 567840,
+   "boxes": 522,
+   "polygons": 520
+  },
+  "N-Diffusion spacing to N-well < 0.34um (diff/tap.9)": {
+   "area": 60823880,
+   "boxes": 606985,
+   "polygons": 160810
+  },
+  "N-diffusion contact width < 0.17um (licon.1)": {
+   "area": 11137720,
+   "boxes": 203456,
+   "polygons": 67990
+  },
+  "N-diffusion overlap of N-diffusion contact < 0.04um (licon.5a)": {
+   "area": 51769024,
+   "boxes": 354135,
+   "polygons": 319036
+  },
+  "N-diffusion overlap of N-diffusion contact < 0.06um in one direction (licon.5c)": {
+   "area": 149760,
+   "boxes": 1040,
+   "polygons": 1040
+  },
+  "N-tap contact width     < 0.17um (licon.1)": {
+   "area": 3960796,
+   "boxes": 50121,
+   "polygons": 16642
+  },
+  "N-well overlap of N-tap < 0.18um (diff/tap.10)": {
+   "area": 33550272,
+   "boxes": 183452,
+   "polygons": 33284
+  },
+  "P-Transistor in SRAM core width < 0.14um (diff/tap.2)": {
+   "area": 11183424,
+   "boxes": 66568,
+   "polygons": 33284
+  },
+  "P-diffusion contact width < 0.17um (licon.1)": {
+   "area": 10184904,
+   "boxes": 83598,
+   "polygons": 49926
+  },
+  "P-diffusion overlap of P-diffusion contact < 0.04um (licon.5a)": {
+   "area": 27159744,
+   "boxes": 100112,
+   "polygons": 99852
+  },
+  "P-tap minimum area < 0.07011um^2 (psd.10b)": {
+   "area": 13655200,
+   "boxes": 50830,
+   "polygons": 16900
+  },
+  "P-tap overlap of P-tap contact < 0.12um in one direction (licon.7)": {
+   "area": 25282400,
+   "boxes": 135200,
+   "polygons": 67600
+  },
+  "This layer can't abut or partially overlap between subcells": {
+   "area": 25700288,
+   "boxes": 100620,
+   "polygons": 25090
+  },
+  "Via1 width < 0.26um (via.1a + 2 * via.4a)": {
+   "area": 16055000,
+   "boxes": 321295,
+   "polygons": 80275
+  },
+  "nFET cannot abut P-diffusion (diff/tap.3)": {
+   "area": 39748800,
+   "boxes": 84695,
+   "polygons": 33800
+  },
+  "poly contact spacing to diffusion < 0.19um (licon.14)": {
+   "area": 29103092,
+   "boxes": 342101,
+   "polygons": 75663
+  },
+  "poly contact width        < 0.17um (licon.1)": {
+   "area": 22003800,
+   "boxes": 180744,
+   "polygons": 42250
+  },
+  "poly overhang of SRAM core transistor < 0.11um (poly.8)": {
+   "area": 59163968,
+   "boxes": 368960,
+   "polygons": 201768
+  },
+  "poly overlap of poly contact < 0.05um (licon.8)": {
+   "area": 29913000,
+   "boxes": 372578,
+   "polygons": 185900
+  },
+  "poly overlap of poly contact < 0.08um in one direction (licon.8a)": {
+   "area": 11221600,
+   "boxes": 136236,
+   "polygons": 135200
+  },
+  "poly spacing < 0.21um (poly.2)": {
+   "area": 10038600,
+   "boxes": 59215,
+   "polygons": 42250
+  },
+  "poly spacing to Diffusion < 0.075um (poly.4)": {
+   "area": 17508400,
+   "boxes": 269368,
+   "polygons": 67600
+  }
  }
 }

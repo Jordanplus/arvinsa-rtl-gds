@@ -110,6 +110,16 @@
     - 使用者 2026-10-10 選擇（4d）：「依序跑兩輪」。兩輪平行時，各自的 `neg-pnr`（預設 `-j 4`）會同時開 8 個 LibreLane run，這台 24 GB 的機器在步驟 4c 就是這樣被系統中止；Phase 5 結案也因 neg-eqy 與 gate-level 模擬的負載疊加而依序跑。這項取代決定 16 的「平行跑」。
     - 4d 結果（2026-10-11，`4713c5f`）：Hazard3 `regress` 23/23、PicoRV32 `regress-picorv32` 28/28；三次 harden 的 golden 逐值相同，網表、DEF 逐位元相同，GDS 只差日期記錄；`neg-eqy` 14/14、10/10、core 12/12（筆記步驟 4d）。
 
+19. **（2026-10-11，步驟 5 獨立審查之後）checker 漏洞全部修正後再跑兩輪 regress；IR 最壞組合兩個 ff corner 都跑並加上 port 1 浮接電流；macro DRC 逐種類比較；萃取網表限時試跑**。依據：獨立審查（`docs/phase_exit/phase6.md`「獨立審查」；文件核對 44 列、找漏洞 12 個實驗確認 7 個漏洞）。
+    - 漏洞（都用植入錯誤證明 checker 照樣 PASS）：H1 view QA 不比對 LEF 與 GDS 的腳位位置（`din0[0]`／`din0[1]` 的 RECT 對調，`check_inputs.py` 12 列全 PASS；LVS 把 SRAM 當 black box 也看不到）；H2 LEF 沒有 OBS 仍 PASS；H3 `.lib` 範本與 OpenRAM 的 TT `.lib` 沒有來源追溯；H4 `macro_drc.py` 只比總數與種類；H5 `macro_klayout_drc.py` 只防 SRAM 的名稱排除，deck 還依名稱排除 IO cell；H6 `check_macro_gds.py` 的比對只算圖形數與外框座標和；H7 view QA 與 `check_char_lib.py` 只讀 power 表的第一個數字。這次交付的 SRAM 沒有因此變成假 PASS：125 支腳位的 GDS 標籤都在 LEF 同層的 RECT 裡（2026-10-11 逐支比對）。
+    - 使用者 2026-10-11 選擇：「全部修，再跑兩輪」。不選「只修 H1–H3」或「全部列為已知限制」：H1 正是 view QA（CLAUDE.md 規則 12）該擋、而 LVS 看不到的錯誤，Phase 7 換 macro 或加 IP 時一定會用到。
+    - IR：`ir_worst.py` 固定用 max_ff_n40C，但自產 SRAM 讓 max_ff_100C 的總功耗高了約 10%（Phase 5 時約 7%），port 1 浮接電流（ff 100°C 最大 5.34 mW）不在 .lib 裡。實測（已知限制一節）最差 15.91 mV（上限 20）。使用者 2026-10-11 選擇：「兩個 ff 都跑＋加浮接電流」：對 ff_n40C 與 ff_100C 各跑一次，SRAM 的漏電加上該 PVT 的 `static_max_mw`（只改這次 IR 用的 .lib 複本），取最大值判上限。
+    - macro DRC：結案條件「≤ 預建 baseline」，`macro_drc.py` 的判法是「沒有新種類、總數 ≤」，diff/tap.1、licon.5a、poly.2 三種比預建多。使用者 2026-10-11 選擇：「查清 3 種再逐種比較」：查出位置與原因，改成每一種都 ≤ 預建，確認無害的寫 waiver（位置與原因）。
+      - 查證（背景 agent，我核對了 XOR 的輸入與結果）：三種多出來的框都在 bitcell 陣列（`sky130_fd_bd_sram__openram_dp_cell`、replica column），patch 動到的 cell 這三種都是 0。Magic 列錯誤框時，會在被列出 cell 的座標每 157.28 µm 切一條線，跨線的違規被拆成兩個框；自產陣列的原點在 (148.205, 108.55) µm、預建在 (142.595, 99.23) µm，切到的框數不同（diff/tap.1 260 對比 130、licon.5a 260 對比 0、poly.2 65 對比 0，正好等於多出的 +130、+260、+65）。把相接的框合併、以 bitcell 陣列原點對齊後 XOR：三種都是 0，合併後塊數與面積逐值相同（diff/tap.1 83,210 塊／227.9954 µm²、licon.5a 319,036／1294.2256、poly.2 42,250／250.9650）；`bitcell_array` 的版圖 28 層 XOR 0。同一顆預建 macro 從 bank 與從最上層列出，diff/tap.1 也差 130 個框，所以逐種比框數本身不穩定。157.28 µm 是不是 Magic DRC 分塊的大小是推測，沒讀原始碼。
+      - 使用者 2026-10-11 再選：「改比合併後的違規區域」：`macro_drc.py` 對每種規則合併相接的錯誤框（KLayout，`drc_merge.py`），合併後的塊數與面積都要 ≤ 預建，不再比框數；baseline 檔重新產生成新格式。不選「逐種比框數＋3 筆 waiver」：框數隨陣列位置變，重產或換 macro 時要再查一次。negative test：`neg-openram` D1–D7（D5：框數多、合併後相同要 PASS；D7：真的跑 Magic 與 KLayout，多一個 li.3 要 FAIL）。
+      - 改完後重新產生 baseline 並跑自產 SRAM：29 種中 27 種合併後塊數與面積 ≤ 預建，li.5（+0.038 µm²，0.015%）與 diff/tap.9（+0.221 µm²，0.015%）塊數相同、面積多一點，licon.14 反過來預建多 0.38 µm²。查證（對齊 bitcell 陣列後 XOR，`runs/openram/drc_baseline.magic.log.boxes.tsv` 對自產的框）：388 塊差異的邊全部貼在其中一顆 macro 的 157.28 µm 切框線上，Magic 在切線處畫出的違規少一小條。使用者 2026-10-11 選擇：「塊數嚴格、面積容許 0.05%」（`AREA_TOL`，實測的約 3 倍）：新的獨立違規一定多一塊；接在既有違規上又小於該規則總面積 0.05% 的變化看不到（已知限制）。不選「只比塊數」（既有違規變大看不到）、「對齊陣列後比位置」（只適用陣列相同的 SRAM，約半天）。結果：自產 SRAM PASS；植入一個 li.3 的 GDS（審查 H4 的案例）多 2 塊，FAIL。negative test 加 D8（面積多 0.1% FAIL）、D8a（多 0.03% PASS）。
+    - Phase 3.5 限制 3（萃取網表無法模擬、換上萃取 bitcell 後寫入失敗，指定 Phase 6 確認）沒有做。使用者 2026-10-11 選擇：「限時 3 小時試跑」：用自產 SRAM 版圖萃取的網表跑讀寫檢查，跑不通就把卡住的原因寫進已知限制。
+
 ## 計畫
 
 0. skill `openram-macro-characterization` 補自產 macro 的一節；本 ADR；`project-plan.md` §8、§11 與 `toolchain.md` 更正。

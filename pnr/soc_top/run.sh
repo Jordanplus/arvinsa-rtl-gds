@@ -99,8 +99,9 @@ python3 pnr/soc_top/sram_drc_alone.py "$RUN_DIR" "$OUT/sram_drc_alone" | tee "$O
 python3 pnr/soc_top/check_soc.py "$RUN_DIR" --sram-drc "$OUT/sram_drc_alone/step/reports/drc.magic.rpt" --config "$CONFIG" | tee "$OUT/soc_checks.txt" || true
 python3 pnr/soc_top/check_inputs.py --cpu "$CPU" --resolved "$RUN_DIR/resolved.json" > "$OUT/inputs_resolved.txt" 2>&1 || true
 tail -1 "$OUT/inputs_resolved.txt"
-# Worst-case IR (ff currents + ss metal resistance) against the same 20 mV; the flow's IR step is nom_tt
-# (Phase 5 exit review: Hazard3 measured 25.75 mV there with 18.28 at nom_tt).
+# Worst-case IR (ff currents of both ff corners, with the SRAM's port 1 floating current, + ss metal resistance)
+# against the same 20 mV; the flow's IR step is nom_tt (Phase 5 exit review: Hazard3 measured 25.75 mV there with
+# 18.28 at nom_tt; Phase 6 independent review: both ff corners and the floating current, ADR-0018 decision 19).
 python3 pnr/soc_top/ir_worst.py "$RUN_DIR" "$OUT" "$LIMITS" --ll-dir "$LL_DIR" | tee "$OUT/ir_worst.txt" || true
 python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \
   > "$OUT/provenance_end.txt" 2>&1 || true

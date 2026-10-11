@@ -318,8 +318,12 @@ def power_entries(text):
                 continue
             body = text[g.end():close(g.end() - 1)]
             when = re.search(r'when\s*:\s*"([^"]*)"', body)
-            for rf, v in re.findall(r"(rise|fall)_power\s*\(\s*scalar\s*\)\s*\{\s*values\(\"([-\d.eE+]+)", body):
-                out[(pm.group(1), when.group(1) if when else None, rf)] = float(v)
+            # the whole table: a scalar template with exactly one number, else NaN (never equals power.json). Until
+            # the Phase 6 independent review (H7) only the first number was read: values("12.18, 1.0e11") passed
+            for rf, tmpl, tbl in re.findall(r"(rise|fall)_power\s*\(\s*(\w+)\s*\)\s*\{([^{}]*)\}", body):
+                nums = [v for grp in re.findall(r"\bvalues\(([^()]*)\)", tbl) for v in re.findall(r"[-\d.eE+]+", grp)]
+                ok = tmpl == "scalar" and len(nums) == 1 and "index_" not in tbl
+                out[(pm.group(1), when.group(1) if when else None, rf)] = float(nums[0]) if ok else math.nan
     leak = [float(v) for v in re.findall(r"(?<!\w)(?:leakage_power\s*\(\s*\)\s*\{\s*value|cell_leakage_power)\s*:\s*([-\d.eE+]+)", text)]
     return out, leak
 
@@ -349,9 +353,9 @@ def power_problems(doc, char_dir):
         for (pin, w, rf), v in have.items():
             kind = POWER_MAP.get((pin, w))
             want = x.get(f"{kind}_{rf}") if kind else None
-            if not isinstance(want, (int, float)) or abs(v - want) > POWER_TOL:
+            if not isinstance(want, (int, float)) or not abs(v - want) <= POWER_TOL:   # NaN (not a one-number table) FAILs
                 out.append(f"{p} {pin} {w!r} {rf}_power {v}, power.json {want}")
-        if len(leak) != 2 or any(not isinstance(x.get("leakage_mw"), (int, float)) or abs(v - x["leakage_mw"]) > POWER_TOL for v in leak):
+        if len(leak) != 2 or any(not isinstance(x.get("leakage_mw"), (int, float)) or not abs(v - x["leakage_mw"]) <= POWER_TOL for v in leak):
             out.append(f"{p} leakage {leak}, power.json {x.get('leakage_mw')}")
         if p not in marked:
             out.append(f"{p} .lib does not say its power is measured")

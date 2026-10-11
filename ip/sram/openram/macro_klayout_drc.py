@@ -7,8 +7,11 @@ decision 17).
 Why (2026-10-10): the macro passed OpenRAM's DRC and the Magic full deck against the prebuilt baseline (macro_drc.py),
 but once it really was in the SoC GDS, the flow's KLayout DRC found 27 errors in it (nwell.6, psdm.1, m2.2), which
 OpenRAM's generator made (docs/notes/openram_phase6_bringup.md steps 4b and 3m). The prebuilt macro has 0 (also
-renamed), so the target is 0. The deck leaves cells named `*sky130_sram_*kbyte_*` out of nwell.6 always and out of
-the nsdm/psdm checks with sram_exclude on, so such a name (macro or a cell in it) is a FAIL here.
+renamed), so the target is 0. The deck treats some cells by name (`layout(...).select(...)`): `*sky130_sram_*kbyte_*`
+out of nwell.6 always and out of the nsdm/psdm checks with sram_exclude on, two sky130_fd_io cells out of nwell.6,
+five s8cell/s8fs cells under another m1.4 rule. A cell of the macro with such a name is a FAIL here. The names are
+read from the deck itself (deck_patterns): the Phase 6 independent review (H5) showed that a fixed list of the SRAM
+pattern let an nwell.6 error through under an IO cell's name.
 Runs KLayout from LibreLane's nix-shell with the flow PDK (PDK_ROOT, default ~/.ciel). Writes <out.json> (total,
 counts per rule and per cell, problems) and <out>.lyrdb. Negative tests: neg_openram.py K1-K5.
 """
@@ -25,8 +28,6 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 PDK_ROOT = os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel"))
 DECK = os.path.join("sky130A", "libs.tech", "klayout", "drc", "sky130A_mr.drc")
-# the deck's own cell exclusion (`layout(...).select("-*sky130_sram_*kbyte_*")`: nwell.6, and nsdm/psdm with sram_exclude)
-EXCLUDED = "*sky130_sram_*kbyte_*"
 # the deck options of the flow's KLayout DRC (KLAYOUT_DRC_DEFINES in runs/soc_top/*-klayout-drc/config.json), plus
 # sram_exclude off
 OPTIONS = {"feol": "1", "beol": "1", "floating_metal": "0", "offgrid": "1", "seal": "1", "sram_exclude": "false",
@@ -64,9 +65,16 @@ def parse(lyrdb, top):
     return out, dict(rules), dict(cells)
 
 
-def excluded(cells):
-    """Cell names the deck would leave out of its nwell/nsdm/psdm checks."""
-    return sorted(c for c in cells if fnmatch.fnmatchcase(c, EXCLUDED))
+def deck_patterns(deck_text):
+    """The cell-name patterns of every `select(...)` of the deck, outside comments, without +/- and the bare `*`."""
+    code = "\n".join(line for line in deck_text.splitlines() if not line.lstrip().startswith("#"))
+    return sorted({name for args in re.findall(r"\.select\(([^)]*)\)", code)
+                   for name in re.findall(r'"[+-]?([^"]+)"', args) if name != "*"})
+
+
+def excluded(cells, patterns):
+    """Cell names the deck treats by name (left out of a check or checked by another rule)."""
+    return sorted(c for c in cells if any(fnmatch.fnmatchcase(c, p) for p in patterns))
 
 
 def nix(cmd, log):
@@ -94,9 +102,13 @@ def run(gds, top, out):
     problems = [] if m else ["KLayout could not read the GDS"]
     if names and top not in names:
         problems.append(f"no cell {top} in the GDS")
-    hidden = excluded(names)
+    patterns = deck_patterns(open(os.path.join(PDK_ROOT, DECK), encoding="utf-8").read())
+    if "*sky130_sram_*kbyte_*" not in patterns:
+        problems.append(f"the deck's cell-name selections were not found (deck changed?): {patterns[:4]}")
+    hidden = excluded(names, patterns)
     if hidden:
-        problems.append(f"{len(hidden)} cell name(s) match the deck's exclusion {EXCLUDED} (checked vacuously): {hidden[:3]}")
+        problems.append(f"{len(hidden)} cell name(s) match a name the deck treats specially {patterns} "
+                        f"(checked vacuously or by another rule): {hidden[:3]}")
     opts = " ".join(f"-rd {k}={v}" for k, v in OPTIONS.items())
     nix(f"klayout -b -zz -r '{os.path.join(PDK_ROOT, DECK)}' -rd input='{gds}' -rd topcell={top} -rd report='{lyrdb}' {opts}", log)
     found, rules, cells = parse(lyrdb, top)

@@ -69,7 +69,7 @@ SKILL.md 是一般的 Markdown，任何 agent 都能讀。它們放在專案層�
 - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，用 `signoff-criteria` 重新推導。
 - `pnr/<design>/run.sh` 與設計專屬的 checker：本 repo 的 `check_inputs.py`（harden 前的輸入檢查）、`check_soc.py`（SRAM 擺放、未用 port 的接法、斷線 pin、STA 設定、macro clock 前有沒有 delay buffer、Magic DRC 對 SRAM 單獨的結果）、`sram_drc_alone.py`、`ir_worst.py`（最壞情況的靜態 IR）。
 - golden。
-- 和設計綁在一起的植入錯誤案例，例如 `pnr/soc_top/neg_pnr.py` 的 P00–P70（PnR 與 signoff checker 的植入錯誤）。
+- 和設計綁在一起的植入錯誤案例，例如 `pnr/soc_top/neg_pnr.py` 的 P00–P78（PnR 與 signoff checker 的植入錯誤）。
 - ADR、exit review 的內容。
 
 ### 1.6 經驗寫回這裡
@@ -166,8 +166,8 @@ signoff（harden 結尾自動執行）
 - 本 repo 的歷程（ADR-0007、0010、0018）：Phase 3 預建＋保守 .lib → Phase 3.5 實測 .lib → Phase 6 換成自產，同樣的特性化與整合做了兩次。
 
 1. **取得或產生**：PDK 預建 macro、memory compiler（本 repo：OpenRAM，`make openram-macro`）、廠商 IP。產生工具自己的 DRC／LVS 要讀報告判斷，不能只看 exit code（OpenRAM 在 LVS 不一致時仍 exit 0）。本 repo 對 OpenRAM 執行結果、安裝、patch、macro DRC 比對、.lib 範本與自產 macro 特性化來源的 negative test：`make neg-openram`。
-2. **view QA**（`CLAUDE.md` 規則 12，`hard-macro-integration` 清單第 0 項）：`scripts/check_macro_views.py` 檢查 LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF 尺寸等於 GDS 外框，LEF 的資料庫單位與 `FOREIGN`（缺 `FOREIGN` 時 KLayout 輸出的最終 GDS 裡 macro 是空的，不報錯）。harden 後再用 `scripts/check_macro_gds.py` 比對最終 GDS 的 macro 與 macro 自己的 GDS（本 repo `check_soc.py macro_gds`）。產生 macro 的 target 要接這一步；整合中的 macro 用 `make macro-views`。FAIL 的 view 修正或替換後重跑到 PASS，做法記進該 macro 的 README 或 ADR。negative test：`make neg-macro-views`。
-3. **整顆 macro 的 DRC**：用 full 規則，和已知 baseline 比較，不只比總數：不能出現 baseline 沒有的規則種類，總數不能超過 baseline（`ip/sram/openram/macro_drc.py`；negative test 在 `neg-openram` 的 D1–D3）。個別種類可以比 baseline 多（本 repo 自產 SRAM 有 3 種多了幾百個，ADR-0018 決定 17），要在 exit review 列出。再用 flow 簽核用的 KLayout deck 跑整顆 macro，要 0（`macro_klayout_drc.py`，K0–K6）：memory compiler 的 DRC 與 Magic deck 都沒報的錯誤，macro 進了晶片才被 flow 的 KLayout DRC 抓到（本 repo：nwell.6、psdm.1、m2.2，ADR-0018 決定 17）。deck 若依名稱排除某些 cell（sky130：`*sky130_sram_*kbyte_*`），macro 不能取這種名字。
+2. **view QA**（`CLAUDE.md` 規則 12，`hard-macro-integration` 清單第 0 項）：`scripts/check_macro_views.py` 檢查 LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF 尺寸等於 GDS 外框，LEF 的資料庫單位與 `FOREIGN`（缺 `FOREIGN` 時 KLayout 輸出的最終 GDS 裡 macro 是空的，不報錯），以及 LEF 與 GDS 的幾何：每支腳位的 GDS 文字落在該腳位同層的 LEF RECT 裡、繞線金屬在 LEF 的 OBS 與腳位內（LVS 只透過 LEF 看 macro，腳位位置錯了 flow 的每個檢查都看不到）。產生鏈上的中間檔（例如 .lib 範本）也要能對回它的來源。harden 後再用 `scripts/check_macro_gds.py` 比對最終 GDS 的 macro 與 macro 自己的 GDS（本 repo `check_soc.py macro_gds`）。產生 macro 的 target 要接這一步；整合中的 macro 用 `make macro-views`。FAIL 的 view 修正或替換後重跑到 PASS，做法記進該 macro 的 README 或 ADR。negative test：`make neg-macro-views`。
+3. **整顆 macro 的 DRC**：用 full 規則，和已知 baseline 逐種類比較，不只比總數：不能出現 baseline 沒有的規則種類，每一種的違規區域（相接的錯誤框合併後的塊數）不能超過 baseline，面積只容許 Magic 切框造成的微小差異（本 repo 0.05%）。不比框數：Magic 會把同一個違規切成幾個框，切法隨 cell 的座標變（本 repo 自產 SRAM 3 種多了幾百個框，合併後與預建完全相同，ADR-0018 決定 19）（`ip/sram/openram/macro_drc.py`；negative test 在 `neg-openram` 的 D1–D7）。再用 flow 簽核用的 KLayout deck 跑整顆 macro，要 0（`macro_klayout_drc.py`，K0–K6）：memory compiler 的 DRC 與 Magic deck 都沒報的錯誤，macro 進了晶片才被 flow 的 KLayout DRC 抓到（本 repo：nwell.6、psdm.1、m2.2，ADR-0018 決定 17）。deck 若依名稱排除某些 cell（sky130：`*sky130_sram_*kbyte_*`），macro 不能取這種名字。
 4. **每個 corner 的功能確認**：先證明 macro 在每個 STA corner 與 corner 之間的溫度都讀寫正確，再談時序。不能動的 corner 用標明 PLACEHOLDER 的佔位 .lib，列為下線風險。未用的 port 照實際 SoC 的接法模擬（OpenRAM SRAM 未用 port 的時脈要打時脈，ADR-0018 決定 9）。
 5. **SPICE 特性化**：延遲、setup／hold、最小週期與 pulse width、internal power，每個 PVT 一份 .lib。量測方法先驗證誤差，再用植入錯誤證明量得對（`make neg-char`），最後在 .lib 採用的數值上跑確認模擬（`make sram-confirm`／`openram-confirm`），並由不 import 產生器的程式獨立重算（`check_char_lib.py`：每次 `harden-soc` 開頭由 `check_inputs.py` 執行，預建與自產 macro 都是；產生 .lib 之後也可以單獨跑，自產 macro 用 `make openram-check-lib`）。特性化本身用 `make sram-char`／`openram-char`。internal power 與漏電也用 SPICE 量（自產 macro：`make openram-power`，再 `make openram-lib` 寫進 .lib），不用 memory compiler 的解析值；漏電要在所有 port 都 precharge、時脈停住的待機狀態量；單顆 bitcell 的漏電 deck 要把 ngspice 的 gmin 調小並用再小 10 倍的值核對（`bitcell leakage depends on gmin`，`make neg-char` N21），量測窗的平穩度只放行小幅下降（`openram-macro-characterization` 規則 25、28）。沒用到的 port 在 SoC 接法下可能浮接、漏出額外的靜態電流，它不進 .lib，要另外記錄並列為已知限制（`openram-macro-characterization` 規則 25）。
 - skill：`hard-macro-integration`、`openram-macro-characterization`、`drc-signoff`。
@@ -187,12 +187,12 @@ signoff（harden 結尾自動執行）
 - 開跑前：`pnr/<design>/check_inputs.py` 檢查輸入。本 repo 檢查 RTL 檔案清單與 config 一致、兩顆 CPU 的 config 只差 RTL（本 repo 專屬）、macro 產生器的輸出沒被改過（sha256 對產生紀錄）、flow 讀的 macro view 通過 view QA、macro 的 .lib、antenna LEF 與模擬模型是產生器的最新輸出、.lib 的數字由 `check_char_lib.py` 獨立重算、STA 每個 corner 只讀到一份 macro .lib、`LIB`／`EXTRA_LIBS` 沒有帶進別的 macro .lib、弱 cell。harden 只能在已 commit 的工作樹上開（來源追溯）。
 - 怎麼跑：`make harden-soc`（本 repo 要加 `CPU=hazard3`）。它呼叫 `pnr/soc_top/run.sh`：LibreLane（`pnr/librelane_flow.sh` 對已知的偶發錯誤做有上限的重試），接著自動執行 signoff 的全部 checker：
   - `check_signoff.py`：`signoff/limits/<tag>.toml` 的門檻（多 corner 的 setup、hold、slew、cap，DRC、LVS、antenna、IR）與 golden 比對；
-  - `check_soc.py`（加 `sram_drc_alone.py`）、`check_inputs.py --resolved`（這次 run 真的用了這些輸入）、`ir_worst.py`、`provenance.py --verify`、`review_criteria.py`。
+  - `check_soc.py`（加 `sram_drc_alone.py`）、`check_inputs.py --resolved`（這次 run 真的用了這些輸入）、`ir_worst.py`（最壞組合 IR：兩個 ff corner 的電流加上 macro 不在 .lib 裡的電流，配 ss 的金屬電阻，取大的判上限）、`provenance.py --verify`、`review_criteria.py`。
 - 結果：`runs/<tag>_signoff/`（`signoff.txt`、`soc_checks.txt`、`ir_worst.txt`、整體結果 `result.txt`）。
 - 每一步的設定與已知問題：`floorplan-congestion`、`pdn-ir-drop`、`drv-timing-closure`、`cts-clock-tree`、`antenna-signoff`、`multicorner-sta`、`drc-signoff`、`lvs-signoff`；執行與除錯看 `librelane-run-debug`。
 - 跑完（PASS 或 FAIL）：`CLAUDE.md` 規則 9 的 criteria review（`signoff-criteria`「每次 harden 後的檢查」，寫 `runs/<tag>_signoff/criteria_review.md`），學到的數字寫進該製程的 knowledge 檔。
 - **golden**：第一次 signoff 全部 PASS、criteria review 也確認後，把那次 run 的 metrics 存成 golden（`signoff/golden/<tag>/`）。之後改了工具、PDK、RTL、config、SDC、macro 的產生檔，golden 比對一定 FAIL，要照 `signoff-checker-qualification` 規則 6 更新：先確認所有門檻與 checker PASS，逐項說明差異，複製並記 sha256，再跑一次確認 PASS。同樣設定重跑的差異怎麼給誤差也在該 skill。
-- negative test：`make neg-pnr`（本 repo P00–P70）。
+- negative test：`make neg-pnr`（本 repo P00–P78）。
 
 ### 4.7 網表驗證
 

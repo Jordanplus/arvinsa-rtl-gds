@@ -11,7 +11,7 @@ global: OpenRAM prefixes its own cells with the macro name, but its library cell
 the bitcells) keep theirs, so another GDS defining one of them would replace it silently (one definition per name).
 Checks:
   - the final GDS has <macro>, and the cells below it are exactly the cells below <macro> in the macro GDS;
-  - each of those cells has the same fingerprint (scripts/gds_cells.py: shapes per layer, instances);
+  - each of those cells has the same fingerprint (scripts/gds_cells.py: every shape in full per layer, instances);
   - no cell of the final GDS is a renamed copy of one of them (`<name>$<n>`, KLayout's conflict resolution).
 Cells without the macro-name prefix are listed in the PASS line. KLayout from LibreLane's nix-shell.
 Prints `macro-gds: PASS ...` / `macro-gds: FAIL ...`; exit 0 only on PASS. Negative tests: neg_pnr.py P67, P68.

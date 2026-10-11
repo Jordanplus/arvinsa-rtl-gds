@@ -1,6 +1,6 @@
 ---
 name: pdn-ir-drop
-description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、macro 電源怎麼接、IR drop（供電線上的電壓降）分析與門檻（VDD 降壓 + GND 抬升、供電點模型 `VSRC_LOC_FILES`）、IR drop 結果小得不合理（PDN pin 全被當成理想電源）、flow 的 nom_tt IR PASS 但最壞組合（ff 電流＋ss 金屬電阻）超過上限（`ir_worst.py`）、改 PDN 之前先做 what-if（strap 加寬或加密、`PDN_HWIDTH`、重產 PDN 只跑 IR）、EM、decap 擺放時使用。電源 pin 有沒有實體接上看 lvs-signoff；IR 上限怎麼推導看 signoff-criteria。Use for PDN generation errors, macro power hookup, static IR drop analysis and limits (incl. voltage-source modelling and suspiciously small IR results), EM and decap placement in OpenROAD/LibreLane.
+description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、macro 電源怎麼接、IR drop（供電線上的電壓降）分析與門檻（VDD 降壓 + GND 抬升、供電點模型 `VSRC_LOC_FILES`）、IR drop 結果小得不合理（PDN pin 全被當成理想電源）、flow 的 nom_tt IR PASS 但最壞組合（ff 電流＋ss 金屬電阻）超過上限（`ir_worst.py`；兩個 ff corner 都要跑，哪個電流大隨設計變；macro 有不在 .lib 裡的電流，例如 SRAM 未用 port 的浮接電流，要加在 macro 的位置）、改 PDN 之前先做 what-if（strap 加寬或加密、`PDN_HWIDTH`、重產 PDN 只跑 IR）、EM、decap 擺放時使用。電源 pin 有沒有實體接上看 lvs-signoff；IR 上限怎麼推導看 signoff-criteria。Use for PDN generation errors, macro power hookup, static IR drop analysis and limits (incl. voltage-source modelling and suspiciously small IR results), EM and decap placement in OpenROAD/LibreLane.
 ---
 
 # PDN 與 IR drop
@@ -36,9 +36,10 @@ description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、
     - flow 的 IR 步驟只跑 nom_tt。Phase 4 接受「nom_tt ≤ 20 mV」，依據是最壞組合在 PicoRV32 版圖只有 11.46 mV。
     - 換成 Hazard3 後，nom_tt 18.28 mV 仍 PASS，最壞組合卻是 25.75 mV。
     - 最壞組合約是 nom_tt 的 1.4 倍，兩個 CPU、三種版圖都一樣（1.40／1.41／1.42）。所以 nom_tt 要低於約 14 mV 才夠。
-    - 本 repo 每次 harden 都跑 `pnr/soc_top/ir_worst.py`：用 run 自己的 `OpenROAD.IRDropReport` 設定重跑一次，改三處：`DEFAULT_CORNER=max_ff_n40C_1v95`、`LAYERS_RC["*ff*"]` 換成 `*ss*`、供電點 1.95 V，判同一個 `[max_sum]` 上限。
-    - 它也檢查這個組合真的套用了：log 讀的是 ff 的 .lib、config 是 ss 的電阻。negative test 是 `neg_pnr.py` P61、P62。
-    - **設計換了，就要重新驗證「只判一個 corner」的依據**。依據是在別的設計上量的，不能沿用（`signoff-criteria`）。
+    - 本 repo 每次 harden 都跑 `pnr/soc_top/ir_worst.py`：用 run 自己的 `OpenROAD.IRDropReport` 設定，對 `max_ff_n40C_1v95` 與 `max_ff_100C_1v95` 各重跑一次，改四處：`DEFAULT_CORNER`、`LAYERS_RC["*ff*"]` 換成 `*ss*`、供電點 1.95 V、SRAM 該 PVT 的 .lib 換成漏電加上 port 1 浮接電流（`power.json` 的 `static_max_mw`）的複本；兩個 corner 取大的判同一個 `[max_sum]` 上限。
+    - 它也檢查這個組合真的套用了：log 讀的是該 PVT 的 .lib 與 SRAM 的複本、沒有 tt，config 是 ss 的電阻。negative test 是 `neg_pnr.py` P61、P62、P77（缺浮接電流）、P78（上限在兩個 corner 之間，要判大的那個）。
+    - **設計換了，就要重新驗證「只判一個 corner」的依據**。依據是在別的設計上量的，不能沿用（`signoff-criteria`）。Phase 5 只跑 ff_n40C；換成自產 SRAM 後 ff_100C 的總功耗高了約 10%（SRAM 漏電 409 µW），而 .lib 不含 port 1 浮接電流（ff 100°C 最大 5.3 mW），兩個都沒算到（Phase 6 獨立審查）。改成兩個 ff corner 都跑、取大的，就不必判斷哪個 corner 電流最大。
+    - **macro 的電流若有不在 .lib 裡的部分**（例如 SRAM 未用 port 的浮接電流），IR 檢查要另外加上，加在該 macro 的位置：Phase 6 PicoRV32 加上 5.3 mW 後，最大壓降從邏輯區移到 SRAM 上（6.41 → 13.49 mV）。
 13. **改 PDN 前先做 what-if，不必每個候選都完整 harden**（Phase 5，方法已驗證）：
     - 取完成版圖在 IR 步驟的輸入 ODB，刪掉電源 net 的 special wiring 與電源 pin 的形狀。
     - 用 LibreLane 自己的 `pdn_cfg.tcl` 加 `pdngen` 依候選值重新產生：用 `OpenROAD.GeneratePDN` 單步重跑，只換 Tcl script。

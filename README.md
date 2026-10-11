@@ -242,6 +242,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 每個植入錯誤必須在**預期的** checker、以預期的原因 FAIL，FAIL 的位置要和植入點有關。修 checker 漏洞時，要證明舊 checker 會漏、新的會抓。
   - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）、重試留下的中止目錄頂替完成的那次。新 checker 要逐條對照。
   - Phase 5 獨立審查的 9 種新漏洞類型：只證明設定被讀到、沒證明生效；靠名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制的觸發條件比規則小；抓到的機制和宣稱的不同；守門條件本身沒測試；只看版本字串；暫用另一個設計的誤差；比對到資料而不是指令。規則 7 補兩條：斷言抓到它的機制、每道守門條件都要有「拿掉就 FAIL」的情境。
+  - Phase 6 獨立審查的 5 種新漏洞類型：black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯。另外 `abs(x - y) > tol` 對 NaN 永遠不成立，要寫成 `not abs(x - y) <= tol`。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂
@@ -275,8 +276,9 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - STA 的每個 corner 只能讀到一份 macro .lib：`LIB`、`EXTRA_LIBS` 也會被讀進每個 corner。檢查要打開 STA 讀的每個 .lib 看誰定義了 macro cell，並比完整路徑。
   - macro 在每個 STA corner 都要先證明功能正確：PDK 這顆 SRAM 在低溫、以及 ss 1.60 V 室溫時會讀出前一次的值；corner 之間的溫度 STA 看不到，要另外模擬。不能動的 corner 仍要給一份標明 PLACEHOLDER 的佔位 .lib（否則被當 black box），並列為下線風險。
   - macro 的 clock：CTS 預設會在 macro clock pin 前插 delay buffer 對齊 flip-flop 的 latency，對 SRAM 半週期讀出反而有害；soc_top 關掉了（ADR-0016，看 cts-clock-tree）。
+  - LEF 與 GDS 的幾何也要比：每支腳位的 GDS 文字要落在該腳位同層的 LEF RECT 裡，繞線金屬要在 LEF 的 OBS 與腳位內。LVS 只透過 LEF 看 macro，兩支腳位 RECT 對調時 flow 的每個檢查都 PASS（Phase 6 獨立審查）。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
-- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、`scripts/check_macro_views.py`（`make macro-views`）、ADR-0006／0007／0008／0010／0016／0018。negative test：Q1–Q13（`make neg-macro-views`）、P08、P09、P14、P16–P20、P30、P32、P63–P69。
+- **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、`scripts/check_macro_views.py`（`make macro-views`）、ADR-0006／0007／0008／0010／0016／0018。negative test：Q1–Q20（`make neg-macro-views`）、P08、P09、P14、P16–P20、P30、P32、P63–P76。
 
 #### openram-macro-characterization：SRAM macro 的 SPICE 特性化
 
@@ -311,7 +313,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **何時用**：Magic／KLayout DRC、GDS 輸出、XOR（兩個工具寫出的 GDS 逐點比對）；設計含 macro 時 DRC 不為 0、abstract DRC 報大量 `nwell.4`、GDS 有多個 top cell、金屬密度；換了自產或改名的 macro 後 KLayout 在 macro 裡報錯。
 - **重點**：
   - abstract DRC 會在每條 standard cell row 報假的 `nwell.4`，所以改用完整 GDS 的 DRC。
-  - SRAM 內部本來就有大量標準規則違規：外框外必須是 0；外框內每個違規都要落在 macro 單獨檢查時、同規則違規的位置上。只比規則種類會漏掉新的錯誤。
+  - SRAM 內部本來就有大量標準規則違規：外框外必須是 0；外框內每個違規都要落在 macro 單獨檢查時、同規則違規的位置上。只比規則種類會漏掉新的錯誤。Magic 會把同一個違規切成幾個框，切法隨 cell 的座標變，所以兩顆 macro 之間比 DRC 要比合併後的違規區域，不比框數。
   - Magic 與 KLayout 的 sky130 deck 涵蓋範圍不同：KLayout 沒有 latch-up 規則，浮接金屬檢查也開不起來，而且依 cell 名稱（`*sky130_sram_*kbyte_*`）排除 SRAM 的 `nwell.6`。所以「KLayout DRC = 0」不代表全部合格；自產或改名的 macro 要在 macro 單獨時用同一份 deck 檢查到 0。
   - 框內違規至少要是 macro 單獨檢查的一半：macro 在最終 GDS 裡是空的時，位置比對沒有東西可比也會 PASS。
   - 設了 `ERROR_ON_MAGIC_DRC=false` 之後 LibreLane 不再替 Magic DRC 判 FAIL，取代它的自寫 checker 必須有自己的植入錯誤。
@@ -367,8 +369,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
-  - 規則 12：每次 harden 判最壞組合（ff 電流＋ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；最壞組合約是 nom_tt 的 1.4 倍。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
-- **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29。
+  - 規則 12：每次 harden 判最壞組合（ff 電流＋ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；最壞組合約是 nom_tt 的 1.4 倍。兩個 ff corner 都要跑（哪個電流大隨設計變），macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）要加在 macro 上（Phase 6 獨立審查）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+- **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29、P61、P62、P77、P78。
 
 #### lvs-signoff：LVS 與連接性
 

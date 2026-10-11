@@ -183,6 +183,23 @@ step re-run one step on a copy of that step's saved config and input state
        another order and one transistor W changed     neither the recorded file nor the same circuit:
                                                      ADR-0018 decision 17 lets only order and comments
                                                      differ)
+  P71  SRAM LEF with the RECTs of din0[0] and din0[1]   check_inputs.py macro_views (GDS pin texts outside the
+       swapped                                        pins' LEF RECTs; LVS sees the SRAM through its LEF
+                                                     only. Phase 6 independent review H1, ADR-0018 dec. 19)
+  P72  SRAM LEF without OBS                           check_inputs.py macro_views (GDS metal outside the LEF
+                                                     OBS and pins; review H2)
+  P73  openram/ copy with the first capacitance of the  check_inputs.py lib_template (the template is not
+       .lib template / 10                             what lib_template.py makes; review H3)
+  P74  openram/ copy with one number of OpenRAM's TT    check_inputs.py macro_source (names tt_lib; review H3)
+       .lib changed
+  P75  final GDS with the SRAM texts din0[0], din0[1]   check_soc.py macro_gds (only row FAIL; the fingerprint
+       swapped                                        was a count and a weighted sum of box corners: H6)
+  P76  final GDS with a box of the SRAM bank cell       check_soc.py macro_gds (only row FAIL; same bounding
+       replaced by a notched polygon                  box, other vertices: H6)
+  P77  ir_worst.py with a power.json without the ff     ir_worst.py (no port 1 floating current for that PVT;
+       100C static_max_mw                             ADR-0018 decision 19)
+  P78  ir_worst.py with the limit between the drops of   ir_worst.py drop (the worst of the two corners is
+       its two ff corners                             judged, named in the FAIL row)
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
@@ -1109,6 +1126,116 @@ def p62(run, d):
     return review_case(run, d, "checkers_ran", out_drop=("ir_worst.txt",))
 
 
+def lef_swap_pin_rects(text, a, b):
+    """The LEF text with the first RECT of pins a and b exchanged."""
+    spans = []
+    for pin in (a, b):
+        m = re.search(rf"^\s*PIN {re.escape(pin)}\s*\n(.*?)^\s*END {re.escape(pin)}\s*$", text, re.M | re.S)
+        r = re.search(r"\bRECT\b[^;]*;", m.group(1)) if m else None
+        if r is None:
+            raise RuntimeError(f"no RECT of pin {pin} in the LEF")
+        spans.append((m.start(1) + r.start(), m.start(1) + r.end()))
+    (s1, e1), (s2, e2) = sorted(spans)
+    return text[:s1] + text[s2:e2] + text[e1:s2] + text[s1:e1] + text[e2:]
+
+
+def p71(run, d):
+    p = os.path.join(d, f"{SRAM}.lef")
+    open(p, "w").write(lef_swap_pin_rects(open(os.path.join(SRAM_IP, f"{SRAM}.lef")).read(), "din0[0]", "din0[1]"))
+    rc, out = inputs_check(d, "--lef", p)
+    return (inputs_failed(rc, out, "macro_views") and "outside the pin's LEF RECTs" in out,
+            "check_inputs.py macro_views (din0[0]/din0[1] texts outside their LEF RECTs)")
+
+
+def p72(run, d):
+    text = open(os.path.join(SRAM_IP, f"{SRAM}.lef")).read()
+    p = os.path.join(d, f"{SRAM}.lef")
+    open(p, "w").write(edit_once(text, r"^\s*OBS\s*\n(?:.*\n)*?\s*END\s*\n", "", "the OBS block"))
+    rc, out = inputs_check(d, "--lef", p)
+    return (inputs_failed(rc, out, "macro_views") and "outside the LEF OBS and pins" in out,
+            "check_inputs.py macro_views (GDS routing metal outside the LEF OBS and pins)")
+
+
+def openram_copy(d, name, pattern, repl, what):
+    dst = os.path.join(d, "openram")
+    shutil.copytree(os.path.join(SRAM_IP, "openram"), dst)
+    f = os.path.join(dst, name)
+    new = edit_once(open(f).read(), pattern, repl, what)   # read before open(f, "w") empties the file
+    open(f, "w").write(new)
+    return dst
+
+
+def p73(run, d):
+    dst = openram_copy(d, f"{SRAM}_TT_template.lib", r"(capacitance\s*:\s*)([\d.eE+-]+)",
+                       lambda m: f"{m.group(1)}{float(m.group(2)) / 10:.6g}", "a capacitance in the template")
+    rc, out = inputs_check(d, "--openram", dst)
+    return inputs_failed(rc, out, "lib_template"), "check_inputs.py lib_template (template edited by hand)"
+
+
+def p74(run, d):
+    dst = openram_copy(d, f"{SRAM}_TT_1p8V_25C.lib", r"(capacitance\s*:\s*)([\d.eE+-]+)",
+                       lambda m: f"{m.group(1)}{float(m.group(2)) * 2:.6g}", "a capacitance in the OpenRAM TT .lib")
+    rc, out = inputs_check(d, "--openram", dst)
+    return inputs_failed(rc, out, "macro_source") and "'tt_lib'" in out, "check_inputs.py macro_source names the TT .lib"
+
+
+def p75(run, d):
+    body = ("c = ly.cell(M)\nt = {}\nfor li in ly.layer_indexes():\n    for s in c.shapes(li).each():\n"
+            "        if s.is_text() and s.text_string in ('din0[0]', 'din0[1]'):\n            t[s.text_string] = s\n"
+            "assert len(t) == 2, t\nt['din0[0]'].text_string, t['din0[1]'].text_string = 'din0[1]', 'din0[0]'")
+    g = gds_edit(run, d, body, "SRAM texts din0[0] and din0[1] swapped")
+    if g is None:
+        return False, "could not edit the GDS"
+    ok, out = soc_case(run, d, "macro_gds", links={"final/gds/soc_top.gds": g})
+    return ok and "other contents" in out, "check_soc.py macro_gds: two pin texts swapped (only row FAIL)"
+
+
+def p76(run, d):
+    body = ("c = ly.cell(M + '_bank')\nli = ly.layer(70, 20)\n"
+            "s = next(x for x in c.shapes(li).each() if x.is_box() and x.box.width() > 100 and x.box.height() > 100)\n"
+            "b = s.box\nn = 40\nc.shapes(li).erase(s)\n"
+            "c.shapes(li).insert(pya.Polygon([pya.Point(b.left, b.bottom), pya.Point(b.right - n, b.bottom), "
+            "pya.Point(b.right - n, b.bottom + n), pya.Point(b.right, b.bottom + n), pya.Point(b.right, b.top), "
+            "pya.Point(b.left, b.top)]))")
+    g = gds_edit(run, d, body, "a met3 box of the SRAM bank cell notched")
+    if g is None:
+        return False, "could not edit the GDS"
+    ok, out = soc_case(run, d, "macro_gds", links={"final/gds/soc_top.gds": g})
+    return ok and f"{SRAM}_bank" in out, "check_soc.py macro_gds: a polygon with the same box (only row FAIL)"
+
+
+def ir_worst_run(run, d, *extra):
+    os.makedirs(d, exist_ok=True)
+    cp = subprocess.run([sys.executable, IR_WORST, run, d, *extra], capture_output=True, text=True)
+    open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
+    return cp.returncode, cp.stdout
+
+
+def p77(run, d):
+    doc = json.load(open(os.path.join(SRAM_IP, "char", "power.json")))
+    del doc["pvts"]["ff_100C_1v95"]["static_max_mw"]
+    pj = os.path.join(d, "power.json")
+    json.dump(doc, open(pj, "w"))
+    rc, out = ir_worst_run(run, d, LIMITS, "--power", pj)
+    return (rc != 0 and "no port 1 floating current for ff_100C_1v95" in out and out.rstrip().endswith("ir-worst: FAIL"),
+            "ir_worst.py: no port 1 floating current for ff_100C")
+
+
+def p78(run, d):
+    rc, out = ir_worst_run(run, os.path.join(d, "ref"), LIMITS)
+    drops = {c: float(v) for c, v in re.findall(r"\[PASS\] (max_ff_\w+) drop: .*= ([\d.]+) mV", out)}
+    if rc != 0 or len(drops) != 2 or len(set(drops.values())) != 2:
+        return False, f"reference run did not PASS with two different drops: {drops}"
+    worst = max(drops, key=drops.get)
+    text = open(LIMITS).read()
+    lim = os.path.join(d, "limits.toml")
+    open(lim, "w").write(edit_once(text, r"(\"ir_vdd_drop_plus_gnd_rise\" = \{.*max = )[\d.]+", lambda m: f"{m.group(1)}{sum(drops.values()) / 2e3:.6f}",
+                                   "the IR limit"))
+    rc, out = ir_worst_run(run, os.path.join(d, "mid"), lim)
+    return (rc != 0 and f"[FAIL] drop: worst {worst}" in out,
+            f"ir_worst.py: limit between {drops} -> FAIL on {worst}")
+
+
 def inputs_check(d, *args):
     cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", CPU, *args], capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
@@ -1487,7 +1614,8 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P43", p43), ("P44", p44), ("P45", p45), ("P46", p46), ("P47", p47), ("P48", p48), ("P49", p49), ("P50", p50), ("P51", p51),
          ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
          ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69),
-         ("P70", p70)]
+         ("P70", p70), ("P71", p71), ("P72", p72), ("P73", p73), ("P74", p74), ("P75", p75), ("P76", p76),
+         ("P77", p77), ("P78", p78)]
 
 
 def main():

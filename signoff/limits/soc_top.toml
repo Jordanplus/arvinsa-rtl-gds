@@ -54,8 +54,9 @@
 # = 90 mV on the VDD drop alone in project-plan.md §7.2). LibreLane's ir__drop__worst is the VDD
 # drop only, so both nets are summed here (the sum of the two worst values is >= the worst sum on
 # any one cell). Supply model: one side only (VSRC_LOC_FILES in config.json); the worst corner
-# combination of that model is in docs/notes/ir_worst_case_soc_top.md. The SRAM current comes from
-# the analytical .lib (ADR-0007).
+# combination of that model is in docs/notes/ir_worst_case_soc_top.md; pnr/soc_top/ir_worst.py
+# checks it in every run (both ff corners, with the SRAM's port 1 floating current). The SRAM current comes
+# from the measured .lib (ADR-0018 decisions 10-15), which leaves the floating current out.
 "ir_vdd_drop_plus_gnd_rise" = { keys = ["design_powergrid__drop__worst__net:vccd1", "design_powergrid__drop__worst__net:vssd1"], max = 0.02 }
 
 [corners]
