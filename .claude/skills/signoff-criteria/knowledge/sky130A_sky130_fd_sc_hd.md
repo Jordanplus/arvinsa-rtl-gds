@@ -26,7 +26,7 @@ S12. **sky130 只能用 flat derate**：三份 .lib 都沒有 ocv／sigma／LVF 
 
 S15. **KLayout 的 sky130 DRC deck**（`sky130A_mr.drc`）：
     - 沒有 latch-up（LU）、`nwell.4`、density、antenna 規則。
-    - nsdm／psdm 的寬度、間距、包覆規則只有 `sram_exclude=true` 時才跑（557–633、639–729 行），LibreLane 沒有開，所以這些只由 Magic 檢查。
+    - nsdm／psdm 的寬度、間距、包覆規則在 `sram_exclude` 的兩個分支都會跑（557–633、639–729 行）；`true` 只是先排除名稱符合 `*sky130_sram_*kbyte_*` 的 cell，LibreLane 用預設 `false`，全部形狀都查（2026-10-11 更正：原本誤讀成只在 `true` 時跑；Phase 6 在自產 SRAM 裡報了 psdm.1）。`nwell.6` 不論設定都排除這種名稱的 cell。
     - LibreLane 傳的 `floating_metal`、`topcell`、`threads` 和 deck 讀的變數名對不上（`$floating_met`、`$top_cell`、`$thr`），所以浮接金屬檢查開不起來。
     - 結論：「KLayout DRC = 0」不代表 latch-up、density、antenna 合格。
 

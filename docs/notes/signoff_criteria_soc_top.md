@@ -40,7 +40,7 @@
 | antenna | 0 違規；SRAM LEF 補了 gate 面積（ADR-0008） | OK | — |
 | latch-up | Magic 完整 GDS DRC 在 SRAM 外 0 違規；tap 最壞約 13.1 µm（15 µm 規則） | macro 內 OK。**chip-level 注意**：KLayout 輸出的 GDS 沒有 81/14 標記，沒有標記的區域適用 6 µm 規則 | Phase 7 確認 81/14 覆蓋 soc_top；`FP_TAPCELL_DIST` 不要調大 |
 | metal density | 沒有檢查。實測全域密度：li1 42.4%、met1 25.8%、met2 14.3%、met3 7.8%、met4 3.5%、met5 2.6% | macro-level 不判；met1–met5 遠低於 35% 下限，chip-level 一定要補 fill | Phase 7 交給平台的 fill。注意 cf-precheck 只檢查上限 |
-| KLayout DRC 的涵蓋範圍 | 0 違規 | 不含 latch-up、density、antenna、浮接金屬、nsdm／psdm | 這些由 Magic 完整 GDS DRC 涵蓋（latch-up、implant），其餘見上 |
+| KLayout DRC 的涵蓋範圍 | 0 違規 | 不含 latch-up、density、antenna、浮接金屬（2026-10-11 更正：nsdm／psdm 規則其實有跑，`sram_exclude` 只決定是否先排除 `*sky130_sram_*kbyte_*` 名稱的 cell；`drc-signoff` 規則 5） | latch-up 由 Magic 完整 GDS DRC 涵蓋，其餘見上 |
 | LVS | SRAM 是 black box | 已知限制 | Phase 7 的 precheck 有 device-level LVS 與 ERC |
 
 ## clock uncertainty 的成分（Phase 4，`pnr/soc_top/clock_uncertainty.sdc`）

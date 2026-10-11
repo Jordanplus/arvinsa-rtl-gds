@@ -167,9 +167,9 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`、`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`、`LEF has no FOREIGN`）；OpenROAD 報 `ODB-0292 LEF data from ... is discarded due to errors`；最終 GDS 的 macro 是空的、XOR 差異幾百萬；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
 | SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix；用 OpenRAM 自產 macro（官方環境只有 x86_64-linux、要不要關 use_nix、words_per_row 與讀取電路）；OpenRAM 的 LVS 用新 PDK 報 `Netlists do not match`（`special_nfet_01v8`、`special_pfet_latch`）、log 有 `ERROR` 但 exit 0、`Custom cell pin names do not match spice file`、同一設定產生的 GDS 每次不同；`gen_char_lib` 報 `internal_power ... outside (0, 1000]`；用 SPICE 量 internal power 時漏電隨網表改變或外插成負值；漏電量測窗 `leakage window ... not settled`、bitcell 漏電不隨溫度變或 `bitcell leakage depends on gmin`、用 `.nodeset` 算 DC 工作點報 `doAnalyses: out of memory`；sky130 1RW 報 `must have an even number of cols including replica cols`、DRC／LVS 失敗；OpenRAM 產的 macro 在 KLayout DRC 報 nwell.6、psdm.1、m2.2，或改了 OpenRAM 的擺放後 LVS 不一致、報 nwell.2a | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
-| DRC 不為 0、macro 內部的 DRC 怎麼判、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | — |
+| DRC 不為 0、macro 內部的 DRC 怎麼判、換了自產或改名的 macro 後 KLayout 在 macro 裡報錯、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | hard-macro-integration（macro 單獨的 DRC） |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
-| LVS 失敗、斷線 pin、電源 pin 有沒有真的接上 | lvs-signoff | pdn-ir-drop |
+| LVS 失敗、斷線 pin、電源 pin 有沒有真的接上；LVS PASS 但不確定 macro 的版圖有沒有進 GDS | lvs-signoff | pdn-ir-drop、hard-macro-integration（`check_macro_gds.py`） |
 | 合成設定、lint 警告、狀態機被重新編碼（formal 因此對不上） | rtl-synthesis-lint | formal-equivalence-eqy |
 | 證明兩份網表等價、EQY 當機或證不出來、EQY 在切分步驟停下（`conflicting matches`，例如 OpenROAD 對調了輸入腳位） | formal-equivalence-eqy | — |
 | 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
@@ -308,11 +308,12 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 #### drc-signoff：DRC、GDS 輸出、XOR
 
-- **何時用**：Magic／KLayout DRC、GDS 輸出、XOR（兩個工具寫出的 GDS 逐點比對）；設計含 macro 時 DRC 不為 0、abstract DRC 報大量 `nwell.4`、GDS 有多個 top cell、金屬密度。
+- **何時用**：Magic／KLayout DRC、GDS 輸出、XOR（兩個工具寫出的 GDS 逐點比對）；設計含 macro 時 DRC 不為 0、abstract DRC 報大量 `nwell.4`、GDS 有多個 top cell、金屬密度；換了自產或改名的 macro 後 KLayout 在 macro 裡報錯。
 - **重點**：
   - abstract DRC 會在每條 standard cell row 報假的 `nwell.4`，所以改用完整 GDS 的 DRC。
   - SRAM 內部本來就有大量標準規則違規：外框外必須是 0；外框內每個違規都要落在 macro 單獨檢查時、同規則違規的位置上。只比規則種類會漏掉新的錯誤。
-  - Magic 與 KLayout 的 sky130 deck 涵蓋範圍不同：KLayout 沒有 latch-up 與 implant 規則，浮接金屬檢查也開不起來。所以「KLayout DRC = 0」不代表全部合格。
+  - Magic 與 KLayout 的 sky130 deck 涵蓋範圍不同：KLayout 沒有 latch-up 規則，浮接金屬檢查也開不起來，而且依 cell 名稱（`*sky130_sram_*kbyte_*`）排除 SRAM 的 `nwell.6`。所以「KLayout DRC = 0」不代表全部合格；自產或改名的 macro 要在 macro 單獨時用同一份 deck 檢查到 0。
+  - 框內違規至少要是 macro 單獨檢查的一半：macro 在最終 GDS 裡是空的時，位置比對沒有東西可比也會 PASS。
   - 設了 `ERROR_ON_MAGIC_DRC=false` 之後 LibreLane 不再替 Magic DRC 判 FAIL，取代它的自寫 checker 必須有自己的植入錯誤。
   - Classic flow 不插 metal fill，也不查密度；soc_top 實測遠低於下限，chip-level 要補。
 - **本 repo 實例**：`pnr/soc_top/check_soc.py`（magic_drc）、`pnr/soc_top/sram_drc_alone.py`、`signoff/waivers/`。negative test：P10、P11、P21。
@@ -373,7 +374,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 - **何時用**：LVS 失敗、macro 在 LVS 中是 black box、驗證電源或訊號 pin 的實體連接、斷線 pin。
 - **重點**：
-  - macro 用 LEF 萃取時，LVS 只驗 macro pin 的連接，不驗內部。
+  - macro 用 LEF 萃取時，LVS 只驗 macro pin 的連接，不驗內部。macro 在最終 GDS 裡是空的，LVS 照樣 PASS（Phase 6 只有 XOR 抓到），macro 的版圖內容要靠 XOR 與 `check_macro_gds.py`。
   - 斷線 pin 的表格只在有斷線時才產生。要讀 log 裡的那一行，有表格時還要確認表格完整。
   - macro 未用的輸出接 RTL 具名 wire，就不算斷線；並確認 `IGNORE_DISCONNECTED_MODULES` 仍是 PDK 預設。
   - 驗證方法：刪掉電源環上的 via，單步重跑萃取與 LVS，必須 FAIL。
