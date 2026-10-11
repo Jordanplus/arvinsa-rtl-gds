@@ -168,9 +168,9 @@ def main(argv):
     try:
         summ = json.load(open(os.path.join(args.openram, "summary.json"), encoding="utf8"))
         want_sha = summ["outputs_sha256"]
-        files = {"gds": f"{MACRO}.gds", "lef": f"{MACRO}.lef", "sp": f"{MACRO}.sp", "v": f"{MACRO}.v",
+        views = {"gds": f"{MACRO}.gds", "lef": f"{MACRO}.lef", "sp": f"{MACRO}.sp", "v": f"{MACRO}.v",
                  "tt_lib": f"{MACRO}_TT_1p8V_25C.lib"}
-        bad_sha = [e for e, f in files.items() if sha256(os.path.join(args.openram, f)) != want_sha.get(f)]
+        bad_sha = [e for e, f in views.items() if sha256(os.path.join(args.openram, f)) != want_sha.get(f)]
         # the netlist may be the earlier run's that the .lib was characterized from, when it is the same circuit
         # (same subcircuits, word for word; only order and comments differ; ADR-0018 decision 17)
         sp_same = "sp" in bad_sha and summ.get("spice_content_sha256") == spice_content_sha256(
@@ -256,11 +256,13 @@ def main(argv):
             and f"/versions/{pin('SKY130_PDK_HASH')}/" in os.path.realpath(rstd[f"*_{p}"][0]) for p in PVTS)
         rinc = [os.path.normpath(p) for p in res.get("VERILOG_INCLUDE_DIRS") or []]
         rdef = res.get("VERILOG_DEFINES") or []
-        ok = sorted(rfiles) == sorted(files) and sorted(rinc) == sorted(inc) and rdef == defines \
-            and rlib == {f"*_{p}": [char_lib(CHAR_DIR, p)] for p in PVTS} \
-            and rlef == [ANT_LEF] and std_ok and not res.get("EXTRA_LIBS")
-        row("resolved", ok, f"run used {len(rfiles)} RTL files, {len(rinc)} include dir(s), defines {rdef}, MACROS lib {rlib}, lef {rlef}"
-            + ("" if std_ok and not res.get("EXTRA_LIBS") else f"; LIB {rstd}, EXTRA_LIBS {res.get('EXTRA_LIBS')}"))
+        diff = [name for name, same in (
+            ("VERILOG_FILES", sorted(rfiles) == sorted(files)), ("VERILOG_INCLUDE_DIRS", sorted(rinc) == sorted(inc)),
+            ("VERILOG_DEFINES", rdef == defines), ("MACROS lib", rlib == {f"*_{p}": [char_lib(CHAR_DIR, p)] for p in PVTS}),
+            ("MACROS lef", rlef == [ANT_LEF]), ("LIB", std_ok), ("EXTRA_LIBS", not res.get("EXTRA_LIBS"))) if not same]
+        row("resolved", not diff, f"run used {len(rfiles)} RTL files, {len(rinc)} include dir(s), defines {rdef}, MACROS lib {rlib}, lef {rlef}"
+            + ("" if std_ok and not res.get("EXTRA_LIBS") else f"; LIB {rstd}, EXTRA_LIBS {res.get('EXTRA_LIBS')}")
+            + (f"; differs from the expected: {', '.join(diff)}" if diff else ""))
 
     ok = all(rows) and rows
     print(f"soc-inputs: {'PASS' if ok else 'FAIL'}")

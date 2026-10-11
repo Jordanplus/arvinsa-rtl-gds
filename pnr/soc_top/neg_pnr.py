@@ -46,7 +46,8 @@ step re-run one step on a copy of that step's saved config and input state
   P11  KLayout GDS + one met2 rectangle (Magic GDS unchanged)
                                                      KLayout.XOR -> Checker.XOR
   checker inputs (the checker on an edited copy of one file; the tool is not re-run)
-  P00  positive control: the fake run of the cases below, without any edit: check_soc.py PASS
+  P00  positive control: the fake run of the cases below, without any edit: check_soc.py PASS;
+       check_inputs.py --resolved on the run's resolved.json: PASS
        (each fake run links the run's final netlist and DEF, disconnected-pin log, Magic DRC
        report and signoff STA directory; the edited file replaces its link)
   P06  SRAM LEF with ANTENNAGATEAREA / 1000         OpenROAD check_antennas on the final DEF: > 0 violations
@@ -744,8 +745,12 @@ def p36(run, d):
 
 def p00(run, d):
     rc, out = check_soc(fake_run(run, d, {}), d, run)
-    return rc == 0 and "[FAIL]" not in out and out.rstrip().endswith("soc-checks: PASS"), \
-        "positive control: check_soc.py PASS on the unedited fake run"
+    # the input checker too: a mistake in it that fails every run is not seen by the cases that edit an input
+    # (Phase 6 close: a variable reused in check_inputs.py failed the resolved row of every run)
+    rc_in, out_in = inputs_check(d, "--resolved", os.path.join(run, "resolved.json"))
+    return rc == 0 and "[FAIL]" not in out and out.rstrip().endswith("soc-checks: PASS") \
+        and rc_in == 0 and "[FAIL]" not in out_in and out_in.rstrip().endswith("soc-inputs: PASS"), \
+        "positive control: check_soc.py PASS on the unedited fake run, check_inputs.py --resolved PASS on the run's resolved.json"
 
 
 def antenna_check(run, sram_lef, d, tag):

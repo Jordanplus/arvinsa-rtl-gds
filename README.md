@@ -243,6 +243,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）、重試留下的中止目錄頂替完成的那次。新 checker 要逐條對照。
   - Phase 5 獨立審查的 9 種新漏洞類型：只證明設定被讀到、沒證明生效；靠名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制的觸發條件比規則小；抓到的機制和宣稱的不同；守門條件本身沒測試；只看版本字串；暫用另一個設計的誤差；比對到資料而不是指令。規則 7 補兩條：斷言抓到它的機制、每道守門條件都要有「拿掉就 FAIL」的情境。
   - Phase 6 獨立審查的 5 種新漏洞類型：black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯。另外 `abs(x - y) > tol` 對 NaN 永遠不成立，要寫成 `not abs(x - y) <= tol`。
+  - Phase 6 結案 regress 抓到的一類：checker 的某個模式（`check_inputs.py --resolved`）只有植入錯誤的案例在跑，checker 改壞成永遠 FAIL 時這些案例照樣「抓到」。每個模式都要有沒植入時必須 PASS 的對照（neg-pnr P00）。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂
