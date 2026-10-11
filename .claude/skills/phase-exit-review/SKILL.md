@@ -1,6 +1,6 @@
 ---
 name: phase-exit-review
-description: 一個 Phase（階段）收尾時使用：對照 project-plan.md 的 exit criteria 整理證據（只用乾淨 checkout 的最後一次 run）、寫 docs/phase_exit/phase<N>.md、列出與計畫不同的做法與帶到下一階段的已知限制、請沒參與實作的 agent 做獨立審查、記錄使用者決定，以及收尾時分析本階段任務是否需要新 skill、逐一對照每個 skill 與 README 有沒有寫回、推送規則。Use when closing a project phase (exit criteria evidence, deviations from plan, known limitations, independent review, user decisions, skill and README write-back).
+description: 一個 Phase（階段）收尾時使用：對照 project-plan.md 的 exit criteria 整理證據（只用乾淨 checkout 的最後一次 run）、寫 docs/phase_exit/phase<N>.md、列出與計畫不同的做法與帶到下一階段的已知限制、開結案 regress 前先讓最後改過的 checker 在現有 run 上跑過 positive control（改了沒跑就開 regress，兩次各浪費一輪）、請沒參與實作的 agent 做獨立審查、記錄使用者決定，以及收尾時分析本階段任務是否需要新 skill、逐一對照每個 skill 與 README 有沒有寫回、推送規則。Use when closing a project phase (exit criteria evidence, deviations from plan, known limitations, independent review, user decisions, skill and README write-back).
 ---
 
 # Phase exit review 與獨立審查
@@ -11,6 +11,7 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
 
 1. **exit criteria 照抄 `project-plan.md` §8**，再加上前一階段 exit review 帶過來的項目（「已知限制」與「留到下一階段」逐條對照，**也包含再前一個階段沒結的項目**（Phase 5 漏了 Phase 3.5 的限制 1–15）；每一條「沒變」要在新設計上重新量過才算，不能照抄（Phase 5：IR「供電位置是假設」原本寫沒變，實測 Hazard3 已超過上限）；Phase 2 延到 Phase 3 的來源追溯，到 Phase 3 收尾才發現還沒做，`signoff-checker-qualification` 規則 9）。
 2. **證據只來自乾淨 checkout 的端到端 run**：寫明 commit、開始與結束時間、exit code、跑了幾次、前幾次為什麼沒跑完。開發目錄補跑的結果不算（`flow-regression-reproducibility` 規則 2）。
+   - **開結案 regress 之前，最後改過的每支 checker 都要先在現有的 run 上跑一次 positive control**（沒植入時必須 PASS），植入錯誤的案例也要跑。兩次都是改了沒跑就開 regress：Phase 3.5 的 P17 改寫後先清空檔案再讀，Phase 6 的 `check_inputs.py --resolved` 對每個 run 都 FAIL。各浪費一輪 regress（Phase 6 兩輪共 76 分鐘）。
 3. **每個數字都要對得回證據檔，而且用對 metric 的意思**：
    - Phase 3 文件核對找到 6 個寫錯的數字或事實（案例數、clock skew、使用率、cell 組成、最長線的來源、密度）。
    - 容易誤讀的彙總值：`power__total` 是最後寫入的 corner；`clock__skew__worst_setup` 是各 corner 的最小值；DRV 計數是各 corner 的最大值（`librelane-run-debug` 規則 4）。
@@ -33,3 +34,4 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
 | 2026-10-05 | Phase 3.5 收尾 | 乾淨 checkout 的 `make regress` 跑 2 次：第 1 次 neg-pnr P17 FAIL（植入程式先清空檔案再讀；改寫後沒先跑）。獨立審查在 regress 2 執行期間進行（只讀、只做幾秒的實驗）：文件漏列一個讀取失敗條件（室溫），其他 21 項更正；checker 漏洞 12 個，獨立重算確認沒有假 PASS | 已驗證 | regress 1 不算數並寫明原因；審查與 regress 同時進行省下約 1 小時；漏洞依使用者決定列為已知限制、下一個 Phase 開頭修；頭號風險的範圍擴大要直接告訴使用者 | `docs/phase_exit/phase3_5.md` |
 | 2026-10-08 | Phase 5 收尾 | 兩輪乾淨 regress 都 PASS 後，獨立審查仍找到：文件 17 項（判定說法不誠實、Phase 3.5 限制沒延續、證據引用開發 worktree 的 run）、checker 漏洞 8 個；再實測 IR，Hazard3 最壞組合 25.75 mV 超過上限。三件事都要使用者決定，修完之後還要重 harden、重建 golden、再跑兩輪 regress | 已驗證：IR 用 Phase 4 方法重測，PDN 用 what-if | 規則 1 補：上一階段帶過來的「假設成立」也要在新設計上重新量，不能只抄過來（IR 在 Phase 4 是「沒變」，在 Phase 5 其實變差）；時程要預留「審查後修正、再跑一輪」 | `docs/phase_exit/phase5.md` |
 | 2026-10-08 | Phase 5 收尾的時程 | 乾淨 regress 跑了三輪才結案：`7348fab`（PASS，之後獨立審查找到 8 個漏洞與 IR 超標）、`5aaf036`（修正後；PicoRV32 因版圖誤差清空而 FAIL）、`71b1454`（量樣本、訂誤差、加 GRT-0116 重試後兩輪都 PASS）。從第一次 PASS 到結案約一天，其中兩輪 regress 共約 4 小時、補樣本約 1 小時 | 已驗證 | 獨立審查要在第一輪乾淨 regress 之後馬上做，時程預留「修正 → 重新 harden 與建 golden → 再兩輪 regress」；清空誤差這類決定要預期會多一輪量樣本 | `docs/phase_exit/phase5.md`「正式 run」 |
+| 2026-10-11 | Phase 6 結案 regress 第 1 次（`904e18e`） | 兩輪都在 harden-soc FAIL：`check_inputs.py` 的 `resolved` 列對每個 run 都 FAIL；版圖與 golden 逐項相同。獨立審查的修正（`37c99b4`）改了這支 checker，之後只跑過植入錯誤的案例（照樣「抓到」），沒跑過完整 harden | 已驗證：修正版在兩個 worktree 的 run 上 PASS，舊版讓新的 P00 FAIL | 和 Phase 3.5 的 P17 同類（改了沒跑就開 regress），第二次出現，寫進規則 2；checker 修正見 `signoff-checker-qualification` | `docs/phase_exit/phase6.md`「本階段找到並修正的 checker 問題」6、`runs/p6close_attempt1/` |

@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-08）：Phase 0–5 與 Phase 3.5 完成。** 完整規劃見 [project-plan.md](project-plan.md)。
+**實作中（2026-10-11）：Phase 0–6 與 Phase 3.5 完成。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -30,7 +30,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 - Phase 3.5：SRAM 的時序改用 SPICE 實測（本機 ngspice 量 PDK 附的電晶體級網表，ADR-0010）。
   - 5 個 PVT 各一份 .lib，由量測結果的 JSON 產生並檢查沒過期；加上 dout0 在 clock 上升緣後就開始變化的 hold 弧。
   - 延遲、setup、週期都仍由原本保守的下限決定；新的 hold 弧讓 soc_top 週期 42 → 43 ns（使用者決定）。
-  - **頭號下線風險**：這顆 SRAM 在 ss 1.60 V 的 −40°C 與 25°C 讀取失敗（讀成前一次的值，sense amp 的設計問題），ss −40°C corner 用佔位 .lib，Phase 6 自產 macro 要修正。
+  - **頭號下線風險**：這顆 SRAM 在 ss 1.60 V 的 −40°C 與 25°C 讀取失敗（讀成前一次的值，sense amp 的設計問題），ss −40°C corner 用佔位 .lib。Phase 6 的自產 macro 已修正。
   - `make regress` 第 2 次在乾淨 checkout 25/25 PASS（136 分鐘），soc_top 439 個 metric 與 golden 完全相同，164 個植入錯誤全部在預期的 checker FAIL。第 1 次因一個植入程式的 bug FAIL，已修正。
   - 獨立審查更正了文件，並找到 12 個 checker 漏洞（沒有一個造成假 PASS），Phase 5 開頭修。
   - 紀錄見 [docs/phase_exit/phase3_5.md](docs/phase_exit/phase3_5.md)。
@@ -42,6 +42,15 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
   - 獨立審查找到 8 個 checker 漏洞，並發現 Hazard3 的最壞組合 IR 原本 25.75 mV 超標，全部修正後重跑。
   - 結案證據：commit `71b1454` 的乾淨 checkout，`make regress` 21/21（109 分鐘）、`make regress-picorv32` 26/26（124 分鐘），三次 harden 都與 golden 逐項相同。
   - 紀錄見 [docs/phase_exit/phase5.md](docs/phase_exit/phase5.md)。
+- Phase 6：SRAM 換成 OpenRAM 自產的 `arv_sram_2kbyte_1rw1r_32x512_8`（OpenRAM 釘選 commit 加 repo 內 4 個 patch，ADR-0018）。
+  - Phase 3.5 的頭號下線風險已解決：sense amp 輸入端預充電，加上 `clk1` 接系統時脈，7 個 PVT 條件都讀對；版圖萃取網表（含寄生）在 tt、ss −40°C、ss 100°C 也讀寫正確。
+  - 5 個 PVT 的時序與功耗都用 SPICE 量，寫成 .lib；macro 的每個 view 先過 view QA 才交給 flow。
+  - macro 的 DRC 合併錯誤區域後每種規則都 ≤ 預建 macro，flow 的 KLayout deck 0；OpenRAM 的 LVS match。
+  - 15 個 corner 的 setup／hold 全部 PASS：Hazard3 +0.656／+0.126 ns、PicoRV32 +0.769／+0.082 ns；IR 最壞組合 15.91／13.49 mV（上限 20 mV）。
+  - 已知限制：.lib 的時序沒有走線寄生（萃取量到電路圖的 2.0 倍），靠下限蓋住；dout0 transition 偏低，改成量到的值後 setup 仍 +0.37 ns。
+  - 獨立審查找到 7 個 checker 漏洞，全部修正後重跑；第一次結案 regress 抓到修正時弄壞的一支 checker，修正後重跑。
+  - 結案證據：commit `85bfa75` 的乾淨 worktree，`make regress` 23/23（126 分鐘）、`make regress-picorv32` 28/28（196 分鐘），三次 harden 都與 golden 逐項相同。
+  - 紀錄見 [docs/phase_exit/phase6.md](docs/phase_exit/phase6.md)。
 
 ## 快速開始
 
@@ -96,7 +105,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 3.5 | （可選）用 SPICE 實測 SRAM macro 的時序，取代假設值。2026-10-04 改為本機 ngspice 直接量 PDK 附的網表（ADR-0010） | 完成（2026-10-05） |
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
 | 5 | 換成 Hazard3 | 完成（2026-10-08） |
-| 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 進行中（2026-10-08 起，ADR-0018） |
+| 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 完成（2026-10-11，ADR-0018） |
 | 7 | （可選）chip-level 整合，例如 ChipFoundry Caravel | 未開始 |
 
 各階段的 exit criteria 與工時估計見 project-plan.md 第 8 章。
@@ -494,6 +503,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **重點**：
   - exit criteria 照抄規劃，再加上前一階段帶過來的項目。
   - 證據只用乾淨 checkout 的最後一次 run；前幾次為什麼不算要寫明。每個數字都對回證據檔。
+  - 開結案 regress 之前，最後改過的每支 checker 先在現有的 run 上跑一次沒植入時必須 PASS 的對照（Phase 3.5 與 Phase 6 都因為改了沒跑，各浪費一輪 regress）。
   - 請兩個沒參與實作的 agent 獨立審查：一個核對文件，一個找 checker 漏洞。審查找到的問題沒有重跑驗證，就不能寫「已修正」。
   - 要放寬門檻或改比對規則時先問使用者，並記錄決定。
   - 收尾時分析本階段的重大任務是否需要新 skill，並逐一對照每個 skill、README 與 `description` 有沒有寫回。
