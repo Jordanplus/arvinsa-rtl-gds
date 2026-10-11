@@ -261,13 +261,13 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
   | tt 25°C 1.80 V | 3.05 → 2.91 | 1.18 → 1.13 | 5.62 → 5.32 | 0.24 → 0.24 |
   | ss 100°C 1.60 V | 5.70 → 5.47 | 2.70 → **2.08** | 9.37 → 8.445 | 0.43 → 0.44 |
   | ff −40°C 1.95 V | 1.87 → 1.79 | 0.71 → 0.70 | 3.495 → 3.32 | 0.16 → 0.16 |
-  | ss −40°C 1.60 V | 預建讀錯 → 5.98 | → 2.65 | → 10.445 | → 0.40 |
+  | ss −40°C 1.60 V | 預建讀錯 → 5.98 | → 2.65 | → 10.445 | → 0.58 |
   | ff 100°C 1.95 V | 1.77 → 1.67 | 0.73 → 0.73 | 2.90 → 2.66 | 0.18 → 0.18 |
 
-- `.lib`（`make openram-lib`）：port 0 的延遲、setup／hold、最小週期與 pulse width 量測值 ×1.6 都低於 ADR-0010 的下限（padded.lib：延遲 10 ns、ss 15 ns，週期 30 ns，setup／hold 1.0 ns），所以採用下限；量測值直接決定的是 dout0 的 hold 弧（最早變化 ×0.9）。ss 100°C 的最早變化比預建早 0.6 ns，接收端的 hold 餘量會變少，步驟 4a 的 STA 要看。
+- `.lib`（`make openram-lib`，公式在 `ip/sram/char/gen_char_lib.py`）：port 0 的延遲、最小週期與 pulse width 量測值 ×1.6 都低於 ADR-0010 的下限（padded.lib：延遲 10 ns、ss 15 ns，週期 30 ns），所以採用下限；setup／hold 是「量測值 + 0.10 ns」與下限（setup 1.0 ns、hold 0.5 ns）取大的，setup 全部採用下限，hold 在 ss 100°C 與 ss −40°C 由量測值決定（例如 ss −40°C din0 0.6837 ns），其他 PVT 採用 0.5 ns。dout0 的 hold 弧也由量測值決定（最早變化 ×0.9）。ss 100°C 的最早變化比預建早 0.6 ns，接收端的 hold 餘量會變少，步驟 4a 的 STA 要看（結果：4d 的 run 在 min_ss_100C 從 `sram0` 出發的最差 hold slack PicoRV32 +1.656、Hazard3 +1.674 ns，`57-openroad-stapostpnr/min_ss_100C_1v60/min.rpt`）。
 - view QA（`scripts/check_macro_views.py`，LEF／5 份 .lib／Verilog／SPICE／GDS）PASS。
 - 確認模擬（`make openram-confirm`，51 分鐘）：5 個 PVT、115 條 lane、25 次模擬，在 .lib 採用的 setup／hold／pulse width／週期上全部讀寫正確（`confirm.json`）。`make openram-check-lib`：來源（網表 sha256＝`summary.json` 記錄的值）、5 個 PVT 的數值獨立重算、確認模擬全部 PASS。來源檢查的自產 macro 分支有 negative test（`neg-openram` C1–C2）。
-- `make neg-char`（改過 `sramchar.py`、`gen_char_lib.py`、`check_char_lib.py` 之後重跑，2026-10-09，16 分鐘）：16/16 PASS。步驟 3c 完成。
+- `make neg-char`（改過 `sramchar.py`、`gen_char_lib.py`、`check_char_lib.py` 之後重跑，2026-10-09，16 分鐘）：16/16 PASS。步驟 3c 完成。最後一次是 2026-10-10 12:36 的 21/21（`runs/sram_char/neg_char_20261010.log`，步驟 3e 加了 N17–N21）；之後 `ad184f5` 改了 `check_char_lib.py` 的來源檢查（內容雜湊），`neg-char` 沒有重跑，這部分只有 regression 裡的 `neg-openram` C1–C5 涵蓋。`neg-char` 不在 `make regress` 裡，乾淨 worktree 沒跑過。
 
 ## 步驟 3e：internal power 與漏電（`ip/sram/char/power.py`，ADR-0018 決定 10、11，2026-10-09）
 
@@ -369,7 +369,7 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 
 ## 步驟 4b 第一輪 harden（2026-10-10，commit `221822a`，兩個 CPU 平行）
 
-- signoff 上限只有兩項 FAIL：`timing__unannotated_net__count`（PicoRV32 148／上限 118、Hazard3 151／126，上限要照推導重算）與 `design__xor_difference__count`（5,691,003／5,690,757，上限 0）；時序、DRV、IR、LVS 都在上限內。`check_soc`：`port1_tieoff`（`clk1` 追到 `clk`）、`sta_setup`（沒有警告）PASS；`sram_drc_ref` FAIL（SRAM 單獨 5,576,033 個、31 種，參考檔是預建的 5,579,161、30 種，要重建）。golden 152／88 列不同（預期）。
+- signoff 上限只有兩項 FAIL：`timing__unannotated_net__count`（PicoRV32 148／上限 118、Hazard3 151／126，上限要照推導重算）與 `design__xor_difference__count`（5,691,003／5,690,757，上限 0）；時序、DRV、IR、LVS 都在上限內。`check_soc`：`port1_tieoff`（`clk1` 追到 `clk`）、`sta_setup`（沒有警告）PASS；`sram_drc_ref` FAIL（SRAM 單獨 5,576,033 個、31 種，參考檔是預建的 5,579,161、30 種，要重建）。signoff FAIL 152／88 列，其中 golden 比對不同 149／85 個（預期）。
 - XOR：差異分布在 30 層，包括 SRAM 的 poly、diff、licon、li1 與 SRAM 專用層。KLayout 輸出的 `soc_top.gds` 裡 SRAM cell 沒有子 cell、外框是空的；Magic 的 GDS 有 168 個（名稱加了 `EN_`）。兩邊 GDS 的資料庫單位都是 0.001（排除）。
 - 根因（已驗證）：LibreLane `scripts/klayout/stream_out.py` 先用 LEF＋DEF 建 cell、清空，再合併 GDS；OpenRAM 的 LEF 沒有 `FOREIGN`，SRAM 不是 ghost cell，GDS 的同名 cell 被 `RenameCell` 改名後沒被引用；缺 GDS 的檢查只看 ghost cell，log 印 `All LEF cells have matching GDS cells`。單步重跑 `KLayout.StreamOut`、LEF 加 `FOREIGN` 後 169 個 cell 全部相同（`scripts/check_macro_gds.py` PASS）。
 - 連帶發現：Magic DRC 讀的是同一份 GDS，`magic_drc` 框內 0 個違規仍 PASS（比對的集合是空的）。
@@ -401,9 +401,9 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 - 簽核結果：KLayout DRC 0（上一輪 SRAM 裡 27）、XOR 0、LVS 0、antenna 0、`magic_drc`（SRAM 外 0）、`macro_gds`、`port1_tieoff`、`sta_setup`、`ir_worst`（PicoRV32 5.87 mV、Hazard3 14.74 mV）PASS。最差 setup：PicoRV32 +0.769、Hazard3 +0.656 ns（都是 SRAM 半週期讀出）；最差 hold +0.082／+0.126 ns。
 - FAIL 只有預期的三類：golden（134／100 列，設計改變）、`sram_drc_ref`（參考檔是預建 macro 的）、`timing__unannotated_net__count`（144／上限 118、152／126）。
 - unannotated 逐一分類（`57-openroad-stapostpnr/*/checks.rpt`，15 個 corner 相同）：PicoRV32 102 CTS 假負載 + 32 `dout1` + 10 tie 空端；Hazard3 109 + 32 + 11。三類都在推導裡，照決定 16 把上限改成 144、152（`signoff/limits/*.toml` 的註解寫組成）。
-- 依決定 16 重建：golden（兩個 CPU，`signoff/golden/*/README.md` 寫出處與逐項差異；signoff dir 另存 `runs/p6_3m_{pico,h3}_signoff/`）、SRAM DRC 參考檔（`signoff/waivers/soc_top/sram_magic_drc_baseline.json`：5,576,010、29 種；兩個 CPU 的 SRAM 單獨報告逐位元相同；比預建少的只有 `Can't overlap those layers` 161）。用新檔對這一輪重判：signoff PASS、soc-checks PASS。
+- 依決定 16 重建：golden（兩個 CPU，`signoff/golden/*/README.md` 寫出處與逐項差異；signoff dir 另存 `runs/p6_3m_{pico,h3}_signoff/`）、SRAM DRC 參考檔（`signoff/waivers/soc_top/sram_magic_drc_baseline.json`：5,576,010、29 種；兩個 CPU 的 SRAM 單獨報告逐位元相同；和預建的參考檔比：少了 `Can't overlap those layers`（161）這一種，diff/tap.1、licon.5a、poly.2 三種比預建多（+130、+260、+65），18 種比預建少、8 種相同）。用新檔對這一輪重判：signoff PASS、soc-checks PASS。
 - 觀察：detailed routing 25 行 `DRT-0418 ... has no pins on routing grid`（SRAM 的 `addr0` 3、`addr1` 2、`clk0`、`web0`、`dout1` 18），第二輪起就有、預建 macro 沒有，最終 DRC／LVS 0；根因未查（推測腳位沒有對齊繞線格點），記在 `hard-macro-integration` 經驗紀錄。
-- 功耗：power__total PicoRV32 8.73 → 9.47 mW、Hazard3 19.33 → 20.41 mW（SRAM internal power 換成實測值、`clk1` 打時脈）。
+- 功耗：`power__total` 是最後寫入的 corner（max_ff_100C_1v95），PicoRV32 8.73 → 9.47 mW、Hazard3 19.33 → 20.41 mW。PicoRV32 多的 0.74 mW：SRAM 漏電 +0.39（ff 100°C 17.7 µW → 409 µW，量測值）、SRAM internal power +0.22（量測值，`clk1` 也打時脈）、standard cell +0.13；Hazard3 是 +0.39、+0.21、+0.47。nom_tt 只多 1.1％／2.3％（6.93 → 7.00、15.33 → 15.68 mW）。比較的是 Phase 5 結案（`p5final_*`）與 4d（`p6final_*`）的 `57-openroad-stapostpnr/*/power.rpt`。
 - `check_soc.py --make-drc-baseline` 寫的 `source` 原本是「PDK GDS」，改成「config.json MACROS 指的 GDS」。
 
 ## 步驟 4c：下游驗證（2026-10-10，harden 用 commit `940e395`；checker 修正在工作樹上驗，之後一起 commit）

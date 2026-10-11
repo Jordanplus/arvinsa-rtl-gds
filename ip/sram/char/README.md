@@ -71,7 +71,7 @@ make openram-check-lib      # 獨立重算、來源（ip/sram/<macro>/openram/<m
 
 **讀取失敗的 PVT**：每個 PVT 先跑延遲表中間那一點的模擬（和延遲表共用）。只要有一次讀取錯，就只記下錯的讀取（`char.json` 的 `read_fail`），不量時序；`gen_char_lib.py` 為它產生佔位 .lib（`PLACEHOLDER_FROM` 的數字，hold 弧取所有 PVT 最早的值，檔頭寫明）。目前 STA 的 PVT 中只有 ss −40°C 1.60 V：PDK 這顆 macro 在低溫，以及 ss 1.60 V 的室溫（25°C）會讀成前一次的值（25°C 不是 STA corner），原因與證據見 ADR-0010「ss −40°C 讀取失敗」。
 
-**port 1**：SoC 裡 tie-off，STA 沒有 clk1 的 clock，沿用 PDK 的解析數字。功耗：預建 macro 沿用 PDK 的解析數字；自產 macro 用 `power.py` 量（`make openram-power`）。port 1 從不選時它的 sense amp 浮接、上下同時導通，這個靜態電流不在 .lib 的漏電裡，記在 `power.json` 的 `static_mw`（ADR-0018 決定 11）。
+**port 1**：時序沿用範本的解析數字（不量）。預建 macro 在 SoC 裡 tie-off，STA 沒有 clk1 的 clock；自產 macro 的 `clk1` 接系統時脈（ADR-0018 決定 9），STA 會用這些解析數字檢查 port 1。功耗：預建 macro 沿用 PDK 的解析數字；自產 macro 用 `power.py` 量（`make openram-power`）。port 1 從不選時它的 sense amp 浮接、上下同時導通，這個靜態電流不在 .lib 的漏電裡，記在 `power.json` 的 `static_mw`（ADR-0018 決定 11）。
 
 ## 植入錯誤（`make neg-char`）
 

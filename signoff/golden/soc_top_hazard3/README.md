@@ -19,7 +19,8 @@
 - 原因：同 PicoRV32 版（`signoff/golden/soc_top/README.md`）：SRAM 換成 OpenRAM 自產（ADR-0018），沒有逐項分開實驗。
 - metrics 436 → 441 個：多了 `flow__warnings__count:DRT-0418`（同 PicoRV32 的 25 行 SRAM 腳位不在繞線格點上）與 `route__drc_errors__iter:6`、`:7`、`route__wirelength__iter:6`、`:7`（detailed routing 多跑兩輪，最終 DRC 0）。共有的 436 個中 256 個相同、180 個改變。
 - timing：最差 setup +1.114 → **+0.656 ns**（SRAM 半週期讀出，launch clock 與 hold buffer 佔掉差距；Phase 6 第二輪 +0.643）；hold +0.109 → +0.126 ns。
-- 功耗：power__total 19.33 → **20.41 mW**（+5.6%，同 PicoRV32 的原因）；IR（nom_tt）5.02 → 5.23 mV，最壞組合 14.74 mV（上限 20）。
+- 功耗：`power__total` 是最後寫入的 corner（max_ff_100C_1v95）的總和，19.33 → **20.41 mW**（+5.6%）：SRAM 漏電 +0.39 mW、SRAM internal power +0.21 mW、standard cell +0.47 mW；nom_tt 多 2.3%（15.33 → 15.68 mW）。.lib 不含 port 1 浮接電流（ADR-0018 已知限制）。IR（nom_tt）5.02 → 5.23 mV，最壞組合 14.74 mV（上限 20）。
+- clock：skew metric 在 ss −40°C 變大約 0.2–0.3 ns（例如 nom_ss_n40C hold −1.214 → −1.540、setup 0.921 → 1.155 ns），clock inverter 56 → 101。原因推測是 `clk1` 成為新的 clock sink，沒有分開實驗；最差 setup／hold 見上，仍 PASS。
 - cell：standard cell 30,423 → 30,406；clock buffer 445 → 454；antenna diode 108 → 99；stdcell 面積 238,995 → 240,768 µm²；utilization 0.681 → 0.700。
 - Magic DRC 4,746,079 → 4,770,846（全部在 SRAM 框內、對得上位置）。
 - unannotated 126 → **152**（109 CTS 假負載 + 32 `dout1` + 11 tie 空端；決定 16）。
@@ -65,7 +66,11 @@
 
 | run | 與本檔比較 |
 |---|---|
-| Phase 5 Hazard3，`PDN_HWIDTH` 4.8（commit `1dee974`） | 本檔來源 |
+| Phase 6 第三輪 harden（commit `ad184f5`） | 本檔來源 |
+| Phase 6 確認 harden（commit `940e395`） | 441 個完全相同 → harden-soc PASS |
+| Phase 6 乾淨 worktree 的 `make regress`（commit `4713c5f`，Phase 6 步驟 4d） | 441 個完全相同；最終網表、DEF 與 `940e395` 逐位元相同，GDS 只差日期記錄 → regress 23/23 |
+| 下列為 Phase 5 golden（見 git 歷史，commit `940e395` 以前的本檔）的紀錄 | |
+| Phase 5 Hazard3，`PDN_HWIDTH` 4.8（commit `1dee974`） | Phase 5 golden 的來源 |
 | 乾淨 checkout 的 `make regress`（commit `5aaf036`，第 44 步 GRT-0229 接續一次） | 422 個相同、14 個連續量在誤差內 → PASS，regress 21/21 |
 | 乾淨 checkout 的 `make regress`（commit `71b1454`，Phase 5 結案） | 436 個完全相同 → PASS，regress 21/21 |
 | 下列為 ADR-0016 golden（見 git 歷史，commit `1dee974` 以前的本檔）的紀錄 | |

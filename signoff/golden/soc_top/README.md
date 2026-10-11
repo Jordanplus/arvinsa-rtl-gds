@@ -19,7 +19,8 @@
 - 原因：SRAM 換成 OpenRAM 自產的 `arv_sram_2kbyte_1rw1r_32x512_8`（ADR-0018）：macro 大 11 × 12 µm、位置 (290.72, 353.6)、`clk1` 接系統時脈（決定 9）、.lib 是 5 個 PVT 的實測特性化（含量測的 internal power 與漏電）、patch 0002–0004 修掉 macro 的 DRC。沒有逐項分開實驗。
 - metrics 435 → 435 個：少了 `flow__warnings__count:GRT-0243`，多了 `flow__warnings__count:DRT-0418`（25 行：SRAM 的 `addr0` 3、`addr1` 2、`clk0`、`web0` 與沒繞線的 `dout1` 18 支腳位不在繞線格點上；自產 SRAM 第一輪就有，最終 DRC、LVS 都是 0）。共有的 434 個中 253 個相同、181 個改變。
 - timing：最差 setup +0.789 → **+0.769 ns**（同一類 SRAM 半週期讀出）；hold +0.080 → +0.082 ns。
-- 功耗：power__total 8.73 → **9.47 mW**（+8.5%：SRAM 的 internal power 換成實測值，`clk1` 也打時脈）；IR（nom_tt）2.03 → 2.09 mV，最壞組合 5.72 → 5.87 mV。
+- 功耗：`power__total` 是最後寫入的 corner（max_ff_100C_1v95）的總和，8.73 → **9.47 mW**（+8.5%）：SRAM 漏電 +0.39 mW（ff 100°C 17.7 µW → 409 µW，量測值）、SRAM internal power +0.22 mW（量測值，`clk1` 也打時脈）、standard cell +0.13 mW；nom_tt 只多 1.1%（6.93 → 7.00 mW）。.lib 不含 port 1 浮接電流（ADR-0018 已知限制）。IR（nom_tt）2.03 → 2.09 mV，最壞組合 5.72 → 5.87 mV。
+- clock：skew metric 在 ss −40°C 變大約 0.2–0.4 ns（例如 nom_ss_n40C hold −1.292 → −1.679、setup 0.936 → 1.168 ns），clock inverter 49 → 87、clock buffer 508 → 521。原因推測是 `clk1` 成為新的 clock sink，沒有分開實驗；最差 setup／hold 見上，仍 PASS。
 - cell：standard cell 31,966 → 32,070；clock buffer 508 → 521；antenna diode 120 → 140；stdcell 面積 254,358 → 256,786 µm²；utilization 0.701 → 0.721（macro 變大）。
 - Magic DRC 4,746,079 → 4,770,846：全部在 SRAM 框內、位置對得上 SRAM 單獨檢查（`check_soc.py magic_drc`）。
 - unannotated 118 → **144**（102 CTS 假負載 + 32 `dout1` + 10 tie 空端；上限檔照推導重算，決定 16）。
@@ -77,7 +78,11 @@
 
 | run | 與本檔比較 |
 |---|---|
-| Phase 5 PicoRV32，`PDN_HWIDTH` 4.8（commit `1dee974`） | 本檔來源 |
+| Phase 6 第三輪 harden（commit `ad184f5`） | 本檔來源 |
+| Phase 6 確認 harden（commit `940e395`） | 435 個完全相同 → harden-soc PASS |
+| Phase 6 乾淨 worktree 的 `make regress-picorv32`（commit `4713c5f`，Phase 6 步驟 4d） | 435 個完全相同；最終網表、DEF 與 `940e395` 逐位元相同，GDS 只差日期記錄 → regress 28/28 |
+| 下列為 Phase 5 golden（見 git 歷史，commit `940e395` 以前的本檔）的紀錄 | |
+| Phase 5 PicoRV32，`PDN_HWIDTH` 4.8（commit `1dee974`） | Phase 5 golden 的來源 |
 | 乾淨 checkout 的 `make regress-picorv32`、樣本 3、樣本 5（commit `5aaf036`） | 三次彼此逐項相同；與本檔差 10 個版圖 metric（diode 99 對 100、`global_route__vias` 11 對 20 等）→ 當時沒有版圖誤差，FAIL；依這 4 個樣本訂 `[golden_layout_tolerance]`。樣本 4 在第 44 步因 GRT-0116 中止，不算 |
 | 乾淨 checkout 的 `make regress-picorv32`（commit `71b1454`，Phase 5 結案；第 44 步 GRT-0229 接續一次） | 435 個完全相同 → PASS，regress 26/26 |
 | 下列為 ADR-0016 golden（見 git 歷史，commit `1dee974` 以前的本檔）的紀錄 | |
