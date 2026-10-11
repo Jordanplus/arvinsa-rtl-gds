@@ -56,7 +56,7 @@ SKILL.md 是一般的 Markdown，任何 agent 都能讀。它們放在專案層�
 
 - `ip/sram/char/`：SRAM macro 的 ngspice 特性化、.lib 產生、獨立重算與確認模擬。方法通用；程式只支援 OpenRAM 架構的 1rw1r、32 bit × 512 word（`sramchar.py` 的字寬、位址寬、網表修剪依 OpenRAM 的命名），macro 名稱與網表可用環境變數 `SRAM_CHAR_MACRO`、`SRAM_CHAR_NETLIST` 換；其他容量或架構要改 `sramchar.py`。
 - `signoff/scripts/review_criteria.py` 與 `.claude/hooks/require_criteria_review.py`：每次 harden 後的 criteria review 與強制它的 Claude Code Stop hook。設計名稱、run tag、要讀哪些 checker 的結果都寫在程式裡，要改。
-- `scripts/progress.py` 加 `.claude/statusline-progress`：Claude Code 狀態列第二行的進度顯示（待辦清單 `runs/todo.md`，格式 `- [ ]` 待辦、`- [~]` 進行中、`- [x]` 完成）。它判斷「執行中工作」的方式綁本 repo 的 target 與 run 目錄（regress、LibreLane 有百分比；其他 make target 與直接執行的本 repo Python 腳本只顯示「執行中」）。
+- `scripts/progress.py` 加 `.claude/statusline-progress`：Claude Code 狀態列第二行的進度顯示（待辦清單 `runs/todo.md`，格式 `- [ ]` 待辦、`- [~]` 進行中、`- [x]` 完成；進行中的項目顯示它的子項目完成幾項，沒有子項目時算上層項目的子項目）。它判斷「執行中工作」的方式綁本 repo 的 target 與 run 目錄（regress、LibreLane 有百分比；其他 make target、直接執行的本 repo Python 腳本，以及本專案 Claude Code scratchpad 裡直接執行的 Python 腳本（例如 agent 的試跑）只顯示「執行中」與已跑時間；沒有固定總數的工作算不出百分比）。
 
 ### 1.4 只在使用者這台機器有的
 

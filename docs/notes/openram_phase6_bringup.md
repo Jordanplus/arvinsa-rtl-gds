@@ -433,3 +433,71 @@ Colab 官方環境：Magic 8.3.629、Netgen 1.5.318、KLayout 0.30.7、ngspice 4
 - EQY：Hazard3 16222/16222（pin swap 仍是 `_10787_` A↔B、`_10793_` A1↔A2，和 4c 相同）、PicoRV32 soc_top 18156/18156、picorv32_core 15137/15137（都沒有 pin swap）。
 - negative test：`neg-eqy-soc` Hazard3 14/14（交叉檢查 170 組）、PicoRV32 10/10（78 組）；`neg-eqy-core` 12/12（126 組）。三個設計的 `o21ai_swap` 都是 2 個分區證明失敗，位置是被改的 o21ai 與它的輸出負載（Hazard3 `_10144_`／`_10149_`、PicoRV32 `_10135_`／`_10136_`、core `_08326_`／`_08354_`）。4c 待驗的兩項（Hazard3 14 個一起跑、`neg-eqy-core`）都 PASS。
 - 其他：`neg-pnr` 兩個 CPU 71/71（P05 拿掉 8 個 via、LVS FAIL）；`gl-soc`、`gl-soc-powered` 15/15；`neg-gl-soc` 8/8；`gl-core` PASS、`neg-gl-core` 2/2；`neg-rtl` 36/36（Hazard3）；`neg-openram` 39/39；`neg-macro-views` 15/15。
+
+## 步驟 5d：版圖萃取網表的讀寫試跑（2026-10-11，ADR-0018 決定 19、20）
+
+限時 3 小時，由背景 agent 執行，44 ns 重跑與 STA what-if 由我接著做。證據在 `runs/p6_extract_trial/`：`report.md` 是 agent 的完整報告，另有腳本、`queue.log`、`sims/<網表>/<PVT>/result.json` 與 `ngspice.log`、`sta_whatif/`。萃取出來的網表有 1.4 GB，沒有保留。
+
+**萃取**：Magic 8.3.623 加 flow 用的 PDK（open_pdks `8afc834`），對出貨 GDS 做 `extract do capacitance`、`extract do coupling`、`extract no resistance`；花 31.6 分鐘、峰值 0.4 GB。輸出有兩種：
+- 階層式：`ext2spice hierarchy on`，`cthresh 0.01`。
+- 平面式：`hierarchy off`。
+
+無寄生的對照用 OpenRAM 做 LVS 時萃取的網表；它的 GDS 和出貨 GDS 只差檔頭時間戳記。
+
+**模擬**：
+- 激勵與 checker 都用 repo 的 `ip/sram/char`，沒有修改：`characterize.delay_seq`（clk slew 0.2 ns、負載 0.02 pF）與 `sramchar.check_reads`。
+- 修剪和電路圖相同，保留 1264 顆 bitcell。
+- 平面網表另外拿掉被修剪 column 上只接 drain 的電晶體：96654 顆元件時，ngspice 解析 13 分鐘都還沒開始模擬；拿掉後剩 34254 顆。
+- Magic 的 `ngspice(si)` 寫 SI 單位（`w=0.21u`），PDK 有 `.option scale=1e-6`，要先轉成 µm，否則報 `could not find a valid modelname`。
+
+| PVT | 網表 | 週期 | 讀寫 | 讀出穩定（ns） | 對電路圖 |
+|---|---|---|---|---|---|
+| tt 25°C 1.80 V | 無寄生萃取 | 20 ns | 對 | 2.879 | +8.0% |
+| tt 25°C 1.80 V | 含寄生平面 | 20 ns | 對 | 5.324 | 2.00 倍 |
+| ss −40°C 1.60 V | 無寄生萃取 | 20 ns | 對 | 5.731 | +6.7% |
+| ss −40°C 1.60 V | 含寄生平面 | 20 ns | 7 次都判 FAIL | — | — |
+| ss −40°C 1.60 V | 含寄生平面 | **44 ns** | 對 | 10.879 | 2.03 倍 |
+| ss 100°C 1.60 V | 含寄生平面 | **44 ns** | 對 | 10.164 | 2.02 倍 |
+| ss 25°C 1.60 V | 無寄生萃取 | 20 ns | 對 | 5.704 | +7.1% |
+| tt −40°C 1.60 V | 無寄生萃取 | 20 ns | 對 | 3.643 | +6.0% |
+
+電路圖的數字用步驟 3c 的讀取正確性波形重算（`runs/openram/read_check_clk1_self/`，網表 sha256 和出貨 `.sp` 相同），週期都是 20 ns。
+
+**ss −40°C 在 20 ns 週期 FAIL 的查證**：
+- 我從波形核對：應該是 1 的 bit 在下降緣後 10.79–10.93 ns 才到 0.8 VDD，也就是下一個上升緣後約 0.8 ns；接著被下一筆讀取改掉。7 次讀取都一樣。
+- 這有兩種解釋：真的慢了約 2 倍，或讀取在低電位半週期內做不完、是上升緣把資料推出來。20 ns 週期的低電位 10 ns，已經比 .lib 的 `min_pulse_width` 12 ns 還窄。
+- 用 SoC 的 44 ns 週期重跑（使用者選），兩個 ss corner 都讀對，穩定時間約 10.9 ns，遠早於 22 ns 處的上升緣，所以是單純變慢。
+- deck 用 `save_only`，只存時脈與 dout，每個 1.8 GB、約 43 分鐘，兩個平行跑。
+- 倍數在 tt、ss −40°C、ss 100°C 都是 2.00–2.03，三個 corner 一致。
+
+**`Timestep too small` 的根因**（ADR-0010 已知限制 3，已用前後比較確認）：
+- Magic 的階層式輸出在上層 subckt 放負值電容，修正 cell 重疊處重複算的電容。
+- 攤平後未修剪的網表有 263 個節點總電容為負（`bank_0/port_data_0/bl_127` −107.9 fF、`bl_20` −77.5 fF、`w_en0` −36.0 fF），修剪後 995 個。
+- 同一份網表只拿掉負值電容（電容偏大），tt 25°C 就能跑完；平面輸出沒有負值電容，可以直接模擬。
+- 沒有 coupling 的階層式輸出，修正電容寫到子 cell 的非 port 節點上，ngspice 把它當成另一個浮接節點（3791 個），直流工作點 singular。
+- 防護：`extract_sram.py` 的負值電容 checker，在這份網表上抓到 263 個，與上面一致；`neg-char` N22。
+
+**寫入**：所有萃取網表的寫入都正確，寫進去的值都讀回來了。Phase 3.5「換上萃取 bitcell 後寫入失敗」（ADR-0010 已知限制 4）沒有出現，那是只換 bitcell、周邊沒有寄生造成的不一致。
+
+**dout0 transition**：
+- 含寄生的 ss 100°C 是 2.09 ns，電路圖 2.16 ns；ss −40°C 是 0.64 ns，電路圖 0.44 ns。負載都是 0.02 pF。
+- 所以 ADR-0010 已知限制 5「兩個模型差 5 倍」，對的是電路圖那一邊。.lib 寫的 0.5 ns 偏低。
+
+**STA what-if**：用 OpenSTA 跑 p6final 兩個 worktree 的最終版圖（commit `4713c5f`，max RC），只換 SRAM 的 .lib，看最差 setup slack。原 .lib 的值和 signoff 逐值相同。
+
+| 情境 | Hazard3 ss −40°C | PicoRV32 ss −40°C | Hazard3 ss 100°C | PicoRV32 ss 100°C |
+|---|---|---|---|---|
+| 原 .lib | +0.763 | +0.925 | +1.150 | +1.246 |
+| transition 改成量到的值（1.40／2.22 ns），延遲照 .lib | +0.37 | +0.53 | +0.53 | +0.63 |
+| transition 同上，延遲改成萃取估計（12.12／11.07 ns） | +1.78 | +3.58 | +4.68 | +4.78 |
+| transition 一律 2.5 ns（過度保守），延遲照 .lib | −0.12 | +0.04 | +0.44 | +0.54 |
+
+- ss −40°C 的 1.40 ns 怎麼來：電路圖在 0.05 pF 的最大值 0.97 ns，乘上萃取對電路圖的比例（0.02 pF 時 0.638／0.443 = 1.44 倍）。
+- ss 100°C 用電路圖最大值 2.22 ns，因為萃取比電路圖小。
+- 萃取延遲估計＝電路圖各負載與 slew 中最大的穩定時間 × 倍數：ss −40°C 是 5.98 × 2.026，ss 100°C 是 5.47 × 2.024。
+- 違規路徑都是 SRAM 在下降緣出資料後，經 CPU 管線邏輯到下一個上升緣的正反器（Hazard3 `_21042_/D`）。
+
+**沒有做的部分**（ADR-0018 已知限制）：
+- ff 兩個 corner、tt −40°C、ss 25°C 沒有跑含寄生的模擬；平面網表每個 PVT 約 32–43 分鐘。
+- 沒有逐一試 ngspice 的收斂選項，直接走找根因的路線。
+- read port 控制邏輯裡一段浮接的 metal2（`control_logic_r_0/m2_2798_0#`，3.3 fF）沒有追查；處理方式是經 1 TΩ 接地。

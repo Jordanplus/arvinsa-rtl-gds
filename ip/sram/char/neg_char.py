@@ -48,6 +48,10 @@ Each case injects one fault and passes only when the named check reports it:
   N21 single-bitcell leakage deck without its gmin option   power.cell_gmin_problem reports it against the
       (ngspice's default 1e-12 S; ADR-0018 decision 15)      CELL_GMIN_CHECK deck (positive control: CELL_GMIN
                                                             PASS)
+  N22 hierarchical netlist made up for the test: a parent  extract_sram.negative_nodes names the node for
+      corrector larger than the child's capacitance on a     each (positive control first: a corrector smaller
+      port net; a corrector on a child's inner node (not a   than the child's capacitance and the ground node
+      port), which ngspice leaves floating                   are not reported)
 N1 and N2 simulate tt_025C_1v80 (about 10 minutes each, run in parallel), N3 about 20 minutes; the
 others take seconds (N14 needs the committed confirm.json).
 Prints one line per case and `neg-char: PASS n/n` or `neg-char: FAIL ...`; exit 0 only on PASS.
@@ -625,6 +629,25 @@ def n21(work):
                        f"CELL_GMIN {ok * 1e9:.3g} pW PASS") if not wrong else f"wrong: {wrong}"
 
 
+def n22(work):
+    import extract_sram
+    child = ".subckt cell a b\nC0 a b 1f\nC1 a n1 0.5f\n.ends\n"
+    top = ".subckt top p q\nX0 p q cell\nX1 p q cell\n{}\n.ends\n"
+    cases = {"control": ("C9 p 0 -1.5f", []),                  # p: 2 x 1.5 fF - 1.5 fF = 1.5 fF
+             "corrector too large": ("C9 p 0 -3.5f", ["p"]),    # p: 3 fF - 3.5 fF
+             "corrector on an inner node": ("C9 X0/n1 q -0.4f", ["X0/n1"])}
+    wrong = []
+    for name, (line, want) in cases.items():
+        path = os.path.join(work, "n22_" + re.sub(r"\W+", "_", name) + ".spice")
+        with open(path, "w") as f:
+            f.write(child + top.format(line))
+        got = [n for _, n in extract_sram.negative_nodes(path, "top")]
+        if got != want:
+            wrong.append(f"{name}: negative {got}, expected {want}")
+    return not wrong, ("positive control PASS; the large corrector on p and the floating corrector on X0/n1 "
+                       "reported") if not wrong else f"wrong: {wrong}"
+
+
 def gen_char_lib_placeholder_from():
     import gen_char_lib
     return gen_char_lib.PLACEHOLDER_FROM
@@ -632,7 +655,7 @@ def gen_char_lib_placeholder_from():
 
 CASES = {"N1": n1, "N2": n2, "N3": n3, "N4": n4, "N5": n5, "N6": n6, "N7": n7, "N8": n8, "N9": n9, "N10": n10,
          "N11": n11, "N12": n12, "N13": n13, "N14": n14, "N15": n15, "N16": n16, "N17": n17, "N18": n18, "N19": n19,
-         "N20": n20, "N21": n21}
+         "N20": n20, "N21": n21, "N22": n22}
 
 
 def main():

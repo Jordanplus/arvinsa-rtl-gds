@@ -97,7 +97,7 @@ help:
 	@echo "Phase 3.5 targets (SRAM timing from SPICE, ADR-0010, ip/sram/char/README.md; need ngspice):"
 	@echo "  make sram-lib             regenerate the five SRAM .lib from $(SRAM_CHAR)/char.json (seconds)"
 	@echo "  make sram-confirm         simulate every setup/hold and clock pulse lane at the .lib values -> confirm.json (about 1 hour)"
-	@echo "  make neg-char             bug injection into the characterization N1-N21, each must be caught (about 40 minutes)"
+	@echo "  make neg-char             bug injection into the characterization N1-N22, each must be caught (about 40 minutes)"
 	@echo "  make sram-char            ngspice characterization of the SRAM: tt, then the other four PVTs seeded from tt,"
 	@echo "                            into $(SRAM_CHAR)/char.json, then sram-lib and sram-confirm (hours; not part of make regress)"
 	@echo "  make sram-extract         Magic extraction of the SRAM GDS with wire capacitances (about 30 minutes)"

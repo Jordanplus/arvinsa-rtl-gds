@@ -119,6 +119,13 @@
       - 使用者 2026-10-11 再選：「改比合併後的違規區域」：`macro_drc.py` 對每種規則合併相接的錯誤框（KLayout，`drc_merge.py`），合併後的塊數與面積都要 ≤ 預建，不再比框數；baseline 檔重新產生成新格式。不選「逐種比框數＋3 筆 waiver」：框數隨陣列位置變，重產或換 macro 時要再查一次。negative test：`neg-openram` D1–D7（D5：框數多、合併後相同要 PASS；D7：真的跑 Magic 與 KLayout，多一個 li.3 要 FAIL）。
       - 改完後重新產生 baseline 並跑自產 SRAM：29 種中 27 種合併後塊數與面積 ≤ 預建，li.5（+0.038 µm²，0.015%）與 diff/tap.9（+0.221 µm²，0.015%）塊數相同、面積多一點，licon.14 反過來預建多 0.38 µm²。查證（對齊 bitcell 陣列後 XOR，`runs/openram/drc_baseline.magic.log.boxes.tsv` 對自產的框）：388 塊差異的邊全部貼在其中一顆 macro 的 157.28 µm 切框線上，Magic 在切線處畫出的違規少一小條。使用者 2026-10-11 選擇：「塊數嚴格、面積容許 0.05%」（`AREA_TOL`，實測的約 3 倍）：新的獨立違規一定多一塊；接在既有違規上又小於該規則總面積 0.05% 的變化看不到（已知限制）。不選「只比塊數」（既有違規變大看不到）、「對齊陣列後比位置」（只適用陣列相同的 SRAM，約半天）。結果：自產 SRAM PASS；植入一個 li.3 的 GDS（審查 H4 的案例）多 2 塊，FAIL。negative test 加 D8（面積多 0.1% FAIL）、D8a（多 0.03% PASS）。
     - Phase 3.5 限制 3（萃取網表無法模擬、換上萃取 bitcell 後寫入失敗，指定 Phase 6 確認）沒有做。使用者 2026-10-11 選擇：「限時 3 小時試跑」：用自產 SRAM 版圖萃取的網表跑讀寫檢查，跑不通就把卡住的原因寫進已知限制。
+20. **（2026-10-11，步驟 5d 萃取網表試跑之後）ss 兩個 corner 用 SoC 的 44 ns 週期重跑確認；.lib 不改，寄生倍數與 dout transition 寫進已知限制；萃取網表加負值電容 checker**。依據（`docs/notes/openram_phase6_bringup.md` 步驟 5d，證據 `runs/p6_extract_trial/`）：
+    - 試跑（Magic 8.3.623 萃取出貨 GDS，含 coupling，平面輸出加修剪）：無寄生萃取網表 4 個讀取 PVT 都讀對（延遲 +6–8%）；含寄生 tt 25°C 讀對，讀出穩定時間 5.32 ns，電路圖 2.67 ns（2.00 倍）；ss −40°C 在 20 ns 週期 7 次讀取都判 FAIL，讀出值在下一個上升緣後約 0.8 ns 才到。寫入在所有萃取網表都正確（ADR-0010 已知限制 4 沒有出現）。
+    - Phase 3.5 的 `Timestep too small`（ADR-0010 已知限制 3）根因已確認：`ext2spice lvs` 的階層式輸出放負值修正電容，攤平後 263 個節點的總電容是負的；拿掉負值電容或用平面輸出都能模擬。
+    - ss −40°C 的 FAIL 有兩種解釋：寄生讓讀取慢了約 2 倍、剛好碰到上升緣，或讀取在低電位半週期內做不完。20 ns 週期的低電位 10 ns 已比 .lib 的 `min_pulse_width` 12 ns 還窄。使用者 2026-10-11 選擇：「44 ns 重跑 ss 兩點」（不選「只重跑 ss −40°C」或「不跑，寫進已知限制」）。結果：ss −40°C 讀對、穩定時間 10.88 ns（電路圖 5.37 ns，2.03 倍），ss 100°C 讀對、10.16 ns（電路圖 5.02 ns，2.02 倍），都遠早於 22 ns 的上升緣，所以是單純變慢。
+    - 使用者 2026-10-11 選擇：「不改 .lib，寫進已知限制」（不選「現在改成 ×2.2 重產 .lib」：延遲表斜率與 `min_pulse_width` 會變，要重新 harden 兩個 CPU 與兩輪 regress，多約 6–8 小時）。目前的 .lib 靠下限蓋住：tt 10 ns 對萃取 5.32 ns、ss 15 ns 對 10.88／10.16 ns。
+    - 同一份萃取確認 dout0 的 transition 是電路圖那一邊（ss 100°C 萃取 2.09 ns、電路圖 2.16 ns，負載 0.02 pF），不是 Phase 3.5「只換 bitcell」的 0.23–0.28 ns；.lib 寫 0.5 ns（ADR-0010 已知限制 5）。OpenSTA what-if（p6final 兩個 worktree 的最終版圖、max RC，只換 SRAM .lib；原 .lib 的 slack 和 signoff 逐值相同）：transition 改成量到的值（ss −40°C 1.40 ns＝電路圖最大 0.97 ns × 萃取對電路圖 1.44 倍；ss 100°C 2.22 ns），延遲照 .lib，最差 setup slack Hazard3 +0.763 → +0.37 ns、PicoRV32 +0.925 → +0.53 ns（ss −40°C），ss 100°C +1.150 → +0.53、+1.246 → +0.63 ns，都 MET；延遲也改成萃取估計（12.12／11.07 ns）時 ≥ +1.78 ns。transition 一律改成 2.5 ns（比所有量到的都大）時 Hazard3 ss −40°C 是 −0.12 ns，這個值對 ss −40°C 過度保守（量到的最大 0.97 ns）。依使用者「不改 .lib」的選擇一併寫進已知限制，沒有另外問。
+    - 使用者 2026-10-11 選擇：「加 checker＋negative test」（不選「再改成平面輸出」：多 2–3 小時、每個 PVT 模擬約 32 分鐘；也不選「只寫 skill」）：`extract_sram.py` 輸出網表後攤平計算每個節點的總電容，有負值就 FAIL；`neg-char` N22。萃取與 neg-char 不在 regress 裡，`make sram-extract` 照現在的階層式輸出會 FAIL，這是預期的。
 
 ## 計畫
 
@@ -145,4 +152,5 @@
   - −40°C 的修剪 deck 用預設 gmin 偏高：ff −40°C 約 48%（246 對 166 nW）；ss −40°C 用小 gmin 跑不完，偏差未知。
   - 20 ns 量測窗看不出緩慢漂移（窗內 tt 只升 2.5%、ss −40°C 300 ns 時窗內只差 1.6%），平穩度 checker 只能抓窗內的階躍與明顯斜率。
   - 修剪 deck 換 gmin 時，1264 顆保留的 bitcell 照單顆結果應少約 54 nW（tt），實際只少 4.3 nW，原因未查。
+- **.lib 的時序沒有走線寄生，靠下限蓋住**（決定 20）：整顆版圖萃取的讀出穩定時間是電路圖的 2.0 倍（tt 25°C、ss −40°C、ss 100°C 都在 2.00–2.03 倍），ADR-0010 的 × 1.6 不夠。出貨 .lib 的 dout0 延遲是下限（tt／ff 10 ns、ss 15 ns），比萃取值大 4.1–4.8 ns；`min_pulse_width` 下限 12 ns 對萃取的 ss 讀出時間（約 10.9 ns）只剩約 10%（SoC 的低電位是 22 ns）。dout0 transition 寫 0.5 ns，實際約 1.4（ss −40°C）到 2.2 ns（ss 100°C）；改成實際值後最差 setup slack 是 +0.37 ns（Hazard3 ss −40°C），仍 MET。沒有萃取的部分：ff 兩個 corner、tt −40°C、ss 25°C 的含寄生模擬沒有跑；修剪網表只留 1264 顆 bitcell；ff 的 hold 用較大的 transition 只會更晚到，沒有另外跑 what-if。換製程、換 macro 或下線前，用平面萃取網表重新特性化。
 - OpenRAM 產生的 .lib internal_power 數量級錯誤，上游另有回報且未修（VLSIDA/OpenRAM issue #294，2026-04-30 open：sky130 224 byte 1rw 寫成 1.034875e+10、1 KB 寫成 4.603410e+10；較早的 #157「Internal power is super large」2022 已關閉）。

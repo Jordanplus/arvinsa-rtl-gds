@@ -391,6 +391,7 @@ LibreLane 用 `--override-config`、`--with-initial-state`，或 `python3 -m lib
 | L1–L2 | 自產 macro 的 .lib 範本（Phase 6） | OpenRAM dev 的 internal_power（1.036316e+11，2026-10-08 實際遇到）當範本、兩份 .lib 的 power 項目對不上；一個正常對照 | `ip/sram/char/gen_char_lib.py` `power_problems()`、`ip/sram/openram/lib_template.py` `make()`（`make neg-openram`） |
 | C1–C2 | 自產 macro 特性化的來源（Phase 6） | 假 repo 根目錄放一顆自產 macro：`char.json` 記錄的網表 sha256 不是 `ip/sram/<macro>/openram/<macro>.sp` 的、該網表不是 `summary.json` 記錄的那份；一個正常對照 | `ip/sram/char/check_char_lib.py` `provenance()`（`make neg-openram`） |
 | N17–N21 | 自產 macro 的量測 power（Phase 6，ADR-0018 決定 10–15） | `power.json` 來自另一份網表、有負能量；.lib 的量測 power 被手改、讀寫對調、`power.json` 被刪；合成波形的已知答案（每個邊緣的能量、clk1 的份、dout 負載、靜態電流、待機漏電）；漏電量測窗裡有階躍、斜率或上升，下降超過絕對門檻、少一顆 bitcell 的網表；單顆 bitcell deck 沒有小 gmin；各有正常對照 | `ip/sram/char/gen_char_lib.py` `power_record_problems()`、`check_char_lib.py` `power_problems()`、`power.py` `energies()`／`mean_mw()`／`leakage()`／`unsettled()`／`cell_gmin_problem()`、`sramchar.py` `bitcell_ic()`（`make neg-char`） |
+| N22 | Magic 萃取網表的負值修正電容（Phase 6 試跑，ADR-0018 決定 20） | 假的階層式網表：上層修正電容大於子 cell 在 port net 上的電容、修正電容寫在子 cell 的內部節點（ngspice 視為另一個浮接節點）；一個只部分修正的正常對照 | `ip/sram/char/extract_sram.py` `negative_nodes()`（`make neg-char`） |
 
 不採用「`CLOCK_PERIOD` 設 2 ns」：FAIL 位置不確定（resizer 跑很久、slew/cap 先爆、甚至 crash）且耗時，改用 P01。
 

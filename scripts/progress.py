@@ -15,7 +15,11 @@ Running work is found with ps in this repo and in every worktree of it (git work
   a Python script of the tree run     "running", labelled with the script name (for example characterize.py
   directly (not under make)           or power.py started without make; 2026-10-09 the status line showed
                                       nothing during a 6-hour characterization started that way)
-To-do list: runs/todo.md of the main checkout (git-ignored: ticking an item must not dirty the working
+  a Python script in this repo's      the same, under "scratchpad", labelled <folder>/<script> (a trial that
+  Claude Code scratchpad              an agent runs outside the tree; 2026-10-11 the status line showed
+  (/tmp/claude-<uid>/<project>/       nothing during the 3-hour extracted-netlist trial of Phase 6)
+  <session>/scratchpad/)
+To-do list (todo()): runs/todo.md of the main checkout (git-ignored: ticking an item must not dirty the working
 tree that harden and regress require clean); `- [ ]` open, `- [~]` in progress, `- [x]` done.
 The percentages are estimates for people; nothing in signoff reads them.
 --oneline prints one line for the status line (.claude/statusline-progress), cached 10 s; it prints
@@ -36,6 +40,8 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 REGRESS_OUT = {"hazard3": "regress", "picorv32": "regress_picorv32"}
 CACHE_S = 10
+# Claude Code names a project's temp directory after its path with every other character turned into "-"
+SCRATCH = re.compile(rf"/claude-{os.getuid()}/{re.escape(re.sub(r'[^A-Za-z0-9-]', '-', ROOT))}/[^/]+/scratchpad/")
 
 
 def run(*cmd):
@@ -210,16 +216,19 @@ def jobs():
         cmd = procs[p][2]
         script = re.search(r"(\S+\.py)\b", cmd).group(1)
         path = script if os.path.isabs(script) else os.path.join(where.get(p, ""), script)
-        tree = tree_of(os.path.realpath(path), trees)
+        real = os.path.realpath(path)
+        tree, label = tree_of(real, trees), os.path.basename(script)
+        m = SCRATCH.search(real)
+        if not tree and m:
+            tree, label = "scratchpad", real[m.end():]
         if not tree:
             continue
         made = by_tree.setdefault(tree, {}).setdefault("make", [])
-        label = os.path.basename(script)
         if label not in [m["label"] for m in made]:
             made.append({"kind": "make", "label": label, "done": None, "total": None, "current": None,
                          "elapsed_s": procs[p][1], "eta_s": None, "alerts": []})
     items = []
-    for tree in trees:
+    for tree in trees + ["scratchpad"]:
         if tree not in by_tree:
             continue
         info, name = by_tree[tree], os.path.basename(tree)
@@ -278,20 +287,53 @@ def job_text(j, short=False):
 
 
 def todo():
-    """{left, doing, total, doing_items, open_items} from runs/todo.md, or None."""
+    """{left, doing, done, total, doing_items, doing_detail, open_items} from runs/todo.md, or None. The fields
+    are those of the shared provider ~/.claude/skills/progress-pane/bin/todo_progress.py, which the progress
+    pane reads. doing_detail: one {item, section, done, total} per in-progress item, counting its indented
+    sub-items; an item without sub-items counts the sub-items of its parent item (5d counts the items under
+    5), and a top-level one the boxes under its `##`/`###` heading. Boxes inside ``` blocks do not count."""
     path = os.path.join(ROOT, "runs", "todo.md")
     if not os.path.isfile(path):
         return None
-    items = re.findall(r"^\s*[-*] \[([ ~xX])\]\s*(.*)$", open(path, encoding="utf-8").read(), re.M)
-    if not items:
+    boxes, section, in_code = [], "", False   # boxes: (section, indent, mark, text)
+    for line in open(path, encoding="utf-8"):
+        if re.match(r"\s*```", line):
+            in_code = not in_code
+            continue
+        h = None if in_code else re.match(r"#{2,3}\s+(.*\S)\s*$", line)
+        m = None if in_code else re.match(r"(\s*)[-*]\s+\[([ ~xX])\]\s+(.*\S)\s*$", line)
+        if h:
+            section = h.group(1)
+        elif m:
+            boxes.append((section, len(m.group(1).expandtabs(4)), m.group(2), m.group(3)))
+    if not boxes:
         return None
-    return {"left": sum(1 for m, _ in items if m in " ~"), "doing": sum(1 for m, _ in items if m == "~"),
-            "total": len(items), "doing_items": [t for m, t in items if m == "~"],
-            "open_items": [t for m, t in items if m == " "]}
+
+    def under(i):   # the boxes nested under box i
+        out = []
+        for b in boxes[i + 1:]:
+            if b[0] != boxes[i][0] or b[1] <= boxes[i][1]:
+                break
+            out.append(b)
+        return out
+
+    detail = []
+    for i, (sec, ind, mark, text) in enumerate(boxes):
+        if mark != "~":
+            continue
+        group, name = under(i), "子項目"
+        if not group:
+            parent = next((j for j in range(i - 1, -1, -1) if boxes[j][0] == sec and boxes[j][1] < ind), None)
+            group, name = (under(parent), boxes[parent][3]) if parent is not None else ([b for b in boxes if b[0] == sec], sec)
+        detail.append({"item": text, "section": name, "done": sum(1 for b in group if b[2] in "xX"), "total": len(group)})
+    return {"left": sum(1 for b in boxes if b[2] in " ~"), "doing": sum(1 for b in boxes if b[2] == "~"),
+            "done": sum(1 for b in boxes if b[2] in "xX"), "total": len(boxes),
+            "doing_items": [b[3] for b in boxes if b[2] == "~"], "doing_detail": detail,
+            "open_items": [b[3] for b in boxes if b[2] == " "]}
 
 
 def todo_text(t):
-    return f"待辦 剩 {t['left']}（進行中 {t['doing']}）／共 {t['total']}" if t else None
+    return f"待辦 {t['done']}/{t['total']}（{100 * t['done'] // t['total']}%）·剩 {t['left']}，進行中 {t['doing']}" if t else None
 
 
 def oneline():
@@ -325,8 +367,8 @@ def main():
         return 0
     t = todo()
     print(todo_text(t) or "待辦: runs/todo.md 不存在或沒有勾選項")
-    for item in (t or {}).get("doing_items", []):
-        print(f"  進行中：{item}")
+    for d in (t or {}).get("doing_detail", []):
+        print(f"  進行中：{d['item']}  〔{d['section'] or '（無標題）'} {d['done']}/{d['total']}〕")
     for j in jobs() or []:
         print(job_text(j))
     return 0
