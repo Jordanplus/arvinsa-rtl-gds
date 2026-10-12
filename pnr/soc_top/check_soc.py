@@ -549,9 +549,9 @@ def main(run_dir, config_path, sram_drc):
             pts = [[float(v) for v in line.split(",")] for line in open(path) if line.strip()]
             volt_ok = all((p[3] > 0) if net in (cfg.get("VDD_NETS") or []) else (p[3] == 0) for p in pts)
             seen, bad = set(), 0
-            for x, y, size, _ in pts:
-                side = [k for k, (xc, hw, y0, y1) in sides.items() if abs(x * units - xc) <= hw and y0 <= y * units <= y1]
-                hit = [i for i, (yc, hw, x0, x1) in enumerate(stripes) if abs(y * units - yc) <= hw]
+            for px, py, size, _ in pts:                      # px/py: x, y hold the sram0 origin (magic_drc)
+                side = [k for k, (xc, hw, y0, y1) in sides.items() if abs(px * units - xc) <= hw and y0 <= py * units <= y1]
+                hit = [i for i, (yc, hw, x0, x1) in enumerate(stripes) if abs(py * units - yc) <= hw]
                 if len(side) != 1 or len(hit) != 1 or size * units > 2 * sides[side[0]][1] or (side[0], hit[0]) in seen:
                     bad += 1
                 else:
