@@ -78,3 +78,28 @@ repo 的 LibreLane nix-shell 有 Magic、KLayout（含 `pya`）、Netgen、ruby�
   - `MR_licon.SP.6`（poly 上的 licon 與 psdm 至少 0.11 µm，不可重疊，新 deck 第 939–943 行）在舊 deck 沒有。
 - 影響：**任何用 OpenRAM bitcell 的 SRAM，包括 PDK 預建的那顆，在目前的 precheck 都過不了 `klayout_feol` 與 `klayout_beol`**。`$sram_exclude` 只管 nsdm／psdm，也只認 `sky130_sram_*` 的名稱，救不了這兩條。
 - 相關 issue（2026-10-12 查）：cf-precheck #108（open，2026-04-20）「Expose sram_exclude flag」，留言指出 `sram_exclude=true` 對商用 SRAM 的違規數沒有影響；#51「Precheck crash with SRAM DRC」（open）；#119「Auto-abstract catalog hard macros for LVS」（open）。沒有找到針對 OpenRAM bitcell 與 `MR_mcon.CON.10` 的 issue。
+
+## 8. precheck 環境（2026-10-12，ADR-0019 決定 4）
+
+- **VM 用 lima 直接建，不經 colima**：colima 要從 GitHub release 下載自己的 VM image（332 MB），本機到 GitHub release 的總頻寬只有約 80 KB/s（8 條連線分段下載合計也一樣；同時 Cloudflare 8.6 MB/s、ubuntu ports 5 MB/s、Docker Hub 9 MB/s），估計要 1 小時。colima 本身就是包在 lima 外面，改用 lima 2.2.0 的 `template:docker`：base image 是 ubuntu 26.04 `release-20260720` arm64，本機 lima 快取已有，不必下載。
+  - `limactl create --name=cf-precheck --vm-type=vz --rosetta --cpus=6 --memory=10 --disk=60 --mount-type=virtiofs --mount-only <工作目錄>:w template:docker`：只掛一個可寫的工作目錄（`../arvinsa-rtl-gds-p7precheck`，在 repo 外），VM 看不到其他檔案。
+  - docker context `lima-cf-precheck`；`/proc/sys/fs/binfmt_misc/rosetta` 為 enabled，amd64 容器 `uname -m` 回 `x86_64`。
+- **官方 image**：`chipfoundry/mpw_precheck:latest`，digest `sha256:f1523bcb7c959c80f2d7d6dded0c4bcf3483d84b6ff2437f49754e4ec53eac84`，解開 6.9 GB，pull 180 秒。容器內 `pip install --upgrade cf-precheck` 後仍是 1.3.7。
+- **PDK `3e0e31dc`**：照 cf-cli 的做法用 ciel（3.0.1，裝在 scratchpad 的 venv），`--data-source static-web:https://chipfoundry.github.io/ciel-releases`、`--pdk-root <工作目錄>/pdks`（不碰 `~/.ciel`：`ciel enable` 會改 PDK root 裡 `sky130A` 的連結，flow 用的是 `~/.ciel`），`-l sky130_fd_sc_hd -l sky130_sram_macros`。檔案放在 GitHub release，下載 47 分鐘。
+- 執行方式照 cf-cli `main.py` 第 4890–4925 行的 `docker run`（同樣的掛載與 `PDK_ROOT`／`PDK_PATH`／`PDKPATH`），由工作目錄的 `run_precheck.sh` 執行，並記下 image digest、PDK 版本、cf-precheck 版本與時間。
+
+### 8a. 環境驗證：官方範例跑一次（2026-10-12 10:01–10:20，19 分鐘）
+
+`caravel_user_project` `b510613c` 原封不動（只有 GDS、網表與 LVS 設定，GPIO 全是 INVALID）：
+
+| 檢查 | 結果 | 秒 |
+|---|---|---|
+| topcell_check | PASS | 2.0 |
+| gpio_defines | FAIL（33 個 `13'hXXXX`，預期） | 0.8 |
+| xor | PASS | 16.4 |
+| klayout_feol／beol／offgrid | PASS | 167.3／394.4／94.0 |
+| 密度、pin label、零面積、spike、cell 名稱 | PASS | 28.8、23.0、7.8、5.9、2.6 |
+| lvs | PASS | 386.0 |
+| oeb | FAIL（stat=6；33 個 `GPIO n: ERROR: missing gpio configuration`，原因同 gpio_defines） | 5.9 |
+
+結論：環境可用。Rosetta 模擬下最久的是 KLayout BEOL 與 LVS（各約 6.5 分鐘）。官方範例沒有 SRAM，所以 BEOL 沒有第 7 節的違規。

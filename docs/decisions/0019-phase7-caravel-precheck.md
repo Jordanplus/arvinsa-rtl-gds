@@ -16,7 +16,7 @@
 3. **precheck 環境先查再決定**（使用者 2026-10-12：「先查清楚再決定 (建議)」）。查證結果見筆記第 1、6 節：`cf precheck` 一定用 Docker 跑 `chipfoundry/mpw_precheck:latest`，image 只有 linux/amd64；本機是 arm64、沒有 Docker；repo 的 nix 工具缺 CVC、GNU awk／sed、`pyverilog`，完整 precheck 不能原生跑。
 4. **正式判定在本機用 colima＋Rosetta 跑官方 image**（使用者 2026-10-12：「本機 colima＋Rosetta (建議)」）。
    - 安裝限時 1 小時；跑不動就改 GitHub Actions（repo 是 public，免費、原生 x86；要把 wrapper GDS 上傳成附件）。
-   - colima 0.10.3 與 docker CLI 29.9.0 已用 Homebrew 安裝（2026-10-12）。
+   - colima 0.10.3 與 docker CLI 29.9.0 已用 Homebrew 安裝（2026-10-12）。**實際改用 lima 直接建 VM**（同樣是 vz＋Rosetta；colima 就是包在 lima 外面）：colima 要從 GitHub release 下載 332 MB 的 VM image，本機到 GitHub release 只有約 80 KB/s，lima 的 ubuntu image 本機已有快取（筆記第 8 節）。官方範例跑一次 19 分鐘，除了範例本來就沒填的 GPIO 設定，其他 11 項 PASS（筆記 8a）。
    - 容器每次會 `pip install --upgrade cf-precheck`，每次執行都要記下實際的 cf-precheck 版本與 image digest。
 5. **`klayout_feol`／`klayout_beol` 的判定：其他 11 項全 PASS，這兩項只允許 OpenRAM bitcell 造成的兩條規則，而且要和 PDK 預建 macro 一致**（使用者 2026-10-12：「其他全 PASS＋這兩條比對預建 (建議)」）。
    - 原因（已驗證，筆記第 7 節）：precheck 的 deck（release `2026.03.30_01.00`）在 cf-precheck commit `08f559e30a`（2026-05-07）拿掉了 SRAM 核心區（`areaid.ce`）對「mcon 要被 li 蓋住」的豁免（`MR_mcon.CON.10`），並新增 `MR_licon.SP.6`。PDK 預建的 `sky130_sram_2kbyte_1rw1r_32x512_8` 與自產 macro 一樣，FEOL 3 個、BEOL 264 個（依 cell 計），全部在 OpenRAM bitcell 與 replica column 裡；沒有參數能關掉。
