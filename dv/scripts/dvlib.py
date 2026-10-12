@@ -42,10 +42,12 @@ CHECKERS = (
     "gpio_seq", "bus_assert", "x_check", "log_scan", "sim_error",
     # Added by the Phase 1 testbench qualification fixes (dv/README.md):
     "sram_port", "irq_line", "uart_div", "coverage",
+    # Phase 7 (ADR-0019): the Caravel wrapper's pad / logic analyzer contract (CARAVEL_WRAPPER only)
+    "caravel_pins",
 )
 # Checkers implemented in the testbench (they print "[CHK:<name>] FAIL ...").
 TB_CHECKERS = ("test_ctrl", "trap", "timeout", "uart_monitor", "bus_assert", "x_check",
-               "sram_port", "irq_line", "uart_div")
+               "sram_port", "irq_line", "uart_div", "caravel_pins")
 
 # ---------------------------------------------------------------- repo files
 MEMMAP = "rtl/include/memmap.vh"
@@ -64,7 +66,17 @@ FW_DIR = "fw/build"
 CPUS = {
     "picorv32": {"rtl_f": "rtl/rtl.f", "fw_dir": "fw/build", "defines": ()},
     "hazard3": {"rtl_f": "rtl/rtl_hazard3.f", "fw_dir": "fw/build_hazard3", "defines": ("SOC_CPU_HAZARD3",)},
+    # Phase 7 (ADR-0019): the Hazard3 SoC inside the Caravel user_project_wrapper, host port over
+    # Wishbone. Runs as hazard3 ("as"): the same firmware, tests.toml / bugs.toml entries and
+    # [test.hazard3] overrides; only the testbench DUT (CARAVEL_WRAPPER) and the file list differ.
+    "caravel": {"rtl_f": "rtl/rtl_caravel.f", "fw_dir": "fw/build_hazard3",
+                "defines": ("SOC_CPU_HAZARD3", "CARAVEL_WRAPPER"), "as": "hazard3"},
 }
+
+
+def base_cpu(cpu):
+    """The CPU whose tests.toml / bugs.toml entries and overrides cpu uses (caravel: hazard3)."""
+    return CPUS[cpu].get("as", cpu)
 CPU_OVERRIDES = ("max_cycles", "min_cycles", "expect_uart", "sram_cov")
 SIM_BUILD = "runs/sim_build"
 BOOTROM_V = "rtl/bootrom/bootrom.v"
@@ -323,7 +335,7 @@ def for_cpu(t, cpu, where=None):
     """The test as it runs on cpu: the [test.<cpu>] overrides applied, re-checked."""
     where = where or "test %s" % t.get("name")
     tt = {k: v for k, v in t.items() if k not in CPUS}
-    tt.update(t.get(cpu, {}))
+    tt.update(t.get(base_cpu(cpu), {}))
     if not _is_int(tt["max_cycles"]) or tt["max_cycles"] <= 0:
         raise DvError("%s (%s): max_cycles must be a positive integer" % (where, cpu))
     if "min_cycles" in tt and (not _is_int(tt["min_cycles"]) or not 0 < tt["min_cycles"] < tt["max_cycles"]):
@@ -336,8 +348,10 @@ def for_cpu(t, cpu, where=None):
 
 
 def applies(entry, cpu):
-    """True if a tests.toml / bugs.toml entry applies to cpu (no cpus field: every CPU)."""
-    return cpu in entry.get("cpus", list(CPUS))
+    """True if a tests.toml / bugs.toml entry applies to cpu (no cpus field: every CPU). A build
+    that runs as another CPU (caravel as hazard3) takes that CPU's entries and its own."""
+    cpus = entry.get("cpus", list(CPUS))
+    return cpu in cpus or base_cpu(cpu) in cpus
 
 
 def load_bugs(path=BUGS_TOML, tests=None):

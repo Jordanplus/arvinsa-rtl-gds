@@ -33,6 +33,12 @@
 //                 writes held by the transmitter-busy stall), sig_at_done (SIG
 //                 in the cycle of the first DONE strobe), mid_resets
 //
+// CARAVEL_WRAPPER (Phase 7, ADR-0019; dvlib CPU "caravel"): the DUT is the Caravel
+// user_project_wrapper with soc_top (Hazard3) inside. The SoC pins come from io_in/io_out
+// (GPIO 8-20), resetn drives wb_rst_i, the host port is reached over Wishbone through
+// wb_host_bridge (host_en = CTRL bit 0, reset value 1), and the caravel_pins checker compares
+// io_oeb, the unused io_out bits, la_data_out and user_irq with the wrapper's contract every cycle.
+//
 // Checker messages: "[CHK:<name>] FAIL <msg>". Informational lines start with "[TB]".
 `timescale 1ns/1ps
 `default_nettype none
@@ -74,6 +80,77 @@ module tb_soc;
     wire vssd1 = 1'b0;
 `endif
 
+`ifdef CARAVEL_WRAPPER
+`define SOC_DUT dut.u_soc
+    localparam [31:0] WB_CTRL = 32'h3000_0000;
+    localparam [31:0] WB_SRAM = 32'h3000_1000;
+    // io_oeb contract (ADR-0019 decision 10): 0 on GPIO 8, 10-18 (user output) and 19-20 (user
+    // input pulldown), 1 elsewhere
+    localparam [37:0] EXP_OEB = ~((38'h1 << 8) | (38'hFF << 10) | (38'h1 << 18) | (38'h3 << 19));
+    localparam [37:0] USED_OUT = (38'h1 << 8) | (38'hFF << 10) | (38'h1 << 18);
+    reg         wb_cyc = 1'b0;
+    reg         wb_stb = 1'b0;
+    reg         wb_we  = 1'b0;
+    reg  [3:0]  wb_sel = 4'd0;
+    reg  [31:0] wb_adr = 32'd0;
+    reg  [31:0] wb_wdat = 32'd0;
+    wire        wb_ack;
+    wire [31:0] wb_rdat;
+    wire [37:0] io_in = {17'd0, boot_mode, 9'd0, uart_rx, 9'd0};
+    wire [37:0] io_out;
+    wire [37:0] io_oeb;
+    wire [127:0] la_data_out;
+    wire [2:0]  user_irq;
+    wire [28:0] analog_io;
+`ifdef USE_POWER_PINS
+    wire vccd2 = 1'b1, vdda1 = 1'b1, vdda2 = 1'b1;
+    wire vssd2 = 1'b0, vssa1 = 1'b0, vssa2 = 1'b0;
+`endif
+    user_project_wrapper dut (
+`ifdef USE_POWER_PINS
+        .vdda1 (vdda1), .vdda2 (vdda2), .vssa1 (vssa1), .vssa2 (vssa2),
+        .vccd1 (vccd1), .vccd2 (vccd2), .vssd1 (vssd1), .vssd2 (vssd2),
+`endif
+        .wb_clk_i    (clk),
+        .wb_rst_i    (~resetn),
+        .wbs_stb_i   (wb_stb),
+        .wbs_cyc_i   (wb_cyc),
+        .wbs_we_i    (wb_we),
+        .wbs_sel_i   (wb_sel),
+        .wbs_dat_i   (wb_wdat),
+        .wbs_adr_i   (wb_adr),
+        .wbs_ack_o   (wb_ack),
+        .wbs_dat_o   (wb_rdat),
+        .la_data_in  (128'd0),
+        .la_data_out (la_data_out),
+        .la_oenb     ({128{1'b1}}),
+        .io_in       (io_in),
+        .io_out      (io_out),
+        .io_oeb      (io_oeb),
+        .analog_io   (analog_io),
+        .user_clock2 (1'b0),
+        .user_irq    (user_irq)
+    );
+    assign uart_tx    = io_out[8];
+    assign gpio_out   = io_out[17:10];
+    assign trap       = io_out[18];
+    assign host_rdata = `SOC_DUT.host_rdata;
+    // The host port as soc_top sees it (driven by wb_host_bridge), for the monitors
+    wire        m_host_en    = `SOC_DUT.host_en;
+    wire        m_host_cs    = `SOC_DUT.host_cs;
+    wire        m_host_we    = `SOC_DUT.host_we;
+    wire [8:0]  m_host_addr  = `SOC_DUT.host_addr;
+    wire [31:0] m_host_wdata = `SOC_DUT.host_wdata;
+    wire [3:0]  m_host_wmask = `SOC_DUT.host_wmask;
+`else
+`define SOC_DUT dut
+    wire        m_host_en    = host_en;
+    wire        m_host_cs    = host_cs;
+    wire        m_host_we    = host_we;
+    wire [8:0]  m_host_addr  = host_addr;
+    wire [31:0] m_host_wdata = host_wdata;
+    wire [3:0]  m_host_wmask = host_wmask;
+
     soc_top dut (
 `ifdef USE_POWER_PINS
         .vccd1      (vccd1),
@@ -94,38 +171,39 @@ module tb_soc;
         .host_wmask (host_wmask),
         .host_rdata (host_rdata)
     );
+`endif
 
     // Hierarchical probes (spec 3.1)
-    wire        p_mem_valid   = dut.mem_valid;
-    wire        p_mem_instr   = dut.mem_instr;
-    wire        p_mem_ready   = dut.mem_ready;
-    wire [31:0] p_mem_addr    = dut.mem_addr;
-    wire [31:0] p_mem_wdata   = dut.mem_wdata;
-    wire [3:0]  p_mem_wstrb   = dut.mem_wstrb;
-    wire [31:0] p_mem_rdata   = dut.mem_rdata;
-    wire        p_sel_sram    = dut.u_bus.sel_sram;
-    wire        p_sel_rom     = dut.u_bus.sel_rom;
-    wire        p_sel_uart    = dut.u_bus.sel_uart;
-    wire        p_sel_gpio    = dut.u_bus.sel_gpio;
-    wire        p_sel_test    = dut.u_bus.sel_test;
-    wire        p_sel_none    = dut.u_bus.sel_none;
-    wire        p_done_strobe = dut.u_test_ctrl.done_strobe;
-    wire [31:0] p_done_value  = dut.u_test_ctrl.done_value;
-    wire [31:0] p_sig_value   = dut.u_test_ctrl.sig_value;
+    wire        p_mem_valid   = `SOC_DUT.mem_valid;
+    wire        p_mem_instr   = `SOC_DUT.mem_instr;
+    wire        p_mem_ready   = `SOC_DUT.mem_ready;
+    wire [31:0] p_mem_addr    = `SOC_DUT.mem_addr;
+    wire [31:0] p_mem_wdata   = `SOC_DUT.mem_wdata;
+    wire [3:0]  p_mem_wstrb   = `SOC_DUT.mem_wstrb;
+    wire [31:0] p_mem_rdata   = `SOC_DUT.mem_rdata;
+    wire        p_sel_sram    = `SOC_DUT.u_bus.sel_sram;
+    wire        p_sel_rom     = `SOC_DUT.u_bus.sel_rom;
+    wire        p_sel_uart    = `SOC_DUT.u_bus.sel_uart;
+    wire        p_sel_gpio    = `SOC_DUT.u_bus.sel_gpio;
+    wire        p_sel_test    = `SOC_DUT.u_bus.sel_test;
+    wire        p_sel_none    = `SOC_DUT.u_bus.sel_none;
+    wire        p_done_strobe = `SOC_DUT.u_test_ctrl.done_strobe;
+    wire [31:0] p_done_value  = `SOC_DUT.u_test_ctrl.done_value;
+    wire [31:0] p_sig_value   = `SOC_DUT.u_test_ctrl.sig_value;
     // Probes added by the Phase 1 qualification fixes (dv/README.md; spec 3.1
     // update pending): the CPU test IRQ input, the divider simpleuart really
     // uses, and the SRAM macro port 0 pins.
 `ifdef SOC_CPU_HAZARD3
-    wire        p_irq_test    = dut.u_cpu.irq;      // one IRQ input (ADR-0011)
+    wire        p_irq_test    = `SOC_DUT.u_cpu.irq;      // one IRQ input (ADR-0011)
 `else
-    wire        p_irq_test    = dut.u_cpu.irq[`SOC_IRQ_TEST];
+    wire        p_irq_test    = `SOC_DUT.u_cpu.irq[`SOC_IRQ_TEST];
 `endif
-    wire [31:0] p_uart_div    = dut.u_uart.u_simpleuart.cfg_divider;
-    wire        p_sram_csb0   = dut.sram0.csb0;
-    wire        p_sram_web0   = dut.sram0.web0;
-    wire [3:0]  p_sram_wmask0 = dut.sram0.wmask0;
-    wire [8:0]  p_sram_addr0  = dut.sram0.addr0;
-    wire [31:0] p_sram_din0   = dut.sram0.din0;
+    wire [31:0] p_uart_div    = `SOC_DUT.u_uart.u_simpleuart.cfg_divider;
+    wire        p_sram_csb0   = `SOC_DUT.sram0.csb0;
+    wire        p_sram_web0   = `SOC_DUT.sram0.web0;
+    wire [3:0]  p_sram_wmask0 = `SOC_DUT.sram0.wmask0;
+    wire [8:0]  p_sram_addr0  = `SOC_DUT.sram0.addr0;
+    wire [31:0] p_sram_din0   = `SOC_DUT.sram0.din0;
 
     // ------------------------------------------------------------------
     // Clock, cycle counter, run state
@@ -172,7 +250,7 @@ module tb_soc;
         .cycle    (cycle),
         .rtl_out  ({uart_tx, gpio_out, trap, host_rdata}),
         .gl_out   ({gl_uart_tx, gl_gpio_out, gl_trap, gl_host_rdata}),
-        .rtl_sram ({dut.sram0.csb0, dut.sram0.web0, dut.sram0.wmask0, dut.sram0.addr0, dut.sram0.din0}),
+        .rtl_sram ({`SOC_DUT.sram0.csb0, `SOC_DUT.sram0.web0, `SOC_DUT.sram0.wmask0, `SOC_DUT.sram0.addr0, `SOC_DUT.sram0.din0}),
         .gl_sram  ({dut_gl.sram0.csb0, dut_gl.sram0.web0, dut_gl.sram0.wmask0, dut_gl.sram0.addr0, dut_gl.sram0.din0})
     );
 `endif
@@ -288,12 +366,12 @@ module tb_soc;
         .active       (active),
         .cycle        (cycle),
         .resetn       (resetn),
-        .host_en      (host_en),
-        .host_cs      (host_cs),
-        .host_we      (host_we),
-        .host_addr    (host_addr),
-        .host_wdata   (host_wdata),
-        .host_wmask   (host_wmask),
+        .host_en      (m_host_en),
+        .host_cs      (m_host_cs),
+        .host_we      (m_host_we),
+        .host_addr    (m_host_addr),
+        .host_wdata   (m_host_wdata),
+        .host_wmask   (m_host_wmask),
         .mem_valid    (p_mem_valid),
         .mem_ready    (p_mem_ready),
         .mem_addr     (p_mem_addr),
@@ -428,6 +506,27 @@ module tb_soc;
     );
 `endif
 
+    // caravel_pins checker (CARAVEL_WRAPPER): the wrapper's pad and logic analyzer contract
+    // (ADR-0019 decision 10) holds in every cycle after reset release.
+`ifdef CARAVEL_WRAPPER
+    reg [31:0] fail_caravel_pins = 32'd0;
+    always @(posedge clk) begin
+        if (active) begin
+            if (io_oeb !== EXP_OEB || (io_out & ~USED_OUT) !== 38'd0
+                || la_data_out !== {114'd0, m_host_en, boot_mode, trap, gpio_out, uart_rx, uart_tx}
+                || user_irq !== 3'd0) begin
+                if (fail_caravel_pins < 10)
+                    $display("[CHK:caravel_pins] FAIL cycle %0d: io_oeb=%b (expected %b), unused io_out=%b, la_data_out[13:0]=%b (expected %b), user_irq=%b",
+                             cycle, io_oeb, EXP_OEB, io_out & ~USED_OUT, la_data_out[13:0],
+                             {m_host_en, boot_mode, trap, gpio_out, uart_rx, uart_tx}, user_irq);
+                fail_caravel_pins = fail_caravel_pins + 32'd1;
+            end
+        end
+    end
+`else
+    wire [31:0] fail_caravel_pins = 32'd0;
+`endif
+
     // trap checker: FAIL on the first cycle trap is 1 after reset release.
     always @(negedge clk) begin
         if (active && trap === 1'b1 && !trap_seen) begin
@@ -494,6 +593,69 @@ module tb_soc;
     // ------------------------------------------------------------------
     // Host port access (spec 4.4): signals change on the falling edge.
     // ------------------------------------------------------------------
+`ifdef CARAVEL_WRAPPER
+    // Wishbone classic master (signals change on the falling edge, ack sampled on the rising edge)
+    task wb_access;
+        input         we;
+        input  [31:0] adr;
+        input  [31:0] wdat;
+        input  [3:0]  sel;
+        output [31:0] rdat;
+        integer       n;
+        begin
+            @(negedge clk);
+            wb_cyc = 1'b1; wb_stb = 1'b1; wb_we = we; wb_adr = adr; wb_wdat = wdat; wb_sel = sel;
+            n = 0;
+            @(posedge clk);
+            while (wb_ack !== 1'b1 && n < 16) begin
+                n = n + 1;
+                @(posedge clk);
+            end
+            if (wb_ack !== 1'b1)
+                abort_sim("Wishbone: no ack within 16 cycles");
+            rdat = wb_rdat;
+            @(negedge clk);
+            wb_cyc = 1'b0; wb_stb = 1'b0; wb_we = 1'b0; wb_sel = 4'd0;
+        end
+    endtask
+
+    task host_write_word;
+        input [8:0]  a;
+        input [31:0] d;
+        reg   [31:0] unused_rd;
+        wb_access(1'b1, WB_SRAM + {21'd0, a, 2'b00}, d, 4'hF, unused_rd);
+    endtask
+
+    task host_write_word_mask;
+        input [8:0]  a;
+        input [31:0] d;
+        input [3:0]  m;
+        reg   [31:0] unused_rd;
+        wb_access(1'b1, WB_SRAM + {21'd0, a, 2'b00}, d, m, unused_rd);
+    endtask
+
+    task host_read_word;
+        input  [8:0]  a;
+        output [31:0] d;
+        wb_access(1'b0, WB_SRAM + {21'd0, a, 2'b00}, 32'd0, 4'hF, d);
+    endtask
+
+    // Release the CPU: CTRL.host_en = 0 (the bridge resets it to 1)
+    task host_release;
+        reg [31:0] unused_rd;
+        begin
+            wb_access(1'b1, WB_CTRL, 32'd0, 4'h1, unused_rd);
+            host_en = 1'b0;
+        end
+    endtask
+`else
+    task host_release;
+        begin
+            @(negedge clk);
+            host_en = 1'b0;
+        end
+    endtask
+
     task host_write_word;
         input [8:0]  a;
         input [31:0] d;
@@ -545,6 +707,7 @@ module tb_soc;
             d = host_rdata;
         end
     endtask
+`endif
 
     // ------------------------------------------------------------------
     // Result file and end of simulation
@@ -604,6 +767,7 @@ module tb_soc;
                 $fdisplay(fd_result, "fail.sram_port=%0d", fail_sram_port);
                 $fdisplay(fd_result, "fail.irq_line=%0d", fail_irq_line);
                 $fdisplay(fd_result, "fail.uart_div=%0d", fail_uart_div);
+                $fdisplay(fd_result, "fail.caravel_pins=%0d", fail_caravel_pins);
 `ifdef GL_LOCKSTEP
                 if (u_gl_lockstep.fail_count > 10)
                     $display("[CHK:gl_lockstep] FAIL %0d mismatches in total (first 10 printed)", u_gl_lockstep.fail_count);
@@ -688,9 +852,9 @@ module tb_soc;
             if (fw_file == "")
                 abort_sim("+load=backdoor needs +fw=<hex>");
             if (fw_words > 0)
-                $readmemh(fw_file, dut.sram0.mem, 0, fw_words - 1);
+                $readmemh(fw_file, `SOC_DUT.sram0.mem, 0, fw_words - 1);
             else
-                $readmemh(fw_file, dut.sram0.mem);
+                $readmemh(fw_file, `SOC_DUT.sram0.mem);
 `ifdef GL_LOCKSTEP
             if (fw_words > 0)
                 $readmemh(fw_file, dut_gl.sram0.mem, 0, fw_words - 1);
@@ -756,9 +920,12 @@ module tb_soc;
                 end
             end
             $display("[TB] host port byte-mask check: 10 masks on word %0d read back as expected at cycle %0d", HOST_MASK_WORD, cycle);
-            @(negedge clk);
-            host_en = 1'b0;
+            host_release;
         end
+`ifdef CARAVEL_WRAPPER
+        else
+            host_release;   // the bridge holds the CPU after reset until CTRL.host_en is cleared
+`endif
 
         cpu_started     = 1'b1;
         cpu_start_cycle = cycle;
@@ -777,12 +944,15 @@ module tb_soc;
                 resetn     = 1'b0;
                 mid_resets = mid_resets + 32'd1;
                 $display("[TB] mid-run reset: resetn=0 from cycle %0d, while the CPU presents a store to 0x%08x (wdata 0x%08x, wstrb %b, old SRAM word 0x%08x)",
-                         cycle, p_mem_addr, p_mem_wdata, p_mem_wstrb, dut.sram0.mem[rst_store_addr[10:2]]);
+                         cycle, p_mem_addr, p_mem_wdata, p_mem_wstrb, `SOC_DUT.sram0.mem[rst_store_addr[10:2]]);
                 repeat (RESET_CYCLES) @(posedge clk);
                 @(negedge clk);
                 resetn = 1'b1;
+`ifdef CARAVEL_WRAPPER
+                host_release;   // wb_rst_i set CTRL.host_en back to 1
+`endif
                 $display("[TB] mid-run reset released at cycle %0d (SRAM word 0x%08x is now 0x%08x)",
-                         cycle, rst_store_addr, dut.sram0.mem[rst_store_addr[10:2]]);
+                         cycle, rst_store_addr, `SOC_DUT.sram0.mem[rst_store_addr[10:2]]);
             end
         end
         while (!done_seen && !trap_seen && cycle < max_cycles)

@@ -420,3 +420,60 @@ expect_checkers = ["coverage"]
 expect_regex = "(?i)data reads 0 \\(expected 88\\), fetches 88 \\(expected 0\\)"
 cpus = ["hazard3"]
 
+# Caravel wrapper (Phase 7, ADR-0019): bugs in rtl/caravel, run on the "caravel" build only
+# (dvlib CPUS["caravel"]: the Hazard3 SoC inside user_project_wrapper, host port over Wishbone).
+[[bug]]
+id = "W01"
+define = "BUG_W01"
+test = "boot_host_hello"
+sim = "icarus"
+cpus = ["caravel"]
+expect_checkers = ["sim_error"]
+expect_regex = "(?i)host port load read-back mismatch"
+
+[[bug]]
+id = "W02"
+define = "BUG_W02"
+test = "boot_host_hello"
+sim = "icarus"
+cpus = ["caravel"]
+expect_checkers = ["sim_error"]
+expect_regex = "(?i)host port partial-wmask write mismatch"
+
+[[bug]]
+id = "W03"
+define = "BUG_W03"
+test = "hello"
+sim = "icarus"
+cpus = ["caravel"]
+expect_checkers = ["caravel_pins"]
+expect_regex = "(?i)io_oeb="
+exclusive = true
+
+[[bug]]
+id = "W04"
+define = "BUG_W04"
+test = "hello"
+sim = "icarus"
+cpus = ["caravel"]
+expect_checkers = ["caravel_pins"]
+expect_regex = "(?i)la_data_out"
+exclusive = true
+
+[[bug]]
+id = "W05"
+define = "BUG_W05"
+test = "bootrom_march"
+sim = "icarus"
+cpus = ["caravel"]
+expect_checkers = ["timeout"]
+expect_regex = ""
+
+[[bug]]
+id = "W06"
+define = "BUG_W06"
+test = "boot_host_hello"
+sim = "icarus"
+cpus = ["caravel"]
+expect_checkers = ["sim_error"]
+expect_regex = "(?i)host port load read-back mismatch"

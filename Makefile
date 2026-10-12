@@ -18,7 +18,7 @@ SOC_TAG = $(if $(filter hazard3,$(CPU)),soc_top_hazard3,soc_top)
 PY   ?= python3
 DRY_RUN ?= 0
 
-.PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke \
+.PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke regress-rtl-caravel neg-rtl-caravel \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
         neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
@@ -43,6 +43,8 @@ help:
 	@echo "  make regress-rtl          all positive tests on Icarus and Verilator (L1b)"
 	@echo "  make regress-rtl-smoke    smoke subset on Icarus"
 	@echo "  make neg-rtl              bug injection (all dv/bugs.toml entries), each must FAIL at its checker"
+	@echo "  make regress-rtl-caravel  regress-rtl on the Hazard3 SoC inside the Caravel user_project_wrapper (Phase 7)"
+	@echo "  make neg-rtl-caravel      neg-rtl on that build: the Hazard3 bugs and the wrapper bugs W01-W06"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check py-check skill-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"
@@ -155,6 +157,16 @@ regress-rtl: fw
 
 regress-rtl-smoke: fw
 	$(PY) dv/scripts/regress.py --sims icarus --suite smoke --cpu $(CPU)
+
+# Phase 7 (ADR-0019): the Hazard3 SoC inside the Caravel user_project_wrapper (dv build "caravel":
+# host port over Wishbone, caravel_pins checker); the Hazard3 firmware, whatever CPU is set.
+regress-rtl-caravel:
+	$(MAKE) -C fw CPU=hazard3 all check-bootrom
+	$(PY) dv/scripts/regress.py --sims $(SIMS) --suite all --cpu caravel
+
+neg-rtl-caravel:
+	$(MAKE) -C fw CPU=hazard3 all check-bootrom
+	$(PY) dv/scripts/neg.py --cpu caravel
 
 neg-rtl: fw
 	$(PY) dv/scripts/neg.py --cpu $(CPU)

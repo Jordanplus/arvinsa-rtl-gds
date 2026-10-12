@@ -11,6 +11,7 @@ its own `make <target>`, in this order, and the run stops at the first one that 
 targets use earlier results, e.g. eqy-soc uses the run of harden-soc):
   hazard3
   RTL and firmware             env-check-flow py-check lint synth-check fw core-hazard3 regress-rtl neg-rtl
+                               regress-rtl-caravel neg-rtl-caravel (Caravel wrapper, Phase 7)
   checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook neg-openram neg-macro-views
   soc_top with Hazard3         harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr
   end                          provenance-final (HEAD unchanged, working tree still clean)
@@ -46,7 +47,8 @@ OUTS = {"hazard3": os.path.join(ROOT, "runs", "regress"), "picorv32": os.path.jo
 SOC = ["harden-soc", "eqy-soc", "neg-eqy-soc", "gl-soc", "gl-soc-powered", "neg-gl-soc", "neg-pnr"]
 FLOW_CHECKERS = ["neg-provenance", "neg-run-guard", "neg-regress", "test-flow-retry", "test-review-hook", "neg-openram", "neg-macro-views"]
 TARGET_LISTS = {
-    "hazard3": ["env-check-flow", "py-check", "lint", "synth-check", "fw", "core-hazard3", "regress-rtl", "neg-rtl"]
+    "hazard3": ["env-check-flow", "py-check", "lint", "synth-check", "fw", "core-hazard3", "regress-rtl", "neg-rtl",
+                "regress-rtl-caravel", "neg-rtl-caravel"]
                + FLOW_CHECKERS + SOC + ["provenance-final"],
     "picorv32": ["env-check-flow", "py-check", "lint", "synth-check", "fw", "core-stock", "regress-rtl", "neg-rtl"]
                 + FLOW_CHECKERS + SOC

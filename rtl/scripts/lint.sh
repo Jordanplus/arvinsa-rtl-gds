@@ -7,7 +7,9 @@
 # Variants: default, -DUSE_POWER_PINS, and every RTL bug injection define, for the
 # PicoRV32 build (rtl/rtl.f) and the Hazard3 build (rtl/rtl_hazard3.f, -DSOC_CPU_HAZARD3,
 # variant names hazard3[+<define>]; Phase 5, ADR-0011). A bug define is linted on the
-# CPUs its dv/bugs.toml entry applies to (cpus = [...], default both).
+# CPUs its dv/bugs.toml entry applies to (cpus = [...], default both). The Caravel wrapper
+# (rtl/caravel, Phase 7, ADR-0019) is linted as top user_project_wrapper on the Hazard3 build:
+# variants caravel and caravel+USE_POWER_PINS.
 # Any warning or error in any variant -> FAIL (exit 1).
 # RTL-owned files (rtl/soc, rtl/bus, rtl/periph, rtl/cpu) may not carry any waiver.
 # Bug injection defines: the single list is dv/bugs.toml (define = "BUG_...").
@@ -27,7 +29,7 @@ FILELIST=rtl/rtl.f
 FILELIST_H3=rtl/rtl_hazard3.f
 WAIVERS=rtl/lint/waivers.vlt
 SRAM_BB=ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.bb.v
-OWN_SRC="rtl/soc rtl/bus rtl/periph rtl/cpu"
+OWN_SRC="rtl/soc rtl/bus rtl/periph rtl/cpu rtl/caravel"
 BUGS_TOML=dv/bugs.toml
 BUGS=$( (grep -oE '^[[:space:]]*define[[:space:]]*=[[:space:]]*"BUG_[A-Za-z0-9_]+"' "$BUGS_TOML" || true) \
         | grep -oE 'BUG_[A-Za-z0-9_]+' | sort -u | tr '\n' ' ' || true)
@@ -42,6 +44,12 @@ BUGS_P=$(bugs_for picorv32)
 BUGS_H=$(bugs_for hazard3)
 VARIANTS="default USE_POWER_PINS $BUGS_P hazard3 hazard3+USE_POWER_PINS"
 for b in $BUGS_H; do VARIANTS="$VARIANTS hazard3+$b"; done
+VARIANTS="$VARIANTS caravel caravel+USE_POWER_PINS"
+# Bug defines of the Caravel wrapper (dv/bugs.toml entries with cpus naming "caravel")
+BUGS_C=$(python3 -c 'import sys; sys.path.insert(0, "dv/scripts"); import dvlib
+print(" ".join(sorted({b["define"] for b in dvlib.load_bugs().values() if b["define"] and "caravel" in b.get("cpus", [])})))')
+for b in $BUGS_C; do VARIANTS="$VARIANTS caravel+$b"; done
+FILELIST_CV=rtl/rtl_caravel.f
 
 if ! command -v verilator >/dev/null 2>&1; then
     echo "LINT: FAIL (verilator not found in PATH)"
@@ -59,7 +67,7 @@ if grep -rn 'lint_off' $OWN_SRC >/dev/null 2>&1; then
     grep -rn 'lint_off' $OWN_SRC | sed 's/^/        /'
     fail=1
 fi
-OWN_WAIVER_RE='^[[:space:]]*lint_off.*rtl/(soc|bus|periph|cpu)'
+OWN_WAIVER_RE='^[[:space:]]*lint_off.*rtl/(soc|bus|periph|cpu|caravel)'
 if grep -nE "$OWN_WAIVER_RE" "$WAIVERS" >/dev/null 2>&1; then
     echo "  FAIL  policy: $WAIVERS waives an RTL-owned file:"
     grep -nE "$OWN_WAIVER_RE" "$WAIVERS" | sed 's/^/        /'
@@ -86,19 +94,31 @@ for b in $RTL_BUGS; do
 done
 echo "lint: bug injection defines (dv/bugs.toml = RTL): $BUGS"
 
+# 2b. rtl/rtl_caravel.f = rtl/rtl_hazard3.f + every file under rtl/caravel (one list per build,
+#     no drift between the Hazard3 SoC and the SoC inside the Caravel wrapper).
+want_cv=$( { cat "$FILELIST_H3"; ls rtl/caravel/*.v | grep -v '/user_defines\.v$' | sort; } )
+have_cv=$( { grep -v '^rtl/caravel/' "$FILELIST_CV"; grep '^rtl/caravel/' "$FILELIST_CV" | sort; } )
+if [ "$want_cv" != "$have_cv" ]; then
+    echo "  FAIL  $FILELIST_CV is not $FILELIST_H3 + the rtl/caravel/*.v files (user_defines.v excluded)"
+    fail=1
+fi
+
 # 3. Lint every variant.
 for v in $VARIANTS; do
     defs=""
     flist="$FILELIST"
+    top=soc_top
     case "$v" in
         default) ;;
+        caravel) defs="-DSOC_CPU_HAZARD3"; flist="$FILELIST_CV"; top=user_project_wrapper ;;
+        caravel+*) defs="-DSOC_CPU_HAZARD3 -D${v#caravel+}"; flist="$FILELIST_CV"; top=user_project_wrapper ;;
         hazard3) defs="-DSOC_CPU_HAZARD3"; flist="$FILELIST_H3" ;;
         hazard3+*) defs="-DSOC_CPU_HAZARD3 -D${v#hazard3+}"; flist="$FILELIST_H3" ;;
         *) defs="-D$v" ;;
     esac
     log="$OUT/$v.log"
     set +e
-    verilator --lint-only -Wall --top-module soc_top $defs \
+    verilator --lint-only -Wall --top-module $top $defs \
         "$WAIVERS" -f "$flist" "$SRAM_BB" >"$log" 2>&1
     rc=$?
     set -e

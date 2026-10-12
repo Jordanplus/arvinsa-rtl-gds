@@ -155,6 +155,7 @@ signoff（harden 結尾自動執行）
 
 - 怎麼跑：`make lint`、`make synth-check`、`make fw`、`make regress-rtl`（Icarus 與 Verilator）、上游 core 的測試（`make core-stock`、`make core-hazard3`）。
 - PASS 條件：每個 test 都是 self-checking；`make neg-rtl` 對每個植入錯誤都要 FAIL。
+- 晶片層級的外殼（本 repo Phase 7：Caravel `user_project_wrapper`）：同一組測試透過外殼再跑一次（`make regress-rtl-caravel`，host port 走 Wishbone），外殼自己的接線另有 checker（`caravel_pins`）與植入錯誤（`make neg-rtl-caravel`，W01–W06）。
 - skill：`rtl-synthesis-lint`、`dv-directed-tests`；換 core 時 `core-migration-hazard3`。
 
 ### 4.3 macro：取得或產生、QA、特性化
@@ -202,7 +203,7 @@ signoff（harden 結尾自動執行）
 ### 4.8 一鍵 regression 與來源追溯
 
 - `make regress`（Hazard3 版，`scripts/regress.py --cpu hazard3`）依序跑下列項目，第一個 FAIL 就停（實際清單：`scripts/regress.py` 的 `TARGET_LISTS`）：
-  1. `env-check-flow py-check lint synth-check fw core-hazard3 regress-rtl neg-rtl`
+  1. `env-check-flow py-check lint synth-check fw core-hazard3 regress-rtl neg-rtl regress-rtl-caravel neg-rtl-caravel`
   2. flow 的 checker：`neg-provenance`（來源追溯的植入錯誤）、`neg-run-guard`（下游拒絕 FAIL 或別的 commit 的 run）、`neg-regress`（regression 自己的植入錯誤）、`test-flow-retry`（偶發錯誤的重試）、`test-review-hook`（criteria review 的 Stop hook）、`neg-openram`、`neg-macro-views`
   3. `harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr`
   4. `provenance-final`：HEAD 與工作樹從 harden 開始後都沒變。

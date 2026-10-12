@@ -25,6 +25,24 @@
 6. **向 ChipFoundry 反映由使用者決定是否送出**（使用者 2026-10-12：「我擬稿，你自己決定發不發 (建議)」）。草稿在 `runs/p7_chipfoundry_issue_draft.md`（不進版控）。
 7. **LVS 把 SRAM 當 black box**（業界做法，與現行 SoC LVS 相同，沒有另外問）：`lvs_config.json` 的 `EXTRACT_ABSTRACT` 加入 SRAM。ChipFoundry 的 PDK `3e0e31dc` 對 bitcell 的元件命名和 `8afc834` 相同（筆記第 4 節），transistor-level 比對會遇到 Phase 6 的同一個不一致；ChipFoundry 自己的 `caravel_user_sram` 範例也用 black box。SRAM 內部的一致性仍由 repo 的 view QA 與 `check_macro_gds.py` 負責。
 
+8. **SoC 的 clock 與 reset 接 `wb_clk_i`／`wb_rst_i`**（使用者 2026-10-12：「wb_clk_i／wb_rst_i (建議)」）。和 host write port 同一個 clock，不跨 clock domain；週期維持 44 ns。`resetn = ~wb_rst_i`（`wb_rst_i` 由管理用 SoC 在 `wb_clk_i` 下產生）。
+9. **host write port 由 Wishbone slave 驅動**（使用者 2026-10-12：「Wishbone slave (建議)」）。`soc_top` 不改，wrapper 加一個轉接：
+   - 位址 `0x3000_0000` 的控制暫存器，bit 0 = `host_en`，**reset 值為 1**：`wb_rst_i` 之後 CPU 停住，等管理用 CPU 寫 0 才依 `boot_mode` 從 boot ROM 開機。理由：reset 值為 0 時，CPU 會在管理用 CPU 寫入之前先跑幾個 cycle（例如先寫 GPIO），和 repo 驗證時「載入期間 CPU 一直停住」的條件不同；代價是晶片上一定要管理用韌體放開 CPU。這是實作細節，不是使用者選的，使用者可以改回 0；
+   - `0x3000_1000`–`0x3000_17FF` 對應 SRAM 的 512 個 word，只有 `host_en=1` 時讀寫 SRAM，否則寫入忽略、讀回 0；
+   - 讀取在 `host_cs` 後兩個上升緣取 `host_rdata`（`rtl/bus/soc_bus.v`「A read sampled at T0 ... captured into rdata_q at T1」）才回 `wbs_ack_o`；寫入一個 cycle 回 ack。`wbs_sel_i` 接 `host_wmask`。
+10. **對外訊號接實體 GPIO，同一份也接到 logic analyzer**（使用者 2026-10-12：「接實體 GPIO＋一份接 LA (建議)」）。腳位規劃依 `run_oeb_check` 的接線要求（cf-precheck `6c401ed5`，第 843–900 行）：
+
+    | GPIO | 訊號 | 模式 | `io_out`／`io_oeb` |
+    |---|---|---|---|
+    | 8 | `uart_tx` | user output | `uart_tx`／0 |
+    | 9 | `uart_rx` | user input nopull | 0／1（這個模式也要求兩者有接） |
+    | 10–17 | `gpio_out[7:0]` | user output | `gpio_out[i]`／0 |
+    | 18 | `trap` | user output | `trap`／0 |
+    | 19–20 | `boot_mode[1:0]` | user input pulldown（沒接時為 0） | 0／0（這個模式規定兩者都要是 0） |
+    | 5–7、21–37 | 不用 | management input nopull（和 caravel-lite `verilog/rtl/user_defines.v` 第 50–52 行的預設相同；GPIO 5、6 是管理用 UART 的 `ser_rx`／`ser_tx`，`caravel.v` 第 92–93 行，由管理用韌體在開機後改設定） | 0／1（management 模式忽略，只有 warning） |
+
+    `la_data_out[12:0]` = `{boot_mode, trap, gpio_out, uart_rx, uart_tx}` 的鏡像，`la_data_out[13]` = `host_en`，其餘 0；`user_irq` 接 0，`analog_io` 不接。
+
 ## 後果
 
 - Phase 7 的 exit 條件改寫為：「官方 image 的 precheck 13 項中，11 項 PASS；`klayout_feol`／`klayout_beol` 只有決定 5 的兩條規則，而且與 PDK 預建 macro 一致」。`project-plan.md` §8 同步更新。
