@@ -27,6 +27,12 @@ Checks (each prints a PASS/FAIL row):
   disconnected LibreLane's Odb.ReportDisconnectedPins finds no disconnected pin (log line
                "Found 0 disconnected pin(s), of which 0 are critical." and no table). sram0
                dout1 is connected to the RTL wires unused_sram_dout1[31:0], so it is not reported.
+               user_project_wrapper (DESIGNS unused_ports): the fixed Caravel ports the design does
+               not use are reported, so the table must list exactly those, on the top module only, and
+               0 critical: every input or inout port except the Wishbone inputs and the io_in of the
+               GPIOs in an input mode of pin_plan.toml, plus the supply pins no cell uses (cells
+               use the first net of VDD_NETS / GND_NETS and the nets of PDN_MACRO_CONNECTIONS). An output port, a used input or a cell pin in the table FAILs, and so does an
+               expected unused port that is connected.
   sram_drc_ref the Magic DRC report of the SRAM alone (--sram-drc, made by sram_drc_alone.py) has
                exactly the reviewed rule counts of signoff/waivers/soc_top/sram_magic_drc_baseline.json
                (made with --make-drc-baseline)
@@ -300,12 +306,18 @@ CHECK_SETUP_ALLOWED = set()   # Phase 3-5 allowed the unclocked sram0/clk1 (tied
 BOUNDARY_SLEW_MARGIN = 0.05
 DESIGNS = {
     "soc_top": {"inst": "sram0", "clk_port": "clk", "check_setup_allowed": set(), "ir_model": "met5_left_end",
-                "boundary_sdc": None},
+                "boundary_sdc": None, "unused_ports": None},
     # Phase 7 (ADR-0019): the SoC flat in the wrapper. analog_io[28:0] are pads of the fixed Caravel template with
     # nothing connected (the SoC has no analog circuit), so STA lists them as unconstrained endpoints.
     "user_project_wrapper": {
         "inst": "u_soc.sram0", "clk_port": "wb_clk_i", "ir_model": "core_ring",
         "boundary_sdc": "pnr/user_project_wrapper/caravel_io.sdc",
+        # disconnected: the fixed Caravel ports the design leaves unconnected. Used inputs are the Wishbone
+        # bus and the io_in of the GPIOs that pin_plan.toml puts in an input mode; every other input or inout
+        # port and every supply pin that no cell uses (see the row) must be unconnected, every output connected.
+        "unused_ports": {"used_inputs": r"wb_clk_i|wb_rst_i|wbs_\w+_i(\[\d+\])?",
+                         "pin_plan": "pnr/user_project_wrapper/pin_plan.toml",
+                         "supplies": ["vccd1", "vccd2", "vdda1", "vdda2", "vssa1", "vssa2", "vssd1", "vssd2"]},
         "check_setup_allowed": {("There are 29 unconstrained endpoints.",
                                  tuple(sorted(f"analog_io[{i}]" for i in range(29))))}},
 }
@@ -356,6 +368,37 @@ def read_max_slew(path):
     viol = [(p, float(sl)) for p, sl in re.findall(r"^(\S+)\s+[\d.]+\s+([\d.]+)\s+-[\d.]+ \(VIOLATED\)", sec.group(1) if sec else "",
                                                    re.M)]
     return int(m.group(1)), viol
+
+
+def top_ports(nl, top):
+    """{bit name: direction} of the ports of module `top` in a Verilog netlist ("input [3:0] a;" -> a[0..3])."""
+    m = re.search(rf"\bmodule\s+{re.escape(top)}\b(.*?)\bendmodule\b", nl, re.S)
+    ports = {}
+    for d, msb, lsb, name in re.findall(r"^\s*(input|output|inout)\s+(?:\[(\d+):(\d+)\]\s+)?(\w+)\s*;",
+                                         m.group(1) if m else "", re.M):
+        if msb == "":
+            ports[name] = d
+        else:
+            for i in range(min(int(msb), int(lsb)), max(int(msb), int(lsb)) + 1):
+                ports[f"{name}[{i}]"] = d
+    return ports
+
+
+def read_disconnected_table(path):
+    """Odb.ReportDisconnectedPins full_disconnected_pins_table.txt -> {instance: (disconnected power pins,
+    disconnected signal pins)}; a row with an empty first column continues the instance above it."""
+    out, inst = {}, None
+    for line in open(path, encoding="utf8", errors="replace"):
+        cols = [c.strip() for c in line.rstrip("\n").split("\u2502")]
+        if len(cols) != 7:
+            continue
+        inst = cols[1] or inst
+        power, signal = out.setdefault(inst, (set(), set()))
+        if cols[3]:
+            power.add(cols[3])
+        if cols[5]:
+            signal.add(cols[5])
+    return out
 
 
 def pin_net(nl, inst, pin, cache):
@@ -529,9 +572,39 @@ def main(run_dir, config_path, sram_drc):
         text = "".join(open(f, encoding="utf8", errors="replace").read() for f in logs)
         found = re.findall(r"Found (\d+) disconnected pin\(s\), of which (\d+) are critical", text)
         table = os.path.join(steps[0], "full_disconnected_pins_table.txt")
-        ok = found == [("0", "0")] and not os.path.exists(table)
-        row("disconnected", ok, f"Odb.ReportDisconnectedPins: {found or 'no result line'}"
-            + ("" if not os.path.exists(table) else f"; table {table} exists"))
+        up = dz["unused_ports"]
+        if up is None:
+            ok = found == [("0", "0")] and not os.path.exists(table)
+            row("disconnected", ok, f"Odb.ReportDisconnectedPins: {found or 'no result line'}"
+                + ("" if not os.path.exists(table) else f"; table {table} exists"))
+        else:
+            import tomllib
+            plan = tomllib.load(open(os.path.join(ROOT, up["pin_plan"]), "rb"))
+            used = {f"io_in[{p['gpio']}]" for p in plan.get("pin", []) if "INPUT" in p.get("mode", "")}
+            ports = top_ports(nl, design)
+            exp_sig = {p for p, d in ports.items() if d != "output"
+                       and not re.fullmatch(up["used_inputs"], p) and p not in used}
+            # supplies with cell pins on them: the first VDD/GND net (standard cells) and the nets of
+            # PDN_MACRO_CONNECTIONS ("inst vdd gnd vdd_pin gnd_pin"); the other pairs only have their core ring
+            fed = {(cfg.get("VDD_NETS") or [None])[0], (cfg.get("GND_NETS") or [None])[0]}
+            fed |= {n for c in cfg.get("PDN_MACRO_CONNECTIONS") or [] for n in c.split()[1:3]}
+            exp_pow = set(up["supplies"]) - fed
+            tab = read_disconnected_table(table) if os.path.isfile(table) else {}
+            got_pow, got_sig = tab.get(design, (set(), set()))
+            others = sorted(i for i in tab if i != design)
+            n = len(exp_sig) + len(exp_pow)
+            bad = []
+            if found != [(str(n), "0")]:
+                bad.append(f"result line {found or 'missing'}, expected [('{n}', '0')]")
+            if others:
+                bad.append(f"instances with disconnected pins: {others[:5]}")
+            for what, extra in (("unexpectedly disconnected", (got_sig - exp_sig) | (got_pow - exp_pow)),
+                                ("expected unused but connected", (exp_sig - got_sig) | (exp_pow - got_pow))):
+                if extra:
+                    bad.append(f"{what}: {sorted(extra)[:8]}" + (f" (+{len(extra) - 8})" if len(extra) > 8 else ""))
+            row("disconnected", not bad, f"{n} pins unconnected, all of them top-level ports the design does not use "
+                f"({len(exp_sig)} signal, {len(exp_pow)} supply; used inputs: Wishbone and {sorted(used)}), 0 critical"
+                if not bad else "; ".join(bad))
 
     # CTS without macro latency balancing (ADR-0016)
     subst = ((cfg.get("meta") or {}).get("substituting_steps")) or {}

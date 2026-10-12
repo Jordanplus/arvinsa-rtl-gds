@@ -67,7 +67,7 @@ SKILL.md 是一般的 Markdown，任何 agent 都能讀。它們放在專案層�
 ### 1.5 要依新設計重做的
 
 - `pnr/<design>/config.json`、SDC、`signoff/limits/` 的數值，用 `signoff-criteria` 重新推導。
-- `pnr/<design>/run.sh` 與設計專屬的 checker：本 repo 的 `check_inputs.py`（harden 前的輸入檢查）、`check_soc.py`（SRAM 擺放、未用 port 的接法、斷線 pin、STA 設定、macro clock 前有沒有 delay buffer、Magic DRC 對 SRAM 單獨的結果）、`sram_drc_alone.py`、`ir_worst.py`（最壞情況的靜態 IR）。
+- `pnr/<design>/run.sh` 與設計專屬的 checker：本 repo 的 `check_inputs.py`（harden 前的輸入檢查）、`check_soc.py`（SRAM 擺放、未用 port 的接法、斷線 pin（Caravel wrapper：表上只能是設計沒用到的固定腳位，與 pin 規劃逐支相符）、STA 設定、max slew（外部 transition 驅動的邊界 net 另判）、macro clock 前有沒有 delay buffer、Magic DRC 對 SRAM 單獨的結果）、`sram_drc_alone.py`、`ir_worst.py`（最壞情況的靜態 IR）。
 - golden。
 - 和設計綁在一起的植入錯誤案例，例如 `pnr/soc_top/neg_pnr.py` 的 P00–P80（PnR 與 signoff checker 的植入錯誤）。
 - ADR、exit review 的內容。

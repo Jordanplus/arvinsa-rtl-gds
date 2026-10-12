@@ -160,7 +160,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
-| 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
+| 要跑 LibreLane、從中間 step 接續（包括已跑完的 run 改設定從中間重來）、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
 | run 失敗、錯誤時有時無（例如 `GRT-0229`）、`RSZ-0074 failed to build tree from gloubal routes`、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | hold delay cell 卡在 setup 吃緊的路徑上、半週期路徑、launch 與 capture 的 clock 差隨 corner 變號 | cts-clock-tree | drv-timing-closure（hold 修復本身） |
@@ -238,6 +238,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 判斷是不是卡住：log 有緩衝，要看 CPU 時間、記憶體與 call stack（`sample`）。記憶體要看 physical footprint，`ps` 的 RSS 不算被換到 swap 的部分，會嚴重低估；CPU 使用率低、swap 一直增加，就是記憶體失控，要馬上停（Phase 5 一個 step 用到 92.9 GB，機器只有 24 GB）。
   - 要在某一步的工具指令裡加除錯輸出時，用 `python3 -m librelane.steps eject` 把那一步匯出成獨立 script 再改；可能失控的實驗要加記憶體上限自動停。
   - 重跑會覆蓋同名的 run：Phase 3.5 第 1 次 harden 的 log 就因此不見。Phase 5 起 `run.sh` 把上一次的 run 搬成 `<dir>.prev`（只留一層），要保存更多次就自己改名；改名後各步的 `state_in.json` 仍指向舊路徑，單步重跑前要在複本裡換掉。
+  - 從中間接續（`--from`）時，LibreLane 讀的是 run 目錄裡修改時間最新的 `state_out.json`，不是前一步的。失敗後立刻接續沒問題；run 已跑過那一步、想改設定從中間重來時，要用新的 run tag 加 `--with-initial-state <前一步>/state_out.json`，否則那一步拿到的是最後一步的成品（Phase 7：`RepairDesignPostGRT` 拿到已填 fill 的版圖，報 `EST-0026` 後中止於 `RSZ-0074`）。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號），而且中止那次的目錄還在（checker 只採計有 `state_out.json` 的目錄）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。state 的 metrics 會沿用前面步驟的值，flow 中途 `state_out.json` 的數字不一定是那一步量的，要看該步的 `or_metrics_out.json`。log 的 `RSZ-0032 Inserted N hold buffers` 不是總數，要數網表。
   - what-if：改 config 複本後單步重跑一個 step（例如 `IRDropReport` 換 corner 與電阻、`GeneratePDN` 換 Tcl 重產 PDN），先用現行設定確認結果與原 run 相同（Phase 5）。GRT-0229 接續後的結果不一定逐項相同。同一步還有另一種隨機中止 `GRT-0116`（溢位只有個位數），重試只在總溢位 ≤ 10 時接手。
