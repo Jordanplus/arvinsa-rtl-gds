@@ -47,6 +47,13 @@
 
 11. **wrapper 的 PDN strap 沿用 `soc_top` 的設定**（使用者 2026-10-12：「沿用 soc_top 的設定 (建議)」）：met4 1.6 µm、met5 4.8 µm（ADR-0017）、pitch 用 LibreLane 預設（約 153 µm）。core ring 照 Caravel 固定設定（寬 3.1 µm、offset 12.45 µm、spacing 1.7 µm，4 組電源 net），標準元件與 SRAM 接 `vccd1`／`vssd1`。供電從 core ring 進來，IR 的供電點模型改成 ring 上（取代 `soc_top` 一側供電的假設），步驟 5 實作。
 12. **SRAM 與 CPU 邏輯放在左下角，靠近 Wishbone 腳位**（使用者 2026-10-12：「左下角，靠近 Wishbone (建議)」）：Wishbone 與 LA 腳位在下緣 x = 0–870 µm，Wishbone 有時序要求，而且是 32 位元的匯流排。SRAM 固定在左下角附近，placement 密度維持 55%，讓邏輯聚在 SRAM 與 Wishbone 周圍。GPIO 依這個位置重選（決定 10）。
+13. **pad／block／pin 規劃一定在 RTL 與 harden 之前，用四層機制強制**（使用者 2026-10-12：「現在情況應該是出pin位置因為pad都是固定的受到限制，所以這個流程上的修正很重要，要想個辦法確保之後一定會先探討pad & pin location」；選項回答「四層都做 (建議)」、「新建 chip-floorplan-pin-planning」）：
+    - 規則：`CLAUDE.md` 規則 14、新 skill `chip-floorplan-pin-planning`、流程文件 4.1。
+    - 規劃文件：`pnr/<design>/pin_plan.toml`（pad 來源、block 位置、每支 pin 的訊號與模式、它管轄的檔案），使用者看過 floorplan 圖（`scripts/plot_floorplan.py`）後，在 `[approval]` 填日期、原話、記錄的 ADR，以及規劃內容的 sha256（核准後規劃再改，核准就失效）。
+    - checker：`make pin-plan`（`scripts/check_pin_plan.py`），比對 RTL 的腳位常數、`user_defines.v`、LibreLane config 的 macro 位置與範本 DEF 是否照規劃；`make harden D=<design>` 先跑它，`make regress` 也跑；植入錯誤 `make neg-pin-plan`。
+    - hook：`.claude/hooks/require_pin_plan.py`（PreToolUse），規劃沒核准時，擋下對它管轄的檔案（config 只擋擺放與腳位設定）的 Edit／Write；沒有規劃的新設計也不能改 config 的擺放設定。用 Bash 改檔看不到，靠 checker 在 harden 與 regress 擋。Codex 沒有 hook，靠 checker。
+    - `soc_top`、`picorv32_core` 是規則之前的設計，列為 legacy，不需要規劃。
+    - `user_project_wrapper` 的規劃（`pnr/user_project_wrapper/pin_plan.toml`：SRAM 在 (350.98, 413.44) µm，GPIO 37／36／35／34／33 = `uart_tx`／`uart_rx`／`trap`／`boot_mode[1]`／`boot_mode[0]`，`gpio_out` 只走 LA）經使用者核准：使用者 2026-10-12 看過規劃表與 floorplan 圖 `runs/layout_png/p7_floorplan4_modules.png`（run `p7_floorplan4`，跑到 global placement）後回覆「可以」。
 
 ## 後果
 

@@ -100,6 +100,7 @@ SKILL.md 是一般的 Markdown，任何 agent 都能讀。它們放在專案層�
 ```
 環境與釘版 ............................ （不做成 skill）toolchain.md、env/setup.md
 規格與計畫 ............................ project-plan.md、ADR
+ └ pad、block 位置、pin 指定（寫 RTL 前）... chip-floorplan-pin-planning
 RTL：合成、lint ........................ rtl-synthesis-lint
  └ RTL 模擬與 directed 測試 ............ dv-directed-tests
  └ 換 CPU core ......................... core-migration-hazard3
@@ -151,6 +152,7 @@ signoff（harden 結尾自動執行）
 - 做什麼：規格（本 repo `docs/spec/`）、分 Phase 的計畫與每個 Phase 的 exit criteria（`project-plan.md` 第 8 章）、negative test 總表（第 7.3 節）。
 - 重大選擇（PDK、core、SRAM、週期、corner、餘量）由使用者決定，記成 ADR。
 - 晶片層級的規劃要在寫外殼 RTL 之前做，順序是：pad／外殼腳位 → block 位置 → pin 指定（使用者 2026-10-12：「block擺放位置應該在後段開始前就應該先確認之後出pin決定好」）。外殼的腳位位置固定時（本 repo Phase 7 的 Caravel：pad 與 wrapper 腳位都固定，XOR 檢查），pin 指定就是選用哪幾支 GPIO：先依有時序要求的介面（Caravel 是 Wishbone）定 block 位置，再挑離 block 最近的 GPIO（`tapeout-precheck-caravel` 規則 5）。
+  - 規劃寫在 `pnr/<design>/pin_plan.toml`，LibreLane 只跑到套用 DEF 範本或 global placement 就出 floorplan 圖，連同規劃請使用者核准；核准前 Claude Code 的 hook 擋下受管轄檔案的編輯，`make pin-plan` 在 harden 與 regress 擋下沒核准或與規劃不符的設計（植入錯誤 `make neg-pin-plan`）。做法在 skill `chip-floorplan-pin-planning`（使用者 2026-10-12，ADR-0019 決定 13）。
 
 ### 4.2 RTL 與 RTL 驗證
 

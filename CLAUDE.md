@@ -2,9 +2,9 @@
 
 ## 流程 skill 與經驗累積
 
-`.claude/skills/` 有 22 個流程 skill（清單與每個的說明在 README「Claude Code skills」一節）。
+`.claude/skills/` 有 23 個流程 skill（清單與每個的說明在 README「Claude Code skills」一節）。
 
-1. 做到 skill 涵蓋的任務（LibreLane 執行除錯、checker／golden、時序與 DRV、macro 整合、DRC、EQY、antenna、CTS、PDN／IR、LVS、gate-level 模擬、floorplan 與壅塞、SDC 約束、合成與 lint、signoff 條件的推導、一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review、SRAM macro 的 SPICE 特性化、把 CPU 換成 Hazard3、Caravel 整合與 ChipFoundry precheck）時，先讀對應的 `SKILL.md`，照裡面的規則與已知陷阱做。
+1. 做到 skill 涵蓋的任務（LibreLane 執行除錯、checker／golden、時序與 DRV、macro 整合、DRC、EQY、antenna、CTS、PDN／IR、LVS、gate-level 模擬、floorplan 與壅塞、SDC 約束、合成與 lint、signoff 條件的推導、一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review、SRAM macro 的 SPICE 特性化、把 CPU 換成 Hazard3、Caravel 整合與 ChipFoundry precheck、晶片層級的 pad／block／pin 規劃）時，先讀對應的 `SKILL.md`，照裡面的規則與已知陷阱做。
 2. 任務做完，把新遇到的現象追加到該 skill 的「經驗紀錄」表：日期、run、原文訊息、根因（標明已驗證或推測）、處理、證據路徑。推測的根因不能寫進規則本文。
 3. 同一現象出現兩次以上，或根因已用實驗確認（設定前後比較、單步重跑、negative test），才從經驗紀錄搬進規則本文。
 4. 這顆設計的具體數字放 repo 文件（`pnr/*/README.md`、ADR、exit review）；skill 只放可以帶到下一顆設計的規則，與指向 repo 文件的連結。
@@ -37,3 +37,8 @@
     - **列選項**：每個選項寫做法、代價（時間、風險、影響範圍）與依據，標出建議的那一個並說明理由。查證不足以判斷時，「先查清楚某件事再決定」本身也可以是選項。
     - **由使用者決定**：等使用者選。有業界標準做法、而且不影響上述各項的，照標準做法做，回報時說明。
     - **再實作**：照選定的做；決定、依據與使用者的原話和日期寫進 ADR（`docs/decisions/`）或該 macro 的 README，查證過程寫進對應的筆記。
+14. **pad、block 位置與 pin 指定先規劃、經使用者核准，才寫頂層 RTL 的腳位對應與 config**（使用者 2026-10-12：「要想個辦法確保之後一定會先探討pad & pin location」；ADR-0019 決定 13）。
+    - 順序：pad → block 位置 → pin 指定 → RTL → harden；做法在 skill `chip-floorplan-pin-planning`。
+    - 規劃寫在 `pnr/<design>/pin_plan.toml`，連同 floorplan 圖（`scripts/plot_floorplan.py`）請使用者確認；`[approval]` 只填使用者的原話，規劃改了要重新核准（`plan_sha256`）。
+    - 強制：`make pin-plan`（`make harden` 先跑、`make regress` 也跑，植入錯誤 `make neg-pin-plan`）；Claude Code 另有 PreToolUse hook（`.claude/hooks/require_pin_plan.py`）在核准前擋下受管轄檔案的編輯。被擋下時不要改用 Bash 繞過。Codex 沒有 hook，照本條自行遵守，checker 會在 harden 與 regress 擋。
+    - `soc_top`、`picorv32_core` 是本條之前的設計（legacy），不需要規劃。

@@ -139,7 +139,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 22 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
+`.claude/skills/` 放了 23 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
 
 **Claude 怎麼挑 skill**：每次對話開始時，Claude 只看得到每個 skill 開頭的 `description`，也就是一段「什麼情況用」的說明。判斷和手上的任務相關，才讀整份 `SKILL.md`。所以 `description` 要寫出會遇到的情況與錯誤訊息。這一節是給人看的索引：先用「依情況找 skill」查，再看每個 skill 的說明。
 
@@ -173,6 +173,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
+| 開新的頂層設計、決定用哪幾支 pad／GPIO、搬動 block 或 macro，要先規劃並經使用者核准；hook 擋下編輯（「這份 pad／block／pin 規劃還沒經使用者核准」）、`make pin-plan` FAIL（`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`）；harden 前出 floorplan 圖確認 | chip-floorplan-pin-planning | tapeout-precheck-caravel（Caravel 的固定腳位）、floorplan-congestion（die 內的密度與壅塞） |
 | 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`、`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`、`LEF has no FOREIGN`）；OpenROAD 報 `ODB-0292 LEF data from ... is discarded due to errors`；最終 GDS 的 macro 是空的、XOR 差異幾百萬；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
 | SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix 或 `Timestep too small`（階層式輸出的負值修正電容）；用 OpenRAM 自產 macro（官方環境只有 x86_64-linux、要不要關 use_nix、words_per_row 與讀取電路）；OpenRAM 的 LVS 用新 PDK 報 `Netlists do not match`（`special_nfet_01v8`、`special_pfet_latch`）、log 有 `ERROR` 但 exit 0、`Custom cell pin names do not match spice file`、同一設定產生的 GDS 每次不同；`gen_char_lib` 報 `internal_power ... outside (0, 1000]`；用 SPICE 量 internal power 時漏電隨網表改變或外插成負值；漏電量測窗 `leakage window ... not settled`、bitcell 漏電不隨溫度變或 `bitcell leakage depends on gmin`、用 `.nodeset` 算 DC 工作點報 `doAnalyses: out of memory`；sky130 1RW 報 `must have an even number of cols including replica cols`、DRC／LVS 失敗；OpenRAM 產的 macro 在 KLayout DRC 報 nwell.6、psdm.1、m2.2，或改了 OpenRAM 的擺放後 LVS 不一致、報 nwell.2a | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
@@ -222,6 +223,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：證據、限制、獨立審查、使用者決定、skill 回寫 | 通用 |
 | [core-migration-hazard3](.claude/skills/core-migration-hazard3/SKILL.md) | 把 CPU 從 PicoRV32 換成 Hazard3（AHB5）：介面、參數、中斷與 reset、驗證資產 | Hazard3 細節；換 core 的檢查方法通用 |
 | [tapeout-precheck-caravel](.claude/skills/tapeout-precheck-caravel/SKILL.md) | 放進 Caravel `user_project_wrapper`、跑 ChipFoundry precheck，precheck 與 flow 的工具和 deck 差異 | ChipFoundry Caravel、sky130 |
+| [chip-floorplan-pin-planning](.claude/skills/chip-floorplan-pin-planning/SKILL.md) | 晶片層級的 pad、block 位置、pin 指定先規劃並經使用者核准，再寫 RTL 與 harden；規劃文件、出圖檢查點、checker 與 hook | 方法通用；checker 目前只實作 pad 固定的外殼（Caravel） |
 
 ### 各 skill 說明
 
@@ -539,10 +541,22 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - precheck 自帶的 KLayout deck 比 flow 用的新：flow 的 KLayout DRC 是 0，precheck 不一定過。每顆 macro 先用 precheck 的 deck 單獨跑一次。
   - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019）。
   - LVS 是電晶體層級，SRAM 用 `EXTRACT_ABSTRACT` 當 black box。
-  - pad 與 wrapper 腳位位置都是固定的，能選的只有用哪幾支 GPIO：先依 Wishbone（下緣左段）定 block 位置，再挑最近的 GPIO，最後才寫 wrapper RTL（Phase 7 順序做反了，重做一次）。
+  - pad 與 wrapper 腳位位置都是固定的，能選的只有用哪幾支 GPIO：先依 Wishbone（下緣左段）定 block 位置，再挑最近的 GPIO，最後才寫 wrapper RTL（Phase 7 順序做反了，重做一次）。規劃與核准的做法看 chip-floorplan-pin-planning。
   - 還沒實跑確認的：XOR 要求 die 外那圈和官方空 wrapper 相同（用固定的 DEF 範本）、GPIO 設定與 `io_oeb` 的實體接線檢查、`lvs_config.json` 的路徑寫法。
 - **不在這裡**：macro 本身的 view QA 看 hard-macro-integration；DRC、LVS 的一般做法看 drc-signoff、lvs-signoff。
 - **本 repo 實例**：ADR-0019、`docs/notes/caravel_precheck_phase7.md`（Phase 7）。
+
+#### chip-floorplan-pin-planning：晶片層級的 pad、block 與 pin 規劃
+
+- **何時用**：開新的頂層設計，或要決定、改變用哪幾支 pad／GPIO、block 與 macro 放哪裡；被 hook 或 `make pin-plan` 擋下時。
+- **重點**：
+  - 順序是 pad → block 位置 → pin 指定 → 頂層 RTL 的腳位對應 → harden。block 位置依有時序要求的介面定，pin 挑離 block 最近的。
+  - 規劃寫在 `pnr/<design>/pin_plan.toml`。LibreLane 只跑到套用 DEF 範本（看腳位）或 global placement（看邏輯分布，幾分鐘）就出圖（`scripts/plot_floorplan.py`），連同規劃請使用者確認。
+  - 使用者核准後，在 `[approval]` 填日期、原話、ADR 與規劃的 sha256；規劃之後再改，核准就失效。
+  - 四層強制：規則（`CLAUDE.md` 規則 14）、規劃文件、checker（`make pin-plan`，harden 與 regress 都跑；植入錯誤 `make neg-pin-plan`）、Claude Code 的 PreToolUse hook（核准前擋下受管轄檔案的編輯）。用 Bash 改檔 hook 看不到，要到 checker 才擋。
+  - 看圖的陷阱：停在 PDN 的 DEF 還沒有範本腳位；範本套用後腳位是 `FIXED`；停在套用範本時 cell 還沒有位置；大外殼會鋪滿 tap cell。
+- **不在這裡**：die 內的密度與壅塞看 floorplan-congestion；Caravel 的固定腳位座標與 GPIO 模式看 tapeout-precheck-caravel。
+- **本 repo 實例**：ADR-0019 決定 10、12、13，`pnr/user_project_wrapper/pin_plan.toml`，`scripts/check_pin_plan.py`、`scripts/neg_pin_plan.py`、`.claude/hooks/require_pin_plan.py`。
 
 ### skill 的由來
 

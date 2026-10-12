@@ -11,6 +11,19 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/require_pin_plan.py\"",
+            "timeout": 10,
+            "statusMessage": "檢查 pad／block／pin 規劃是否已核准…"
+          }
+        ]
+      }
     ]
   }
 }

@@ -23,7 +23,8 @@ DRY_RUN ?= 0
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
         neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
         sram-lib sram-confirm sram-char sram-extract neg-char openram-setup openram-macro neg-openram \
-        openram-lib-template openram-char openram-power openram-lib openram-confirm openram-check-lib macro-views neg-macro-views
+        openram-lib-template openram-char openram-power openram-lib openram-confirm openram-check-lib macro-views neg-macro-views \
+        pin-plan neg-pin-plan
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -70,6 +71,8 @@ help:
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
 	@echo "  make test-review-hook     the Claude Code Stop hook asking for the signoff criteria review after a harden"
+	@echo "  make pin-plan             every top-level design follows its user-approved pad, block and pin plan (pnr/<design>/pin_plan.toml)"
+	@echo "  make neg-pin-plan         bug injection into that checker and the Claude Code hook that refuses edits before the approval"
 	@echo "  make phase3               full Phase 3 exit check (env-check-flow neg-provenance test-flow-retry harden-soc eqy-soc neg-eqy-soc"
 	@echo "                            gl-soc neg-gl-soc neg-pnr harden-core eqy-core neg-eqy-core); needs a committed working tree"
 	@echo ""
@@ -239,6 +242,7 @@ provenance-final:
 # the commit of a run is in runs/<design>_signoff/provenance.json, which every later step compares
 # with HEAD (signoff/scripts/run_guard.py), instead of a tag per git sha.
 harden:
+	$(PY) scripts/check_pin_plan.py --design $(D)
 	@case "$(D)" in soc_top) $(MAKE) harden-soc CPU=picorv32 ;; soc_top_hazard3) $(MAKE) harden-soc CPU=hazard3 ;; \
 	  picorv32_core) $(MAKE) harden-core ;; \
 	  *) echo "harden: FAIL - D must be soc_top, soc_top_hazard3 or picorv32_core (got '$(D)')"; exit 1 ;; esac
@@ -358,6 +362,13 @@ neg-regress:
 
 test-flow-retry:
 	bash pnr/test_librelane_flow.sh
+
+# Pad, block and pin plan before RTL and harden (CLAUDE.md rule 14, skill chip-floorplan-pin-planning).
+pin-plan:
+	$(PY) scripts/check_pin_plan.py
+
+neg-pin-plan:
+	$(PY) scripts/neg_pin_plan.py
 
 # The Claude Code Stop hook that asks for the signoff criteria review after a harden (skill signoff-criteria).
 test-review-hook:

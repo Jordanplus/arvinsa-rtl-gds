@@ -1,0 +1,82 @@
+# Pad, block and pin plan of user_project_wrapper (skill chip-floorplan-pin-planning, CLAUDE.md rule 14).
+# Order: pads (here fixed by Caravel) -> block location -> pin assignment -> RTL pin mapping -> harden.
+# scripts/check_pin_plan.py (make pin-plan, harden, regress) checks that the RTL, the GPIO modes and the
+# LibreLane config follow this plan and that it carries the user's approval; the Claude Code hook
+# .claude/hooks/require_pin_plan.py refuses edits of the files under [governs] until it does.
+design = "user_project_wrapper"
+
+[pads]
+# fixed: the pad ring and the wrapper pin positions are given (ChipFoundry Caravel; precheck xor
+# checks the ring outside the die against the empty wrapper), only the choice of pins is ours.
+source = "fixed"
+template_def = "pnr/user_project_wrapper/fixed_dont_change/user_project_wrapper.def"
+reserved_gpio = [0, 1, 2, 3, 4]   # caravel_user_project README "GPIO Pin Information"
+
+[block]
+# The interface with timing (Wishbone, 32-bit, wb_clk_i / wb_rst_i) is on the bottom edge,
+# x = 0-624 um, so the block (the SRAM and the SoC logic around it) is in the lower-left corner.
+config = "pnr/user_project_wrapper/config.json"
+macro = "arv_sram_2kbyte_1rw1r_32x512_8"
+macro_lef = "ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.lef"
+instance = "u_soc.sram0"
+location = [350.98, 413.44]
+# Every planned pin must lie within this distance of the macro outline (Manhattan distance to the
+# box), or carry a reason. The Wishbone pins are 413 um away (they are below the macro).
+max_pin_distance_um = 1000
+
+[gpio]
+default_mode = "MGMT_STD_INPUT_NOPULL"   # every GPIO 5-37 not listed below (the caravel default)
+
+# The SoC pins on GPIOs, nearest first (ADR-0019 decision 10). gpio_out[7:0] goes to the logic
+# analyzer only (la_data_out[9:2], next to the Wishbone pins).
+[[pin]]
+signal = "uart_tx"
+gpio = 37
+mode = "USER_STD_OUTPUT"
+localparam = "GPIO_UART_TX"
+
+[[pin]]
+signal = "uart_rx"
+gpio = 36
+mode = "USER_STD_INPUT_NOPULL"
+localparam = "GPIO_UART_RX"
+
+[[pin]]
+signal = "trap"
+gpio = 35
+mode = "USER_STD_OUTPUT"
+localparam = "GPIO_TRAP"
+
+[[pin]]
+signal = "boot_mode[1]"
+gpio = 34
+mode = "USER_STD_INPUT_PULLDOWN"
+
+[[pin]]
+signal = "boot_mode[0]"
+gpio = 33
+mode = "USER_STD_INPUT_PULLDOWN"
+localparam = "GPIO_BOOT0"
+
+[rtl]
+wrapper = "rtl/caravel/user_project_wrapper.v"
+user_defines = "rtl/caravel/user_defines.v"
+
+[governs]
+# Files that place the block or map the pins; the hook refuses edits of them while the plan is not
+# approved (pnr/<design>/config*.json only for edits that touch placement or pin settings).
+files = [
+    "rtl/caravel/user_project_wrapper.v",
+    "rtl/caravel/user_defines.v",
+    "pnr/user_project_wrapper/config.json",
+    "pnr/user_project_wrapper/fixed_dont_change/user_project_wrapper.def",
+]
+
+[approval]
+# Filled only with the user's own words after they reviewed this plan and the floorplan picture
+# (scripts/plot_floorplan.py); adr must contain the quote; plan_sha256 from
+# `scripts/check_pin_plan.py --digest <this file>` (any change above [approval] voids the approval).
+date = "2026-10-12"
+quote = "可以"
+adr = "docs/decisions/0019-phase7-caravel-precheck.md"
+plan_sha256 = "8c3c9693f5123cea8ae4cf697abcc1ff19254f8d46b6f14d43c6390b6400b2db"

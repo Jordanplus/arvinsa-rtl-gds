@@ -32,6 +32,7 @@ macro 本身的整合（view QA、LEF、`FOREIGN`）看 `hard-macro-integration`
    - 依有時序要求的介面定 block 位置：Wishbone（含 `wb_clk_i`、`wb_rst_i`）與 logic analyzer 在下緣左段 x = 0–870 µm；
    - 再依範本 DEF 的座標挑最近的 GPIO：0–14 在右緣（0–4 系統保留），15–23 在上緣，24–37 在左緣由上往下，37 在 y = 162 µm；
    - 最後才寫 wrapper RTL 的腳位對應與 `user_defines.v`。
+   - 規劃文件、使用者核准、checker 與 hook 的做法在 `chip-floorplan-pin-planning`（ADR-0019 決定 13）。
    - Phase 7 先在 RTL 選了 GPIO 8–20，到 floorplan 才發現離 block 2–3 mm，RTL、`user_defines.v`、testbench 與文件都要重做（ADR-0019 決定 10）。
 
 ## 待確認（讀過原始碼，還沒實跑）
