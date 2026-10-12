@@ -59,9 +59,11 @@ BOOT_LDFLAGS := -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles 
 # boot ROM only), so its target builds the boot ROM image instead.
 TESTS := hello memtest irq muldiv uart_echo neg_fw_hang neg_fw_illegal \
          boot_uart_hello boot_host_hello regs unmapped uart_burst reset_store counters
-# CPU-specific: buserr is the PicoRV32 bus-error IRQ; exc is the Hazard3 exception path.
+# CPU-specific: buserr is the PicoRV32 bus-error IRQ; exc is the Hazard3 exception path; maxpower uses RV32M.
 ifeq ($(CPU),hazard3)
 TESTS += exc
+# maxpower: the IR max-power pattern of the Caravel wrapper (ADR-0019 decision 20)
+TESTS += maxpower
 else
 TESTS += buserr
 endif

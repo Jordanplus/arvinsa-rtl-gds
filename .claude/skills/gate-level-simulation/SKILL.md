@@ -1,6 +1,6 @@
 ---
 name: gate-level-simulation
-description: 在網表上跑 regression 時使用：sky130 cell 模型的 define、RTL 與網表 lockstep 或 bus trace 比對、X 的處理、帶電源的網表（`USE_POWER_PINS`）、Icarus 的宣告順序、模擬的牆鐘時限與機器負載（逾時誤判）、firmware 沒用到的功能看不到。Use for gate-level simulation of synthesized/PnR netlists (incl. powered netlists), RTL-vs-GL lockstep comparison, X handling and simulation time limits.
+description: 在網表上跑 regression 時使用：sky130 cell 模型的 define、錄 IR 用的切換活動（max power pattern 的 VCD，`run_gl_soc.py --record-window`、`vcd_window.v`，時脈用 signoff 週期；錄波的 VCD 是 0 bytes 而多出 `wave.vcd` 是 plusarg 前綴撞到 `$test$plusargs("vcd")`）、RTL 與網表 lockstep 或 bus trace 比對、X 的處理、帶電源的網表（`USE_POWER_PINS`）、Icarus 的宣告順序、模擬的牆鐘時限與機器負載（逾時誤判）、firmware 沒用到的功能看不到。Use for gate-level simulation of synthesized/PnR netlists (incl. powered netlists), RTL-vs-GL lockstep comparison, X handling and simulation time limits.
 ---
 
 # Gate-level 模擬
@@ -29,6 +29,18 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
    - tap cell（`tapvpwrvgnd_1`）的 LEF 只有 VPWR／VGND 兩個 pin，所以 powered netlist 只接這兩個；它的 Verilog model 卻多宣告 VPB／VNB，Icarus 對每顆 tap 報兩行 `dangling input port ... floating`（soc_top 6635 顆）。只對這個 cell 的這兩個 port 加白名單（`dv/log_whitelist.txt`），其他 cell 不放行。
    - 速度：3 支短測試約 11 秒，與不帶電源差不多；15 支約 17 分鐘（memtest 1004 秒，當時另有 EQY 在跑）。
 
+9. **錄 IR 用的切換活動（max power pattern，`run_gl_soc.py --record-window`，ADR-0019 決定 20）**：
+   - 做法：firmware 把每段滿負載迴圈標在 GPIO_OUT（`fw/tests/maxpower`：0x5A／0x5B／0x5C），`dv/gl_soc/vcd_window.v` 只在 GPIO 等於 `+irwin_gpio` 時錄 `tb_soc.dut_gl`，那段一結束就 `$finish`；每段各跑一次模擬，輸出 `win_<hex>.vcd`。
+   - 時脈要用 signoff 的週期（`--clk-half-ns 22`，44 ns；testbench 預設 40 ns），因為 VCD 給的是每秒的切換次數，40 ns 錄的會比 signoff 頻率多約 10%。clock net 的功耗 OpenSTA 照 SDC 算，不受 VCD 影響。
+   - 只錄 `dut_gl`、只錄那一段：從時間 0 錄整個 testbench，開機與印 UART 的時間會把平均切換率拉低。三段各約 5000 個週期，每段約 300–350 MB。
+   - 每段的檢查：錄到至少 1000 個週期、VCD 非空、錄完前沒有 lockstep 不一致、run 目錄沒有 testbench 自己的 `wave.vcd`（下一條）。完整跑一次 maxpower 的 `gl-caravel` 要 PASS（網表在這個 pattern 下與 RTL 逐週期一致，錄到的活動才可信）。
+   - **plusarg 名稱不能是現有 plusarg 的延伸**（工具行為的防護，CLAUDE.md 規則 10）：
+     - 症狀：錄波的週期數正確，但指定的 VCD 是 0 bytes，run 目錄多了一個幾百 MB 的 `wave.vcd`。
+     - 原因（已驗證）：`tb_soc.v` 用 `$test$plusargs("vcd")` 開整個 testbench 的錄波；`$test$plusargs` 比對的是前綴，`+vcd_win=5a` 也算，於是從時間 0 錄進 `wave.vcd`，之後模組自己的 `$dumpfile` 被忽略（一個模擬只能有一個 dump 檔）。
+     - 怎麼發現：`gl-record` 的那一列印出 VCD 大小與 `testbench dump ... present`。
+     - 繞過：用不撞名的前綴（`irwin_gpio`、`irwin_vcd`）。
+     - 防復發：`record_windows()` 要求 VCD 非空、run 目錄沒有 `wave.vcd`，否則 FAIL。
+
 ## 待補
 - **SDF 反標的時序模擬**：LibreLane 的 STA step 會輸出各 corner 的 `.sdf`（`*-openroad-stapostpnr/<corner>/*.sdf`）。Icarus 對 `$setuphold` 的支援有限，不能當 signoff 證據；要做 timing check 需另找模擬器（規劃提到 CVC，x86_64 Linux）。signoff 仍以全部 corner（soc_top 15 個）的 STA 為準。
 
@@ -42,3 +54,4 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 | 2026-10-04 | 第三次 `make phase3`，neg-gl-soc | `csb0_inverted` 編譯失敗：`Unable to bind wire ... neg_eqy_inv ... Check for declaration after use` | 已驗證：植入腳本把 `wire` 宣告加在 module 最後 | 宣告移到 `sram0` 前；修正後 11/11 支測試報 `sram0.csb0` 不一致。另外 `mux_swap` 只在 1/11 支測試被抓到，lockstep 能抓到的範圍受 firmware 用到的功能限制（規則 5） | `runs/p3_phase3_clean3.log` |
 | 2026-10-04 | Phase 4 預跑（dev fixture，與 neg-pnr、EQY 同時跑） | `gl-soc: FAIL 12/15`：memtest、boot_uart_max、uart_burst `wall-clock timeout: simulation killed after 1370/620/170 s` | 已驗證：機器負載；全部 15 支一致慢 3–6 倍，單獨重跑 3 支 PASS（429、209、23 秒） | 規則 6；不改時限 | `runs/dev5_gl.log`、`runs/gl_dev5_rerun/` |
 | 2026-10-04 | Phase 4 `make regress` 第 3 次（乾淨 checkout，`59c6748`） | `gl-soc-powered: FAIL 14/15`：boot_uart_max `wall-clock timeout: simulation killed after 620 s`（regress 1 同一支 304 秒） | 已驗證：Spotlight 索引造成負載（load 17–21，約 10 個 `mdworker`）；時限是照 RTL 速度算的，gate-level 只剩約 2 倍餘裕 | `gl_timeout`（規則 6）；第二次發生，從「不改時限」改成規則 | `runs/p4_regress_clean3.log` |
+| 2026-10-13 | Phase 7 IR max power pattern（`p7_harden2` 網表，`--record-window 5a,5b,5c`） | 三段都錄到正確的週期數（5328／5048／4904），指定的 VCD 卻是 0 bytes，run 目錄各多一個 400–780 MB 的 `wave.vcd` | 已驗證：`$test$plusargs("vcd")` 比對前綴，`+vcd_win=` 觸發整個 testbench 從時間 0 錄波；改名後三段 VCD 各 300–350 MB、沒有 `wave.vcd` | plusarg 改名 `irwin_*`；`record_windows()` 檢查 VCD 非空、沒有 `wave.vcd`；規則 9 | `dv/gl_soc/run_gl_soc.py`、`dv/gl_soc/vcd_window.v` |

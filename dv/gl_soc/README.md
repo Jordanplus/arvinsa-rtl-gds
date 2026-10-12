@@ -23,6 +23,10 @@ Phase 1 的其他 checker（測試結束協定、trap、timeout、UART、bus ass
 - RTL 那一份 PASS 代表測試本身通過；
 - lockstep 沒有任何不一致，代表網表在這些測試裡，每個 cycle 的輸出與 SRAM 存取都和 RTL 相同。
 
+## 錄 IR 用的切換活動（`--record-window`，`make ir-caravel`，Phase 7）
+
+`run_gl_soc.py --tests maxpower --record-window 5a,5b,5c --clk-half-ns 22`：每一段各跑一次模擬，`vcd_window.v` 只在 GPIO_OUT 等於該段標記時錄 `dut_gl`，那段結束就停，輸出 `<out>/win_<hex>.vcd`；時脈 44 ns（signoff 週期）。每段要錄到至少 1000 個週期、VCD 非空、錄完前沒有 lockstep 不一致、run 目錄沒有 testbench 自己的 `wave.vcd`（plusarg 用 `irwin_*`，不能以 `vcd` 開頭，`tb_soc.v` 的 `$test$plusargs("vcd")` 比對前綴）。`p7_harden2` 網表：三段 5328／5048／4904 個週期，約 1.5 分鐘。這些 VCD 交給 `pnr/user_project_wrapper/ir_caravel.py`（ADR-0019 決定 20）。
+
 ## 判定（`run_gl_soc.py`）
 
 PASS 需要全部成立：

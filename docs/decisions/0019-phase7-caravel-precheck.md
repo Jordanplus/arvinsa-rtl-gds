@@ -89,7 +89,7 @@
     - 做法：
       - `PDN_VWIDTH` 1.6 → 4.8 µm（只改 wrapper；與 met5 同寬）。
       - wrapper 內部：IR 步驟打開，供電點放在 wrapper ring 左右兩側與每條 met5 strap 的交點（Caravel 跨接線所在的兩側；直接用跨接線的位置時 OpenROAD PSM 讀完供電點檔就 Signal 11，原因沒查到），照舊判 20 mV（`ir_worst.py`，判法見決定 19；`check_soc.py ir_sources`）。
-      - 含 Caravel 網路的壓降由新的 checker 判，判法見決定 19（慢 corner，上限 50 mV）。這個上限就是**使用限制**：pad 端 vccd1 − vssd1 至少要 1.60 + 0.050 = 1.65 V（1.8 V 的 −8.3%），signoff 的 1.60 V 時序才成立。寫進 Phase 7 exit review 的已知限制。Caravel 穩壓器實際的精度沒有查證。（最初以最壞組合訂 75 mV、≥ 1.675 V，決定 19 改掉。）
+      - 含 Caravel 網路的壓降由新的 checker 判，判法見決定 19（慢 corner，上限 50 mV）；**決定 20 改成用 max power pattern 判 20 mV，下面的供電要求已取消**。原本這個上限就是**使用限制**：pad 端 vccd1 − vssd1 至少要 1.60 + 0.050 = 1.65 V（1.8 V 的 −8.3%），signoff 的 1.60 V 時序才成立。寫進 Phase 7 exit review 的已知限制。Caravel 穩壓器實際的精度沒有查證。（最初以最壞組合訂 75 mV、≥ 1.675 V，決定 19 改掉。）
     - 被否決的選項：移動 block（最多再改善約 14 mV，要重做 pin 規劃、RTL 與核准，Wishbone 與時脈要跨 2–3 mm）；不改 PDN、只寫供電要求（104 mV，要求 ≥ 1.71 V）；換算成時序餘量（SRAM 沒有低電壓的特性化資料，半天到一天）。
     - 流程上的教訓：電源進入點應該在 pad 階段就查（使用者 2026-10-12：「Caravel pad都是固定，應該早就要決定可以有哪些供電選擇」；2026-10-13：「這就是我說的一開始就應該考慮」），已寫進 `chip-floorplan-pin-planning` 規則 2。
 
@@ -99,6 +99,17 @@
     - 做法：`pnr/soc_top/ir_worst.py` 判 `max_ss_n40C_1v60` 與 `max_ss_100C_1v60`（1.60 V，各自的 ss `LAYERS_RC`，加上該 PVT 的 SRAM 浮接電流），兩個取大的比 `[max_sum]`；`max_ff_n40C_1v95`／`max_ff_100C_1v95` 配 ss 電阻照跑，印成 `[INFO]`，不影響判定（EM 與紀錄用）。negative test P77（拿掉 `ss_100C` 的浮接電流）、P78（上限在兩個慢 corner 之間）改成慢 corner；P61 不變。上限：wrapper 內部與 soc_top 維持 20 mV；含 Caravel 網路 50 mV（決定 18 的供電要求）。
     - 被否決的選項：維持最壞組合（含 Caravel 網路 72 mV，供電要求 ≥ 1.675 V）；兩個都判（慢 corner 50 mV、最壞組合 75 mV）。
     - 量測方法（先重現 flow 的功耗、按類別拆解、.lib 沒有的電流按 PVT 加、切換率是假設、手算交叉檢查、供電點從真實 pad 起算）寫進 `signoff-criteria`「IR 用多大的電流」。
+
+20. **IR 的電流用 CPU max power pattern 的實際切換活動，含 Caravel 網路在慢 corner 判 20 mV；決定 18 的供電要求取消**（使用者 2026-10-13：「一般IR都會用CPU max power pattern去做不是嗎」→ 先量一次；看過結果後「這才是正確的評估IR 的方式，請一樣更新到我們的對應skill與流程」；上限選「回到 20 mV，時脈改 44 ns 再錄 (建議)」）：
+    - 依據：IR 的電流原本用 OpenSTA 的預設切換率（vectorless），沒有驗證過。業界做 static IR 用讓 CPU 滿負載的測試程式（max power pattern），從 gate-level 模擬取得實際的切換活動（VCD），再算功耗與 IR。
+    - pattern：`fw/tests/maxpower`，三段滿負載迴圈各約 5000 個週期，用 GPIO 標記（0x5A：ALU＋每幾個週期一次 SRAM 讀寫、資料每次 32 位元全翻轉；0x5B：再加乘法器；0x5C：只有暫存器運算，每個週期取一道 32 位元指令）。這顆 SoC 從 SRAM 取指令，每道指令約 3 個週期，三段的功耗只差不到 3%，最耗電的空間本來就窄。
+    - 實測（`p7_harden2` 網表、met4 4.8 µm 的 what-if 版圖、含 Caravel 網路、`max_ss_100C`；VCD 是 testbench 的 40 ns 時脈，比 44 ns 保守約 10%）：預設切換率 11.4 mW、45.2 mV（對照組，重現決定 19 的數字）；0x5A 5.11 mW、19.74 mV；0x5B 4.99 mW、19.39 mV；0x5C 5.13 mW、19.88 mV。VCD 標到全部 73058 個 pin。預設切換率高估約 2.2 倍。
+    - 做法：
+      - VCD 用與 signoff 約束相同的 44 ns 時脈錄（testbench 的 `TB_CLK_HALF_NS`），每一段只錄 `dut_gl`、只錄那一段。
+      - harden 之後（VCD 要來自最終網表，接在 gl 模擬之後）：錄各段的 VCD，含 Caravel 網路的 IR 讀 VCD，在兩個慢 corner 判，取各段與各 corner 的最大值 ≤ 20 mV（`[max_sum] ir_caravel_vdd_drop_plus_gnd_rise`）。也檢查 VCD 全部標註、每段長度、整支 maxpower 的 gate-level 模擬與 RTL 逐週期一致；預設切換率的結果只列為參考。
+      - harden 內的 `ir_worst.py`（供電點在 wrapper ring、預設切換率、慢 corner、20 mV）保留，當作早期檢查。
+      - 對板子的供電要求回到原本的假設：pad 端最低 1.62 V（決定 18 的 ≥ 1.65 V 取消）。
+    - 已知限制：pattern 沒有包含 Wishbone 主機端的存取；零延遲的 gate-level 模擬不含 glitch 造成的切換；「最耗電」是三種 pattern 取最大，不是證明。
 
 ## 後果
 

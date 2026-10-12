@@ -366,3 +366,18 @@ uart_in = ""
 smoke = false
 negative_only = false
 cpus = ["hazard3"]
+
+# Phase 7 exploration: max-power pattern for the IR current (fw/tests/maxpower; GPIO 0x5A / 0x5B mark the
+# two busy windows a simulation records).
+[[test]]
+name = "maxpower"
+load = "backdoor"
+boot_mode = 0
+max_cycles = 200000
+expect_uart = "maxpower PASS\n"
+sig_rule = "uart_crc32"
+expect_gpio = [0xB0, 0x5A, 0x5B, 0x5C, 0xA5]
+uart_in = ""
+smoke = false
+negative_only = false
+cpus = ["hazard3", "caravel"]

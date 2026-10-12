@@ -41,7 +41,7 @@ runs/user_project_wrapper and pnr/user_project_wrapper/config.json: the same row
   checkers_ran     <out> has the verdict line of every checker of the design: soc_top check_signoff.py
                    (signoff.txt), check_soc.py (soc_checks.txt), check_inputs.py --resolved
                    (inputs_resolved.txt), ir_worst.py (ir_worst.txt), provenance.py --verify
-                   (provenance_end.txt), and with --cpu caravel also ir_caravel.py (ir_caravel.txt); picorv32_core
+                   (provenance_end.txt); picorv32_core
                    check_signoff.py, check_disconnected.py (disconnected.txt), cpu_params.py
                    --resolved (cpu_params_resolved.txt), provenance.py --verify: PASS or FAIL, but
                    present (a LibreLane FAIL must not skip them)
@@ -382,8 +382,6 @@ def main():
 
     missing = []
     verdicts = VERDICTS[args.design]
-    if args.cpu == "caravel":   # the drop from Caravel's pads, run.sh step 5c (ADR-0019 decision 18)
-        verdicts = dict(verdicts, **{"ir_caravel.txt": "ir-caravel"})
     for f, word in verdicts.items():
         p = os.path.join(out, f)
         txt = open(p, errors="replace").read() if os.path.isfile(p) else ""

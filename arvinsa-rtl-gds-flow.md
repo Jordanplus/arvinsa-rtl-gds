@@ -202,6 +202,8 @@ signoff（harden 結尾自動執行）
 
 - 等價證明：合成網表對最終網表（`make eqy-soc`，外殼用 `make eqy-caravel`，`formal-equivalence-eqy`），negative test `make neg-eqy-soc`。OpenROAD 時序修復對調的等價輸入（pin swap）只排除那幾個腳位名稱的對應，cell 輸出照樣證明（negative test `o21ai_swap`）；config 列出的 macro instance 必須在網表中被解析到，macro 的 clock 檢查才不會被略過（Phase 6）。**限制**：RTL 到合成網表這一段沒有 formal 證明（合成會重新編碼狀態機），由 gate-level 模擬加 directed 測試補（README「專案狀態」、`formal-equivalence-eqy`）。
 - gate-level 模擬：RTL 與網表 lockstep（`make gl-soc`），含電源腳位的網表（`make gl-soc-powered`），negative test `make neg-gl-soc`（`gate-level-simulation`）。外殼（Caravel wrapper）用 `make gl-caravel`：比對外殼全部的輸出腳位（`gl_lockstep` 的 `OUT_W`）。
+- power signoff（IR、EM、功耗）一律用 CPU max power pattern 的切換活動，不用 OpenSTA 的預設切換率（使用者 2026-10-13；`signoff-criteria`）。新設計要有一支 max power firmware，並在 harden、gate-level 模擬之後錄 VCD。
+- IR 的判定（Caravel wrapper，`make ir-caravel`，接在 gate-level 模擬之後）：CPU 的 max power pattern（`fw/tests/maxpower`，滿負載迴圈標在 GPIO）在最終網表的 gate-level 模擬錄成 VCD（`run_gl_soc.py --record-window`，時脈用 signoff 週期），含外殼供電網路的 IR 讀這些 VCD，在慢 corner 判（`ir_caravel.py`，ADR-0019 決定 20）。harden 內的 `ir_worst.py`（預設切換率）只當早期檢查。切換活動要用 max power pattern 的依據見 `signoff-criteria`「IR 用多大的電流」。
 
 ### 4.8 一鍵 regression 與來源追溯
 

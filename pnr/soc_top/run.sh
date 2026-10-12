@@ -24,9 +24,8 @@
 #   5b. pnr/soc_top/ir_worst.py        : static IR in the two slow corners (their currents, 1.60 V and ss
 #                                        metal resistance; the IR step of the flow is nom_tt) within the
 #                                        same [max_sum] limit; ff currents + ss R reported only (ADR-0019 d. 19)
-#   5c. pnr/user_project_wrapper/ir_caravel.py (CPU=caravel): the same slow-corner IR from Caravel's pads
-#                                        through Caravel's own supply network ([max_sum]
-#                                        ir_caravel_vdd_drop_plus_gnd_rise = the board supply requirement)
+#   (Caravel wrapper: the judged IR is make ir-caravel after the harden and the gate-level simulation, with
+#    the max-power pattern recorded on the final netlist, ADR-0019 decision 20; ir_worst.py is the early check)
 #   7. signoff/scripts/review_criteria.py: the signoff criteria were applied (every config setting in
 #                                        resolved.json and the steps, the clock uncertainty in every
 #                                        timing step and signoff corner, the checkers above ran), plus
@@ -110,14 +109,8 @@ python3 pnr/soc_top/check_inputs.py --cpu "$CPU" --resolved "$RUN_DIR/resolved.j
 tail -1 "$OUT/inputs_resolved.txt"
 # IR in the two slow corners (their currents with the SRAM's port 1 floating current, 1.60 V, ss metal
 # resistance) against the same 20 mV; the flow's IR step is nom_tt (ADR-0019 decision 19; ff currents + ss R
-# reported only). The Caravel wrapper also gets the drop from Caravel's pads through its own supply network,
-# whose limit is the board supply requirement (ADR-0019 decision 18).
+# reported only). The Caravel wrapper's judged IR (from Caravel's pads, max-power pattern) is make ir-caravel.
 python3 pnr/soc_top/ir_worst.py "$RUN_DIR" "$OUT" "$LIMITS" --ll-dir "$LL_DIR" | tee "$OUT/ir_worst.txt" || true
-if [ "$CPU" = caravel ]; then
-  python3 pnr/user_project_wrapper/ir_caravel.py "$RUN_DIR" "$OUT" "$LIMITS" --ll-dir "$LL_DIR" | tee "$OUT/ir_caravel.txt" || true
-else
-  echo "ir-caravel: PASS (not a Caravel wrapper)" > "$OUT/ir_caravel.txt"
-fi
 python3 signoff/scripts/provenance.py --verify "$OUT/provenance.json" --resolved "$RUN_DIR/resolved.json" \
   > "$OUT/provenance_end.txt" 2>&1 || true
 tail -1 "$OUT/provenance_end.txt"
@@ -127,7 +120,7 @@ python3 signoff/scripts/review_criteria.py --cpu "$CPU" --run "$RUN_DIR" --out "
   | tee "$OUT/criteria_review.txt" || true
 if [ "$flow_rc" = 0 ] && grep -q '^signoff: PASS$' "$OUT/signoff.txt" && grep -q '^soc-checks: PASS$' "$OUT/soc_checks.txt" \
    && grep -q '^soc-inputs: PASS$' "$OUT/inputs_resolved.txt" && grep -q '^criteria-review: PASS$' "$OUT/criteria_review.txt" \
-   && grep -q '^ir-worst: PASS$' "$OUT/ir_worst.txt" && grep -q '^ir-caravel: PASS' "$OUT/ir_caravel.txt" \
+   && grep -q '^ir-worst: PASS$' "$OUT/ir_worst.txt" \
    && grep -q '^provenance: PASS$' "$OUT/provenance.txt" && grep -q '^provenance: PASS$' "$OUT/provenance_end.txt"; then
   echo "harden-soc: PASS" | tee "$OUT/result.txt"
 else

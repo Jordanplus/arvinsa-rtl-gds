@@ -1,6 +1,6 @@
 ---
 name: signoff-criteria
-description: 兩種情況使用。一、每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）：檢查自己訂的 signoff criteria 有沒有被執行（`review_criteria.py` 的 criteria_review.txt）、合不合理（寫 criteria_review.md；Stop hook 沒看到就擋下回報），再把實測數字寫進依製程分類的 knowledge 檔（knowledge/sky130A_sky130_fd_sc_hd.md）。二、決定或檢討 signoff 條件的數值與依據：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、IR drop 預算（IR 用多大的電流要先量測再決定：哪個 corner 的電流、電壓、電阻要對應預算保護的對象，功耗按類別拆解，.lib 沒有的電流按 PVT 加，切換率是假設，供電點從真實 pad 起算）、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use after every harden run (were the signoff criteria applied, are they still reasonable, per-PDK knowledge base) and when deriving or reviewing signoff limits and margins for sky130 + LibreLane/OpenROAD.
+description: 兩種情況使用。一、每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）：檢查自己訂的 signoff criteria 有沒有被執行（`review_criteria.py` 的 criteria_review.txt）、合不合理（寫 criteria_review.md；Stop hook 沒看到就擋下回報），再把實測數字寫進依製程分類的 knowledge 檔（knowledge/sky130A_sky130_fd_sc_hd.md）。二、決定或檢討 signoff 條件的數值與依據：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、power signoff（IR、EM、功耗）一律用 CPU max power pattern 的切換活動，vectorless 只當參考、IR drop 預算（IR 用多大的電流要先量測再決定：哪個 corner 的電流、電壓、電阻要對應預算保護的對象，功耗按類別拆解，.lib 沒有的電流按 PVT 加，切換活動用 CPU max power pattern 在最終網表的模擬，不用預設切換率，供電點從真實 pad 起算）、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use after every harden run (were the signoff criteria applied, are they still reasonable, per-PDK knowledge base) and when deriving or reviewing signoff limits and margins for sky130 + LibreLane/OpenROAD.
 ---
 
 # Signoff 條件怎麼推導
@@ -106,12 +106,14 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 |---|---|---|
 | static IR drop 上限 | 不能超過 corner 電壓隱含的預算（上表的 PVT 一列）。上限大於預算時，STA 的 slow corner 就不再保守 | 電流、電壓、電阻要取預算所保護的那個慢 corner，怎麼決定見下一節「IR 用多大的電流」；電壓源要從真實 pad 起算。**每次 harden 都要判，不能只判 nom_tt**（本 repo `pnr/soc_top/ir_worst.py`：兩個慢 corner 判定，「ff 電流＋ss 電阻」只當參考，ADR-0019 決定 19） |
 | dynamic IR、L·di/dt | 開源工具沒有 | 用 decap 與 margin 補；用最壞情境的 VCD（reset 解除、SRAM 連續讀寫）估 peak current |
-| 功耗 | 沒有 VCD／SAIF 時用預設 activity（vectorless）；`power__total` 是最後寫入的 corner | 用模擬的 activity（`read_vcd`、`read_saif`）；報告附上 activity 標註率 |
+| 功耗 | IR 用 CPU max power pattern 的切換活動（下一節第 4 項）；沒有 VCD 時的預設 activity（vectorless）只當參考，Phase 7 高估約 2.2 倍；`power__total` 是最後寫入的 corner | 最終網表的 gate-level 模擬錄 VCD、`read_vcd`；報告附上 activity 標註率 |
 | power grid EM | 每段電流 / 線寬 ≤ tech LEF 的電流密度（Tj 90 °C 基準）；via 個別比對 | `-enable_em` 輸出電流後自己比對 |
 | signal EM | 估算 I_rms ≈ C·V·√(2/(t_r·T))，t_r 是 transition 時間，與最小線寬的 AC 上限比 | 沒有工具，只能估算，標明「估算」 |
 | aging（NBTI／HCI） | sky130 沒有 aging 模型 | 放進 M_setup，並寫明「不分析」 |
 
 ### IR 用多大的電流：先量測，再決定（使用者 2026-10-13：「這個建立量測以決定max power的方法也要加到signoff的skill」）
+
+**power signoff 一律用 pattern 的切換活動**（使用者 2026-10-13：「所以之後我們的signoff skill 會要求用patrern 做power signoff」）：IR、EM、功耗預算這些和電流有關的 signoff，判定值都要來自 CPU max power pattern 在最終網表的 gate-level 模擬（下面第 4 項）。OpenSTA 的預設切換率（vectorless）只能當參考或 harden 內的早期檢查，不能當 signoff 依據。沒有 pattern 的設計（本 repo：Phase 7 之前的 legacy `soc_top`），要在報告與 exit review 寫明「功耗與 IR 用 vectorless，未經 pattern 驗證」，新設計不能沿用這個例外。
 
 IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據，不能沿用一個方便的假設。Phase 7 的教訓：最壞組合（ff 電流＋ss 電阻）、預設切換率、SRAM 浮接電流、把外殼的電源 pin 當理想電源，四個假設各自都說得通，疊起來就讓同一個版圖從 0.3 mV 變成 104 mV，而且判的是一個 ff corner 根本用不到的預算（ADR-0019 決定 18、19）。
 
@@ -121,7 +123,12 @@ IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據�
    - 逐 instance 取功耗（`sta::instance_power`），按類別加總：邏輯 cell、修 slew／cap／長線的 buffer（`wire`、`load_slew`、`fanout`、`max_cap`）、clock tree、hold delay cell、macro。找出不合理的大項再往下查。Phase 7 nom_tt 13.7 mW：邏輯 45%、修復 buffer 32%、clock tree 14%、hold 5%、SRAM 4%。
    - 列出各 corner 的總功耗，算成電流（I = P／V，電壓用該 corner 的）。同樣的功耗在低電壓 corner 是較大的電流，只按功耗比例縮放會低估（Phase 7 的粗估就錯在這裡：估 35 mV，實測 45 mV）。
 3. **.lib 沒有的電流另外加，而且依 PVT 分開**：macro 特性化沒有包含的電流（本 repo：SRAM port 1 浮接電流，ff 100°C 5.34 mW、ss 0.03–0.15 mW，`power.json` 的 `static_max_mw`），加在該 macro 的位置、用對應 PVT 的值。
-4. **切換率是假設，要寫出來**：沒有 VCD／SAIF 時 OpenSTA 用預設切換率（vectorless），沒有驗證過；報告寫明。要放寬時用 firmware 模擬的切換活動（`read_vcd`、`read_saif`），並附 activity 標註率。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（Phase 7 約 4 mW）不會因此變小。
+4. **切換活動用 CPU 的 max power pattern，不用預設切換率**（使用者 2026-10-13：「一般IR都會用CPU max power pattern去做不是嗎」「這才是正確的評估IR 的方式」，ADR-0019 決定 20）：
+   - pattern：寫一支讓 CPU 滿負載的 firmware，做幾種不同的滿負載迴圈（本 repo `fw/tests/maxpower`：ALU＋SRAM 讀寫且資料每次全翻轉、再加乘法器、只有暫存器運算），各段用 GPIO 標記，取最大的。三種都差不多時，表示最耗電的空間窄（本 repo 從 SRAM 取指令，每道指令約 3 個週期），差很多時要再找更耗電的。
+   - 活動：在**最終網表**的 gate-level 模擬錄每一段（RTL 的名稱在扁平化網表裡對不上），時脈用 signoff 的週期，只錄那一段（`gate-level-simulation` 規則 9）；網表在這支 firmware 下要與 RTL 逐週期一致。
+   - 計算：IR 步驟讀 VCD（`read_vcd`，本 repo `irdrop_vcd.tcl`），要標到全部的 pin（`report_activity_annotation` 的 unannotated 是 0），在規則 1 的慢 corner 判，取各段與各 corner 的最大值。
+   - 預設切換率（vectorless）只列為參考：Phase 7 它是 max power pattern 的約 2.2 倍（ss 100°C：11.4 對 5.1 mW），用它判會讓預算看起來做不到。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（約 2 mW）兩者相同。
+   - 已知限制要寫出來：零延遲模擬不含 glitch 的切換；pattern 沒涵蓋的活動（本 repo：Wishbone 主機端的存取）；「最耗電」是幾種 pattern 取最大，不是證明。
 5. **手算交叉檢查**：等效電阻 R = 壓降 ÷ 電流，和幾何估算比量級（片電阻 × 方塊數，例如 5 µm 寬 met4 每 mm 約 9.4 Ω；sky130 met4 0.047、met5 0.0285 Ω／sq）。對不上時，先查電流與電阻的來源（功耗拆解、`LAYERS_RC`、供電點），不要先改設計。Phase 7：7.6 mA、35.8 mV → 4.7 Ω，與 Caravel ring（約 26 Ω）並聯 wrapper grid 的量級相符。
 6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV，同一個版圖、同一個最壞組合）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本相同（DEF 轉 ODB 的來回本身會差約 0.01%，容許值要比它大、比可能的錯誤小，本 repo 用 0.1%）。
 7. **決定與上限寫進 ADR**：哪個 corner 判、上限多少、對應的使用限制（例如 pad 端最低電壓），以及被否決的判法與它們的數字。
@@ -202,6 +209,7 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
   - uncertainty 的每個成分：假設值是否還是假設、DCD 預算 vs. 半週期路徑的 slack（腳本的 INFO 列印出最差的半週期路徑與它扣的 uncertainty，最差路徑那一列也標出送出與接收的 clock 邊緣）；
   - skew：metric 換算成名目值（規則 4）；
   - 上限檔（`signoff/limits/<tag>.toml`）裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）是不是為這顆設計推導的，還是從別的設計抄來的。
+  - power signoff（IR、EM、功耗）用的切換活動：是 max power pattern 在這次最終網表錄的 VCD（標註率 100%、時脈是 signoff 週期、各段取最大），還是 vectorless；pattern 與 vectorless 的比值和上次比有沒有大變（「IR 用多大的電流」第 4 項）。
 - `## 學習`：
   - 新量到的數字追加到 `knowledge/<製程>.md` 的「實測校準資料」；
   - 新的工具行為寫進本檔的經驗紀錄；

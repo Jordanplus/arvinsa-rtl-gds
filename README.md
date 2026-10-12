@@ -386,7 +386,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
-  - 規則 12：每次 harden 在預算所保護的兩個慢 corner 判（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估 5 倍以上）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`，ADR-0019 決定 20；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估 5 倍以上）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
 - **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29、P61、P62、P77、P78。
 
 #### lvs-signoff：LVS 與連接性
@@ -409,7 +409,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - Icarus 要求先宣告再使用；用腳本改網表時也要注意。
   - 牆鐘時限要依 gate-level 的速度算：照 RTL 速度算只剩約 2 倍餘裕，機器一忙就會誤判逾時。
   - firmware 沒用到的功能，gate-level 模擬看不到（見 dv-directed-tests）。
-- **本 repo 實例**：`dv/gl_soc/`、`dv/gl_core/`、`dv/monitors/gl_lockstep.v`。negative test：`neg_gl_soc.py`、`neg_gl_core.py`。
+  - 錄 IR 用的切換活動（規則 9）：firmware 把滿負載的段落標在 GPIO，`run_gl_soc.py --record-window` 只錄網表那一份、只錄那一段、用 signoff 的時脈週期；plusarg 名稱不能是 testbench 現有 plusarg 的延伸（`$test$plusargs` 比對前綴，`+vcd_win` 會打開整個 testbench 的錄波）。
+- **本 repo 實例**：`dv/gl_soc/`（含 `vcd_window.v`）、`dv/gl_core/`、`dv/monitors/gl_lockstep.v`。negative test：`neg_gl_soc.py`、`neg_gl_core.py`。
 
 #### floorplan-congestion：floorplan 與繞線壅塞
 
@@ -444,7 +445,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - IO delay 的 `-min` 不能直接設 0，要和上層的 clock latency 一起建模，否則會出現大量假的 hold 違規。
   - macro 的 SPICE 特性化值要加上模型沒涵蓋的部分（寄生、量測誤差、mismatch）：延遲乘比例、setup/hold 加固定值、輸出最早變化的時間乘小於 1 的係數，再和既有保守值取較嚴者。
   - 推導出來的條件要寫進 flow 變成 checker，每個都要有植入錯誤的案例（附 soc_top 的實作範本）。
-  - IR 用多大的電流要先量測再決定（Phase 7，使用者 2026-10-13）：電流、電壓、電阻取預算所保護的那個慢 corner（不是「ff 電流＋ss 電阻」），先重現 flow 的功耗並按類別拆解，.lib 沒有的電流按 PVT 加，切換率寫明是假設，用 R = 壓降 ÷ 電流和幾何估算交叉檢查，供電點從外殼的真實 pad 起算。
+  - power signoff（IR、EM、功耗）一律用 CPU max power pattern 在最終網表錄的切換活動判，OpenSTA 的預設切換率只當參考或 harden 內的早期檢查（使用者 2026-10-13）；沒有 pattern 的 legacy 設計要在報告寫明。
+  - IR 用多大的電流要先量測再決定（Phase 7，使用者 2026-10-13）：電流、電壓、電阻取預算所保護的那個慢 corner（不是「ff 電流＋ss 電阻」），先重現 flow 的功耗並按類別拆解，.lib 沒有的電流按 PVT 加，切換活動用 CPU max power pattern 在最終網表 gate-level 模擬錄的 VCD（預設切換率只當參考），用 R = 壓降 ÷ 電流和幾何估算交叉檢查，供電點從外殼的真實 pad 起算。
   - 一組已驗證的工具行為，例如：指定邊緣的 uncertainty 會取代一般值、instance derate 會取代 global、fmax 報告排除半週期路徑、OpenSTA 沒有 SI 分析。
   - 每次 signoff 都要列出「不分析的項目」，寫出各用哪一筆 margin 涵蓋。
   - **每次 harden 後的檢查**（使用者 2026-10-07 要求）：
@@ -548,6 +550,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019）。
   - LVS 是電晶體層級，SRAM 用 `EXTRACT_ABSTRACT` 當 black box。
   - `wb_clk_i` 是管理用 CPU 的核心時脈（外部時脈或 PLL 除頻）：設計的週期就是管理端時脈的下限；wrapper 邊界的時序約束用官方 wrapper SDC 的數值（見 timing-constraints-sdc）。
+  - user area 的供電：vccd1、vssd1 各只有一顆 pad（右側），經 Caravel 5 µm 的 met4 ring 與只在 wrapper ring 左右兩側的 met3 跨接線進來；wrapper 的電源 pin 不能當理想電源，IR 要從 pad 起算（`ir_caravel.py`、`caravel_pwr/`），電流用 max power pattern 量（規則 7，ADR-0019 決定 18–20）。
   - pad 與 wrapper 腳位位置都是固定的，能選的只有用哪幾支 GPIO：先依 Wishbone（下緣左段）定 block 位置，再挑最近的 GPIO，最後才寫 wrapper RTL（Phase 7 順序做反了，重做一次）。規劃與核准的做法看 chip-floorplan-pin-planning。
   - 還沒實跑確認的：XOR 要求 die 外那圈和官方空 wrapper 相同（用固定的 DEF 範本）、GPIO 設定與 `io_oeb` 的實體接線檢查、`lvs_config.json` 的路徑寫法。
 - **不在這裡**：macro 本身的 view QA 看 hard-macro-integration；DRC、LVS 的一般做法看 drc-signoff、lvs-signoff。

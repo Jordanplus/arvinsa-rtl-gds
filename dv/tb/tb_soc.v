@@ -49,7 +49,11 @@ module tb_soc;
     // ------------------------------------------------------------------
     // Constants (all addresses and UART timing come from memmap.vh)
     // ------------------------------------------------------------------
-    localparam integer CLK_HALF_NS  = 20;                    // 40 ns clock
+`ifndef TB_CLK_HALF_NS
+`define TB_CLK_HALF_NS 20
+`endif
+    // 40 ns clock; the IR max-power recording uses the signoff period (-DTB_CLK_HALF_NS=22, 44 ns, ADR-0019 d. 20)
+    localparam integer CLK_HALF_NS  = `TB_CLK_HALF_NS;
     localparam integer RESET_CYCLES = 16;                    // spec 4.9: >= 10
     localparam integer BIT_CYCLES   = `SOC_UART_BIT_CYCLES;
     localparam integer FRAME_CYCLES = 10 * BIT_CYCLES;

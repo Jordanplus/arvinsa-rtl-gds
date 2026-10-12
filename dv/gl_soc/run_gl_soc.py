@@ -40,6 +40,13 @@ usage: run_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--netlist <p
   --out         output directory (default runs/gl_soc, with --powered runs/gl_soc_powered; another
                 CPU adds _<cpu>: runs/gl_soc_hazard3, runs/gl_soc_powered_hazard3)
   --tests       comma-separated subset of tests (default: all positive tests of the CPU)
+  --record-window  hex GPIO values, comma-separated (with one test in --tests): instead of the test
+                verdict, record the switching activity of the gate-level copy in each window the firmware
+                marks on GPIO_OUT (dv/gl_soc/vcd_window.v): one simulation per window, <out>/win_<hex>.vcd,
+                at least MIN_WINDOW_CYCLES cycles, no lockstep mismatch before the window ended. For the IR
+                max-power pattern (fw/tests/maxpower, ADR-0019 decision 20); prints `gl-record: PASS/FAIL`.
+  --clk-half-ns half period of the testbench clock (default the testbench's 20 ns); the IR recording
+                uses the signoff period, 22 (44 ns), so that the activity per second is the signoff one
 Prints `gl-soc: PASS` / `gl-soc: FAIL` (`gl-soc-powered: ...` with --powered); exit code 0 only
 on PASS. Python stdlib only.
 """
@@ -60,6 +67,8 @@ sys.path.insert(0, str(ROOT / "signoff" / "scripts"))
 from run_guard import guard  # noqa: E402
 
 LOCKSTEP_V = ROOT / "dv" / "monitors" / "gl_lockstep.v"
+VCD_WINDOW_V = ROOT / "dv" / "gl_soc" / "vcd_window.v"
+MIN_WINDOW_CYCLES = 1000
 GL_FLAGS = ["-DGL_LOCKSTEP", "-DFUNCTIONAL", "-DUNIT_DELAY=#1"]
 # Wall-clock limit of one simulation. dvlib.default_timeout assumes the RTL speed (4000 cycles/s);
 # the lockstep simulation runs about 1200-1600 cycles/s here with 8 in parallel (Phase 4 make
@@ -97,6 +106,8 @@ def main():
     ap.add_argument("--tests")
     ap.add_argument("-j", type=int, default=dvlib.default_jobs())
     ap.add_argument("--powered", action="store_true")
+    ap.add_argument("--record-window")
+    ap.add_argument("--clk-half-ns", type=int)
     args = ap.parse_args()
     cpu = dvlib.CPUS[args.cpu]
     suffix = "" if args.cpu == "picorv32" else f"_{args.cpu}"
@@ -107,6 +118,12 @@ def main():
     netlist = Path(args.netlist).resolve() if args.netlist else default_nl
     out = Path(args.out or ROOT / "runs" / (("gl_soc_powered" if args.powered else "gl_soc") + suffix)).resolve()
     flags = GL_FLAGS + (["-DUSE_POWER_PINS"] if args.powered else [])
+    if args.clk_half_ns:
+        flags += [f"-DTB_CLK_HALF_NS={args.clk_half_ns}"]
+    windows = [w.strip().lower() for w in args.record_window.split(",")] if args.record_window else []
+    if windows:
+        label = "gl-record"
+        flags += ["-s", "vcd_window"]
     t0 = time.time()
 
     def fail(msg):
@@ -146,10 +163,14 @@ def main():
     print(f"[{label}] cpu {args.cpu}, netlist {netlist}")
     print(f"[{label}] compile tb_soc with the RTL and gate-level SoC (Icarus, {' '.join(flags)})")
     b = dvlib.build("icarus", defines=cpu["defines"], rtl_f=cpu["rtl_f"],
-                    extra_files=[LOCKSTEP_V] + [Path(m) for m in cell_models] + [gl_v],
-                    extra_flags=flags, variant="glp" if args.powered else "gl")
+                    extra_files=[LOCKSTEP_V] + [Path(m) for m in cell_models] + [gl_v] + ([VCD_WINDOW_V] if windows else []),
+                    extra_flags=flags, variant="glrec" if windows else "glp" if args.powered else "gl")
     if not b.ok:
         return fail(f"compile: {b.message}")
+    if windows:
+        if len(names) != 1:
+            return fail(f"--record-window needs exactly one test in --tests, got {names}")
+        return record_windows(names[0], windows, tests, b, cpu, args, out, label)
 
     print(f"[{label}] run {len(names)} tests, {args.j} in parallel")
 
@@ -186,6 +207,32 @@ def main():
     status = "PASS" if errors == 0 and results else "FAIL"
     print(f"{label}: {status} {len(results) - errors}/{len(results)} tests passed ({summary['wall_time_s']} s)")
     return 0 if status == "PASS" else 1
+
+
+def record_windows(name, windows, tests, b, cpu, args, out, label):
+    """One simulation per window; each must record at least MIN_WINDOW_CYCLES cycles into its VCD before any
+    lockstep mismatch."""
+    ok_all = True
+    for w in windows:
+        vcd = out / f"win_{w}.vcd"
+        r = dvlib.run_test(name, "icarus", out_root=str(out / f"run_{w}"), build_result=b, quiet=True,
+                           rtl_f=cpu["rtl_f"], fw_dir=cpu["fw_dir"], cpu=args.cpu,
+                           extra_plusargs=[f"irwin_gpio={w}", f"irwin_vcd={vcd}"],
+                           timeout=gl_timeout(dvlib.for_cpu(tests[name], args.cpu)["max_cycles"]))
+        logs = "".join(p.read_text(errors="replace") for p in (ROOT / r.get("run_dir", "")).glob("*.log"))
+        m = re.search(r"\[vcd_window\] end after (\d+) cycles", logs)
+        cycles = int(m.group(1)) if m else 0
+        mism = len(re.findall(r"\[CHK:gl_lockstep\] FAIL", logs))
+        # tb_soc.v's $test$plusargs("vcd") matches any plusarg beginning with "vcd": it would dump the whole
+        # testbench into wave.vcd from time 0 and the window's $dumpfile would be ignored (Phase 7)
+        stray = list((ROOT / r.get("run_dir", "")).glob("wave.vcd"))
+        ok = cycles >= MIN_WINDOW_CYCLES and vcd.is_file() and vcd.stat().st_size > 0 and mism == 0 and not stray
+        ok_all &= ok
+        print(f"  [{'PASS' if ok else 'FAIL'}] window {w}: {cycles} cycles recorded to {vcd} "
+              f"({vcd.stat().st_size if vcd.is_file() else 0} bytes), {mism} lockstep mismatch(es)"
+              + (f", testbench dump {stray[0]} present" if stray else ""))
+    print(f"{label}: {'PASS' if ok_all else 'FAIL'} {name} windows {','.join(windows)}")
+    return 0 if ok_all else 1
 
 
 if __name__ == "__main__":

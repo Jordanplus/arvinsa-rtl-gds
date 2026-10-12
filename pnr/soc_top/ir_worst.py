@@ -115,10 +115,14 @@ def sram_lib_with_floating(cfg, pvt, power_path, dst_dir):
     return macro, lib, copy, add
 
 
-def run_corner(step, corner, voltage, ss_r, work, ll_dir, power_path):
-    """(rows, metrics or None) of one corner; ss_r: metal resistance of ss instead of the corner's own."""
+VCD_STEP = os.path.join(ROOT, "pnr", "user_project_wrapper", "irdrop_vcd_step.py")
+
+
+def run_corner(step, corner, voltage, ss_r, work, ll_dir, power_path, vcd=None, tag=""):
+    """(rows, metrics or None) of one corner; ss_r: metal resistance of ss instead of the corner's own; vcd: the
+    switching activity of that simulation window (irdrop_vcd_step.py, ADR-0019 decision 20) instead of vectorless."""
     pvt = corner.split("_", 1)[1]
-    cdir = os.path.join(work, corner)
+    cdir = os.path.join(work, corner + tag)
     os.makedirs(os.path.join(cdir, "vsrc"))
     cfg = json.load(open(os.path.join(step, "config.json")))
     cfg["DEFAULT_CORNER"] = corner
@@ -144,7 +148,8 @@ def run_corner(step, corner, voltage, ss_r, work, ll_dir, power_path):
     cfg_path = os.path.join(cdir, "config.json")
     json.dump(cfg, open(cfg_path, "w"), indent=1)
     step_out = os.path.join(cdir, "step")
-    cmd = (f"python3 -m librelane.steps run --id OpenROAD.IRDropReport -c '{cfg_path}' "
+    runner = f"IR_VCD='{vcd}' python3 '{VCD_STEP}'" if vcd else "python3 -m librelane.steps"
+    cmd = (f"{runner} run --id OpenROAD.IRDropReport -c '{cfg_path}' "
            f"-i '{os.path.join(step, 'state_in.json')}' -o '{step_out}'")
     with open(os.path.join(cdir, "console.log"), "w") as log:
         rc_run = subprocess.run(["nix-shell", "--run", cmd], cwd=ll_dir, stdout=log, stderr=subprocess.STDOUT).returncode
@@ -161,6 +166,11 @@ def run_corner(step, corner, voltage, ss_r, work, ll_dir, power_path):
     if ss_r:
         rows.append((json.load(open(cfg_path))["LAYERS_RC"]["*ff*"] == json.load(open(os.path.join(step, "config.json")))["LAYERS_RC"]["*ss*"],
                      f"{corner} ss metal resistance: LAYERS_RC *ff* = the run's *ss* values"))
+    if vcd:
+        ann = re.search(r"^vcd\s+(\d+)\s*$.*?^unannotated\s+(\d+)\s*$", logs, re.M | re.S)
+        rows.append((bool(ann) and int(ann.group(1)) > 0 and int(ann.group(2)) == 0 and "read_vcd" in logs,
+                     f"{corner}{tag} activity: {ann.group(1) if ann else 0} pins annotated from {os.path.basename(vcd)}, "
+                     f"{ann.group(2) if ann else '?'} unannotated"))
     return rows, json.load(open(state)).get("metrics", {})
 
 

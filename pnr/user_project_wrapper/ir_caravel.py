@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Static IR of the wrapper including Caravel's own supply network, from the pads (ADR-0019 decisions 18, 19).
 
-usage: ir_caravel.py <run dir> <out dir> <limits.toml> [--ll-dir <LibreLane checkout>] [--power <power.json>]
+usage: ir_caravel.py <run dir> <out dir> <limits.toml> --vcd <window.vcd> [--vcd ...] [--ll-dir <LibreLane checkout>]
+                    [--power <power.json>]
 
 The run's IR step (and ir_worst.py) puts ideal sources on the wrapper's core rings. Caravel feeds those rings
 through one vccd1 and one vssd1 pad on the right side, its own 5 um met4 ring and met3 bridges on the left and
@@ -12,9 +13,13 @@ right ring sides only (caravel_pwr/README.md), so most of the drop is outside th
      within CONTROL_TOL (relative; the added shapes do not change the wrapper; the DEF -> ODB round trip alone
      moved it by 0.01-0.02 % on p7_harden2);
   3. the IR step re-run with one ideal source at the pad end of each pad strap, in the slow corners of
-     ir_worst.py (JUDGED: their currents, 1.60 V and ss resistance, with the SRAM's port 1 floating current);
-     the larger VDD drop + GND rise <= [max_sum] ir_caravel_vdd_drop_plus_gnd_rise of the limits file. That
-     limit is the board supply requirement: the pad voltage vccd1 - vssd1 must be at least 1.60 V + limit.
+     ir_worst.py (JUDGED: their libraries, 1.60 V and ss resistance, with the SRAM's port 1 floating current),
+     with the switching activity of each --vcd window: the max-power pattern recorded on the final netlist
+     (fw/tests/maxpower, run_gl_soc.py --record-window, 44 ns clock; ADR-0019 decision 20). The largest VDD
+     drop + GND rise over windows and corners <= [max_sum] ir_caravel_vdd_drop_plus_gnd_rise of the limits
+     file (20 mV: lowest pad supply 1.62 V - 1.60 V). Every window must annotate all pins (0 unannotated).
+     The same corners with OpenSTA's vectorless activity are printed as [INFO] (decision 19's value, about
+     2.2 times the max-power pattern on p7_harden2).
 Also required: 54 + 53 bridges per net (left + right), two pad straps per net, the via definitions found.
 Writes <out>/ir_caravel/ and prints `ir-caravel: PASS` / `ir-caravel: FAIL` last; exit code 0 only on PASS.
 Python stdlib only (LibreLane and OpenROAD run inside LibreLane's nix-shell).
@@ -150,6 +155,8 @@ def main(argv):
     for a in it:
         if a in ("--ll-dir", "--power"):
             opts[a] = os.path.abspath(next(it, ""))
+        elif a == "--vcd":
+            opts.setdefault("--vcd", []).append(os.path.abspath(next(it, "")))
         else:
             pos.append(a)
     if len(pos) != 3:
@@ -209,26 +216,39 @@ def main(argv):
     pcfg = dict(cfg, VSRC_LOC_FILES=vsrc)
     json.dump(pcfg, open(os.path.join(pstep, "config.json"), "w"), indent=1)
     json.dump(state, open(os.path.join(pstep, "state_in.json"), "w"), indent=1)
-    drops = {}
-    for corner, voltage, ss_r in ir_worst.JUDGED:
-        r, metrics = ir_worst.run_corner(pstep, corner, voltage, ss_r, os.path.join(work, "corners"), ll_dir, opts.get("--power"))
-        vals = ir_worst.drop(metrics, keys) if metrics is not None else None
-        rows += r
-        if vals:
-            drops[corner] = vals
-            rows.append((True, f"{corner} drop from the pads: VDD {vals[0] * 1e3:.2f} + GND {vals[1] * 1e3:.2f} = {sum(vals) * 1e3:.2f} mV"))
-        elif metrics is not None:
-            rows.append((False, f"{corner} drop: {[metrics.get(k) for k in keys]} (missing or negative)"))
-    if len(drops) == len(ir_worst.JUDGED):
+    vcds = opts.get("--vcd") or []
+    if not vcds or not all(os.path.isfile(v) for v in vcds):
+        return finish(rows + [(False, f"switching activity: need --vcd window(s) of the max-power pattern, got {vcds}")])
+    drops, info = {}, []
+    for vcd in vcds + [None]:
+        tag = "_" + os.path.splitext(os.path.basename(vcd))[0] if vcd else "_vectorless"
+        for corner, voltage, ss_r in ir_worst.JUDGED:
+            r, metrics = ir_worst.run_corner(pstep, corner, voltage, ss_r, os.path.join(work, "corners"), ll_dir,
+                                             opts.get("--power"), vcd=vcd, tag=tag)
+            vals = ir_worst.drop(metrics, keys) if metrics is not None else None
+            if vals:
+                r.append((True, f"{corner}{tag} drop from the pads: VDD {vals[0] * 1e3:.2f} + GND {vals[1] * 1e3:.2f} = "
+                                f"{sum(vals) * 1e3:.2f} mV"))
+            elif metrics is not None:
+                r.append((False, f"{corner}{tag} drop: {[metrics.get(k) for k in keys]} (missing or negative)"))
+            if vcd:
+                rows += r
+                if vals:
+                    drops[corner + tag] = vals
+            else:   # vectorless: recorded, not judged (ADR-0019 decision 20)
+                info += [("" if ok else "not applied: ") + msg for ok, msg in r]
+    if len(drops) == len(vcds) * len(ir_worst.JUDGED):
         worst = max(drops, key=lambda c: sum(drops[c]))
-        rows.append((sum(drops[worst]) <= lim, f"drop: worst {worst} {sum(drops[worst]) * 1e3:.2f} mV from Caravel's pads vs max "
-                                               f"{lim * 1e3:.1f} mV (board supply requirement: pad vccd1 - vssd1 >= {1.6 + lim:.3f} V)"))
-    return finish(rows)
+        rows.append((sum(drops[worst]) <= lim, f"drop: worst {worst} {sum(drops[worst]) * 1e3:.2f} mV from Caravel's pads "
+                                               f"(max-power pattern, slow corner) vs max {lim * 1e3:.1f} mV"))
+    return finish(rows, info)
 
 
-def finish(rows):
+def finish(rows, info=()):
     for ok, msg in rows:
         print(f"  [{'PASS' if ok else 'FAIL'}] {msg}")
+    for msg in info:
+        print(f"  [INFO] {msg}")
     ok = bool(rows) and all(r[0] for r in rows)
     print(f"ir-caravel: {'PASS' if ok else 'FAIL'}")
     return 0 if ok else 1

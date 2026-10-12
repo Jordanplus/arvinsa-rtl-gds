@@ -18,7 +18,7 @@ SOC_TAG = $(if $(filter hazard3,$(CPU)),soc_top_hazard3,soc_top)
 PY   ?= python3
 DRY_RUN ?= 0
 
-.PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke regress-rtl-caravel neg-rtl-caravel eqy-caravel gl-caravel \
+.PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke regress-rtl-caravel neg-rtl-caravel eqy-caravel gl-caravel ir-caravel \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
         neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
@@ -48,6 +48,8 @@ help:
 	@echo "  make neg-rtl-caravel      neg-rtl on that build: the Hazard3 bugs and the wrapper bugs W01-W06"
 	@echo "  make eqy-caravel          formal equivalence of make harden D=user_project_wrapper (synthesized vs final)"
 	@echo "  make gl-caravel           gate-level lockstep of that wrapper netlist against the RTL wrapper"
+	@echo "  make ir-caravel           static IR of that wrapper from Caravel's pads with the max-power pattern"
+	@echo "                            (fw/tests/maxpower windows recorded on the final netlist, slow corners)"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check py-check skill-check lint fw regress-rtl-smoke"
 	@echo "  make phase1               full Phase 1 exit check"
@@ -180,6 +182,19 @@ eqy-caravel:
 gl-caravel:
 	$(MAKE) -C fw CPU=hazard3 all check-bootrom
 	$(PY) dv/gl_soc/run_gl_soc.py --cpu caravel
+
+# IR with the max-power pattern (ADR-0019 decision 20): record the busy windows of fw/tests/maxpower on the
+# final netlist at the signoff period (44 ns), then the IR from Caravel's pads with that activity.
+IR_WINDOWS := 5a 5b 5c
+comma := ,
+empty :=
+space := $(empty) $(empty)
+ir-caravel:
+	$(MAKE) -C fw CPU=hazard3 all check-bootrom
+	$(PY) dv/gl_soc/run_gl_soc.py --cpu caravel --tests maxpower --out runs/ir_caravel_vcd \
+	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS)) --clk-half-ns 22
+	$(PY) pnr/user_project_wrapper/ir_caravel.py runs/user_project_wrapper runs/ir_caravel \
+	  signoff/limits/user_project_wrapper.toml $(foreach w,$(IR_WINDOWS),--vcd runs/ir_caravel_vcd/win_$(w).vcd)
 
 neg-rtl: fw
 	$(PY) dv/scripts/neg.py --cpu $(CPU)
