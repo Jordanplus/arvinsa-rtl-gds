@@ -174,7 +174,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改 SDC；STA 報 unconstrained endpoint；`set_input_transition` 寫了但報表的腳位 slew 沒變；放進 Caravel wrapper 的邊界約束 | timing-constraints-sdc | tapeout-precheck-caravel（Caravel 的 clock 來源） |
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
-| 開新的頂層設計、決定用哪幾支 pad／GPIO、搬動 block 或 macro，要先規劃並經使用者核准；hook 擋下編輯（「這份 pad／block／pin 規劃還沒經使用者核准」）、`make pin-plan` FAIL（`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`）；harden 前出 floorplan 圖確認 | chip-floorplan-pin-planning | tapeout-precheck-caravel（Caravel 的固定腳位）、floorplan-congestion（die 內的密度與壅塞） |
+| 開新的頂層設計、決定用哪幾支 pad／GPIO、搬動 block 或 macro，要先規劃並經使用者核准；外殼的電源從哪幾邊進來、IR 的供電點模型怎麼選（要在定 block 位置前查清楚）；hook 擋下編輯（「這份 pad／block／pin 規劃還沒經使用者核准」）、`make pin-plan` FAIL（`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`）；harden 前出 floorplan 圖確認 | chip-floorplan-pin-planning | tapeout-precheck-caravel（Caravel 的固定腳位）、floorplan-congestion（die 內的密度與壅塞） |
 | 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`、`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`、`LEF has no FOREIGN`）；OpenROAD 報 `ODB-0292 LEF data from ... is discarded due to errors`；最終 GDS 的 macro 是空的、XOR 差異幾百萬；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
 | SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix 或 `Timestep too small`（階層式輸出的負值修正電容）；用 OpenRAM 自產 macro（官方環境只有 x86_64-linux、要不要關 use_nix、words_per_row 與讀取電路）；OpenRAM 的 LVS 用新 PDK 報 `Netlists do not match`（`special_nfet_01v8`、`special_pfet_latch`）、log 有 `ERROR` 但 exit 0、`Custom cell pin names do not match spice file`、同一設定產生的 GDS 每次不同；`gen_char_lib` 報 `internal_power ... outside (0, 1000]`；用 SPICE 量 internal power 時漏電隨網表改變或外插成負值；漏電量測窗 `leakage window ... not settled`、bitcell 漏電不隨溫度變或 `bitcell leakage depends on gmin`、用 `.nodeset` 算 DC 工作點報 `doAnalyses: out of memory`；sky130 1RW 報 `must have an even number of cols including replica cols`、DRC／LVS 失敗；OpenRAM 產的 macro 在 KLayout DRC 報 nwell.6、psdm.1、m2.2，或改了 OpenRAM 的擺放後 LVS 不一致、報 nwell.2a | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
 | PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
@@ -556,7 +556,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 - **何時用**：開新的頂層設計，或要決定、改變用哪幾支 pad／GPIO、block 與 macro 放哪裡；被 hook 或 `make pin-plan` 擋下時。
 - **重點**：
-  - 順序是 pad → block 位置 → pin 指定 → 頂層 RTL 的腳位對應 → harden。block 位置依有時序要求的介面定，pin 挑離 block 最近的。
+  - 順序是 pad（含電源 pad 與電源進入點）→ block 位置 → pin 指定 → 頂層 RTL 的腳位對應 → harden。block 位置依有時序要求的介面定，pin 挑離 block 最近的。
+  - 電源進入點和訊號 pad 一樣在 pad 階段查清楚：外殼從哪幾邊、哪些點把電源接進來，查不到的列成幾種供電模型，定 block 位置時一起考慮，採用的模型（signoff IR 用它）在核准規劃時一起決定。Phase 7 到 harden 後才量，Caravel wrapper 左下角的 SoC 在整圈供電 6.87 mV、只從上側 143 mV（上限 20 mV）。
   - 規劃寫在 `pnr/<design>/pin_plan.toml`。LibreLane 只跑到套用 DEF 範本（看腳位）或 global placement（看邏輯分布，幾分鐘）就出圖（`scripts/plot_floorplan.py`），連同規劃請使用者確認。
   - 使用者核准後，在 `[approval]` 填日期、原話、ADR 與規劃的 sha256；規劃之後再改，核准就失效。
   - 四層強制：規則（`CLAUDE.md` 規則 14）、規劃文件、checker（`make pin-plan`，harden 與 regress 都跑；植入錯誤 `make neg-pin-plan`）、Claude Code 的 PreToolUse hook（核准前擋下受管轄檔案的編輯）。用 Bash 改檔 hook 看不到，要到 checker 才擋。

@@ -38,7 +38,7 @@
     - **由使用者決定**：等使用者選。有業界標準做法、而且不影響上述各項的，照標準做法做，回報時說明。
     - **再實作**：照選定的做；決定、依據與使用者的原話和日期寫進 ADR（`docs/decisions/`）或該 macro 的 README，查證過程寫進對應的筆記。
 14. **pad、block 位置與 pin 指定先規劃、經使用者核准，才寫頂層 RTL 的腳位對應與 config**（使用者 2026-10-12：「要想個辦法確保之後一定會先探討pad & pin location」；ADR-0019 決定 13）。
-    - 順序：pad → block 位置 → pin 指定 → RTL → harden；做法在 skill `chip-floorplan-pin-planning`。
+    - 順序：pad（含電源 pad 與電源進入點，使用者 2026-10-12）→ block 位置 → pin 指定 → RTL → harden；做法在 skill `chip-floorplan-pin-planning`。
     - 規劃寫在 `pnr/<design>/pin_plan.toml`，連同 floorplan 圖（`scripts/plot_floorplan.py`）請使用者確認；`[approval]` 只填使用者的原話，規劃改了要重新核准（`plan_sha256`）。
     - 強制：`make pin-plan`（`make harden` 先跑、`make regress` 也跑，植入錯誤 `make neg-pin-plan`）；Claude Code 另有 PreToolUse hook（`.claude/hooks/require_pin_plan.py`）在核准前擋下受管轄檔案的編輯。被擋下時不要改用 Bash 繞過。Codex 沒有 hook，照本條自行遵守，checker 會在 harden 與 regress 擋。
     - `soc_top`、`picorv32_core` 是本條之前的設計（legacy），不需要規劃。
