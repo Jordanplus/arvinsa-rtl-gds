@@ -2,14 +2,16 @@
 """Signoff criteria review of one harden run, part 1: were the criteria applied (skill signoff-criteria,
 "每次 harden 後的檢查"; user decision 2026-10-07).
 
-usage: review_criteria.py [--design soc_top|picorv32_core] [--cpu picorv32|hazard3] [--run <dir>]
+usage: review_criteria.py [--design soc_top|picorv32_core] [--cpu picorv32|hazard3|caravel] [--run <dir>]
                           [--out <dir>] [--config <file>]
 
 --design soc_top (default; pnr/soc_top/run.sh, `make harden-soc`) or picorv32_core
 (pnr/picorv32_core/run.sh, `make harden-core`; Phase 5 exit review: the core harden had no review).
 Defaults: --run runs/<tag>, --out runs/<tag>_signoff, --config pnr/soc_top/config.json or
-config_hazard3.json (the same tags as pnr/soc_top/run.sh; --cpu picks one), or
-pnr/picorv32_core/config.json. Rows, each PASS or FAIL:
+config_hazard3.json (the same tags as pnr/soc_top/run.sh; --cpu picks one), or, with --cpu caravel
+(the Hazard3 SoC flat in the Caravel user_project_wrapper, pnr/user_project_wrapper/run.sh, Phase 7),
+runs/user_project_wrapper and pnr/user_project_wrapper/config.json: the same rows and checkers as soc_top
+(it uses the same clock_uncertainty.sdc); or pnr/picorv32_core/config.json. Rows, each PASS or FAIL:
   config_applied   every setting of the config (except meta) has the same value in the run's
                    resolved.json: numbers as numbers, dir::<p> = <the run's DESIGN_DIR>/<p>,
                    pdk_dir::<p> = a path ending in /<p>, a dict only for the keys the config has,
@@ -63,7 +65,9 @@ import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
+TAGS = {"picorv32": ("soc_top", os.path.join("pnr", "soc_top", "config.json")),
+        "hazard3": ("soc_top_hazard3", os.path.join("pnr", "soc_top", "config_hazard3.json")),
+        "caravel": ("user_project_wrapper", os.path.join("pnr", "user_project_wrapper", "config.json"))}
 CORE_TAG, CORE_CONFIG = "picorv32_core", os.path.join("pnr", "picorv32_core", "config.json")
 TIMING_STEPS = ["OpenROAD.STAPrePNR", "OpenROAD.GlobalPlacement", "OpenROAD.RepairDesignPostGPL", "OpenROAD.CTS",
                 "OpenROAD.ResizerTimingPostCTS", "OpenROAD.GlobalRouting", "OpenROAD.RepairDesignPostGRT",
@@ -284,7 +288,7 @@ def main():
     ap.add_argument("--config")
     args = ap.parse_args()
     soc = args.design == "soc_top"
-    tag, cfg_rel = (TAGS[args.cpu][0], os.path.join("pnr", "soc_top", TAGS[args.cpu][1])) if soc else (CORE_TAG, CORE_CONFIG)
+    tag, cfg_rel = TAGS[args.cpu] if soc else (CORE_TAG, CORE_CONFIG)
     run = os.path.abspath(args.run or os.path.join(ROOT, "runs", tag))
     out = os.path.abspath(args.out or os.path.join(ROOT, "runs", tag + "_signoff"))
     config_path = os.path.abspath(args.config or os.path.join(ROOT, cfg_rel))

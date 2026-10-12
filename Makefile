@@ -87,7 +87,7 @@ help:
 	@echo "  make py-check             every name a tracked Python file reads is defined in that file, no file emptied before it is read (seconds)"
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
 	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, and stop at a FAIL"
-	@echo "  make harden D=soc_top|soc_top_hazard3|picorv32_core   same as harden-soc CPU=picorv32 / CPU=hazard3 / harden-core"
+	@echo "  make harden D=soc_top|soc_top_hazard3|user_project_wrapper|picorv32_core   harden-soc CPU=picorv32 / hazard3 / caravel, or harden-core"
 	@echo ""
 	@echo "Phase 5 targets (Hazard3 replaces PicoRV32 as the main CPU, docs/decisions/0011-hazard3-integration.md):"
 	@echo "  make regress              EVERYTHING for the Hazard3 SoC in one command, in order, stops at the first FAIL:"
@@ -244,8 +244,8 @@ provenance-final:
 harden:
 	$(PY) scripts/check_pin_plan.py --design $(D)
 	@case "$(D)" in soc_top) $(MAKE) harden-soc CPU=picorv32 ;; soc_top_hazard3) $(MAKE) harden-soc CPU=hazard3 ;; \
-	  picorv32_core) $(MAKE) harden-core ;; \
-	  *) echo "harden: FAIL - D must be soc_top, soc_top_hazard3 or picorv32_core (got '$(D)')"; exit 1 ;; esac
+	  user_project_wrapper) $(MAKE) harden-soc CPU=caravel ;; picorv32_core) $(MAKE) harden-core ;; \
+	  *) echo "harden: FAIL - D must be soc_top, soc_top_hazard3, user_project_wrapper or picorv32_core (got '$(D)')"; exit 1 ;; esac
 
 # SRAM SPICE characterization (Phase 3.5, ADR-0010). char.json and the five .lib are committed;
 # make harden-soc checks the .lib against char.json (pnr/soc_top/check_inputs.py char_lib).

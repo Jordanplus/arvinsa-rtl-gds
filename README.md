@@ -67,6 +67,7 @@ make regress-picorv32  # PicoRV32 版 SoC 的全部檢查（Phase 1–4 的 make
 
 `make regress` 的結果在 `runs/regress/`（`make regress-picorv32` 在 `runs/regress_picorv32/`）：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
 個別 target 用 `CPU=picorv32`（預設）或 `CPU=hazard3` 選 SoC 的 CPU，例如 `make harden-soc CPU=hazard3`（run 在 `runs/soc_top_hazard3/`）。
+Phase 7 的 Caravel wrapper 用 `make harden D=user_project_wrapper`（等於 `make harden-soc CPU=caravel`，run 在 `runs/user_project_wrapper/`）。
 它會先刪掉自己的結果目錄，並由每個 harden 步驟重新產生自己的 run；下游步驟只接受同一個 commit 產生、且 PASS 的 run。
 工作目錄有未提交的修改時，來源追溯（provenance）會判 FAIL，所以請在乾淨的 checkout 上執行。
 

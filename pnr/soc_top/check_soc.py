@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""soc_top-specific physical checks on a LibreLane run (project-plan.md §5.1, §6.4, §7.2).
+"""SoC physical checks on a LibreLane run of soc_top or of the Caravel user_project_wrapper (project-plan.md
+§5.1, §6.4, §7.2).
 
 usage: check_soc.py <LibreLane run dir> --sram-drc <drc.magic.rpt of the SRAM alone> [--config pnr/soc_top/config.json]
-       (run.sh passes the config of its CPU: config.json for PicoRV32, config_hazard3.json for Hazard3)
+       (run.sh passes the config of its CPU: config.json for PicoRV32, config_hazard3.json for Hazard3;
+       pnr/user_project_wrapper/run.sh passes pnr/user_project_wrapper/config.json)
+The design is the config's DESIGN_NAME; DESIGNS below gives what differs: the SRAM instance (sram0 in soc_top,
+u_soc.sram0 in the flat wrapper, an escaped identifier in the netlist), the clock port, the check_setup
+warnings allowed and the static IR supply model of ir_sources.
 
 Checks (each prints a PASS/FAIL row):
   macro        the final netlist has exactly one SRAM macro instance, named sram0
   placement    sram0 in the final DEF is FIXED at the location and orientation of config.json
                MACROS (§7.2 "擺放": the macro must not drift)
-  ir_sources   the static IR supply model (config VSRC_LOC_FILES, one side only): every source point
+  ir_sources   soc_top: the static IR supply model (config VSRC_LOC_FILES, one side only): every source point
                of a net lies on a met5 stripe of that net in the final DEF, every met5 stripe of the
                net has exactly one point, and the voltage column is > 0 for VDD_NETS and 0 for
                GND_NETS. A point that misses its stripe would silently remove a supply (Phase 4).
+               user_project_wrapper: the supply comes in from the core ring (ADR-0019 decision 11); that model
+               is not implemented yet, so the row FAILs.
   port1_tieoff sram0 port 1 is tied off in the final netlist: csb1 to a tie-high (conb_1 HI),
                addr1[8:0] to tie-low (conb_1 LO) (§5.1); dout1 is left unconnected. clk1 must be
                the system clock: through buffers and an even number of inverters back to the top-level
@@ -37,7 +44,9 @@ Checks (each prints a PASS/FAIL row):
   sta_setup    OpenSTA `check_setup` (unconstrained endpoints, unclocked registers, missing input
                delays, loops, multiple clocks) in every signoff STA corner: the only allowed warning
                was the unclocked sram0/clk1 while clk1 was tied to 0, before Phase 6 (ADR-0018
-               decision 9); now none is allowed. project-plan.md §7.2
+               decision 9); now none is allowed in soc_top. The wrapper allows one: the 29 analog_io
+               pads of the Caravel template as unconstrained endpoints (no analog circuit; exactly
+               that warning with exactly those ports). project-plan.md §7.2
                "no unconstrained endpoint". The section must be present in every corner of
                STA_CORNERS in the config, and no other corner may be there.
   pulse_width  minimum pulse width and minimum period (<corner>/pulse_width.rpt, written by
@@ -81,7 +90,8 @@ import subprocess
 import sys
 
 MACRO = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
-INST = "sram0"
+INST = "sram0"        # set by main() from DESIGNS; the default is soc_top's
+NL_INST = "sram0"     # the instance name as the netlist writes it
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 LIB_LINE = re.compile(r"^Reading (?:cell|extra timing|timing) library for the '([^']*)' corner at '(.*?)'", re.M)
 CTS_STEP = "Arvinsa.CTSNoInsertionDelay"
@@ -104,7 +114,7 @@ def clock_source(nl, pin):
         pins = {k: v.strip() for k, v in re.findall(r"\.(\w+)\(\s*(\\\S+\s|[^()\s]+)\s*\)", body)}
         if CLK_BUF.match(cell) and (pins.get("X") or pins.get("Y")):
             drv[pins.get("X") or pins.get("Y")] = (cell, pins.get("A"))
-        if name == INST:
+        if name == NL_INST:
             start = pins.get(pin)
     net, inv, seen = start, 0, set()
     while net in drv and net not in seen:
@@ -127,7 +137,7 @@ def sram_clock_chain(nl):
                 fanout[net] = fanout.get(net, 0) + 1
         if buf and (pins.get("X") or pins.get("Y")):
             drv[pins.get("X") or pins.get("Y")] = (name, cell, pins.get("A"))
-        if name == INST:
+        if name == NL_INST:
             clk = pins.get("clk0")
     chain, net = [], clk
     while net in drv and fanout.get(net, 0) == 1 and len(chain) < 1000:
@@ -147,7 +157,7 @@ def defines_sram(path):
     return _DEFINES[path]
 TIE_HI = ["csb1"]
 TIE_LO = [f"addr1[{i}]" for i in range(9)]
-CLK_PORT = "clk"     # sram0/clk1 must come from it (ADR-0018 decision 9)
+CLK_PORT = "clk"     # sram0/clk1 must come from it (ADR-0018 decision 9); set by main() from DESIGNS
 WIDTH = {"wmask0": 4, "addr0": 9, "din0": 32, "dout0": 32, "addr1": 9, "dout1": 32}
 
 
@@ -274,8 +284,18 @@ def read_magic_drc(path, outline=None):
     return rules, outside, total
 
 
-# check_setup warnings that are expected in soc_top: (warning text, set of listed pins)
+# check_setup warnings that are expected: (warning text, sorted tuple of the listed pins); set by main() from DESIGNS
 CHECK_SETUP_ALLOWED = set()   # Phase 3-5 allowed the unclocked sram0/clk1 (tied to 0); ADR-0018 decision 9
+# What differs between the designs (keyed by the config's DESIGN_NAME).
+DESIGNS = {
+    "soc_top": {"inst": "sram0", "clk_port": "clk", "check_setup_allowed": set(), "ir_model": "met5_left_end"},
+    # Phase 7 (ADR-0019): the SoC flat in the wrapper. analog_io[28:0] are pads of the fixed Caravel template with
+    # nothing connected (the SoC has no analog circuit), so STA lists them as unconstrained endpoints.
+    "user_project_wrapper": {
+        "inst": "u_soc.sram0", "clk_port": "wb_clk_i", "ir_model": "core_ring",
+        "check_setup_allowed": {("There are 29 unconstrained endpoints.",
+                                 tuple(sorted(f"analog_io[{i}]" for i in range(29))))}},
+}
 
 
 def read_check_setup(sta_dir):
@@ -333,7 +353,7 @@ def met5_stripes(def_text, net):
 
 def sram_connections(netlist_text):
     """{pin: net} for sram0 in the final netlist (bus connections expanded, MSB first)."""
-    m = re.search(re.escape(MACRO) + r"\s+" + INST + r"\s*\((.*?)\);", netlist_text, re.S)
+    m = re.search(re.escape(MACRO) + r"\s+" + re.escape(NL_INST) + r"\s*\((.*?)\);", netlist_text, re.S)
     if not m:
         return None
     conns = {}
@@ -360,6 +380,7 @@ def tie_nets(netlist_text):
 
 
 def main(run_dir, config_path, sram_drc):
+    global INST, NL_INST, CLK_PORT, CHECK_SETUP_ALLOWED
     rows = []
 
     def row(name, ok, msg):
@@ -367,9 +388,16 @@ def main(run_dir, config_path, sram_drc):
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {msg}")
 
     cfg = json.load(open(config_path, encoding="utf8"))
+    design = cfg.get("DESIGN_NAME")
+    if design not in DESIGNS:
+        print(f"soc-checks: FAIL (DESIGN_NAME {design!r} of {config_path} is not one of {sorted(DESIGNS)})")
+        return 1
+    dz = DESIGNS[design]
+    INST, CLK_PORT, CHECK_SETUP_ALLOWED = dz["inst"], dz["clk_port"], dz["check_setup_allowed"]
+    NL_INST = "\\" + INST if "." in INST else INST
     inst_cfg = cfg["MACROS"][MACRO]["instances"][INST]
-    nl_path = os.path.join(run_dir, "final", "nl", "soc_top.nl.v")
-    def_path = os.path.join(run_dir, "final", "def", "soc_top.def")
+    nl_path = os.path.join(run_dir, "final", "nl", f"{design}.nl.v")
+    def_path = os.path.join(run_dir, "final", "def", f"{design}.def")
     for p in (nl_path, def_path):
         if not os.path.isfile(p):
             print(f"soc-checks: FAIL (missing {p})")
@@ -378,12 +406,12 @@ def main(run_dir, config_path, sram_drc):
 
     # macro
     insts = re.findall(re.escape(MACRO) + r"\s+(\S+)\s*\(", nl)
-    row("macro", insts == [INST], f"{MACRO} instances in the final netlist: {insts}")
+    row("macro", insts == [NL_INST], f"{MACRO} instances in the final netlist: {insts}")
 
     # placement
     d = open(def_path, encoding="utf8").read()
     units = int(re.search(r"UNITS DISTANCE MICRONS (\d+)", d).group(1))
-    m = re.search(r"-\s+" + INST + r"\s+" + re.escape(MACRO) + r"\s*\+\s*(\w+)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)\s*(\w+)", d)
+    m = re.search(r"-\s+" + re.escape(INST) + r"\s+" + re.escape(MACRO) + r"\s*\+\s*(\w+)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)\s*(\w+)", d)
     if not m:
         row("placement", False, f"{INST} not found in the COMPONENTS of {def_path}")
     else:
@@ -393,35 +421,38 @@ def main(run_dir, config_path, sram_drc):
         row("placement", ok, f"{INST} {status} ({x}, {y}) {orient}; config.json ({want[0]}, {want[1]}) {want[2]}")
 
     # static IR supply model
-    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-    vsrc = cfg.get("VSRC_LOC_FILES") or {}
-    problems = []
-    for net in list(cfg.get("VDD_NETS") or []) + list(cfg.get("GND_NETS") or []):
-        path = vsrc.get(net)
-        path = os.path.join(root, path[len("dir::"):]) if path and path.startswith("dir::") else path
-        if not path or not os.path.isfile(path):
-            problems.append(f"{net}: no source file ({vsrc.get(net)})")
-            continue
-        stripes = met5_stripes(d, net)
-        pts = [[float(v) for v in line.split(",")] for line in open(path) if line.strip()]
-        hits = [[i for i, (yc, hw, x0, x1) in enumerate(stripes)
-                 if abs(y * units - yc) <= hw and x0 <= x * units <= x1] for x, y, _, _ in pts]
-        volt_ok = all((p[3] > 0) if net in (cfg.get("VDD_NETS") or []) else (p[3] == 0) for p in pts)
-        # One side only (the documented model): each source no larger than its stripe is wide, and
-        # within one stripe width of the stripe's left end. A larger source or one further in feeds
-        # the stripe over a longer stretch, i.e. a more optimistic model (Phase 4 review).
-        on = [(p, stripes[h[0]]) for p, h in zip(pts, hits) if len(h) == 1]
-        too_big = sum(1 for p, (yc, hw, x0, x1) in on if p[2] * units > 2 * hw)
-        not_end = sum(1 for p, (yc, hw, x0, x1) in on if p[0] * units - x0 > 2 * hw)
-        if not stripes or any(len(h) != 1 for h in hits) or sorted(h[0] for h in hits) != list(range(len(stripes))) \
-                or not volt_ok or too_big or not_end:
-            problems.append(f"{net}: {len(pts)} points for {len(stripes)} met5 stripes, "
-                            f"{sum(1 for h in hits if len(h) != 1)} not on exactly one stripe, voltages {'ok' if volt_ok else 'wrong'}, "
-                            f"{too_big} larger than the stripe width, {not_end} not at the left end")
-    row("ir_sources", bool(vsrc) and not problems,
-        f"one source, no larger than the stripe width, at the left end of each met5 stripe of {', '.join(sorted(vsrc))}"
-        if vsrc and not problems
-        else ("; ".join(problems) if problems else "VSRC_LOC_FILES missing in the config"))
+    if dz["ir_model"] == "core_ring":
+        row("ir_sources", False, "the core-ring supply model of ADR-0019 decision 11 is not implemented yet")
+    else:
+        root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+        vsrc = cfg.get("VSRC_LOC_FILES") or {}
+        problems = []
+        for net in list(cfg.get("VDD_NETS") or []) + list(cfg.get("GND_NETS") or []):
+            path = vsrc.get(net)
+            path = os.path.join(root, path[len("dir::"):]) if path and path.startswith("dir::") else path
+            if not path or not os.path.isfile(path):
+                problems.append(f"{net}: no source file ({vsrc.get(net)})")
+                continue
+            stripes = met5_stripes(d, net)
+            pts = [[float(v) for v in line.split(",")] for line in open(path) if line.strip()]
+            hits = [[i for i, (yc, hw, x0, x1) in enumerate(stripes)
+                     if abs(y * units - yc) <= hw and x0 <= x * units <= x1] for x, y, _, _ in pts]
+            volt_ok = all((p[3] > 0) if net in (cfg.get("VDD_NETS") or []) else (p[3] == 0) for p in pts)
+            # One side only (the documented model): each source no larger than its stripe is wide, and
+            # within one stripe width of the stripe's left end. A larger source or one further in feeds
+            # the stripe over a longer stretch, i.e. a more optimistic model (Phase 4 review).
+            on = [(p, stripes[h[0]]) for p, h in zip(pts, hits) if len(h) == 1]
+            too_big = sum(1 for p, (yc, hw, x0, x1) in on if p[2] * units > 2 * hw)
+            not_end = sum(1 for p, (yc, hw, x0, x1) in on if p[0] * units - x0 > 2 * hw)
+            if not stripes or any(len(h) != 1 for h in hits) or sorted(h[0] for h in hits) != list(range(len(stripes))) \
+                    or not volt_ok or too_big or not_end:
+                problems.append(f"{net}: {len(pts)} points for {len(stripes)} met5 stripes, "
+                                f"{sum(1 for h in hits if len(h) != 1)} not on exactly one stripe, voltages {'ok' if volt_ok else 'wrong'}, "
+                                f"{too_big} larger than the stripe width, {not_end} not at the left end")
+        row("ir_sources", bool(vsrc) and not problems,
+            f"one source, no larger than the stripe width, at the left end of each met5 stripe of {', '.join(sorted(vsrc))}"
+            if vsrc and not problems
+            else ("; ".join(problems) if problems else "VSRC_LOC_FILES missing in the config"))
 
     # port 1 tie-off
     try:
@@ -481,11 +512,12 @@ def main(run_dir, config_path, sram_drc):
     corners = cfg.get("STA_CORNERS") or []
     stas = sorted(glob.glob(os.path.join(run_dir, "*-openroad-stapostpnr")), key=lambda d: int(os.path.basename(d).split("-")[0]))
     cs = read_check_setup(stas[-1]) if stas else {}
-    bad = {c: [w for w in ws if w not in CHECK_SETUP_ALLOWED] for c, ws in cs.items() if ws is not None}
+    bad = {c: [w for w in ws if (w[0], tuple(sorted(w[1]))) not in CHECK_SETUP_ALLOWED] for c, ws in cs.items() if ws is not None}
     missing = [c for c, ws in cs.items() if ws is None] + sorted(set(corners) - set(cs))
     bad = {c: ws for c, ws in bad.items() if ws}
     ok = bool(corners) and sorted(cs) == sorted(corners) and not missing and not bad
-    row("sta_setup", ok, f"check_setup in {len(cs)} corners: no warning" if ok else
+    row("sta_setup", ok, f"check_setup in {len(cs)} corners: no warning"
+        + (f" other than the {len(CHECK_SETUP_ALLOWED)} allowed one(s) of {design}" if CHECK_SETUP_ALLOWED else "") if ok else
         f"{len(cs)} corners ({len(corners)} in STA_CORNERS), section missing in {missing}, unexpected warnings {dict(list(bad.items())[:2])}")
 
     # minimum pulse width and minimum period
@@ -510,7 +542,7 @@ def main(run_dir, config_path, sram_drc):
 
     # the SRAM in the final GDS is the macro's own GDS
     mgds = [os.path.join(ROOT, g[len("dir::"):]) if g.startswith("dir::") else g for g in cfg["MACROS"][MACRO].get("gds", [])]
-    fgds = os.path.join(run_dir, "final", "gds", "soc_top.gds")
+    fgds = os.path.join(run_dir, "final", "gds", f"{design}.gds")
     if len(mgds) != 1 or not os.path.isfile(fgds):
         row("macro_gds", False, f"need one MACROS gds ({mgds}) and {fgds}")
     else:

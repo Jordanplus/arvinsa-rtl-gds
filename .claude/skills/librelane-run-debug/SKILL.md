@@ -55,7 +55,7 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 | 同上，起因是 corner 變多：resizer 看 15 個 corner（加了溫度反轉）時 `RepairDesignPostGRT` 35 分鐘以上不結束 | 停掉後拿同一份 `state_in.json` 單步重跑、只改 `RSZ_CORNERS` 回 9 個 → 58 秒，確認原因後才改 config（`multicorner-sta` 規則 3） | Phase 4 第 1 次 harden-soc |
 | 診斷「是不是卡住」：log 有緩衝，看不到進度 | `ps -o cputime` 看 CPU 時間是否持續增加；記憶體看 physical footprint（下一列）；macOS `sample <pid> 2` 看 call stack 卡在哪個函式 | Phase 4（看到每加一顆 buffer 就做一次增量 global routing） |
 | 某一步跑很久、CPU 使用率只有三四成：可能不是在算，而是記憶體失控、大部分時間在等 swap。`ps` 的 RSS 只算還留在實體記憶體的部分，會嚴重低估（Phase 5：RSS 418 MB，physical footprint 92.9 GB） | 看 `vmmap --summary <pid>` 的 Physical footprint 或 `top -l 1 -pid <pid> -stats mem`，再看 `sysctl vm.swapusage`。footprint 遠超過實體記憶體、swap 接近用滿就立刻停掉（整台機器的其他工作也會被拖慢）。重現時用單步重跑加記憶體上限與時間上限。Phase 5 的原因是 resizer 的無窮迴圈（`drv-timing-closure` 規則 10），其他幾次「修復不結束」推測同類（經驗紀錄） | Phase 5 第 1 次 harden-soc，`docs/notes/repair_design_loop.md` |
-| `[INFO RSZ-0032] Inserted N hold buffers.` 的 N 不是這一步插的總數：hold 修復進度表的 Buffers 欄中途會從 2624 掉回 2，最後只剩幾顆 | 數輸出網表裡 `hold<N>` 開頭的 instance，和上一步的網表比較 | Phase 5 第 2 次 harden：log 寫 11，`ResizerTimingPostCTS` 前後網表 0 → 2700 |
+| `[INFO RSZ-0032] Inserted N hold buffers.` 的 N 不是這一步插的總數：hold 修復進度表的 Buffers 欄中途會從 2624 掉回 2，最後只剩幾顆 | 數輸出網表裡 `hold<N>` 開頭的 instance，和上一步的網表比較 | Phase 5 第 2 次 harden：log 寫 11，`ResizerTimingPostCTS` 前後網表 0 → 2700。根因（Phase 7 已驗證）：插入後用 journal 復原時，`RepairHold.cc` 把累計數設成 0（`drv-timing-closure` 經驗紀錄 2026-10-12） |
 | 停掉一個 run 時誤殺別的程序 | 用 `ps -eo pid,pgid,command` 找這個 run 的 process group，`kill -TERM -<pgid>` 只停那一組 | Phase 4（同時有 agent 在跑 openroad） |
 
 ## 時間預估（Apple Silicon，10 核）

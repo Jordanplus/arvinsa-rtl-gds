@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Input checks before `make harden-soc` runs LibreLane.
 
-usage: check_inputs.py [--cpu picorv32|hazard3] [--resolved <run>/resolved.json] [--config F] [--char-dir D] [--lef F]
+usage: check_inputs.py [--cpu picorv32|hazard3|caravel] [--resolved <run>/resolved.json] [--config F] [--char-dir D] [--lef F]
                        [--openram D] [--sim-model F]
        (--config/--char-dir/--lef/--openram/--sim-model replace the repo files; used by pnr/soc_top/neg_pnr.py)
 --cpu picks the CPU of soc_top (default picorv32; hazard3: Phase 5, ADR-0011), and with it the config
 and RTL file list: picorv32 pnr/soc_top/config.json and rtl/rtl.f, hazard3
 pnr/soc_top/config_hazard3.json and rtl/rtl_hazard3.f (--config replaces the config of that CPU).
+caravel is the Hazard3 SoC inside the Caravel user_project_wrapper (Phase 7, ADR-0019; the DV build of the
+same name): pnr/user_project_wrapper/config.json and rtl/rtl_caravel.f. Every row is the same for it; the
+cpu_config row still compares the two soc_top configs (the wrapper's floorplan, PDN and SDC differ from
+soc_top on purpose).
 
 Checks:
   rtl_files   the config's VERILOG_FILES == the source files of the CPU's RTL file list, and
@@ -69,7 +73,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 # CPU -> (config, RTL file list, VERILOG_DEFINES)
 CPUS = {"picorv32": (os.path.join(ROOT, "pnr", "soc_top", "config.json"), os.path.join(ROOT, "rtl", "rtl.f"), []),
         "hazard3": (os.path.join(ROOT, "pnr", "soc_top", "config_hazard3.json"),
-                    os.path.join(ROOT, "rtl", "rtl_hazard3.f"), ["SOC_CPU_HAZARD3"])}
+                    os.path.join(ROOT, "rtl", "rtl_hazard3.f"), ["SOC_CPU_HAZARD3"]),
+        "caravel": (os.path.join(ROOT, "pnr", "user_project_wrapper", "config.json"),
+                    os.path.join(ROOT, "rtl", "rtl_caravel.f"), ["SOC_CPU_HAZARD3"])}
+SOC_CPUS = ("picorv32", "hazard3")   # the two soc_top configs that the cpu_config row compares
 CPU_KEYS = ("VERILOG_FILES", "VERILOG_INCLUDE_DIRS", "VERILOG_DEFINES")
 MACRO = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
 IP = os.path.join(ROOT, "ip", "sram", MACRO)
@@ -139,7 +146,7 @@ def main(argv):
 
     config, rtl_f, defines = CPUS[args.cpu]
     configs = {c: json.load(open(args.config if c == args.cpu and args.config else CPUS[c][0], encoding="utf8"))
-               for c in CPUS}
+               for c in sorted(set(SOC_CPUS) | {args.cpu})}
     cfg = configs[args.cpu]
     inc, files = [], []
     for line in open(rtl_f, encoding="utf8"):
@@ -159,7 +166,7 @@ def main(argv):
            f"; only in config {sorted(set(have_files) - set(files))}, only in the file list {sorted(set(files) - set(have_files))}"))
     pico, h3 = configs["picorv32"], configs["hazard3"]
     differ = sorted(k for k in set(pico) | set(h3) if not k.startswith("//") and k not in CPU_KEYS and pico.get(k) != h3.get(k))
-    bad_def = [f"{c} VERILOG_DEFINES = {configs[c].get('VERILOG_DEFINES')}" for c in CPUS
+    bad_def = [f"{c} VERILOG_DEFINES = {configs[c].get('VERILOG_DEFINES')}" for c in configs
                if (configs[c].get("VERILOG_DEFINES") or []) != CPUS[c][2]]
     row("cpu_config", not differ and not bad_def,
         "config.json and config_hazard3.json differ only in " + ", ".join(CPU_KEYS) + " (and comments)"
