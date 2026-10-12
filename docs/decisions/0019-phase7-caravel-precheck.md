@@ -30,18 +30,23 @@
    - 位址 `0x3000_0000` 的控制暫存器，bit 0 = `host_en`，**reset 值為 1**：`wb_rst_i` 之後 CPU 停住，等管理用 CPU 寫 0 才依 `boot_mode` 從 boot ROM 開機。理由：reset 值為 0 時，CPU 會在管理用 CPU 寫入之前先跑幾個 cycle（例如先寫 GPIO），和 repo 驗證時「載入期間 CPU 一直停住」的條件不同；代價是晶片上一定要管理用韌體放開 CPU。這是實作細節，不是使用者選的，使用者可以改回 0；
    - `0x3000_1000`–`0x3000_17FF` 對應 SRAM 的 512 個 word，只有 `host_en=1` 時讀寫 SRAM，否則寫入忽略、讀回 0；
    - 讀取在 `host_cs` 後兩個上升緣取 `host_rdata`（`rtl/bus/soc_bus.v`「A read sampled at T0 ... captured into rdata_q at T1」）才回 `wbs_ack_o`；寫入一個 cycle 回 ack。`wbs_sel_i` 接 `host_wmask`。
-10. **對外訊號接實體 GPIO，同一份也接到 logic analyzer**（使用者 2026-10-12：「接實體 GPIO＋一份接 LA (建議)」）。腳位規劃依 `run_oeb_check` 的接線要求（cf-precheck `6c401ed5`，第 843–900 行）：
+10. **對外訊號：`uart_tx`、`uart_rx`、`trap`、`boot_mode` 放左緣最下面的 GPIO 33–37；`gpio_out` 只走 logic analyzer；全部 SoC 腳位都鏡像到 logic analyzer**（使用者 2026-10-12：「5 支放 GPIO 33–37，gpio_out 只走 LA (建議)」）。
+    - 經過：第一次決定（使用者 2026-10-12：「接實體 GPIO＋一份接 LA (建議)」）時，我提出 GPIO 8–20，沒有先看腳位在範本上的位置；到 floorplan（決定 12）才發現 8–20 在右緣與上緣，離 block 2–3 mm。使用者指出流程順序錯了：「我以為block擺放位置應該在後段開始前就應該先確認之後出pin決定好」、「我在意的是流程問題」。Caravel 的 pad 與 wrapper 腳位位置是固定的（XOR 檢查），能選的只有用哪幾支 GPIO，所以先定 block 位置（決定 12），再依位置重選 GPIO。
+    - 範本上的位置（`pnr/user_project_wrapper/fixed_dont_change/user_project_wrapper.def`）：GPIO 0–14 右緣、15–23 上緣、24–37 左緣由上往下；37 在 y = 162 µm，往上每支約 200–260 µm。離左下角 block 最近的是 33–37（y 162–1075 µm）。
+    - 腳位規劃依 `run_oeb_check` 的接線要求（cf-precheck `6c401ed5`，第 843–900 行）：
 
-    | GPIO | 訊號 | 模式 | `io_out`／`io_oeb` |
-    |---|---|---|---|
-    | 8 | `uart_tx` | user output | `uart_tx`／0 |
-    | 9 | `uart_rx` | user input nopull | 0／1（這個模式也要求兩者有接） |
-    | 10–17 | `gpio_out[7:0]` | user output | `gpio_out[i]`／0 |
-    | 18 | `trap` | user output | `trap`／0 |
-    | 19–20 | `boot_mode[1:0]` | user input pulldown（沒接時為 0） | 0／0（這個模式規定兩者都要是 0） |
-    | 5–7、21–37 | 不用 | management input nopull（和 caravel-lite `verilog/rtl/user_defines.v` 第 50–52 行的預設相同；GPIO 5、6 是管理用 UART 的 `ser_rx`／`ser_tx`，`caravel.v` 第 92–93 行，由管理用韌體在開機後改設定） | 0／1（management 模式忽略，只有 warning） |
+    | GPIO | y（µm） | 訊號 | 模式 | `io_out`／`io_oeb` |
+    |---|---|---|---|---|
+    | 37 | 162 | `uart_tx` | user output | `uart_tx`／0 |
+    | 36 | 358 | `uart_rx` | user input nopull | 0／1（這個模式也要求兩者有接） |
+    | 35 | 553 | `trap` | user output | `trap`／0 |
+    | 33–34 | 1075、814 | `boot_mode[0]`、`boot_mode[1]` | user input pulldown（沒接時為 0） | 0／0（這個模式規定兩者都要是 0） |
+    | 5–32 | — | 不用 | management input nopull（和 caravel-lite `verilog/rtl/user_defines.v` 第 50–52 行的預設相同；GPIO 5、6 是管理用 UART 的 `ser_rx`／`ser_tx`，`caravel.v` 第 92–93 行，由管理用韌體在開機後改設定） | 0／1（management 模式忽略，只有 warning） |
 
-    `la_data_out[12:0]` = `{boot_mode, trap, gpio_out, uart_rx, uart_tx}` 的鏡像，`la_data_out[13]` = `host_en`，其餘 0；`user_irq` 接 0，`analog_io` 不接。
+    `la_data_out[12:0]` = `{boot_mode, trap, gpio_out, uart_rx, uart_tx}`，`la_data_out[13]` = `host_en`，其餘 0（LA 腳位在下緣，就在 Wishbone 旁）；`gpio_out` 從晶片外看不到，由管理用 CPU 讀 LA。`user_irq` 接 0，`analog_io` 不接。
+
+11. **wrapper 的 PDN strap 沿用 `soc_top` 的設定**（使用者 2026-10-12：「沿用 soc_top 的設定 (建議)」）：met4 1.6 µm、met5 4.8 µm（ADR-0017）、pitch 用 LibreLane 預設（約 153 µm）。core ring 照 Caravel 固定設定（寬 3.1 µm、offset 12.45 µm、spacing 1.7 µm，4 組電源 net），標準元件與 SRAM 接 `vccd1`／`vssd1`。供電從 core ring 進來，IR 的供電點模型改成 ring 上（取代 `soc_top` 一側供電的假設），步驟 5 實作。
+12. **SRAM 與 CPU 邏輯放在左下角，靠近 Wishbone 腳位**（使用者 2026-10-12：「左下角，靠近 Wishbone (建議)」）：Wishbone 與 LA 腳位在下緣 x = 0–870 µm，Wishbone 有時序要求，而且是 32 位元的匯流排。SRAM 固定在左下角附近，placement 密度維持 55%，讓邏輯聚在 SRAM 與 Wishbone 周圍。GPIO 依這個位置重選（決定 10）。
 
 ## 後果
 

@@ -17,8 +17,9 @@
 // (chipfoundry/caravel_user_project b510613c, verilog/rtl/user_project_wrapper.v); the body is
 // this project's (Phase 7, ADR-0019): soc_top (Hazard3, SOC_CPU_HAZARD3) placed flat in the
 // wrapper, clocked and reset by the Wishbone clock and reset (decision 8), its host write port
-// driven from Wishbone (decision 9, wb_host_bridge.v), its pins on GPIO 8-20 and mirrored on
-// the logic analyzer (decision 10). GPIO modes: rtl/caravel/user_defines.v.
+// driven from Wishbone (decision 9, wb_host_bridge.v), uart_tx/uart_rx/trap/boot_mode on GPIO 33-37
+// next to the block in the lower-left corner, gpio_out on the logic analyzer only, every SoC pin
+// mirrored on the logic analyzer (decision 10). GPIO modes: rtl/caravel/user_defines.v.
 // Bug injection (dv/bugs.toml W03-W05; negative tests of the Caravel build).
 `default_nettype none
 
@@ -75,12 +76,11 @@ module user_project_wrapper #(
     output [2:0] user_irq
 );
     // ------------------------------------------------------------------
-    // GPIO plan (ADR-0019 decision 10)
-    localparam GPIO_UART_TX = 8;
-    localparam GPIO_UART_RX = 9;
-    localparam GPIO_OUT0    = 10;   // gpio_out[7:0] on GPIO 10-17
-    localparam GPIO_TRAP    = 18;
-    localparam GPIO_BOOT0   = 19;   // boot_mode[1:0] on GPIO 19-20
+    // GPIO plan (ADR-0019 decision 10): the lowest pins of the left edge, next to the block
+    localparam GPIO_UART_TX = 37;
+    localparam GPIO_UART_RX = 36;
+    localparam GPIO_TRAP    = 35;
+    localparam GPIO_BOOT0   = 33;   // boot_mode[1:0] on GPIO 34-33
 
     wire        uart_tx;
     wire        trap;
@@ -148,14 +148,12 @@ module user_project_wrapper #(
     // (ignored by the pad; the OEB check only warns).
     localparam [`MPRJ_IO_PADS-1:0] USER_OUT =
         ({{(`MPRJ_IO_PADS-1){1'b0}}, 1'b1} << GPIO_UART_TX) |
-        ({{(`MPRJ_IO_PADS-8){1'b0}}, 8'hFF} << GPIO_OUT0) |
         ({{(`MPRJ_IO_PADS-1){1'b0}}, 1'b1} << GPIO_TRAP);
     localparam [`MPRJ_IO_PADS-1:0] PULLDOWN =
         {{(`MPRJ_IO_PADS-2){1'b0}}, 2'b11} << GPIO_BOOT0;
 
     wire [`MPRJ_IO_PADS-1:0] out_sig =
         ({{(`MPRJ_IO_PADS-1){1'b0}}, uart_tx} << GPIO_UART_TX) |
-        ({{(`MPRJ_IO_PADS-8){1'b0}}, gpio_out} << GPIO_OUT0) |
         ({{(`MPRJ_IO_PADS-1){1'b0}}, trap} << GPIO_TRAP);
 
     assign io_out   = out_sig;
@@ -174,9 +172,8 @@ module user_project_wrapper #(
     assign user_irq    = 3'b000;
 
     // Inputs this design does not use.
-    wire unused = &{1'b0, la_data_in, la_oenb, user_clock2,
-                    io_in[`MPRJ_IO_PADS-1:GPIO_BOOT0+2], io_in[GPIO_BOOT0-1:GPIO_UART_RX+1],
-                    io_in[GPIO_UART_RX-1:0], BITS[0]};
+    wire unused = &{1'b0, la_data_in, la_oenb, user_clock2, io_in[GPIO_UART_TX], io_in[GPIO_TRAP],
+                    io_in[GPIO_BOOT0-1:0], BITS[0]};
 endmodule
 
 `default_nettype wire

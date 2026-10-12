@@ -34,8 +34,9 @@
 //                 in the cycle of the first DONE strobe), mid_resets
 //
 // CARAVEL_WRAPPER (Phase 7, ADR-0019; dvlib CPU "caravel"): the DUT is the Caravel
-// user_project_wrapper with soc_top (Hazard3) inside. The SoC pins come from io_in/io_out
-// (GPIO 8-20), resetn drives wb_rst_i, the host port is reached over Wishbone through
+// user_project_wrapper with soc_top (Hazard3) inside. uart_tx/uart_rx/trap/boot_mode are on GPIO
+// 33-37 (io_in/io_out), gpio_out is read at the soc_top port (it reaches the chip only through the
+// logic analyzer, which caravel_pins checks against it), resetn drives wb_rst_i, the host port is reached over Wishbone through
 // wb_host_bridge (host_en = CTRL bit 0, reset value 1), and the caravel_pins checker compares
 // io_oeb, the unused io_out bits, la_data_out and user_irq with the wrapper's contract every cycle.
 //
@@ -84,10 +85,10 @@ module tb_soc;
 `define SOC_DUT dut.u_soc
     localparam [31:0] WB_CTRL = 32'h3000_0000;
     localparam [31:0] WB_SRAM = 32'h3000_1000;
-    // io_oeb contract (ADR-0019 decision 10): 0 on GPIO 8, 10-18 (user output) and 19-20 (user
+    // io_oeb contract (ADR-0019 decision 10): 0 on GPIO 37 and 35 (user output) and 33-34 (user
     // input pulldown), 1 elsewhere
-    localparam [37:0] EXP_OEB = ~((38'h1 << 8) | (38'hFF << 10) | (38'h1 << 18) | (38'h3 << 19));
-    localparam [37:0] USED_OUT = (38'h1 << 8) | (38'hFF << 10) | (38'h1 << 18);
+    localparam [37:0] EXP_OEB = ~((38'h1 << 37) | (38'h1 << 35) | (38'h3 << 33));
+    localparam [37:0] USED_OUT = (38'h1 << 37) | (38'h1 << 35);
     reg         wb_cyc = 1'b0;
     reg         wb_stb = 1'b0;
     reg         wb_we  = 1'b0;
@@ -96,7 +97,7 @@ module tb_soc;
     reg  [31:0] wb_wdat = 32'd0;
     wire        wb_ack;
     wire [31:0] wb_rdat;
-    wire [37:0] io_in = {17'd0, boot_mode, 9'd0, uart_rx, 9'd0};
+    wire [37:0] io_in = {1'b0, uart_rx, 1'b0, boot_mode, 33'd0};   // GPIO 36 uart_rx, 34-33 boot_mode
     wire [37:0] io_out;
     wire [37:0] io_oeb;
     wire [127:0] la_data_out;
@@ -131,9 +132,9 @@ module tb_soc;
         .user_clock2 (1'b0),
         .user_irq    (user_irq)
     );
-    assign uart_tx    = io_out[8];
-    assign gpio_out   = io_out[17:10];
-    assign trap       = io_out[18];
+    assign uart_tx    = io_out[37];
+    assign gpio_out   = `SOC_DUT.gpio_out;
+    assign trap       = io_out[35];
     assign host_rdata = `SOC_DUT.host_rdata;
     // The host port as soc_top sees it (driven by wb_host_bridge), for the monitors
     wire        m_host_en    = `SOC_DUT.host_en;

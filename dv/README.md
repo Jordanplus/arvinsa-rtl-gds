@@ -35,7 +35,7 @@ make regress-rtl-caravel            # Hazard3 SoC 放在 Caravel user_project_wr
 make neg-rtl-caravel                # 同一個 build：Hazard3 的植入錯誤加上 wrapper 的 W01–W06
 ```
 
-**Caravel 版（Phase 7，ADR-0019）**：`dvlib.CPUS["caravel"]` 是放在 `user_project_wrapper` 裡的 Hazard3 SoC，韌體、`tests.toml`／`bugs.toml` 的條目與 `[test.hazard3]` 的覆寫都沿用 hazard3（`base_cpu()`），`bugs.toml` 裡 `cpus = ["caravel"]` 的條目只在這個 build 跑。testbench 定義 `CARAVEL_WRAPPER`：SoC 的腳位走 `io_in`／`io_out`（GPIO 8–20），`resetn` 接 `wb_rst_i`，host port 改由 Wishbone 經 `wb_host_bridge` 讀寫（reset 後 `host_en` = 1，testbench 用 Wishbone 寫 0 放開 CPU），其他 checker 照舊看 `dut.u_soc` 裡面。checker `caravel_pins`：reset 放開後每個 cycle，`io_oeb` 等於 ADR-0019 決定 10 的固定值、沒用到的 `io_out` 為 0、`la_data_out` 等於 SoC 腳位與 `host_en` 的鏡像、`user_irq` 為 0。
+**Caravel 版（Phase 7，ADR-0019）**：`dvlib.CPUS["caravel"]` 是放在 `user_project_wrapper` 裡的 Hazard3 SoC，韌體、`tests.toml`／`bugs.toml` 的條目與 `[test.hazard3]` 的覆寫都沿用 hazard3（`base_cpu()`），`bugs.toml` 裡 `cpus = ["caravel"]` 的條目只在這個 build 跑。testbench 定義 `CARAVEL_WRAPPER`：`uart_tx`／`uart_rx`／`trap`／`boot_mode` 走 `io_in`／`io_out`（GPIO 33–37），`gpio_out` 只在 LA 上（testbench 從 `soc_top` 的腳位讀，再拿 LA 和它比），`resetn` 接 `wb_rst_i`，host port 改由 Wishbone 經 `wb_host_bridge` 讀寫（reset 後 `host_en` = 1，testbench 用 Wishbone 寫 0 放開 CPU），其他 checker 照舊看 `dut.u_soc` 裡面。checker `caravel_pins`：reset 放開後每個 cycle，`io_oeb` 等於 ADR-0019 決定 10 的固定值、沒用到的 `io_out` 為 0、`la_data_out` 等於 SoC 腳位與 `host_en` 的鏡像、`user_irq` 為 0。
 
 `run_sim.py` 另有 `--bug <id>`、`--out <dir>`、`--trace`、`--vcd`、`--timeout <秒>`；`regress.py` 另有 `-j N`（預設 CPU 數 − 2）、`--tests a,b`；`neg.py` 另有 `--only R01,R04`、`-j N`。
 
@@ -150,7 +150,7 @@ regression 判 FAIL。避免有人把測試條目改到「只要寫了 DONE 就 
 | C01 | firmware 變體 `reset_store__no_victim`：第一次開機不對 `rst_victim` 寫入，testbench 沒有機會 reset | `reset_store` | `coverage`（mid-run reset 0 次） | 保護 `reset_store` 測試本身 |
 | W01 | `BUG_W01`（Caravel 版）：bridge 早一個上升緣取讀出資料 | `boot_host_hello` | `sim_error`（host 讀回不符） | Wishbone 讀取的等待 cycle 數（ADR-0019 決定 9） |
 | W02 | `BUG_W02`：bridge 忽略 `wbs_sel_i` | `boot_host_hello` | `sim_error`（partial-wmask） | Wishbone byte select 接到 `host_wmask` |
-| W03 | `BUG_W03`：GPIO 19（`boot_mode` pulldown）的 `io_oeb` 為 1 | `hello` | `caravel_pins`（exclusive） | precheck 的 OEB 檢查要求 pulldown 的 oeb 為 0 |
+| W03 | `BUG_W03`：GPIO 33（`boot_mode` pulldown）的 `io_oeb` 為 1 | `hello` | `caravel_pins`（exclusive） | precheck 的 OEB 檢查要求 pulldown 的 oeb 為 0 |
 | W04 | `BUG_W04`：`la_data_out` 的 `uart_tx`／`uart_rx` 對調 | `hello` | `caravel_pins`（exclusive） | LA 鏡像 |
 | W05 | `BUG_W05`：`boot_mode` 兩支 GPIO 對調 | `bootrom_march` | `timeout`（mode 1 變成 UART 開機） | GPIO 對應 |
 | W06 | `BUG_W06`：bridge 的 `host_en` reset 值為 0 | `boot_host_hello` | `sim_error`（host 讀回不符） | reset 後 CPU 停住，直到管理用 CPU 放開 |
