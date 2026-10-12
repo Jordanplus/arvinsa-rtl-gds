@@ -2,8 +2,9 @@
 """Formal equivalence (EQY): synthesized netlist vs final netlist of one LibreLane run.
 
 usage: run_eqy.py --design <tag> [--run <dir>] [--netlist <path>] [--out <dir>] [-j N]
-  --design   picorv32_core | soc_top | soc_top_hazard3 (the run tag: default run directory runs/<design>;
-             soc_top_hazard3 is soc_top with Hazard3, make harden-soc CPU=hazard3)
+  --design   picorv32_core | soc_top | soc_top_hazard3 | user_project_wrapper (the run tag: default run
+             directory runs/<design>; soc_top_hazard3 is soc_top with Hazard3, make harden-soc CPU=hazard3;
+             user_project_wrapper is the Caravel wrapper with that SoC flattened into it, Phase 7)
   --run      LibreLane run directory
   --netlist  gate netlist to check instead of <run>/final/nl/<DESIGN_NAME>.nl.v (negative tests)
   --out      output directory (default runs/eqy_<design>)
@@ -62,7 +63,8 @@ import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 # Verdict line of <run>_signoff/result.txt for each run tag (signoff/scripts/run_guard.py).
-VERDICT = {"picorv32_core": "harden-core: PASS", "soc_top": "harden-soc: PASS", "soc_top_hazard3": "harden-soc: PASS"}
+VERDICT = {"picorv32_core": "harden-core: PASS", "soc_top": "harden-soc: PASS", "soc_top_hazard3": "harden-soc: PASS",
+           "user_project_wrapper": "harden-soc: PASS"}
 # sky130_fd_sc_hd sequential cells: flip-flops (df*, edf*, sdf*, sedf*), latches (dlx*, dlr*) and
 # clock gates (dlclkp, sdlclkp). Not the delay buffers dlygate*/dlymetal*/dlybuf*, which are
 # combinational.

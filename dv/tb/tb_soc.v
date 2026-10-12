@@ -215,9 +215,60 @@ module tb_soc;
     always @(posedge clk) cycle <= cycle + 32'd1;
 
 `ifdef GL_LOCKSTEP
+`ifdef CARAVEL_WRAPPER
+    // Gate-level copy of the wrapper (dv/gl_soc/README.md): the final netlist of
+    // user_project_wrapper (soc_top flattened into it, the SRAM is \u_soc.sram0), module renamed
+    // user_project_wrapper_gl, driven by the same inputs. gl_lockstep compares every wrapper output
+    // and the SRAM port 0 pins with the RTL DUT every cycle; all other checkers watch the RTL DUT.
+`define GL_SRAM(p) dut_gl.\u_soc.sram0 .p
+    wire [37:0]  gl_io_out;
+    wire [37:0]  gl_io_oeb;
+    wire [127:0] gl_la_data_out;
+    wire         gl_wb_ack;
+    wire [31:0]  gl_wb_rdat;
+    wire [2:0]   gl_user_irq;
+    wire [28:0]  gl_analog_io;
+
+    user_project_wrapper_gl dut_gl (
+`ifdef USE_POWER_PINS
+        .vdda1 (vdda1), .vdda2 (vdda2), .vssa1 (vssa1), .vssa2 (vssa2),
+        .vccd1 (vccd1), .vccd2 (vccd2), .vssd1 (vssd1), .vssd2 (vssd2),
+`endif
+        .wb_clk_i    (clk),
+        .wb_rst_i    (~resetn),
+        .wbs_stb_i   (wb_stb),
+        .wbs_cyc_i   (wb_cyc),
+        .wbs_we_i    (wb_we),
+        .wbs_sel_i   (wb_sel),
+        .wbs_dat_i   (wb_wdat),
+        .wbs_adr_i   (wb_adr),
+        .wbs_ack_o   (gl_wb_ack),
+        .wbs_dat_o   (gl_wb_rdat),
+        .la_data_in  (128'd0),
+        .la_data_out (gl_la_data_out),
+        .la_oenb     ({128{1'b1}}),
+        .io_in       (io_in),
+        .io_out      (gl_io_out),
+        .io_oeb      (gl_io_oeb),
+        .analog_io   (gl_analog_io),
+        .user_clock2 (1'b0),
+        .user_irq    (gl_user_irq)
+    );
+
+    gl_lockstep #(.OUT_W(240)) u_gl_lockstep (
+        .clk      (clk),
+        .enable   (1'b1),
+        .cycle    (cycle),
+        .rtl_out  ({io_out, io_oeb, la_data_out, wb_ack, wb_rdat, user_irq}),
+        .gl_out   ({gl_io_out, gl_io_oeb, gl_la_data_out, gl_wb_ack, gl_wb_rdat, gl_user_irq}),
+        .rtl_sram ({`SOC_DUT.sram0.csb0, `SOC_DUT.sram0.web0, `SOC_DUT.sram0.wmask0, `SOC_DUT.sram0.addr0, `SOC_DUT.sram0.din0}),
+        .gl_sram  ({`GL_SRAM(csb0), `GL_SRAM(web0), `GL_SRAM(wmask0), `GL_SRAM(addr0), `GL_SRAM(din0)})
+    );
+`else
     // Gate-level copy of the DUT (dv/gl_soc/README.md): the final netlist, module renamed
     // soc_top_gl, driven by the same inputs. gl_lockstep compares its outputs and SRAM port 0
     // pins with the RTL DUT every cycle; all other checkers keep watching the RTL DUT.
+`define GL_SRAM(p) dut_gl.sram0.p
     wire        gl_uart_tx;
     wire [7:0]  gl_gpio_out;
     wire        gl_trap;
@@ -252,8 +303,9 @@ module tb_soc;
         .rtl_out  ({uart_tx, gpio_out, trap, host_rdata}),
         .gl_out   ({gl_uart_tx, gl_gpio_out, gl_trap, gl_host_rdata}),
         .rtl_sram ({`SOC_DUT.sram0.csb0, `SOC_DUT.sram0.web0, `SOC_DUT.sram0.wmask0, `SOC_DUT.sram0.addr0, `SOC_DUT.sram0.din0}),
-        .gl_sram  ({dut_gl.sram0.csb0, dut_gl.sram0.web0, dut_gl.sram0.wmask0, dut_gl.sram0.addr0, dut_gl.sram0.din0})
+        .gl_sram  ({`GL_SRAM(csb0), `GL_SRAM(web0), `GL_SRAM(wmask0), `GL_SRAM(addr0), `GL_SRAM(din0)})
     );
+`endif
 `endif
 
     string     fw_file;
@@ -858,9 +910,9 @@ module tb_soc;
                 $readmemh(fw_file, `SOC_DUT.sram0.mem);
 `ifdef GL_LOCKSTEP
             if (fw_words > 0)
-                $readmemh(fw_file, dut_gl.sram0.mem, 0, fw_words - 1);
+                $readmemh(fw_file, `GL_SRAM(mem), 0, fw_words - 1);
             else
-                $readmemh(fw_file, dut_gl.sram0.mem);
+                $readmemh(fw_file, `GL_SRAM(mem));
 `endif
         end else if (load == "host") begin
             if (fw_file == "" || fw_words < 1)

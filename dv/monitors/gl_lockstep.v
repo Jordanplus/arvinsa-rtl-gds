@@ -4,7 +4,8 @@
 // with the same inputs. At every falling clock edge, after both copies have settled (the RTL
 // updates at the rising edge, the sky130 flop models 1 ns later with UNIT_DELAY=#1), this
 // checker compares:
-//   - every soc_top output: uart_tx, gpio_out, trap, host_rdata
+//   - every output of the DUT (OUT_W bits): soc_top uart_tx, gpio_out, trap, host_rdata (42); the
+//     Caravel wrapper (CARAVEL_WRAPPER) io_out, io_oeb, la_data_out, wbs_ack_o, wbs_dat_o, user_irq (240)
 //   - SRAM port 0 pins: csb0 always; web0, addr0, wmask0 when csb0=0 (access);
 //     din0 bytes whose wmask0 bit is 1 when csb0=0 and web0=0 (write)
 // Port 1 of the SRAM is tied off in both copies and is not compared.
@@ -21,14 +22,16 @@
 `default_nettype none
 
 module gl_lockstep #(
-    parameter integer MAX_MSG = 10
+    parameter integer MAX_MSG = 10,
+    parameter integer OUT_W   = 42
 ) (
     input wire        clk,
     input wire        enable,       // 1 from the start of reset to the end of the run
     input wire [31:0] cycle,
-    // outputs: {uart_tx, gpio_out[7:0], trap, host_rdata[31:0]}
-    input wire [41:0] rtl_out,
-    input wire [41:0] gl_out,
+    // outputs: soc_top {uart_tx, gpio_out[7:0], trap, host_rdata[31:0]}; wrapper (OUT_W 240)
+    // {io_out[37:0], io_oeb[37:0], la_data_out[127:0], wbs_ack_o, wbs_dat_o[31:0], user_irq[2:0]}
+    input wire [OUT_W-1:0] rtl_out,
+    input wire [OUT_W-1:0] gl_out,
     // SRAM port 0: {csb0, web0, wmask0[3:0], addr0[8:0], din0[31:0]}
     input wire [46:0] rtl_sram,
     input wire [46:0] gl_sram
@@ -61,11 +64,23 @@ module gl_lockstep #(
     wire [31:0] din_care = {{8{r_wmask0[3] === 1'b1}}, {8{r_wmask0[2] === 1'b1}},
                             {8{r_wmask0[1] === 1'b1}}, {8{r_wmask0[0] === 1'b1}}};
 
+    integer i, nbad, first;
     always @(negedge clk) begin
         if (enable) begin
             compare_count = compare_count + 1;
-            if (!match_known({22'd0, rtl_out}, {22'd0, gl_out}, {64{1'b1}}))
-                report("outputs {uart_tx,gpio_out,trap,host_rdata}", {22'd0, rtl_out}, {22'd0, gl_out});
+            nbad = 0;
+            first = -1;
+            for (i = 0; i < OUT_W; i = i + 1)
+                if ((rtl_out[i] === 1'b0 || rtl_out[i] === 1'b1) && gl_out[i] !== rtl_out[i]) begin
+                    nbad = nbad + 1;
+                    if (first < 0) first = i;
+                end
+            if (nbad > 0) begin
+                fail_count = fail_count + 1;
+                if (fail_count <= MAX_MSG)
+                    $display("[CHK:gl_lockstep] FAIL cycle %0d: outputs: %0d bit(s) differ, first bit %0d of %0d RTL=%b GL=%b",
+                             cycle, nbad, first, OUT_W, rtl_out[first], gl_out[first]);
+            end
             if (!match_known({63'd0, r_csb0}, {63'd0, gl_sram[46]}, 64'd1))
                 report("sram0.csb0", {63'd0, r_csb0}, {63'd0, gl_sram[46]});
             if (r_csb0 === 1'b0) begin

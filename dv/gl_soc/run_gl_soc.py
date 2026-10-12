@@ -33,8 +33,10 @@ usage: run_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--netlist <p
                 from that CPU's file list and defines, the firmware from its build directory
                 (dv/scripts/dvlib.py CPUS), and only the tests whose cpus include it run, with its
                 [test.<cpu>] overrides
-  --harden-run  LibreLane run of `make harden-soc` (default runs/soc_top; CPU=hazard3: runs/soc_top_hazard3)
-  --netlist     netlist to simulate instead of <harden-run>/final/nl/soc_top.nl.v (negative tests)
+  --harden-run  LibreLane run of `make harden-soc` (default runs/soc_top; CPU=hazard3: runs/soc_top_hazard3;
+                caravel: runs/user_project_wrapper, the wrapper with soc_top flattened into it, Phase 7)
+  --netlist     netlist to simulate instead of <harden-run>/final/nl/<top>.nl.v (negative tests; top
+                soc_top, or user_project_wrapper for caravel)
   --out         output directory (default runs/gl_soc, with --powered runs/gl_soc_powered; another
                 CPU adds _<cpu>: runs/gl_soc_hazard3, runs/gl_soc_powered_hazard3)
   --tests       comma-separated subset of tests (default: all positive tests of the CPU)
@@ -73,12 +75,17 @@ def gl_timeout(max_cycles):
     return int(120 + max_cycles / GL_CYCLES_PER_S)
 
 
-def rename_top(text):
-    """Netlist text with `module soc_top (` renamed to soc_top_gl; must occur exactly once."""
-    pat = re.compile(r"^module soc_top\s*\(", re.M)
+# Top module of the netlist per CPU build: the Caravel build (Phase 7, ADR-0019) hardens the wrapper
+# with soc_top flattened into it (make harden D=user_project_wrapper, run tag user_project_wrapper).
+TOPS = {"caravel": "user_project_wrapper"}
+
+
+def rename_top(text, top="soc_top"):
+    """Netlist text with `module <top> (` renamed to <top>_gl; must occur exactly once."""
+    pat = re.compile(r"^module " + re.escape(top) + r"\s*\(", re.M)
     if len(pat.findall(text)) != 1:
-        raise ValueError("expected exactly one `module soc_top (` in the netlist")
-    return pat.sub("module soc_top_gl (", text)
+        raise ValueError(f"expected exactly one `module {top} (` in the netlist")
+    return pat.sub(f"module {top}_gl (", text)
 
 
 def main():
@@ -93,9 +100,10 @@ def main():
     args = ap.parse_args()
     cpu = dvlib.CPUS[args.cpu]
     suffix = "" if args.cpu == "picorv32" else f"_{args.cpu}"
-    harden_run = Path(args.harden_run or ROOT / "runs" / f"soc_top{suffix}").resolve()
+    top = TOPS.get(args.cpu, "soc_top")
+    harden_run = Path(args.harden_run or ROOT / "runs" / (top if top != "soc_top" else f"soc_top{suffix}")).resolve()
     label = "gl-soc-powered" if args.powered else "gl-soc"
-    default_nl = harden_run / "final" / ("pnl/soc_top.pnl.v" if args.powered else "nl/soc_top.nl.v")
+    default_nl = harden_run / "final" / (f"pnl/{top}.pnl.v" if args.powered else f"nl/{top}.nl.v")
     netlist = Path(args.netlist).resolve() if args.netlist else default_nl
     out = Path(args.out or ROOT / "runs" / (("gl_soc_powered" if args.powered else "gl_soc") + suffix)).resolve()
     flags = GL_FLAGS + (["-DUSE_POWER_PINS"] if args.powered else [])
@@ -129,9 +137,9 @@ def main():
         names = want
 
     out.mkdir(parents=True)
-    gl_v = out / "soc_top_gl.v"
+    gl_v = out / f"{top}_gl.v"
     try:
-        gl_v.write_text(rename_top(netlist.read_text()))
+        gl_v.write_text(rename_top(netlist.read_text(), top))
     except ValueError as e:
         return fail(str(e))
 

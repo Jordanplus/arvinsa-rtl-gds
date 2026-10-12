@@ -15,6 +15,8 @@
 - soc_top 的所有輸出：`uart_tx`、`gpio_out`、`trap`、`host_rdata`
 - SRAM port 0 的輸入腳：`csb0` 每個 cycle 都比；`web0`、`addr0`、`wmask0` 在 `csb0=0`（有存取）時比；`din0` 在寫入時比 `wmask0` 為 1 的 byte
 
+**Caravel wrapper（`--cpu caravel`，`make gl-caravel`，Phase 7）**：`dut` 是 RTL `user_project_wrapper`，`dut_gl` 是 wrapper harden（`runs/user_project_wrapper`）的最終網表，module 改名為 `user_project_wrapper_gl`；兩份的輸入相同。比對的輸出改成 wrapper 的 240 個輸出 bit `{io_out, io_oeb, la_data_out, wbs_ack_o, wbs_dat_o, user_irq}`（`gl_lockstep` 的參數 `OUT_W`，soc_top 是 42），SRAM 的比對不變（網表裡的 instance 是 `\u_soc.sram0 `，`tb_soc.v` 用 `GL_SRAM` 巨集切換）。不一致時報第一個不同的 bit 編號與總數。試跑（探索 run `p7_harden2`，暫時跳過 run guard）：hello 2377 個 cycle 全部一致；把推動 `io_out[37]`（UART TX）的 `buf_12` 換成 `inv_12`，第 1 個 cycle 就報 bit 239 不同。正式的 negative test 等 `neg_gl_soc.py` 支援 wrapper（Phase 7 步驟 8）。
+
 **X 的規則**：只比 RTL 是 0 或 1 的 bit，這時網表必須完全相同（網表是 X 或 Z 也算不同）。RTL 是 X 的 bit（例如沒有 reset、還沒被寫過的暫存器）不比，因為合成可以合法地替它選一個值。
 
 Phase 1 的其他 checker（測試結束協定、trap、timeout、UART、bus assertion、X checker、SRAM port、IRQ、coverage……）照常看 RTL 那一份。所以：

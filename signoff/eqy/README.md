@@ -89,9 +89,16 @@ Phase 5 的 Hazard3 版（`make neg-eqy-soc CPU=hazard3`，`--design soc_top_haz
 
 結論：改到 reset 連接的錯誤，這兩種都由 EQY 的分區拒絕抓到，判 FAIL，不會漏過。但沒有任何案例能證明「證明本身」抓得到 reset 錯誤。`reset_b_tied1` 要求的原因是常數對應（`neg_eqy.py` 的 `REQUIRE`），別的機制碰巧 FAIL 不算。
 
+## Caravel wrapper（`--design user_project_wrapper`，`make eqy-caravel`，Phase 7）
+
+Hazard3 SoC 扁平放進 Caravel `user_project_wrapper`，證明的範圍與判定都相同（合成網表對最終網表，SRAM 是 blackbox）。試跑（探索 run `p7_harden2`，暫時跳過 run guard）：16149 個分區全部證明等價，88707 個名稱配對，2238 個循序元件功能相同，2240 個 clock pin 都接到 `wb_clk_i`，`-j 4` 約 435 秒。
+
+植入錯誤：把推動 `io_out[37]`（UART TX）的 `buf_12` 換成 `inv_12`，分區步驟拒絕（`conflicting matches for gold bit \_21341_.dff0.Q: \_21341_.dff0.Q vs \wire11756.Y`），判 FAIL；和 soc_top 的 `host_rdata7_inverted` 同一種機制。正式的 negative test 等 `neg_eqy.py` 支援 wrapper（Phase 7 步驟 8）。
+
 ## 執行時間（Apple Silicon，10 核）
 
 | 對象 | 分區數 | 時間 |
 |---|---|---|
 | picorv32_core（Phase 2 網表） | 15137 | 約 6.5 分鐘（`-j 8`） |
 | soc_top（Phase 3 網表，正式 run 2） | 18100 | 約 5 分鐘（297 秒，`-j 10`） |
+| user_project_wrapper（Phase 7 探索 run `p7_harden2`） | 16149 | 約 7 分鐘（435 秒，`-j 4`，同時有 harden 在跑） |
