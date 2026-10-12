@@ -1,0 +1,8 @@
+# Pad met5 straps of manual_power_connections that land on the net's own caravel_core ring (caravel_core DEF
+# units, 1000/um): net ring_x strap_y_lo strap_y_hi strap_x_end. The supply point of the IR model is at the pad
+# end of each strap. vccd1: user1_vccd_lvclamp_pad; vssd1: user1_vssd_lvclamp_pad (both on the right side).
+# The middle strap of each pad lands on the other net's ring (the clamp's other terminal), not a supply input.
+vccd1 3137680 4327795 4351745 3171230
+vccd1 3137680 4378050 4402000 3171230
+vssd1 3131680 2088795 2112745 3171230
+vssd1 3131680 2139050 2163000 3171230

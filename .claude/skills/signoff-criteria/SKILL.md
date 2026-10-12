@@ -123,7 +123,7 @@ IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據�
 3. **.lib 沒有的電流另外加，而且依 PVT 分開**：macro 特性化沒有包含的電流（本 repo：SRAM port 1 浮接電流，ff 100°C 5.34 mW、ss 0.03–0.15 mW，`power.json` 的 `static_max_mw`），加在該 macro 的位置、用對應 PVT 的值。
 4. **切換率是假設，要寫出來**：沒有 VCD／SAIF 時 OpenSTA 用預設切換率（vectorless），沒有驗證過；報告寫明。要放寬時用 firmware 模擬的切換活動（`read_vcd`、`read_saif`），並附 activity 標註率。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（Phase 7 約 4 mW）不會因此變小。
 5. **手算交叉檢查**：等效電阻 R = 壓降 ÷ 電流，和幾何估算比量級（片電阻 × 方塊數，例如 5 µm 寬 met4 每 mm 約 9.4 Ω；sky130 met4 0.047、met5 0.0285 Ω／sq）。對不上時，先查電流與電阻的來源（功耗拆解、`LAYERS_RC`、供電點），不要先改設計。Phase 7：7.6 mA、35.8 mV → 4.7 Ω，與 Caravel ring（約 26 Ω）並聯 wrapper grid 的量級相符。
-6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV，同一個版圖、同一個最壞組合）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本完全相同。
+6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV，同一個版圖、同一個最壞組合）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本相同（DEF 轉 ODB 的來回本身會差約 0.01%，容許值要比它大、比可能的錯誤小，本 repo 用 0.1%）。
 7. **決定與上限寫進 ADR**：哪個 corner 判、上限多少、對應的使用限制（例如 pad 端最低電壓），以及被否決的判法與它們的數字。
 
 ### 實體與 PDK 規則

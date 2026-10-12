@@ -77,7 +77,7 @@
 
 18. **IR：照 Caravel 實際的供電網路量；block 不移，met4 strap 1.6 → 4.8 µm，含 Caravel 網路的壓降寫成對板子的供電要求**（使用者 2026-10-13：先選「移動 block」，看過各位置的實測後改選「不移 block＋met4 4.8＋供電要求 (建議)」）：
     - 查證（agent 讀原始碼，我抽查原文）：ChipFoundry 現用的 Caravel（`chipfoundry/caravel_user_project` `b510613c` 的 `MPW_TAG ?= CC2509` → `chipfoundry/caravel` `a0b50ad1`；所引檔案與 `efabless/caravel` `27cbe49c` 相同）。wrapper 的 vccd1／vssd1 ring 只從左右兩側接到 Caravel：`lef/manual_power_connections.lef` 的 met3 跨接線左 54、右 53 條（間距約 65 µm），上下兩邊沒有接點；`caravel_core` 的 PDN 刻意不跨過 wrapper（`openlane/caravel_core/interactive.tcl` 第 26–33 行）。vccd1、vssd1 各只有一顆 pad，都在晶片右側：`def/chip_io.def` 第 17057–17058 行 `user1_vccd_lvclamp_pad` (3390.035, 4538)、第 16653–16654 行 `user1_vssd_lvclamp_pad` (3390.035, 2299)，換到 wrapper 座標約 y = 3290、1051。電流經 Caravel 自己 5 µm 寬的 met4 ring 與跨接線才到 wrapper。官方沒有 user area 的 IR 預算或說明（efabless/caravel issue #416 討論過舊版只從四角接）。
-    - 量法：把 `caravel_core.def` 中 vccd1／vssd1 在 wrapper 外的 met4／met5 形狀與 via、跨接線、pad 的 met5 strap 平移到 wrapper 座標，加進 IR 用的 DEF 複本，供電點放在兩顆 pad 的 strap 上；PDN 的 what-if 用 `pdn-ir-drop` 規則 13 的方法（現行設定重產的 SPECIALNETS 與原版圖逐行相同，IR 與手建的模型相同）。對照組：同一份 ODB、供電點放回 wrapper ring，結果與原本完全相同（5.17 mV）。
+    - 量法：把 `caravel_core.def` 中 vccd1／vssd1 在 wrapper 外的 met4／met5 形狀與 via、跨接線、pad 的 met5 strap 平移到 wrapper 座標，加進 IR 用的 DEF 複本，供電點放在兩顆 pad 的 strap 上；PDN 的 what-if 用 `pdn-ir-drop` 規則 13 的方法（現行設定重產的 SPECIALNETS 與原版圖逐行相同，IR 與手建的模型相同）。對照組：同一份 ODB、供電點放回 wrapper ring，結果與原本相同（5.17 mV；完整位數差 0.01–0.02%，是 DEF 轉 ODB 的來回造成的）。
     - 結果（`p7_harden2` 版圖，最壞組合 = ff 電流＋SRAM port 1 浮接電流＋ss 金屬電阻，上限 20 mV）：
       | 情況 | 最壞組合 |
       |---|---|

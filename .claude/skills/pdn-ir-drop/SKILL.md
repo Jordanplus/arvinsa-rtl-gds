@@ -39,7 +39,7 @@ description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、
     - 它也檢查判定的 corner 真的套用了：log 讀的是該 PVT 的 .lib 與 SRAM 的複本、沒有 tt，供電點是 1.60 V。negative test 是 `neg_pnr.py` P61、P62、P77（缺 ss 100°C 的浮接電流）、P78（上限在兩個慢 corner 之間，要判大的那個）。
     - **設計換了，就要重新驗證「判哪個 corner」的依據**。依據是在別的設計上量的，不能沿用（`signoff-criteria`）。兩個慢 corner 都跑、取大的，就不必判斷哪個電流大（Phase 6：自產 SRAM 讓 100°C 的電流變大）。
     - **macro 的電流若有不在 .lib 裡的部分**（例如 SRAM 未用 port 的浮接電流），IR 檢查要另外加上，加在該 macro 的位置、用對應 PVT 的值：Phase 6 PicoRV32 在 ff 100°C 加上 5.3 mW 後，最大壓降從邏輯區移到 SRAM 上（6.41 → 13.49 mV）；ss 只有 0.03–0.15 mW。
-    - **供電點要從真實的 pad 起算**（Phase 7）：Caravel 的 vccd1／vssd1 各只有一顆 pad（右側），經 5 µm met4 ring 與 wrapper ring 左右兩側的 met3 跨接線才到 wrapper；只把 wrapper ring 當供電點會低估 5 倍以上（8.4 → 45 mV，慢 corner、met4 4.8 µm）。做法：把外殼網路的形狀加進 IR 用的 DEF 複本、供電點放在 pad，並做對照組（同一份 ODB、供電點放回原處，結果要與原本相同）。
+    - **供電點要從真實的 pad 起算**（Phase 7）：Caravel 的 vccd1／vssd1 各只有一顆 pad（右側），經 5 µm met4 ring 與 wrapper ring 左右兩側的 met3 跨接線才到 wrapper；只把 wrapper ring 當供電點會低估 5 倍以上（8.4 → 45 mV，慢 corner、met4 4.8 µm）。做法：把外殼網路的形狀加進 IR 用的 DEF 複本、供電點放在 pad，並做對照組（同一份 ODB、供電點放回原處，結果要與原本相同，容許 DEF 轉 ODB 來回約 0.01% 的差，本 repo 用 0.1%）。
 13. **改 PDN 前先做 what-if，不必每個候選都完整 harden**（Phase 5，方法已驗證）：
     - 取完成版圖在 IR 步驟的輸入 ODB，刪掉電源 net 的 special wiring 與電源 pin 的形狀。
     - 用 LibreLane 自己的 `pdn_cfg.tcl` 加 `pdngen` 依候選值重新產生：用 `OpenROAD.GeneratePDN` 單步重跑，只換 Tcl script。
