@@ -1,6 +1,6 @@
 ---
 name: timing-constraints-sdc
-description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path／multicycle、derate、max transition／fanout），區分 PnR 與 signoff 的約束、讓兩份 SDC 共用同一組約束，或檢查 STA 有沒有未受約束的路徑（unconstrained endpoints）時使用；含 OpenSTA 容易用錯的指令（`unset_*_delay`、指定邊緣的 uncertainty）。數值怎麼定看 signoff-criteria。Use for writing/reviewing SDC constraints, PnR vs signoff SDC, and unconstrained-path checks (OpenSTA/LibreLane).
+description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path／multicycle、derate、max transition／fanout），區分 PnR 與 signoff 的約束、讓兩份 SDC 共用同一組約束，或檢查 STA 有沒有未受約束的路徑（unconstrained endpoints）時使用；含 OpenSTA 容易用錯的指令（`unset_*_delay`、指定邊緣的 uncertainty、設了 driving cell 的腳位 `set_input_transition` 不生效，報表腳位 slew 仍是 0.01–0.02 ns），以及放進外殼（Caravel wrapper）時用外殼抽出的邊界約束（clock source latency、IO delay、input transition、負載）。數值怎麼定看 signoff-criteria。Use for writing/reviewing SDC constraints, PnR vs signoff SDC, and unconstrained-path checks (OpenSTA/LibreLane).
 ---
 
 # 時序約束（SDC）
@@ -31,13 +31,21 @@ description: 撰寫或修改 SDC（時序約束：clock、IO delay、false path�
 12. **`write_sdc` 會保留指定邊緣的 uncertainty**（`-fall_from ... -rise_to ... -setup`，實測），所以 PnR 後段讀的是寫回的 SDC 時仍有效。
 13. **複製 SDC 做植入時要先把 `source` 展開**：`[info script]` 會變成複本所在的目錄，找不到被 source 的檔（`neg_pnr.py` 的 `flat_sdc()`）。改 clock 波形時編輯原本的 `create_clock` 那一行，不要在檔尾再定義一次同名 clock。
 
+14. **設了 driving cell 的腳位，`set_input_transition` 不會生效**（OpenSTA 的行為；工具意外行為的防護，CLAUDE.md 規則 10）：
+    - **症狀**：SDC 裡寫了 `set_input_transition -max 0.84`，`report_checks -fields {slew}` 在 `(in)` 那一行仍是 driving cell 推出來的 0.01–0.02 ns；sta.log 沒有任何警告。
+    - **怎麼發現**：對每類輸入腳位 `report_checks -from [get_ports <p>] -path_delay max|min -fields {slew}`，看 `(in)` 那一行的 slew 是不是 SDC 的值。只看 SDC 有沒有被讀到不夠（規則 3、經驗紀錄 2026-10-08）。
+    - **原因（實驗確認）**：同一份網表上，沒有 driving cell 時 slew = 設定值；先設 transition 再設 driving cell、或先 driving cell 再設 transition，都是 driving cell 的值；`set_drive 0` 不會清掉 driving cell。LibreLane 的 `base.sdc` 對時脈以外的所有輸入都設 `SYNTH_DRIVING_CELL`，所以 source `base.sdc` 之後再寫 `set_input_transition` 一律無效。
+    - **怎麼繞過**：source `base.sdc` 時暫時把 `set_driving_cell` 換成空的 proc（`rename`），其餘約束照用；需要 driving cell 的腳位自己再設（`pnr/user_project_wrapper/caravel_base.sdc`）。不改 LibreLane 的 `base.sdc`。
+    - **防復發**：還沒有自動防護。Phase 7 第 5 項移植 STA 檢查時，加一列比對每類輸入腳位在 STA 報表的 slew 與 SDC 設定值；在那之前，改 SDC 後照上面「怎麼發現」手動查。OpenSTA 或 LibreLane 升版時重做一次對照實驗。
+15. **放進外殼（Caravel wrapper）時，邊界約束用外殼抽出的數值**：clock source latency（外殼的 clock tree 到 wrapper 腳位）、clock 腳位 transition、每組介面腳位的 input／output delay 與 input transition、輸出負載（Caravel：caravel_user_project 的 `openlane/user_project_wrapper/signoff.sdc`，get_cup_sdc.py 產生）。只取數值，例外路徑（multicycle）要確認自己的電路在第一個 cycle 不取樣才能用；本 repo 不用（ADR-0019 決定 14）。外殼沒給數值、但會接到電路的腳位（Caravel 的 GPIO），保留 `base.sdc` 的 delay，不要留成未受約束；不接的腳位（`analog_io`）在未受約束的檢查裡列為例外。
+
 ## negative test
 
 P01／P02／P03（在 run 實際用的 signoff SDC 後面追加 uncertainty 或 max transition；直接改 config 變數會被後讀的 SDC 蓋掉）；P13（signoff SDC 展開後刪掉 `set_output_delay` 那一行 → check_setup 在每個 corner 報 42 個未受約束的輸出 → `check_soc.py` 的 `sta_setup` 是唯一 FAIL 的列；不用 unset 的原因見規則 6）；P22／P23（clock 波形 {0 10}、週期 29 ns → `pulse_width` FAIL）；P24／P25（duty cycle 60%、duty 預算改 60% → setup FAIL，最差路徑從 sram0 下降緣送出）。
 
 ## 待補
 
-例外路徑（`set_false_path`、`set_multicycle_path`）的使用準則；非同步 reset 的處理；Phase 7 Caravel／Wishbone 介面的 IO 約束（clock 來自 Caravel 的 `wb_clk_i`／`user_clock2`；jitter 與 duty cycle 確定後替換 `clock_uncertainty.sdc` 開頭的假設值）。clock uncertainty、derate、IR／SI margin 這些數字怎麼決定，放在 `signoff-criteria`。
+例外路徑（`set_false_path`、`set_multicycle_path`）的使用準則；非同步 reset 的處理；Caravel 的 PLL jitter 與實際 duty cycle 有量測資料後，替換 `clock_uncertainty.sdc` 開頭的假設值（ADR-0019 決定 15 先維持假設）。clock uncertainty、derate、IR／SI margin 這些數字怎麼決定，放在 `signoff-criteria`。
 
 ## 用完後 / 經驗紀錄
 
@@ -49,3 +57,5 @@ P01／P02／P03（在 run 實際用的 signoff SDC 後面追加 uncertainty 或 
 | 2026-10-03 | soc_top 討論 clock 來源 | 最差 setup 路徑是 SRAM 下降緣 → 上升緣的半週期路徑（min_ss 剩 3.55 ns），0.25 ns uncertainty 不含 duty cycle | 已驗證（`max.rpt` 起點 `clock clk (fall edge)` 20 ns） | 規則 7；數字待 Phase 7 確定 clock 來源後再算 | `runs/soc_top/56-openroad-stapostpnr/min_ss_100C_1v60/max.rpt` |
 | 2026-10-03 | signoff 條件調查（核對 agent 實驗） | inter-clock uncertainty 取代一般值（設 1.0 → slack 少 0.75）；`-clock_path` 在 propagated clock 下 0 筆違規 | 已驗證（`sta` binary 單步實驗） | 規則 9、10 | `docs/notes/signoff_criteria_soc_top.md` |
 | 2026-10-08 | Phase 5 exit 的獨立審查 | SDC 有沒有生效，要看 STA 報表的結果，不能看 SDC 有沒有被讀：`clock_uncertainty.sdc` 印出的那一行，不能證明後面沒有別的 `set_clock_uncertainty` 蓋掉它；setup／hold 的 0.25 又剛好等於 LibreLane 預設的 `CLOCK_UNCERTAINTY_CONSTRAINT` | 已驗證（刪掉報表的 uncertainty 後，舊檢查仍 PASS） | 由 `review_criteria.py uncertainty_applied` 逐條路徑核對（`multicorner-sta` 經驗紀錄）；半週期路徑的 uncertainty 在報表裡寫成 `inter-clock uncertainty` | `signoff/scripts/review_criteria.py` |
+| 2026-10-12 | `p7_floorplan4` 網表＋OpenSTA 單獨實驗 | wrapper SDC 加了官方 Caravel 的 `set_input_transition`（`wbs_dat_i` 0.84 ns），報表 `wbs_dat_i[3] (in)` 的 slew 仍是 0.019 ns，log 沒有警告 | 已驗證（對照實驗：無 driving cell 0.840；transition 後設 driving cell 0.008；driving cell 後再設 transition 0.008；`set_drive 0` 不清除） | 規則 14：`caravel_base.sdc` 暫時停用 `set_driving_cell`；修正後每類輸入腳位 slew 都等於官方值，PnR 與 signoff 報表相同 | ADR-0019 決定 14；`pnr/user_project_wrapper/caravel_base.sdc` |
+| 2026-10-12 | 同上 | 單獨跑 `sta` 時 `base.sdc` 印 `Setting input delay to: 8`（週期 44 × 20%） | 已驗證：我在腳本裡把 `CLOCK_PERIOD` 設成整數 `44`，Tcl 整數除法；LibreLane 傳浮點數，`soc_top` 的 signoff log 是 8.8 | 自己跑 STA 實驗時，環境變數的數值寫成浮點數（`44.0`） | `arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/57-openroad-stapostpnr/*/sta.log` |

@@ -53,6 +53,14 @@
     - checker：`make pin-plan`（`scripts/check_pin_plan.py`），比對 RTL 的腳位常數、`user_defines.v`、LibreLane config 的 macro 位置與範本 DEF 是否照規劃；`make harden D=<design>` 先跑它，`make regress` 也跑；植入錯誤 `make neg-pin-plan`。
     - hook：`.claude/hooks/require_pin_plan.py`（PreToolUse），規劃沒核准時，擋下對它管轄的檔案（config 只擋擺放與腳位設定）的 Edit／Write；沒有規劃的新設計也不能改 config 的擺放設定。用 Bash 改檔看不到，靠 checker 在 harden 與 regress 擋。Codex 沒有 hook，靠 checker。
     - `soc_top`、`picorv32_core` 是規則之前的設計，列為 legacy，不需要規劃。
+14. **wrapper 邊界的時序約束用官方 Caravel 的數值，不用 multicycle**（使用者 2026-10-12：先問「照官方的有multicycle是不是我們的頻率應該可以再上去」，看過分析後選「官方數值，不用 multicycle (建議)」）：
+    - 數值來源：caravel_user_project（`b510613`）`openlane/user_project_wrapper/signoff.sdc`，get_cup_sdc.py 在 2023-06-20 從 Caravel 的 STA 抽出。採用其中的 clock source latency（max 5.57、min 4.65 ns）、clock 腳位 transition 0.61 ns、`wb_rst_i` input delay 半週期、Wishbone 與 LA 的 input／output delay 與 input transition、`io_in` 的 input transition、輸出負載 0.19 pF。實作在 `pnr/user_project_wrapper/caravel_io.sdc`，PnR 與 signoff 的 SDC 都 source 它。
+    - 不採用：`wbs_ack_o`／`wbs_cyc_i`／`wbs_stb_i` 的 2-cycle multicycle（host bridge 在第一個 cycle 取樣，所有路徑都要單一 cycle 收斂）；官方的 uncertainty、derate（用 `clock_uncertainty.sdc` 與 `base.sdc`）；`IO_SYNC = 0` 讓 GPIO 不受約束的做法（`io_in`／`io_out`／`io_oeb` 維持 `base.sdc` 的 20% delay，不留下未受約束的路徑）。
+    - multicycle 不會提高頻率：限制頻率的是 SoC 內部 SRAM 下降緣讀出到上升緣接收的半週期路徑（`arvinsa-rtl-gds-p6final_h3` 的 signoff，44 ns，`min_ss_n40C_1v60` slack 0.66 ns，四個慢 corner 最差都是這條），multicycle 只放寬三支 Wishbone 腳位的邊界路徑。
+    - 實作上的發現：OpenSTA 對設了 driving cell 的腳位會忽略 `set_input_transition`，不管順序（`base.sdc` 對所有輸入設 `inv_2`）。`caravel_base.sdc` 在 source `base.sdc` 時暫時停用 `set_driving_cell`，只有 `wb_rst_i`（官方沒有數值）保留 `inv_2`。驗證：`p7_floorplan4` 網表上，每類輸入腳位的 slew 都等於官方數值（例如 `wbs_dat_i` 0.84／0.07 ns、`wb_clk_i` 0.61 ns），PnR 與 signoff 兩份 SDC 的報表相同；`check_setup` 只報 29 個 `analog_io`（不接，決定 10）。查證過程在 skill `timing-constraints-sdc` 的經驗紀錄。
+15. **clock 的 jitter 與 duty cycle 維持 `clock_uncertainty.sdc` 的假設（jitter 0.15 ns、duty 45/55%），記成下線風險**（使用者 2026-10-12：「維持假設，記成下線風險 (建議)」）：
+    - 依據：`wb_clk_i` 是管理用 CPU 的核心時脈。Caravel `verilog/rtl/caravel_clocking.v`（chipfoundry／efabless `main`，兩者相同）第 93–94 行：開機時用外部時脈 `ext_clk`（duty 由板子上的振盪器決定），firmware 啟用 PLL 後用 `clock_div` 除頻（`clock_div.v` 第 83、106 行，設計成 50% duty；除數 0 時直通 PLL）。45/55% 涵蓋常見振盪器規格；PLL 的 jitter 沒有找到數字。
+    - 下線風險與使用限制：PLL jitter 未知；44 ns 的週期代表管理端的核心時脈不能超過 22.7 MHz（Caravel 文件寫核心時脈上限「TBD，約 50 MHz」），測試 firmware 與板子要照這個設定，寫進 Phase 7 exit review 的已知限制。有 Caravel 的量測資料時再更新假設。
     - `user_project_wrapper` 的規劃（`pnr/user_project_wrapper/pin_plan.toml`：SRAM 在 (350.98, 413.44) µm，GPIO 37／36／35／34／33 = `uart_tx`／`uart_rx`／`trap`／`boot_mode[1]`／`boot_mode[0]`，`gpio_out` 只走 LA）經使用者核准：使用者 2026-10-12 看過規劃表與 floorplan 圖 `runs/layout_png/p7_floorplan4_modules.png`（run `p7_floorplan4`，跑到 global placement）後回覆「可以」。
 
 ## 後果

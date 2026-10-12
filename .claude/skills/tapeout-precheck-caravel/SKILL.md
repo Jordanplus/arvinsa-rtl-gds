@@ -1,6 +1,6 @@
 ---
 name: tapeout-precheck-caravel
-description: 把設計放進 ChipFoundry Caravel 的 user_project_wrapper（2920 × 3520 µm，固定 DEF 範本 `FP_DEF_TEMPLATE`），或要跑 ChipFoundry 收件前的自動檢查（precheck、`cf precheck`、`cf-precheck`、`mpw_precheck`）時使用：precheck 一定用 Docker 跑只有 linux/amd64 的官方 image（Apple Silicon 要用 colima＋Rosetta 模擬），容器每次都 `pip install --upgrade cf-precheck`；precheck 自帶的 KLayout deck 比 flow 用的新，flow 的 KLayout DRC 是 0 不代表 precheck 的 `klayout_feol`／`klayout_beol` 會過；pad 與 wrapper 腳位固定，先定 block 位置再挑最近的 GPIO（0–14 右緣、15–23 上緣、24–37 左緣，Wishbone 在下緣左段）；OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10`（mcon should covered by li）與 `MR_licon.SP.6`，因為 2026-05 拿掉了 `areaid.ce` 的豁免；LVS 是 transistor-level，SRAM 要用 `EXTRACT_ABSTRACT` 當 black box；`gpio_defines` 範本全是 `GPIO_MODE_INVALID`、`oeb` 檢查實體接線；XOR 要求 die 外那圈與官方空 wrapper 相同；`lvs_config.json` 路徑要以 `$PDK_ROOT`／`$UPRJ_ROOT` 開頭。Use for ChipFoundry Caravel user_project_wrapper integration and cf-precheck (docker amd64 image, KLayout deck newer than the flow's, OpenRAM bitcell MR_mcon.CON.10, LVS black box, GPIO/OEB checks).
+description: 把設計放進 ChipFoundry Caravel 的 user_project_wrapper（2920 × 3520 µm，固定 DEF 範本 `FP_DEF_TEMPLATE`），或要跑 ChipFoundry 收件前的自動檢查（precheck、`cf precheck`、`cf-precheck`、`mpw_precheck`）時使用：precheck 一定用 Docker 跑只有 linux/amd64 的官方 image（Apple Silicon 要用 colima＋Rosetta 模擬），容器每次都 `pip install --upgrade cf-precheck`；precheck 自帶的 KLayout deck 比 flow 用的新，flow 的 KLayout DRC 是 0 不代表 precheck 的 `klayout_feol`／`klayout_beol` 會過；pad 與 wrapper 腳位固定，先定 block 位置再挑最近的 GPIO（0–14 右緣、15–23 上緣、24–37 左緣，Wishbone 在下緣左段）；OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10`（mcon should covered by li）與 `MR_licon.SP.6`，因為 2026-05 拿掉了 `areaid.ce` 的豁免；LVS 是 transistor-level，SRAM 要用 `EXTRACT_ABSTRACT` 當 black box；`gpio_defines` 範本全是 `GPIO_MODE_INVALID`、`oeb` 檢查實體接線；XOR 要求 die 外那圈與官方空 wrapper 相同；`lvs_config.json` 路徑要以 `$PDK_ROOT`／`$UPRJ_ROOT` 開頭；`wb_clk_i` 是管理用 CPU 的核心時脈（外部時脈或 PLL 除頻），設計的週期就是管理端時脈的下限，邊界約束用官方 wrapper SDC 的數值。Use for ChipFoundry Caravel user_project_wrapper integration and cf-precheck (docker amd64 image, KLayout deck newer than the flow's, OpenRAM bitcell MR_mcon.CON.10, LVS black box, GPIO/OEB checks).
 ---
 
 # Caravel 整合與 ChipFoundry precheck
@@ -33,6 +33,10 @@ macro 本身的整合（view QA、LEF、`FOREIGN`）看 `hard-macro-integration`
    - 再依範本 DEF 的座標挑最近的 GPIO：0–14 在右緣（0–4 系統保留），15–23 在上緣，24–37 在左緣由上往下，37 在 y = 162 µm；
    - 最後才寫 wrapper RTL 的腳位對應與 `user_defines.v`。
    - 規劃文件、使用者核准、checker 與 hook 的做法在 `chip-floorplan-pin-planning`（ADR-0019 決定 13）。
+6. **`wb_clk_i` 是管理用 CPU 的核心時脈**：Caravel `verilog/rtl/caravel_clocking.v` 第 93–94 行，開機時是外部時脈 `ext_clk`（duty 由板子的振盪器決定），firmware 啟用 PLL 後是 `clock_div` 除頻的輸出（設計成 50% duty；除數 0 時直通 PLL）。所以：
+   - 設計用 `wb_clk_i` 時，設計的週期就是管理端時脈的下限，要寫成使用限制（測試 firmware、板子）。本 repo：44 ns，管理端不能超過 22.7 MHz（ADR-0019 決定 15）。
+   - duty cycle 與 jitter 沒有官方數字，`clock_uncertainty.sdc` 的假設要記成下線風險。
+   - wrapper 邊界的約束（clock source latency、Wishbone／LA delay、transition、負載）用 caravel_user_project 的 wrapper SDC 數值，做法與 OpenSTA 的 driving cell 陷阱看 `timing-constraints-sdc` 規則 14、15。
    - Phase 7 先在 RTL 選了 GPIO 8–20，到 floorplan 才發現離 block 2–3 mm，RTL、`user_defines.v`、testbench 與文件都要重做（ADR-0019 決定 10）。
 
 ## 待確認（讀過原始碼，還沒實跑）
@@ -57,3 +61,4 @@ macro 本身的整合（view QA、LEF、`FOREIGN`）看 `hard-macro-integration`
 |---|---|---|---|---|---|
 | 2026-10-12 | arvinsa-rtl-gds Phase 7 開始（查證） | precheck 的 deck 檢查 SRAM：自產 macro 與 PDK 預建 macro 都是 FEOL 3（`MR_licon.SP.6`）、BEOL 264（`MR_mcon.CON.10`）、offgrid 0；flow 的舊 deck 兩顆都是 0 | 已驗證：比對兩份 deck 與 cf-precheck commit `08f559e30a` 的 diff | ADR-0019 決定 5：這兩條比對預建 macro；向 ChipFoundry 反映的草稿由使用者決定是否送出 | `docs/notes/caravel_precheck_phase7.md` 第 7 節 |
 | 2026-10-12 | arvinsa-rtl-gds Phase 7 步驟 3–4 | 寫 wrapper RTL 時先選 GPIO 8–20（沒看位置），到 floorplan 才發現在右緣與上緣，離左下角的 block 2–3 mm；我原本用「慢速訊號加 buffer 就好」帶過 | 已驗證（範本 DEF 座標）；流程順序錯誤，使用者指出 | 改成 GPIO 33–37（左緣最下面）、`gpio_out` 只走 LA；RTL、`user_defines.v`、testbench 重做，regress-rtl caravel 30/30、neg 42/42；寫成規則 5 | ADR-0019 決定 10、12 |
+| 2026-10-12 | `p7_floorplan4`（扁平 wrapper，跑到 global placement） | `OpenROAD.GeneratePDN` 報 `[WARNING PDN-0239] Ring shape falls outside the die bounds.` | 已驗證：Caravel 的 core ring（4 組電源 × 2，寬 3.1 µm、offset 12.45 µm）本來就畫到 die 外，最外到 x = -43.63 µm；8 組 net 的 ring 座標與官方範例 `user_project_wrapper.def` 完全相同，官方範例的 precheck XOR 是 PASS | 預期中的警告，不處理；之後 harden 的 checker 可以比對 ring 與官方 DEF 一致（第 5、6 項） | ADR-0019；`runs/p7_floorplan4/21-openroad-generatepdn/` |

@@ -170,7 +170,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | harden 跑完（PASS 或 FAIL）、要回報結果前；自己訂的 signoff criteria 有沒有生效、還合不合理；Stop hook 說要寫 `criteria_review.md` | signoff-criteria（每次 harden 後的檢查；knowledge 檔依製程分類） | drv-timing-closure（修法）、multicorner-sta（corner） |
 | 要決定週期，或從 slack 推最小週期 | multicorner-sta | signoff-criteria |
 | 要定 clock uncertainty、derate、corner、IR 上限、max transition 這類數值 | signoff-criteria | timing-constraints-sdc（寫進 SDC）、pdn-ir-drop（IR） |
-| 寫或改 SDC；STA 報 unconstrained endpoint | timing-constraints-sdc | — |
+| 寫或改 SDC；STA 報 unconstrained endpoint；`set_input_transition` 寫了但報表的腳位 slew 沒變；放進 Caravel wrapper 的邊界約束 | timing-constraints-sdc | tapeout-precheck-caravel（Caravel 的 clock 來源） |
 | 增減 PVT corner、每個 corner 要多做事（hook）、corner 變多後 PnR 變慢 | multicorner-sta | drv-timing-closure |
 | 決定 die 尺寸與使用率、macro 位置、IO pin、placement 密度；繞線壅塞或繞遠路 | floorplan-congestion | hard-macro-integration |
 | 開新的頂層設計、決定用哪幾支 pad／GPIO、搬動 block 或 macro，要先規劃並經使用者核准；hook 擋下編輯（「這份 pad／block／pin 規劃還沒經使用者核准」）、`make pin-plan` FAIL（`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`）；harden 前出 floorplan 圖確認 | chip-floorplan-pin-planning | tapeout-precheck-caravel（Caravel 的固定腳位）、floorplan-congestion（die 內的密度與壅塞） |
@@ -428,7 +428,9 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 改完約束，用同一份版圖只重跑 STA，確認只改了想改的。
   - 用 `unset_*_delay` 拿掉約束時，STA 的完整性檢查看不出來；要模擬「漏寫」，就產生一份真的少一行的 SDC。
   - 半週期路徑（一個 clock edge 送出、相反 edge 接收）要算 duty cycle。PnR 與 signoff 共用的約束放在同一個檔。
-- **本 repo 實例**：`pnr/soc_top/pnr.sdc`、`signoff.sdc`、`clock_uncertainty.sdc`。negative test：P01–P03、P13、P22–P25。
+  - OpenSTA 對設了 driving cell 的腳位會忽略 `set_input_transition`，而 `base.sdc` 對所有輸入都設了 driving cell；要用 input transition，source `base.sdc` 時先暫時停用 `set_driving_cell`，改完看報表腳位的 slew 確認。
+  - 放進外殼（Caravel wrapper）時，邊界約束用外殼抽出的數值（source latency、IO delay、transition、負載）；例外路徑要確認自己的電路適用才用。
+- **本 repo 實例**：`pnr/soc_top/pnr.sdc`、`signoff.sdc`、`clock_uncertainty.sdc`；wrapper 的 `pnr/user_project_wrapper/caravel_base.sdc`、`caravel_io.sdc`（ADR-0019 決定 14）。negative test：P01–P03、P13、P22–P25。
 
 #### signoff-criteria：signoff 條件的推導與每次 harden 後的檢查
 
@@ -541,6 +543,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - precheck 自帶的 KLayout deck 比 flow 用的新：flow 的 KLayout DRC 是 0，precheck 不一定過。每顆 macro 先用 precheck 的 deck 單獨跑一次。
   - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019）。
   - LVS 是電晶體層級，SRAM 用 `EXTRACT_ABSTRACT` 當 black box。
+  - `wb_clk_i` 是管理用 CPU 的核心時脈（外部時脈或 PLL 除頻）：設計的週期就是管理端時脈的下限；wrapper 邊界的時序約束用官方 wrapper SDC 的數值（見 timing-constraints-sdc）。
   - pad 與 wrapper 腳位位置都是固定的，能選的只有用哪幾支 GPIO：先依 Wishbone（下緣左段）定 block 位置，再挑最近的 GPIO，最後才寫 wrapper RTL（Phase 7 順序做反了，重做一次）。規劃與核准的做法看 chip-floorplan-pin-planning。
   - 還沒實跑確認的：XOR 要求 die 外那圈和官方空 wrapper 相同（用固定的 DEF 範本）、GPIO 設定與 `io_oeb` 的實體接線檢查、`lvs_config.json` 的路徑寫法。
 - **不在這裡**：macro 本身的 view QA 看 hard-macro-integration；DRC、LVS 的一般做法看 drc-signoff、lvs-signoff。
