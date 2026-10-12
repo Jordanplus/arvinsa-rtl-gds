@@ -109,6 +109,7 @@
       - harden 之後（VCD 要來自最終網表，接在 gl 模擬之後）：錄各段的 VCD，含 Caravel 網路的 IR 讀 VCD，在兩個慢 corner 判，取各段與各 corner 的最大值 ≤ 20 mV（`[max_sum] ir_caravel_vdd_drop_plus_gnd_rise`）。也檢查 VCD 全部標註、每段長度、整支 maxpower 的 gate-level 模擬與 RTL 逐週期一致；預設切換率的結果只列為參考。
       - harden 內的 `ir_worst.py`（供電點在 wrapper ring、預設切換率、慢 corner、20 mV）保留，當作早期檢查。
       - 對板子的供電要求回到原本的假設：pad 端最低 1.62 V（決定 18 的 ≥ 1.65 V 取消）。
+    - 固定切換率的比較（wrapper 網表、nom_tt）：pattern 5.88 mW；每個 net 10%／20%／50% 為 6.66／8.62／14.50 mW；OpenSTA 預設 13.70 mW。使用者 2026-10-13 問「一般都是用50% switching activities 做評估對吧」，看過比較後：「那我們還是採用pattern 評估做法」。soc_top（Hazard3）也改用同一支 maxpower firmware 的 pattern 判 IR（firmware 在 soc_top 的 RTL 已 PASS；錄波模組要改成也讀 soc_top 的 `gpio_out`），Phase 7 步驟 8 整合。
     - 已知限制：pattern 沒有包含 Wishbone 主機端的存取；零延遲的 gate-level 模擬不含 glitch 造成的切換；「最耗電」是三種 pattern 取最大，不是證明。
 
 ## 後果

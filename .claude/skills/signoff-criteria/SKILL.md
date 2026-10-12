@@ -113,7 +113,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 
 ### IR 用多大的電流：先量測，再決定（使用者 2026-10-13：「這個建立量測以決定max power的方法也要加到signoff的skill」）
 
-**power signoff 一律用 pattern 的切換活動**（使用者 2026-10-13：「所以之後我們的signoff skill 會要求用patrern 做power signoff」）：IR、EM、功耗預算這些和電流有關的 signoff，判定值都要來自 CPU max power pattern 在最終網表的 gate-level 模擬（下面第 4 項）。OpenSTA 的預設切換率（vectorless）只能當參考或 harden 內的早期檢查，不能當 signoff 依據。沒有 pattern 的設計（本 repo：Phase 7 之前的 legacy `soc_top`），要在報告與 exit review 寫明「功耗與 IR 用 vectorless，未經 pattern 驗證」，新設計不能沿用這個例外。
+**power signoff 一律用 pattern 的切換活動**（使用者 2026-10-13：「所以之後我們的signoff skill 會要求用patrern 做power signoff」）：IR、EM、功耗預算這些和電流有關的 signoff，判定值都要來自 CPU max power pattern 在最終網表的 gate-level 模擬（下面第 4 項）。OpenSTA 的預設切換率（vectorless）只能當參考或 harden 內的早期檢查，不能當 signoff 依據。沒有 pattern 時不要退回固定切換率了事：先寫一支（同一顆 CPU 的 firmware 通常可以共用；本 repo 的 `fw/tests/maxpower` 在 soc_top 與 wrapper 的 RTL 都 PASS），使用者 2026-10-13 看過固定切換率與 pattern 的比較後決定「那我們還是採用pattern 評估做法」。還沒改完的設計（本 repo：soc_top 排在 Phase 7 步驟 8），報告與 exit review 要寫明「功耗與 IR 用 vectorless，未經 pattern 驗證」。
 
 IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據，不能沿用一個方便的假設。Phase 7 的教訓：最壞組合（ff 電流＋ss 電阻）、預設切換率、SRAM 浮接電流、把外殼的電源 pin 當理想電源，四個假設各自都說得通，疊起來就讓同一個版圖從 0.3 mV 變成 104 mV，而且判的是一個 ff corner 根本用不到的預算（ADR-0019 決定 18、19）。
 
