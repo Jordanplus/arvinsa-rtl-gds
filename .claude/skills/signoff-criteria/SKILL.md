@@ -127,7 +127,7 @@ IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據�
    - pattern：寫一支讓 CPU 滿負載的 firmware，做幾種不同的滿負載迴圈（本 repo `fw/tests/maxpower`：ALU＋SRAM 讀寫且資料每次全翻轉、再加乘法器、只有暫存器運算），各段用 GPIO 標記，取最大的。三種都差不多時，表示最耗電的空間窄（本 repo 從 SRAM 取指令，每道指令約 3 個週期），差很多時要再找更耗電的。
    - 活動：在**最終網表**的 gate-level 模擬錄每一段（RTL 的名稱在扁平化網表裡對不上），時脈用 signoff 的週期，只錄那一段（`gate-level-simulation` 規則 9）；網表在這支 firmware 下要與 RTL 逐週期一致。
    - 計算：IR 步驟讀 VCD（`read_vcd`，本 repo `irdrop_vcd.tcl`），要標到全部的 pin（`report_activity_annotation` 的 unannotated 是 0），在規則 1 的慢 corner 判，取各段與各 corner 的最大值。
-   - 預設切換率（vectorless）只列為參考：Phase 7 它是 max power pattern 的約 2.2 倍（ss 100°C：11.4 對 5.1 mW），用它判會讓預算看起來做不到。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（約 2 mW）兩者相同。
+   - 預設切換率（vectorless）只列為參考：Phase 7 它是 max power pattern 的約 2.2 倍（ss 100°C：11.4 對 5.1 mW），用它判會讓預算看起來做不到。沒有 pattern 時常用的固定切換率，Phase 7 wrapper（nom_tt）實測：pattern 5.88 mW；每個 net 10%／20%／50%（`set_power_activity -global`）6.66／8.62／14.50 mW；OpenSTA 預設（輸入 0.1 往下推算）13.70 mW，已接近 50% 的水準。50% 是刻意悲觀的上限，不是業界統一的數字；用固定切換率時要寫明定義（每週期翻轉的機率）與套用範圍（全部 net，或只有輸入）。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（約 2 mW）兩者相同。
    - 已知限制要寫出來：零延遲模擬不含 glitch 的切換；pattern 沒涵蓋的活動（本 repo：Wishbone 主機端的存取）；「最耗電」是幾種 pattern 取最大，不是證明。
 5. **手算交叉檢查**：等效電阻 R = 壓降 ÷ 電流，和幾何估算比量級（片電阻 × 方塊數，例如 5 µm 寬 met4 每 mm 約 9.4 Ω；sky130 met4 0.047、met5 0.0285 Ω／sq）。對不上時，先查電流與電阻的來源（功耗拆解、`LAYERS_RC`、供電點），不要先改設計。Phase 7：7.6 mA、35.8 mV → 4.7 Ω，與 Caravel ring（約 26 Ω）並聯 wrapper grid 的量級相符。
 6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV，同一個版圖、同一個最壞組合）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本相同（DEF 轉 ODB 的來回本身會差約 0.01%，容許值要比它大、比可能的錯誤小，本 repo 用 0.1%）。

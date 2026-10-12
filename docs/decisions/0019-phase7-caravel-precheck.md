@@ -103,7 +103,7 @@
 20. **IR 的電流用 CPU max power pattern 的實際切換活動，含 Caravel 網路在慢 corner 判 20 mV；決定 18 的供電要求取消**（使用者 2026-10-13：「一般IR都會用CPU max power pattern去做不是嗎」→ 先量一次；看過結果後「這才是正確的評估IR 的方式，請一樣更新到我們的對應skill與流程」；上限選「回到 20 mV，時脈改 44 ns 再錄 (建議)」）：
     - 依據：IR 的電流原本用 OpenSTA 的預設切換率（vectorless），沒有驗證過。業界做 static IR 用讓 CPU 滿負載的測試程式（max power pattern），從 gate-level 模擬取得實際的切換活動（VCD），再算功耗與 IR。
     - pattern：`fw/tests/maxpower`，三段滿負載迴圈各約 5000 個週期，用 GPIO 標記（0x5A：ALU＋每幾個週期一次 SRAM 讀寫、資料每次 32 位元全翻轉；0x5B：再加乘法器；0x5C：只有暫存器運算，每個週期取一道 32 位元指令）。這顆 SoC 從 SRAM 取指令，每道指令約 3 個週期，三段的功耗只差不到 3%，最耗電的空間本來就窄。
-    - 實測（`p7_harden2` 網表、met4 4.8 µm 的 what-if 版圖、含 Caravel 網路、`max_ss_100C`；VCD 是 testbench 的 40 ns 時脈，比 44 ns 保守約 10%）：預設切換率 11.4 mW、45.2 mV（對照組，重現決定 19 的數字）；0x5A 5.11 mW、19.74 mV；0x5B 4.99 mW、19.39 mV；0x5C 5.13 mW、19.88 mV。VCD 標到全部 73058 個 pin。預設切換率高估約 2.2 倍。
+    - 實測（`p7_harden2` 網表、met4 4.8 µm 的 what-if 版圖、含 Caravel 網路、`max_ss_100C`；VCD 是 testbench 的 40 ns 時脈；後來用 44 ns 重錄，nom_tt 功耗只差約 2%（5.99 → 5.87 mW），不是原本以為的 10%）：預設切換率 11.4 mW、45.2 mV（對照組，重現決定 19 的數字）；0x5A 5.11 mW、19.74 mV；0x5B 4.99 mW、19.39 mV；0x5C 5.13 mW、19.88 mV。VCD 標到全部 73058 個 pin。預設切換率高估約 2.2 倍。
     - 做法：
       - VCD 用與 signoff 約束相同的 44 ns 時脈錄（testbench 的 `TB_CLK_HALF_NS`），每一段只錄 `dut_gl`、只錄那一段。
       - harden 之後（VCD 要來自最終網表，接在 gl 模擬之後）：錄各段的 VCD，含 Caravel 網路的 IR 讀 VCD，在兩個慢 corner 判，取各段與各 corner 的最大值 ≤ 20 mV（`[max_sum] ir_caravel_vdd_drop_plus_gnd_rise`）。也檢查 VCD 全部標註、每段長度、整支 maxpower 的 gate-level 模擬與 RTL 逐週期一致；預設切換率的結果只列為參考。
