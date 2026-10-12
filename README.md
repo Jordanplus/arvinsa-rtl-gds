@@ -139,7 +139,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 ## Claude Code skills（流程經驗庫）
 
-`.claude/skills/` 放了 21 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
+`.claude/skills/` 放了 22 個 Claude Code skill，每個對應 RTL-to-GDS 流程中的一類任務。skill 是一份工作說明（`SKILL.md`），內容是已驗證的規則、已知陷阱、植入錯誤的案例（negative test），以及每次使用後追加的經驗紀錄。
 
 **Claude 怎麼挑 skill**：每次對話開始時，Claude 只看得到每個 skill 開頭的 `description`，也就是一段「什麼情況用」的說明。判斷和手上的任務相關，才讀整份 `SKILL.md`。所以 `description` 要寫出會遇到的情況與錯誤訊息。這一節是給人看的索引：先用「依情況找 skill」查，再看每個 skill 的說明。
 
@@ -187,6 +187,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同（連 cell 數、diode 數都變）；checker 只證明設定被讀到、靠名稱辨識結構、抓到的機制和宣稱的不同 | signoff-checker-qualification（漏洞類型表；規則 7：斷言抓到的機制、守門條件本身要有測試） | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
 | 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對、PnR 設定與上限檔要不要重做 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面）、drv-timing-closure（時序收斂） |
+| 把設計放進 Caravel 的 `user_project_wrapper`；跑 ChipFoundry precheck（`cf precheck`）；precheck 的 `klayout_beol` 在 SRAM 裡報 `MR_mcon.CON.10`、`klayout_feol` 報 `MR_licon.SP.6`；Apple Silicon 上沒有 amd64 的 Docker | tapeout-precheck-caravel | drc-signoff（DRC 判讀）、lvs-signoff（SRAM black box）、hard-macro-integration、floorplan-congestion |
 | 一個 Phase 收尾 | phase-exit-review | — |
 
 ### 在流程中的位置
@@ -220,6 +221,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | [dv-directed-tests](.claude/skills/dv-directed-tests/SKILL.md) | 從漏掉的植入錯誤找缺口，寫 directed 測試補上並證明有效 | 通用；例子是 RISC-V firmware |
 | [phase-exit-review](.claude/skills/phase-exit-review/SKILL.md) | Phase 收尾：證據、限制、獨立審查、使用者決定、skill 回寫 | 通用 |
 | [core-migration-hazard3](.claude/skills/core-migration-hazard3/SKILL.md) | 把 CPU 從 PicoRV32 換成 Hazard3（AHB5）：介面、參數、中斷與 reset、驗證資產 | Hazard3 細節；換 core 的檢查方法通用 |
+| [tapeout-precheck-caravel](.claude/skills/tapeout-precheck-caravel/SKILL.md) | 放進 Caravel `user_project_wrapper`、跑 ChipFoundry precheck，precheck 與 flow 的工具和 deck 差異 | ChipFoundry Caravel、sky130 |
 
 ### 各 skill 說明
 
@@ -528,10 +530,23 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **不在這裡**：SoC 驗證的一般寫法看 dv-directed-tests、gate-level-simulation；SRAM 整合看 hard-macro-integration。
 - **本 repo 實例**：ADR-0011～0014、`rtl/cpu/`、`dv/core_hazard3/`（`make core-hazard3`）、`signoff/limits/soc_top_hazard3.toml`、`signoff/golden/soc_top_hazard3/`、`docs/phase_exit/phase5.md`（Phase 5）。
 
+#### tapeout-precheck-caravel：Caravel 整合與 ChipFoundry precheck
+
+- **名詞**：Caravel 是 ChipFoundry 的載具晶片，pad、電源、管理用 RISC-V 都做好了，使用者的設計放在 `user_project_wrapper`（2920 × 3520 µm）；precheck 是 ChipFoundry 收件前的自動檢查（`cf precheck`）。
+- **何時用**：把設計放進 Caravel；跑或判讀 precheck；precheck 和 flow 的結果不一致。
+- **重點**：
+  - precheck 一定用 Docker 跑官方 image，只有 linux/amd64，Apple Silicon 要用 colima＋Rosetta 模擬；容器每次會升級 `cf-precheck`，每次要記下版本。只有官方 image 的結果算判定。
+  - precheck 自帶的 KLayout deck 比 flow 用的新：flow 的 KLayout DRC 是 0，precheck 不一定過。每顆 macro 先用 precheck 的 deck 單獨跑一次。
+  - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019）。
+  - LVS 是電晶體層級，SRAM 用 `EXTRACT_ABSTRACT` 當 black box。
+  - 還沒實跑確認的：XOR 要求 die 外那圈和官方空 wrapper 相同（用固定的 DEF 範本）、GPIO 設定與 `io_oeb` 的實體接線檢查、`lvs_config.json` 的路徑寫法。
+- **不在這裡**：macro 本身的 view QA 看 hard-macro-integration；DRC、LVS 的一般做法看 drc-signoff、lvs-signoff。
+- **本 repo 實例**：ADR-0019、`docs/notes/caravel_precheck_phase7.md`（Phase 7）。
+
 ### skill 的由來
 
 - 最初 11 個依使用者要求，對應重大流程任務（CTS、LVS、DRC、IR、timing、EQY……）。
-- `floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的。同一次審查建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7），會在進入那個 Phase 時建立；`openram-macro-characterization` 已在 Phase 3.5 開始時（2026-10-04）建立。
+- `floorplan-congestion`、`timing-constraints-sdc`、`rtl-synthesis-lint` 是 2026-10-03 請 Gemini 3.8 Flash（Antigravity CLI）審查「還漏了哪些任務」後補上的。同一次審查建議的 `openram-macro-characterization`（Phase 3.5／6）、`core-migration-hazard3`（Phase 5）、`tapeout-precheck-caravel`（Phase 7），會在進入那個 Phase 時建立（`tapeout-precheck-caravel` 在 2026-10-12 Phase 7 開始時建立）；`openram-macro-characterization` 已在 Phase 3.5 開始時（2026-10-04）建立。
 - `signoff-criteria` 是 2026-10-03 討論「clock 沒有 PLL，那 clock 從哪來」時，發現 signoff 條件多半沿用預設值、沒有推導，依使用者要求新增。
 - 最後 4 個是 Phase 4（2026-10-04）依使用者要求，分析 Phase 4 的重大任務後新增的：一鍵 regression 與來源追溯、多 corner STA、directed 測試補缺口、Phase exit review。Phase 4 的其他任務（checker 漏洞、L5 模擬、IR、EQY、DRC 位置比對、signoff 條件、CTS 與 resizer 餘量）寫回既有的 skill。
 
