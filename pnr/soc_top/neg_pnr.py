@@ -197,10 +197,10 @@ step re-run one step on a copy of that step's saved config and input state
        swapped                                        was a count and a weighted sum of box corners: H6)
   P76  final GDS with a box of the SRAM bank cell       check_soc.py macro_gds (only row FAIL; same bounding
        replaced by a notched polygon                  box, other vertices: H6)
-  P77  ir_worst.py with a power.json without the ff     ir_worst.py (no port 1 floating current for that PVT;
-       100C static_max_mw                             ADR-0018 decision 19)
+  P77  ir_worst.py with a power.json without the ss     ir_worst.py (no port 1 floating current for that PVT;
+       100C static_max_mw                             ADR-0018 decision 19; judged corner, ADR-0019 d. 19)
   P78  ir_worst.py with the limit between the drops of   ir_worst.py drop (the worst of the two corners is
-       its two ff corners                             judged, named in the FAIL row)
+       its two judged slow corners                    judged, named in the FAIL row)
   P80  checks.rpt of max_ss_n40C_1v60 with one max   check_soc.py max_slew (only row FAIL, names
        slew violator, sram0/clk0 at 0.80 ns            sram0/clk0: no boundary exception in soc_top;
                                                      ADR-0019 decision 16)
@@ -1236,17 +1236,18 @@ def ir_worst_run(run, d, *extra):
 
 def p77(run, d):
     doc = json.load(open(os.path.join(SRAM_IP, "char", "power.json")))
-    del doc["pvts"]["ff_100C_1v95"]["static_max_mw"]
+    del doc["pvts"]["ss_100C_1v60"]["static_max_mw"]
     pj = os.path.join(d, "power.json")
     json.dump(doc, open(pj, "w"))
     rc, out = ir_worst_run(run, d, LIMITS, "--power", pj)
-    return (rc != 0 and "no port 1 floating current for ff_100C_1v95" in out and out.rstrip().endswith("ir-worst: FAIL"),
-            "ir_worst.py: no port 1 floating current for ff_100C")
+    return (rc != 0 and re.search(r"\[FAIL\] max_ss_100C_1v60: no port 1 floating current for ss_100C_1v60", out) is not None
+            and out.rstrip().endswith("ir-worst: FAIL"),
+            "ir_worst.py: no port 1 floating current for ss_100C (a judged corner)")
 
 
 def p78(run, d):
     rc, out = ir_worst_run(run, os.path.join(d, "ref"), LIMITS)
-    drops = {c: float(v) for c, v in re.findall(r"\[PASS\] (max_ff_\w+) drop: .*= ([\d.]+) mV", out)}
+    drops = {c: float(v) for c, v in re.findall(r"\[PASS\] (max_ss_\w+) drop: .*= ([\d.]+) mV", out)}
     if rc != 0 or len(drops) != 2 or len(set(drops.values())) != 2:
         return False, f"reference run did not PASS with two different drops: {drops}"
     worst = max(drops, key=drops.get)

@@ -17,8 +17,11 @@ Checks (each prints a PASS/FAIL row):
                of a net lies on a met5 stripe of that net in the final DEF, every met5 stripe of the
                net has exactly one point, and the voltage column is > 0 for VDD_NETS and 0 for
                GND_NETS. A point that misses its stripe would silently remove a supply (Phase 4).
-               user_project_wrapper: the supply comes in from the core ring (ADR-0019 decision 11); that model
-               is not implemented yet, so the row FAILs.
+               user_project_wrapper (ADR-0019 decision 18): Caravel's met3 bridges land on the left and
+               right sides of the wrapper's core rings only, so there is one source where each met5
+               stripe of the net meets the left and the right ring side (met4 RING shapes of the final
+               DEF), each no larger than the ring is wide; a point on the top or bottom side, a missing
+               stripe/side pair or a GND voltage other than 0 FAILs.
   port1_tieoff sram0 port 1 is tied off in the final netlist: csb1 to a tie-high (conb_1 HI),
                addr1[8:0] to tie-low (conb_1 LO) (§5.1); dout1 is left unconnected. clk1 must be
                the system clock: through buffers and an even number of inverters back to the top-level
@@ -443,6 +446,23 @@ def met5_stripes(def_text, net):
     return out
 
 
+def ring_sides(def_text, net):
+    """{"left"/"right": (x_center, half_width, y0, y1)} in DEF units of the vertical core-ring shapes of a special net
+    (the two met4 RING segments; the leftmost is "left")."""
+    sn = def_text[def_text.index("\nSPECIALNETS"):def_text.index("END SPECIALNETS")]
+    m = re.search(r"^\s*- " + re.escape(net) + r" .*?;\s*$", sn, re.M | re.S)
+    if not m:
+        return {}
+    vert = []
+    for w, x0, y0, x1, y1 in re.findall(r"(?:ROUTED|NEW) met\d (\d+) \+ SHAPE RING \( (-?\d+) (-?\d+) \) \( (-?\d+|\*) (-?\d+|\*) \)",
+                                       m.group(0)):
+        x1 = x0 if x1 == "*" else x1
+        if x0 == x1 and int(w) > 0:
+            vert.append((int(x0), int(w) // 2, min(int(y0), int(y1)), max(int(y0), int(y1))))
+    vert.sort()
+    return {"left": vert[0], "right": vert[-1]} if len(vert) == 2 else {}
+
+
 def sram_connections(netlist_text):
     """{pin: net} for sram0 in the final netlist (bus connections expanded, MSB first)."""
     m = re.search(re.escape(MACRO) + r"\s+" + re.escape(NL_INST) + r"\s*\((.*?)\);", netlist_text, re.S)
@@ -514,7 +534,38 @@ def main(run_dir, config_path, sram_drc):
 
     # static IR supply model
     if dz["ir_model"] == "core_ring":
-        row("ir_sources", False, "the core-ring supply model of ADR-0019 decision 11 is not implemented yet")
+        # ADR-0019 decision 18: Caravel's bridges land on the left and right sides of the wrapper's core rings only.
+        # One point where each met5 stripe of the net meets the left and the right ring side, no larger than the
+        # ring is wide; a point on the top or bottom side, or a missing stripe, would be a different model.
+        vsrc = cfg.get("VSRC_LOC_FILES") or {}
+        problems = []
+        for net in list(cfg.get("VDD_NETS") or [])[:1] + list(cfg.get("GND_NETS") or [])[:1]:
+            path = vsrc.get(net)
+            path = os.path.join(ROOT, path[len("dir::"):]) if path and path.startswith("dir::") else path
+            if not path or not os.path.isfile(path):
+                problems.append(f"{net}: no source file ({vsrc.get(net)})")
+                continue
+            sides, stripes = ring_sides(d, net), met5_stripes(d, net)
+            pts = [[float(v) for v in line.split(",")] for line in open(path) if line.strip()]
+            volt_ok = all((p[3] > 0) if net in (cfg.get("VDD_NETS") or []) else (p[3] == 0) for p in pts)
+            seen, bad = set(), 0
+            for x, y, size, _ in pts:
+                side = [k for k, (xc, hw, y0, y1) in sides.items() if abs(x * units - xc) <= hw and y0 <= y * units <= y1]
+                hit = [i for i, (yc, hw, x0, x1) in enumerate(stripes) if abs(y * units - yc) <= hw]
+                if len(side) != 1 or len(hit) != 1 or size * units > 2 * sides[side[0]][1] or (side[0], hit[0]) in seen:
+                    bad += 1
+                else:
+                    seen.add((side[0], hit[0]))
+            want = {(k, i) for k in ("left", "right") for i in range(len(stripes))}
+            if len(sides) != 2 or not stripes or bad or seen != want or not volt_ok:
+                problems.append(f"{net}: {len(pts)} points for {len(stripes)} met5 stripes x 2 ring sides "
+                                f"({'left and right ring found' if len(sides) == 2 else 'ring sides not found'}), {bad} not exactly "
+                                f"one per stripe and side or larger than the ring width, {len(want - seen)} stripe/side pairs "
+                                f"without a point, voltages {'ok' if volt_ok else 'wrong'}")
+        row("ir_sources", bool(vsrc) and not problems,
+            f"one source, no larger than the ring width, where each met5 stripe meets the left and the right core-ring "
+            f"side of {', '.join(sorted(vsrc))} (Caravel's bridges, ADR-0019 decision 18)"
+            if vsrc and not problems else ("; ".join(problems) if problems else "VSRC_LOC_FILES missing in the config"))
     else:
         root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
         vsrc = cfg.get("VSRC_LOC_FILES") or {}

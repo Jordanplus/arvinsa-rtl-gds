@@ -21,8 +21,9 @@
 #                                        STA check_setup, min pulse width and period, Magic DRC
 #                                        inside the SRAM only where the SRAM alone has it
 #   5. check_inputs.py --resolved      : the run really used rtl/rtl.f, the SRAM .lib and the antenna LEF
-#   5b. pnr/soc_top/ir_worst.py        : static IR with ff currents and ss metal resistance (the IR step
-#                                        of the flow is nom_tt) within the same [max_sum] limit
+#   5b. pnr/soc_top/ir_worst.py        : static IR in the two slow corners (their currents, 1.60 V and ss
+#                                        metal resistance; the IR step of the flow is nom_tt) within the
+#                                        same [max_sum] limit; ff currents + ss R reported only (ADR-0019 d. 19)
 #   7. signoff/scripts/review_criteria.py: the signoff criteria were applied (every config setting in
 #                                        resolved.json and the steps, the clock uncertainty in every
 #                                        timing step and signoff corner, the checkers above ran), plus

@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""Worst-case static IR drop of a soc_top run: ff currents with ss metal resistance (Phase 5 exit review).
+"""Static IR drop of a run in the slow corners, where the IR budget applies (ADR-0019 decision 19).
 
 usage: ir_worst.py <run dir> <out dir> <limits.toml> [--ll-dir <LibreLane checkout>] [--power <power.json>]
        ir_worst.py --metrics <state_out.json> <limits.toml>        (check a result only; neg_pnr.py)
 
-The flow's IR step (OpenROAD.IRDropReport) runs at nom_tt, and the limit (signoff/limits/<tag>.toml
-[max_sum] ir_vdd_drop_plus_gnd_rise, 20 mV) was accepted for nom_tt in Phase 4 only because the worst
-combination, "ff currents + ss metal resistance", measured 11.46 mV on the PicoRV32 layout
-(docs/notes/ir_worst_case_soc_top.md). On the Hazard3 layout that combination measured 25.75 mV
-while nom_tt was 18.28 mV (Phase 5 exit review, user decision 2026-10-08: check it in every run).
-No real corner has both (skill pdn-ir-drop rule 11), so this is an upper bound made on purpose.
+The IR budget (signoff/limits/<tag>.toml [max_sum] ir_vdd_drop_plus_gnd_rise) is the lowest supply minus
+the voltage of the slow corners' libraries (1.60 V, skill pdn-ir-drop rule 4): it protects the setup timing
+of the slow corners. So the drop is judged with the current, voltage and metal resistance of the same slow
+corner: JUDGED, max_ss_n40C_1v60 and max_ss_100C_1v60, at 1.60 V with their own ss LAYERS_RC (user decision
+2026-10-13, ADR-0019 decision 19). The flow's own IR step runs at nom_tt only.
+Until then (Phase 5 exit review, user decision 2026-10-08) the judged value was "ff currents + ss metal
+resistance", a combination no real corner has (skill pdn-ir-drop rule 11): it put the ff current (2.2 times
+the ss one, with the SRAM port 1 floating current of ff 100C) against a budget the ff corners do not use
+(their setup slack is about 8 ns, and a lower voltage helps their hold). It is still run, for the record
+and for EM, as REFERENCE, and printed as [INFO] rows that do not change the verdict.
 
 The run's own IR step is re-run with LibreLane (`python3 -m librelane.steps run --id OpenROAD.IRDropReport`,
-the step's config.json and state_in.json, so the same ODB, SPEF and supply points) once per corner of
-CORNERS, with these changes: DEFAULT_CORNER = that corner (ff cell and SRAM .lib, 1.95 V, the max-RC SPEF),
-LAYERS_RC["*ff*"] = LAYERS_RC["*ss*"] (the grid's metal resistance of ss), VSRC_LOC_FILES: the same points
-at 1.95 V, and the SRAM .lib of that PVT replaced by a copy whose leakage includes the port 1 floating current
-(power.json static_max_mw of that PVT, next to the char .lib or --power; the .lib leaves it out, ADR-0018
-decision 11). Both ff corners, because the corner with the larger current depends on the design: Phase 5
-used max_ff_n40C only; with the self-generated SRAM max_ff_100C draws about 10 % more, and the floating
-current is 2.7-5.3 mW at ff 100C (Phase 6 independent review, user decision 2026-10-11, ADR-0018 decision 19).
-For each corner the check requires: the step log read that PVT's libraries, the SRAM .lib copy and no tt
-one, and the config carries the ss resistance (the combination was really applied); then the larger
-VDD drop + GND rise of the two corners <= the [max_sum] limit.
+the step's config.json and state_in.json, so the same ODB, SPEF and supply points) once per corner, with
+these changes: DEFAULT_CORNER = that corner (its cell and SRAM .lib and RC SPEF), VSRC_LOC_FILES: the same
+points at the corner's voltage, and the SRAM .lib of that PVT replaced by a copy whose leakage includes the
+port 1 floating current (power.json static_max_mw of that PVT, next to the char .lib or --power; the .lib
+leaves it out, ADR-0018 decisions 11, 19). REFERENCE corners also get LAYERS_RC["*ff*"] = LAYERS_RC["*ss*"].
+For each judged corner the check requires: the step log read that PVT's libraries, the SRAM .lib copy and no
+tt one, and the supply points at 1.60 V (the corner was really applied); then the larger VDD drop + GND rise
+of the two judged corners <= the [max_sum] limit.
 Writes <out>/ir_worst/<corner>/ (the step runs) and prints `ir-worst: PASS` / `ir-worst: FAIL` last; exit
 code 0 only on PASS. Python stdlib only (LibreLane runs inside its nix-shell).
 """
@@ -36,8 +37,9 @@ import sys
 import tomllib
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-CORNERS = ("max_ff_n40C_1v95", "max_ff_100C_1v95")
-VOLTAGE = "1.95"
+# (corner, supply voltage, metal resistance of ss): judged corners, then the reference combination
+JUDGED = (("max_ss_n40C_1v60", "1.60", False), ("max_ss_100C_1v60", "1.60", False))
+REFERENCE = (("max_ff_n40C_1v95", "1.95", True), ("max_ff_100C_1v95", "1.95", True))
 KEY = "ir_vdd_drop_plus_gnd_rise"
 NUM = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
 
@@ -68,13 +70,15 @@ def verdict(metrics, limits_path, applied):
         rows.append((False, f"drop: {dict(zip(keys, [metrics.get(k) for k in keys]))} (missing or negative)"))
     else:
         rows.append((sum(vals) <= lim, f"drop: VDD {vals[0] * 1e3:.2f} + GND {vals[1] * 1e3:.2f} = {sum(vals) * 1e3:.2f} mV "
-                                       f"(ff currents + ss metal R) vs max {lim * 1e3:.1f} mV"))
+                                       f"vs max {lim * 1e3:.1f} mV"))
     return finish(rows)
 
 
-def finish(rows):
+def finish(rows, info=()):
     for ok, msg in rows:
         print(f"  [{'PASS' if ok else 'FAIL'}] {msg}")
+    for msg in info:
+        print(f"  [INFO] {msg}")
     ok = bool(rows) and all(r[0] for r in rows)
     print(f"ir-worst: {'PASS' if ok else 'FAIL'}")
     return 0 if ok else 1
@@ -111,8 +115,8 @@ def sram_lib_with_floating(cfg, pvt, power_path, dst_dir):
     return macro, lib, copy, add
 
 
-def run_corner(step, corner, work, ll_dir, power_path):
-    """(rows, [vdd, gnd] or None) of one corner."""
+def run_corner(step, corner, voltage, ss_r, work, ll_dir, power_path):
+    """(rows, metrics or None) of one corner; ss_r: metal resistance of ss instead of the corner's own."""
     pvt = corner.split("_", 1)[1]
     cdir = os.path.join(work, corner)
     os.makedirs(os.path.join(cdir, "vsrc"))
@@ -121,12 +125,13 @@ def run_corner(step, corner, work, ll_dir, power_path):
     rc = cfg.get("LAYERS_RC") or {}
     if "*ss*" not in rc or "*ff*" not in rc:
         return [(False, f"{corner}: LAYERS_RC of {step} has no *ss* and *ff* entries")], None
-    rc["*ff*"] = rc["*ss*"]
+    if ss_r:
+        rc["*ff*"] = rc["*ss*"]
     vsrc = {}
     for net, path in (cfg.get("VSRC_LOC_FILES") or {}).items():
         lines = [ln.split(",") for ln in open(path).read().split() if ln.strip()]
         dst = os.path.join(cdir, "vsrc", os.path.basename(path))
-        open(dst, "w").write("".join(",".join(p[:3] + [VOLTAGE]) + "\n" for p in lines))
+        open(dst, "w").write("".join(",".join(p[:3] + [voltage]) + "\n" for p in lines))
         vsrc[net] = dst
     if not vsrc:
         return [(False, f"{corner}: no VSRC_LOC_FILES in {step} (the one-side supply model)")], None
@@ -151,10 +156,11 @@ def run_corner(step, corner, work, ll_dir, power_path):
     rows = [(bool(pvt_libs) and "tt_025C_1v80.lib" not in logs and copy in logs,
              f"{corner} currents: the step read {len(pvt_libs)} {pvt} .lib file(s), the SRAM copy with the port 1 "
              f"floating current (+{add:.3f} mW) and no tt one"),
-            (json.load(open(cfg_path))["LAYERS_RC"]["*ff*"] == json.load(open(os.path.join(step, "config.json")))["LAYERS_RC"]["*ss*"],
-             f"{corner} ss metal resistance: LAYERS_RC *ff* = the run's *ss* values"),
-            (all(ln.endswith("," + VOLTAGE) for p in vsrc.values() for ln in open(p).read().split()),
-             f"{corner} supply points: the run's {sum(len(open(p).read().split()) for p in vsrc.values())} points at {VOLTAGE} V")]
+            (all(ln.endswith("," + voltage) for p in vsrc.values() for ln in open(p).read().split()),
+             f"{corner} supply points: the run's {sum(len(open(p).read().split()) for p in vsrc.values())} points at {voltage} V")]
+    if ss_r:
+        rows.append((json.load(open(cfg_path))["LAYERS_RC"]["*ff*"] == json.load(open(os.path.join(step, "config.json")))["LAYERS_RC"]["*ss*"],
+                     f"{corner} ss metal resistance: LAYERS_RC *ff* = the run's *ss* values"))
     return rows, json.load(open(state)).get("metrics", {})
 
 
@@ -182,22 +188,26 @@ def main(argv):
         return finish([(False, f"no finished OpenROAD.IRDropReport step in {run}")])
     work = os.path.join(out, "ir_worst")
     shutil.rmtree(work, ignore_errors=True)   # only this check's own output
-    rows, drops = [], {}
-    for corner in CORNERS:
-        r, metrics = run_corner(steps[-1], corner, work, ll_dir, opts.get("--power"))
-        rows += r
-        if metrics is not None:
-            vals = drop(metrics, keys)
-            if vals is None:
-                rows.append((False, f"{corner} drop: {dict(zip(keys, [metrics.get(k) for k in keys]))} (missing or negative)"))
-            else:
-                drops[corner] = vals
-                rows.append((True, f"{corner} drop: VDD {vals[0] * 1e3:.2f} + GND {vals[1] * 1e3:.2f} = {sum(vals) * 1e3:.2f} mV"))
-    if len(drops) == len(CORNERS):
+    rows, info, drops = [], [], {}
+    for corners, judged in ((JUDGED, True), (REFERENCE, False)):
+        for corner, voltage, ss_r in corners:
+            r, metrics = run_corner(steps[-1], corner, voltage, ss_r, work, ll_dir, opts.get("--power"))
+            vals = drop(metrics, keys) if metrics is not None else None
+            if metrics is not None:
+                r.append((vals is not None, f"{corner} drop: " + (f"VDD {vals[0] * 1e3:.2f} + GND {vals[1] * 1e3:.2f} = {sum(vals) * 1e3:.2f} mV"
+                          if vals else f"{dict(zip(keys, [metrics.get(k) for k in keys]))} (missing or negative)")))
+            if judged:
+                rows += r
+                if vals:
+                    drops[corner] = vals
+            else:   # reference (ff currents + ss metal R): recorded, not judged
+                info += [("" if ok else "not applied: ") + msg + ("" if "drop:" not in msg else " (reference: ff currents + port 1 floating current + ss metal R)")
+                         for ok, msg in r]
+    if len(drops) == len(JUDGED):
         worst = max(drops, key=lambda c: sum(drops[c]))
         rows.append((sum(drops[worst]) <= lim, f"drop: worst {worst} {sum(drops[worst]) * 1e3:.2f} mV "
-                                               f"(ff currents + port 1 floating current + ss metal R) vs max {lim * 1e3:.1f} mV"))
-    return finish(rows)
+                                               f"(slow-corner currents + port 1 floating current + ss metal R) vs max {lim * 1e3:.1f} mV"))
+    return finish(rows, info)
 
 
 if __name__ == "__main__":

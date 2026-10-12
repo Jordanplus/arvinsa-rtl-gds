@@ -177,7 +177,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 開新的頂層設計、決定用哪幾支 pad／GPIO、搬動 block 或 macro，要先規劃並經使用者核准；外殼的電源從哪幾邊進來、IR 的供電點模型怎麼選（要在定 block 位置前查清楚）；hook 擋下編輯（「這份 pad／block／pin 規劃還沒經使用者核准」）、`make pin-plan` FAIL（`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`）；harden 前出 floorplan 圖確認 | chip-floorplan-pin-planning | tapeout-precheck-caravel（Caravel 的固定腳位）、floorplan-congestion（die 內的密度與壅塞） |
 | 放進或換一顆 SRAM／IP macro；自建或收到 macro 後的 view QA（`check_macro_views` 報 `internal_power ... outside`、`LEF SIZE ... != GDS box`、`signal pins differ from the LEF`、`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`、`LEF has no FOREIGN`）；OpenROAD 報 `ODB-0292 LEF data from ... is discarded due to errors`；最終 GDS 的 macro 是空的、XOR 差異幾百萬；macro 的 .lib 只有 TT 或只是解析模型 | hard-macro-integration（整合清單） | 清單上連到的各 signoff skill、multicorner-sta、openram-macro-characterization（用 SPICE 實測取代） |
 | SRAM macro 的時序要用 SPICE 量、產生每個 corner 的 .lib；macro 在某些 corner 讀出前一次的值；換上新 .lib 後 repair_design 跑很久；ngspice 讀大網表很慢、報 `bad v() syntax`；從 GDS 萃取寄生電容、萃取網表報 singular matrix 或 `Timestep too small`（階層式輸出的負值修正電容）；用 OpenRAM 自產 macro（官方環境只有 x86_64-linux、要不要關 use_nix、words_per_row 與讀取電路）；OpenRAM 的 LVS 用新 PDK 報 `Netlists do not match`（`special_nfet_01v8`、`special_pfet_latch`）、log 有 `ERROR` 但 exit 0、`Custom cell pin names do not match spice file`、同一設定產生的 GDS 每次不同；`gen_char_lib` 報 `internal_power ... outside (0, 1000]`；用 SPICE 量 internal power 時漏電隨網表改變或外插成負值；漏電量測窗 `leakage window ... not settled`、bitcell 漏電不隨溫度變或 `bitcell leakage depends on gmin`、用 `.nodeset` 算 DC 工作點報 `doAnalyses: out of memory`；sky130 1RW 報 `must have an even number of cols including replica cols`、DRC／LVS 失敗；OpenRAM 產的 macro 在 KLayout DRC 報 nwell.6、psdm.1、m2.2，或改了 OpenRAM 的擺放後 LVS 不一致、報 nwell.2a | openram-macro-characterization | signoff-criteria（量到的數字加多少餘量）、hard-macro-integration（換上新 .lib） |
-| PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次判最壞組合；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
+| PDN 產生失敗、macro 電源怎麼接、IR drop（包括小得不合理）、EM；flow 的 nom_tt IR PASS 但換了設計；想改 PDN（strap 寬度、間距） | pdn-ir-drop（規則 12：每次在慢 corner 判，供電點從真實 pad 起算；規則 13：改 PDN 前先 what-if） | floorplan-congestion（macro 旁的窄 row）、lvs-signoff（實體連接）、signoff-criteria（IR 預算） |
 | DRC 不為 0、macro 內部的 DRC 怎麼判、換了自產或改名的 macro 後 KLayout 在 macro 裡報錯、GDS 有多個 top cell、XOR、金屬密度 | drc-signoff | hard-macro-integration（macro 單獨的 DRC） |
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
 | LVS 失敗、斷線 pin、電源 pin 有沒有真的接上；LVS PASS 但不確定 macro 的版圖有沒有進 GDS | lvs-signoff | pdn-ir-drop、hard-macro-integration（`check_macro_gds.py`） |
@@ -386,7 +386,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
-  - 規則 12：每次 harden 判最壞組合（ff 電流＋ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；最壞組合約是 nom_tt 的 1.4 倍。兩個 ff corner 都要跑（哪個電流大隨設計變），macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）要加在 macro 上（Phase 6 獨立審查）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+  - 規則 12：每次 harden 在預算所保護的兩個慢 corner 判（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估 5 倍以上）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
 - **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29、P61、P62、P77、P78。
 
 #### lvs-signoff：LVS 與連接性
@@ -444,6 +444,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - IO delay 的 `-min` 不能直接設 0，要和上層的 clock latency 一起建模，否則會出現大量假的 hold 違規。
   - macro 的 SPICE 特性化值要加上模型沒涵蓋的部分（寄生、量測誤差、mismatch）：延遲乘比例、setup/hold 加固定值、輸出最早變化的時間乘小於 1 的係數，再和既有保守值取較嚴者。
   - 推導出來的條件要寫進 flow 變成 checker，每個都要有植入錯誤的案例（附 soc_top 的實作範本）。
+  - IR 用多大的電流要先量測再決定（Phase 7，使用者 2026-10-13）：電流、電壓、電阻取預算所保護的那個慢 corner（不是「ff 電流＋ss 電阻」），先重現 flow 的功耗並按類別拆解，.lib 沒有的電流按 PVT 加，切換率寫明是假設，用 R = 壓降 ÷ 電流和幾何估算交叉檢查，供電點從外殼的真實 pad 起算。
   - 一組已驗證的工具行為，例如：指定邊緣的 uncertainty 會取代一般值、instance derate 會取代 global、fmax 報告排除半週期路徑、OpenSTA 沒有 SI 分析。
   - 每次 signoff 都要列出「不分析的項目」，寫出各用哪一筆 margin 涵蓋。
   - **每次 harden 後的檢查**（使用者 2026-10-07 要求）：

@@ -128,11 +128,17 @@
     },
     "//PDN_HWIDTH": "met5 strap width as soc_top (decision 11, ADR-0017).",
     "PDN_HWIDTH": 4.8,
+    "//PDN_VWIDTH": "met4 strap 1.6 -> 4.8 um, the met5 width (ADR-0019 decision 18, user decision 2026-10-13). With Caravel's real supply network (one vccd1 pad and one vssd1 pad on the right side, 5 um met4 ring, met3 bridges on the left and right sides of the wrapper ring only) the worst-case IR with the block in the lower-left corner was 104.2 mV at 1.6 um, 82.2 at 3.2, 72.2 at 4.8, 66.4 at 6.4 (PDN what-if on the p7_harden2 layout): the drop is in the vertical conduction from the pad to the block, and the met4 straps carry it in parallel with Caravel's ring.",
+    "PDN_VWIDTH": 4.8,
     "PDN_MACRO_CONNECTIONS": [
         "u_soc.sram0 vccd1 vssd1 vccd1 vssd1"
     ],
-    "//RUN_IRDROP_REPORT": "No supply-point model for the Caravel core ring yet (decision 11, step 5); until then the IR step is off and IR is not judged.",
-    "RUN_IRDROP_REPORT": false,
+    "//RUN_IRDROP_REPORT": "IR inside the wrapper (ADR-0019 decision 18): one supply point where each met5 strap of the net meets the left and the right side of the net's core ring, the two sides where Caravel's manual_power_connections bridges land (54 left, 53 right; no bridge on the top or bottom side). Points at the exact bridge positions crashed OpenROAD PSM (Signal 11, cause not found). 1.80 V = the nom_tt voltage of the IR step; ir_worst.py rewrites it for the ff corners. The drop from the pads through Caravel's own network is judged separately (ir_caravel.py), its limit being the board supply requirement.",
+    "RUN_IRDROP_REPORT": true,
+    "VSRC_LOC_FILES": {
+        "vccd1": "dir::pnr/user_project_wrapper/vsrc/vccd1.vsrc",
+        "vssd1": "dir::pnr/user_project_wrapper/vsrc/vssd1.vsrc"
+    },
     "ERRORS_ON_UNMATCHED_IO": "both",
     "//CORNERS": "Fail on setup, hold and max cap in every STA corner (LibreLane's sky130 default fails setup only in tt; project-plan.md §6.2). Max slew: LibreLane's default (\"\": no corner fails the flow) and check_soc.py max_slew judges instead (ADR-0019 decision 16): Caravel drives la_oenb, la_data_in, wbs_adr_i and wbs_dat_i at 0.84-0.97 ns (caravel_io.sdc), above the 0.75 ns limit, which no repair inside the wrapper can change (run p7_harden2: all 384 violations on those pins and the first cells on their nets). The row allows exactly those pins, up to the Caravel transition + 0.05 ns, and fails on any other violation.",
     "SETUP_VIOLATION_CORNERS": [

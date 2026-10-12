@@ -1,6 +1,6 @@
 ---
 name: signoff-criteria
-description: 兩種情況使用。一、每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）：檢查自己訂的 signoff criteria 有沒有被執行（`review_criteria.py` 的 criteria_review.txt）、合不合理（寫 criteria_review.md；Stop hook 沒看到就擋下回報），再把實測數字寫進依製程分類的 knowledge 檔（knowledge/sky130A_sky130_fd_sc_hd.md）。二、決定或檢討 signoff 條件的數值與依據：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、IR drop 預算、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use after every harden run (were the signoff criteria applied, are they still reasonable, per-PDK knowledge base) and when deriving or reviewing signoff limits and margins for sky130 + LibreLane/OpenROAD.
+description: 兩種情況使用。一、每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）：檢查自己訂的 signoff criteria 有沒有被執行（`review_criteria.py` 的 criteria_review.txt）、合不合理（寫 criteria_review.md；Stop hook 沒看到就擋下回報），再把實測數字寫進依製程分類的 knowledge 檔（knowledge/sky130A_sky130_fd_sc_hd.md）。二、決定或檢討 signoff 條件的數值與依據：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、IR drop 預算（IR 用多大的電流要先量測再決定：哪個 corner 的電流、電壓、電阻要對應預算保護的對象，功耗按類別拆解，.lib 沒有的電流按 PVT 加，切換率是假設，供電點從真實 pad 起算）、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。Use after every harden run (were the signoff criteria applied, are they still reasonable, per-PDK knowledge base) and when deriving or reviewing signoff limits and margins for sky130 + LibreLane/OpenROAD.
 ---
 
 # Signoff 條件怎麼推導
@@ -104,12 +104,27 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 
 | 條件 | 推導 | 工具支援／沒分析時怎麼補 |
 |---|---|---|
-| static IR drop 上限 | 不能超過 corner 電壓隱含的預算（上表的 PVT 一列）。上限大於預算時，STA 的 slow corner 就不再保守 | 用最大電阻的 RC corner 與最大功耗的 corner 再算一次（`analyze_power_grid -corner`）；電壓源要放在真實 pad 的位置。**每次 harden 都要判這個最壞組合，不能只判 nom_tt**：sky130 的最壞組合約是 nom_tt 的 1.4 倍（knowledge 檔 S23；本 repo `pnr/soc_top/ir_worst.py`） |
+| static IR drop 上限 | 不能超過 corner 電壓隱含的預算（上表的 PVT 一列）。上限大於預算時，STA 的 slow corner 就不再保守 | 電流、電壓、電阻要取預算所保護的那個慢 corner，怎麼決定見下一節「IR 用多大的電流」；電壓源要從真實 pad 起算。**每次 harden 都要判，不能只判 nom_tt**（本 repo `pnr/soc_top/ir_worst.py`：兩個慢 corner 判定，「ff 電流＋ss 電阻」只當參考，ADR-0019 決定 19） |
 | dynamic IR、L·di/dt | 開源工具沒有 | 用 decap 與 margin 補；用最壞情境的 VCD（reset 解除、SRAM 連續讀寫）估 peak current |
 | 功耗 | 沒有 VCD／SAIF 時用預設 activity（vectorless）；`power__total` 是最後寫入的 corner | 用模擬的 activity（`read_vcd`、`read_saif`）；報告附上 activity 標註率 |
 | power grid EM | 每段電流 / 線寬 ≤ tech LEF 的電流密度（Tj 90 °C 基準）；via 個別比對 | `-enable_em` 輸出電流後自己比對 |
 | signal EM | 估算 I_rms ≈ C·V·√(2/(t_r·T))，t_r 是 transition 時間，與最小線寬的 AC 上限比 | 沒有工具，只能估算，標明「估算」 |
 | aging（NBTI／HCI） | sky130 沒有 aging 模型 | 放進 M_setup，並寫明「不分析」 |
+
+### IR 用多大的電流：先量測，再決定（使用者 2026-10-13：「這個建立量測以決定max power的方法也要加到signoff的skill」）
+
+IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據，不能沿用一個方便的假設。Phase 7 的教訓：最壞組合（ff 電流＋ss 電阻）、預設切換率、SRAM 浮接電流、把外殼的電源 pin 當理想電源，四個假設各自都說得通，疊起來就讓同一個版圖從 0.3 mV 變成 104 mV，而且判的是一個 ff corner 根本用不到的預算（ADR-0019 決定 18、19）。
+
+1. **先問這個預算保護的是什麼**：IR 預算 =「最低供電 − 慢 corner 的特性化電壓」，保護的是慢 corner 的 setup（cell 在低電壓變慢）。所以判這個預算時，電流、電壓、金屬電阻要取**同一個**慢 corner（例如 `max_ss_n40C_1v60`、`max_ss_100C_1v60`，取大的）。ff corner 的 setup 餘量大、電壓低反而讓 hold 更寬鬆；「ff 電流＋ss 電阻」沒有真實 corner 對應（`pdn-ir-drop` 規則 11），只當上限參考與 EM 用。若另有保護對象（例如 SRAM 在某個 corner 的讀寫餘裕），就為它另訂預算與對應的 corner，不要拿同一個數字去套。
+2. **每個 corner 量功耗，並拆解**：
+   - 先重現 flow 的數字（OpenSTA `report_power`，與 STA step 的 `power.rpt` 相同），確認讀的是同一份網表、SPEF、.lib。
+   - 逐 instance 取功耗（`sta::instance_power`），按類別加總：邏輯 cell、修 slew／cap／長線的 buffer（`wire`、`load_slew`、`fanout`、`max_cap`）、clock tree、hold delay cell、macro。找出不合理的大項再往下查。Phase 7 nom_tt 13.7 mW：邏輯 45%、修復 buffer 32%、clock tree 14%、hold 5%、SRAM 4%。
+   - 列出各 corner 的總功耗，算成電流（I = P／V，電壓用該 corner 的）。同樣的功耗在低電壓 corner 是較大的電流，只按功耗比例縮放會低估（Phase 7 的粗估就錯在這裡：估 35 mV，實測 45 mV）。
+3. **.lib 沒有的電流另外加，而且依 PVT 分開**：macro 特性化沒有包含的電流（本 repo：SRAM port 1 浮接電流，ff 100°C 5.34 mW、ss 0.03–0.15 mW，`power.json` 的 `static_max_mw`），加在該 macro 的位置、用對應 PVT 的值。
+4. **切換率是假設，要寫出來**：沒有 VCD／SAIF 時 OpenSTA 用預設切換率（vectorless），沒有驗證過；報告寫明。要放寬時用 firmware 模擬的切換活動（`read_vcd`、`read_saif`），並附 activity 標註率。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（Phase 7 約 4 mW）不會因此變小。
+5. **手算交叉檢查**：等效電阻 R = 壓降 ÷ 電流，和幾何估算比量級（片電阻 × 方塊數，例如 5 µm 寬 met4 每 mm 約 9.4 Ω；sky130 met4 0.047、met5 0.0285 Ω／sq）。對不上時，先查電流與電阻的來源（功耗拆解、`LAYERS_RC`、供電點），不要先改設計。Phase 7：7.6 mA、35.8 mV → 4.7 Ω，與 Caravel ring（約 26 Ω）並聯 wrapper grid 的量級相符。
+6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV，同一個版圖、同一個最壞組合）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本完全相同。
+7. **決定與上限寫進 ADR**：哪個 corner 判、上限多少、對應的使用限制（例如 pad 端最低電壓），以及被否決的判法與它們的數字。
 
 ### 實體與 PDK 規則
 

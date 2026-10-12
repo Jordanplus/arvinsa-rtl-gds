@@ -1,6 +1,6 @@
 ---
 name: pdn-ir-drop
-description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、macro 電源怎麼接、IR drop（供電線上的電壓降）分析與門檻（VDD 降壓 + GND 抬升、供電點模型 `VSRC_LOC_FILES`）、IR drop 結果小得不合理（PDN pin 全被當成理想電源）、flow 的 nom_tt IR PASS 但最壞組合（ff 電流＋ss 金屬電阻）超過上限（`ir_worst.py`；兩個 ff corner 都要跑，哪個電流大隨設計變；macro 有不在 .lib 裡的電流，例如 SRAM 未用 port 的浮接電流，要加在 macro 的位置）、改 PDN 之前先做 what-if（strap 加寬或加密、`PDN_HWIDTH`、重產 PDN 只跑 IR）、EM、decap 擺放時使用。電源 pin 有沒有實體接上看 lvs-signoff；IR 上限怎麼推導看 signoff-criteria。Use for PDN generation errors, macro power hookup, static IR drop analysis and limits (incl. voltage-source modelling and suspiciously small IR results), EM and decap placement in OpenROAD/LibreLane.
+description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、macro 電源怎麼接、IR drop（供電線上的電壓降）分析與門檻（VDD 降壓 + GND 抬升、供電點模型 `VSRC_LOC_FILES`）、IR drop 結果小得不合理（PDN pin 全被當成理想電源）、flow 的 nom_tt IR PASS 但慢 corner 超過上限（`ir_worst.py` 判兩個慢 corner，電流、電壓、電阻取同一個 corner；ff 電流＋ss 電阻的最壞組合只當參考；macro 有不在 .lib 裡的電流，例如 SRAM 未用 port 的浮接電流，按 PVT 加在 macro 的位置）、IR 大得不合理或做不到預算（供電點要從外殼的真實 pad 起算，例如 Caravel 只有一顆 vccd1 pad；先量測功耗再決定用多大的電流）、改 PDN 之前先做 what-if（strap 加寬或加密、`PDN_HWIDTH`、重產 PDN 只跑 IR）、EM、decap 擺放時使用。電源 pin 有沒有實體接上看 lvs-signoff；IR 上限怎麼推導看 signoff-criteria。Use for PDN generation errors, macro power hookup, static IR drop analysis and limits (incl. voltage-source modelling and suspiciously small IR results), EM and decap placement in OpenROAD/LibreLane.
 ---
 
 # PDN 與 IR drop
@@ -31,15 +31,15 @@ description: 電源網路（PDN）產生失敗（例如 `PDN-0179` 窄 row）、
 8. **EM**：`analyze_power_grid -enable_em -em_outfile` 可以輸出每段電源線的電流（OpenROAD dcf36133 `src/psm/README.md`），再自己和 tech LEF 的 DCCURRENTDENSITY／ACCURRENTDENSITY 比對（例如 met1 2.8／6.1 mA/µm；mcon 0.36、via 0.29 mA/cut）。LibreLane 沒有開這個選項。
 9. **decap 的擺放**：`filler_placement` 會把 cell 依寬度由大到小排序，再從最寬的開始貪婪填空（`FillerPlacement.cpp` 104–106、251–280），與 `DECAP_CELLS` 在清單中的位置無關。在 `FILL_CELLS` 加入更寬的 fill 會搶走 decap 的位置；要更多 decap，就在 `DECAP_CELLS` 加更寬的 decap（decap_8、decap_12）。
 10. **macro-level 的供電模型要明講假設，checker 也要擋住比假設樂觀的設定**（Phase 4 獨立審查：電壓源大小改 2000 µm 或移到 strap 中間，原本都 PASS；`check_soc.py ir_sources` 現在要求大小 ≤ strap 寬度、在 strap 左端，P27、P28）（`docs/notes/ir_worst_case_soc_top.md`）：soc_top 實測（mV，VDD＋GND 合計，nom_tt／ff 電流＋ss 電阻）：所有 pin 理想 0.56／0.75、met5 每 34 µm 一點 1.1／1.5、每條 strap 一側一點 8.2／11.5、整顆一點 48／67。細的 PDN（1.6 µm strap、153 µm pitch、單一 cut 的 via5）對供電點數非常敏感。signoff 用「每條 strap 一側一點」，並用 `check_soc.py ir_sources` 確認每個點真的落在該 net 的 strap 上（點位寫死在檔案，PDN 一改就可能偏掉）。真正的接點在 chip-level 決定，那時要重算，並一起看 EM。
-11. **沒有一個真實 corner 同時是最大電流與最大電阻**：電流最大是 ff（高電壓），金屬電阻最大是 ss。上限可以用「ff 的 lib 與電壓＋ss 的 `LAYERS_RC`」人為組合跑一次（只當上限用），或用 ff 的結果 × R_ss/R_ff 估算（via 電阻不隨 corner 變，所以估算偏高）。
-12. **IR 要判最壞組合，不能只判 nom_tt**（Phase 5，實測確認）：
-    - flow 的 IR 步驟只跑 nom_tt。Phase 4 接受「nom_tt ≤ 20 mV」，依據是最壞組合在 PicoRV32 版圖只有 11.46 mV。
-    - 換成 Hazard3 後，nom_tt 18.28 mV 仍 PASS，最壞組合卻是 25.75 mV。
-    - 最壞組合約是 nom_tt 的 1.4 倍，兩個 CPU、三種版圖都一樣（1.40／1.41／1.42）。所以 nom_tt 要低於約 14 mV 才夠。
-    - 本 repo 每次 harden 都跑 `pnr/soc_top/ir_worst.py`：用 run 自己的 `OpenROAD.IRDropReport` 設定，對 `max_ff_n40C_1v95` 與 `max_ff_100C_1v95` 各重跑一次，改四處：`DEFAULT_CORNER`、`LAYERS_RC["*ff*"]` 換成 `*ss*`、供電點 1.95 V、SRAM 該 PVT 的 .lib 換成漏電加上 port 1 浮接電流（`power.json` 的 `static_max_mw`）的複本；兩個 corner 取大的判同一個 `[max_sum]` 上限。
-    - 它也檢查這個組合真的套用了：log 讀的是該 PVT 的 .lib 與 SRAM 的複本、沒有 tt，config 是 ss 的電阻。negative test 是 `neg_pnr.py` P61、P62、P77（缺浮接電流）、P78（上限在兩個 corner 之間，要判大的那個）。
-    - **設計換了，就要重新驗證「只判一個 corner」的依據**。依據是在別的設計上量的，不能沿用（`signoff-criteria`）。Phase 5 只跑 ff_n40C；換成自產 SRAM 後 ff_100C 的總功耗高了約 10%（SRAM 漏電 409 µW），而 .lib 不含 port 1 浮接電流（ff 100°C 最大 5.3 mW），兩個都沒算到（Phase 6 獨立審查）。改成兩個 ff corner 都跑、取大的，就不必判斷哪個 corner 電流最大。
-    - **macro 的電流若有不在 .lib 裡的部分**（例如 SRAM 未用 port 的浮接電流），IR 檢查要另外加上，加在該 macro 的位置：Phase 6 PicoRV32 加上 5.3 mW 後，最大壓降從邏輯區移到 SRAM 上（6.41 → 13.49 mV）。
+11. **沒有一個真實 corner 同時是最大電流與最大電阻**：電流最大是 ff（高電壓），金屬電阻最大是 ss。上限可以用「ff 的 lib 與電壓＋ss 的 `LAYERS_RC`」人為組合跑一次（只當上限用），或用 ff 的結果 × R_ss/R_ff 估算（via 電阻不隨 corner 變，所以估算偏高）。**這個組合不是判定用的值**：IR 預算保護的是慢 corner 的 setup，判定要用慢 corner 自己的電流、電壓、電阻（規則 12；怎麼決定見 `signoff-criteria`「IR 用多大的電流」）。
+12. **IR 要在預算所保護的 corner 判，不能只判 nom_tt**（Phase 5 實測確認只判 nom_tt 不夠；Phase 7 改成慢 corner，ADR-0019 決定 19）：
+    - flow 的 IR 步驟只跑 nom_tt。Phase 4 接受「nom_tt ≤ 20 mV」；Phase 5 換成 Hazard3 後，nom_tt 18.28 mV 仍 PASS，最壞組合（ff 電流＋ss 電阻）卻是 25.75 mV，所以改成每次 harden 判最壞組合（使用者 2026-10-08）。
+    - Phase 7 發現最壞組合判的是錯的對象：預算 =「最低供電 − 慢 corner 的 1.60 V」，保護慢 corner 的 setup；ff corner 的 setup 餘量約 8 ns，電壓低反而讓 hold 更寬鬆。最壞組合拿 ff 的電流（加上 ff 100°C 才有的 5.3 mW SRAM 浮接電流）去比這個預算，是兩個保守假設疊在一起：含 Caravel 供電網路時最壞組合 72.2 mV、慢 corner 45.2 mV（使用者 2026-10-13：「你的2,3我們為什麼抓這麼保守」，選「用慢 corner 判」）。
+    - 本 repo 每次 harden 都跑 `pnr/soc_top/ir_worst.py`：用 run 自己的 `OpenROAD.IRDropReport` 設定，判 `max_ss_n40C_1v60` 與 `max_ss_100C_1v60`（`DEFAULT_CORNER`、供電點 1.60 V、該 corner 自己的 ss `LAYERS_RC`、SRAM 該 PVT 的 .lib 換成漏電加上 port 1 浮接電流的複本），兩個取大的判 `[max_sum]`；`max_ff_n40C_1v95`／`max_ff_100C_1v95` 配 ss 電阻照跑，印成 `[INFO]` 不判定（EM 與紀錄用）。soc_top_hazard3：慢 corner 12.48 mV，參考值 15.91 mV。
+    - 它也檢查判定的 corner 真的套用了：log 讀的是該 PVT 的 .lib 與 SRAM 的複本、沒有 tt，供電點是 1.60 V。negative test 是 `neg_pnr.py` P61、P62、P77（缺 ss 100°C 的浮接電流）、P78（上限在兩個慢 corner 之間，要判大的那個）。
+    - **設計換了，就要重新驗證「判哪個 corner」的依據**。依據是在別的設計上量的，不能沿用（`signoff-criteria`）。兩個慢 corner 都跑、取大的，就不必判斷哪個電流大（Phase 6：自產 SRAM 讓 100°C 的電流變大）。
+    - **macro 的電流若有不在 .lib 裡的部分**（例如 SRAM 未用 port 的浮接電流），IR 檢查要另外加上，加在該 macro 的位置、用對應 PVT 的值：Phase 6 PicoRV32 在 ff 100°C 加上 5.3 mW 後，最大壓降從邏輯區移到 SRAM 上（6.41 → 13.49 mV）；ss 只有 0.03–0.15 mW。
+    - **供電點要從真實的 pad 起算**（Phase 7）：Caravel 的 vccd1／vssd1 各只有一顆 pad（右側），經 5 µm met4 ring 與 wrapper ring 左右兩側的 met3 跨接線才到 wrapper；只把 wrapper ring 當供電點會低估 5 倍以上（8.4 → 45 mV，慢 corner、met4 4.8 µm）。做法：把外殼網路的形狀加進 IR 用的 DEF 複本、供電點放在 pad，並做對照組（同一份 ODB、供電點放回原處，結果要與原本相同）。
 13. **改 PDN 前先做 what-if，不必每個候選都完整 harden**（Phase 5，方法已驗證）：
     - 取完成版圖在 IR 步驟的輸入 ODB，刪掉電源 net 的 special wiring 與電源 pin 的形狀。
     - 用 LibreLane 自己的 `pdn_cfg.tcl` 加 `pdngen` 依候選值重新產生：用 `OpenROAD.GeneratePDN` 單步重跑，只換 Tcl script。

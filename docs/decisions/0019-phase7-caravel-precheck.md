@@ -45,7 +45,7 @@
 
     `la_data_out[12:0]` = `{boot_mode, trap, gpio_out, uart_rx, uart_tx}`，`la_data_out[13]` = `host_en`，其餘 0（LA 腳位在下緣，就在 Wishbone 旁）；`gpio_out` 從晶片外看不到，由管理用 CPU 讀 LA。`user_irq` 接 0，`analog_io` 不接。
 
-11. **wrapper 的 PDN strap 沿用 `soc_top` 的設定**（使用者 2026-10-12：「沿用 soc_top 的設定 (建議)」）：met4 1.6 µm、met5 4.8 µm（ADR-0017）、pitch 用 LibreLane 預設（約 153 µm）。core ring 照 Caravel 固定設定（寬 3.1 µm、offset 12.45 µm、spacing 1.7 µm，4 組電源 net），標準元件與 SRAM 接 `vccd1`／`vssd1`。供電從 core ring 進來，IR 的供電點模型改成 ring 上（取代 `soc_top` 一側供電的假設），步驟 5 實作。
+11. **wrapper 的 PDN strap 沿用 `soc_top` 的設定**（met4 寬度後來由決定 18 改成 4.8 µm）（使用者 2026-10-12：「沿用 soc_top 的設定 (建議)」）：met4 1.6 µm、met5 4.8 µm（ADR-0017）、pitch 用 LibreLane 預設（約 153 µm）。core ring 照 Caravel 固定設定（寬 3.1 µm、offset 12.45 µm、spacing 1.7 µm，4 組電源 net），標準元件與 SRAM 接 `vccd1`／`vssd1`。供電從 core ring 進來，IR 的供電點模型改成 ring 上（取代 `soc_top` 一側供電的假設），步驟 5 實作。
 12. **SRAM 與 CPU 邏輯放在左下角，靠近 Wishbone 腳位**（使用者 2026-10-12：「左下角，靠近 Wishbone (建議)」）：Wishbone 與 LA 腳位在下緣 x = 0–870 µm，Wishbone 有時序要求，而且是 32 位元的匯流排。SRAM 固定在左下角附近，placement 密度維持 55%，讓邏輯聚在 SRAM 與 Wishbone 周圍。GPIO 依這個位置重選（決定 10）。
 13. **pad／block／pin 規劃一定在 RTL 與 harden 之前，用四層機制強制**（使用者 2026-10-12：「現在情況應該是出pin位置因為pad都是固定的受到限制，所以這個流程上的修正很重要，要想個辦法確保之後一定會先探討pad & pin location」；選項回答「四層都做 (建議)」、「新建 chip-floorplan-pin-planning」）：
     - 規則：`CLAUDE.md` 規則 14、新 skill `chip-floorplan-pin-planning`、流程文件 4.1。
@@ -74,6 +74,31 @@
     - 做法：`GRT_RESIZER_HOLD_SLACK_MARGIN` 0.2 ns（量到的約 0.1 ns 落差，加上 ff_100C 的 0.028 ns，再留餘裕）。只改 wrapper 的 config。ff_100C 由 signoff STA（15 個 corner）判，這次的違規就是它抓到的。
     - 代價與風險：resizer 沒有直接看 ff_100C（`drv-timing-closure` 規則 11 的教訓），只靠餘量；輸入腳位路徑多插延遲 cell，ss 的 setup 可能略降（`p7_harden2` 最差 setup +0.648 ns）。驗證：`p7_harden4`（從 `p7_harden2` 第 40 步的狀態重跑，137 分鐘，flow 沒有延後錯誤）：post-GRT hold 修復修完 +0.204 ns，signoff 15 個 corner 的 hold 都沒有違規，最差 +0.148 ns（`max_ff_100C`，`wbs_adr_i[8]`）；setup 最差 +0.648 → +0.592 ns；LVS、antenna PASS，KLayout DRC 0，Magic DRC 數目與 `p7_harden2` 相同（後者已確認全部在 SRAM 內）。之後正式 harden。
     - 被否決的選項：寫 plugin 只讓修 timing 的步驟看 15 個 corner（約半天，`repair_timing` 也會放大 cell，同樣的異常可能出現）；先查根因（可能查不到，時程不確定）。
+
+18. **IR：照 Caravel 實際的供電網路量；block 不移，met4 strap 1.6 → 4.8 µm，含 Caravel 網路的壓降寫成對板子的供電要求**（使用者 2026-10-13：先選「移動 block」，看過各位置的實測後改選「不移 block＋met4 4.8＋供電要求 (建議)」）：
+    - 查證（agent 讀原始碼，我抽查原文）：ChipFoundry 現用的 Caravel（`chipfoundry/caravel_user_project` `b510613c` 的 `MPW_TAG ?= CC2509` → `chipfoundry/caravel` `a0b50ad1`；所引檔案與 `efabless/caravel` `27cbe49c` 相同）。wrapper 的 vccd1／vssd1 ring 只從左右兩側接到 Caravel：`lef/manual_power_connections.lef` 的 met3 跨接線左 54、右 53 條（間距約 65 µm），上下兩邊沒有接點；`caravel_core` 的 PDN 刻意不跨過 wrapper（`openlane/caravel_core/interactive.tcl` 第 26–33 行）。vccd1、vssd1 各只有一顆 pad，都在晶片右側：`def/chip_io.def` 第 17057–17058 行 `user1_vccd_lvclamp_pad` (3390.035, 4538)、第 16653–16654 行 `user1_vssd_lvclamp_pad` (3390.035, 2299)，換到 wrapper 座標約 y = 3290、1051。電流經 Caravel 自己 5 µm 寬的 met4 ring 與跨接線才到 wrapper。官方沒有 user area 的 IR 預算或說明（efabless/caravel issue #416 討論過舊版只從四角接）。
+    - 量法：把 `caravel_core.def` 中 vccd1／vssd1 在 wrapper 外的 met4／met5 形狀與 via、跨接線、pad 的 met5 strap 平移到 wrapper 座標，加進 IR 用的 DEF 複本，供電點放在兩顆 pad 的 strap 上；PDN 的 what-if 用 `pdn-ir-drop` 規則 13 的方法（現行設定重產的 SPECIALNETS 與原版圖逐行相同，IR 與手建的模型相同）。對照組：同一份 ODB、供電點放回 wrapper ring，結果與原本完全相同（5.17 mV）。
+    - 結果（`p7_harden2` 版圖，最壞組合 = ff 電流＋SRAM port 1 浮接電流＋ss 金屬電阻，上限 20 mV）：
+      | 情況 | 最壞組合 |
+      |---|---|
+      | 供電點在 wrapper ring（整圈／左右兩側／只有上側） | 6.87／8.37／143 mV |
+      | 含 Caravel 網路，block 在左下（現行），met4 1.6／3.2／4.8／6.4 µm | 104.2／82.2／72.2／66.4 mV |
+      | 含 Caravel 網路，block 平移到右側中段／右上／對齊 vssd1 pad／右下（met4 1.6） | 76.4／73.1／78.2／102.8 mV |
+      | 右側中段＋met4 4.8 | 58.2 mV |
+      壓降幾乎都在 pad 到 wrapper 邊緣（nom_tt：wrapper 右上角 5–9 mV、右下角約 30 mV，wrapper 內部只多 2–5 mV）。兩顆 pad 相距約 2.2 mm，block 放哪裡都至少離其中一顆很遠，所以 20 mV 在這個供電結構下做不到。
+    - 做法：
+      - `PDN_VWIDTH` 1.6 → 4.8 µm（只改 wrapper；與 met5 同寬）。
+      - wrapper 內部：IR 步驟打開，供電點放在 wrapper ring 左右兩側與每條 met5 strap 的交點（Caravel 跨接線所在的兩側；直接用跨接線的位置時 OpenROAD PSM 讀完供電點檔就 Signal 11，原因沒查到），照舊判 20 mV（`ir_worst.py`，判法見決定 19；`check_soc.py ir_sources`）。
+      - 含 Caravel 網路的壓降由新的 checker 判，判法見決定 19（慢 corner，上限 50 mV）。這個上限就是**使用限制**：pad 端 vccd1 − vssd1 至少要 1.60 + 0.050 = 1.65 V（1.8 V 的 −8.3%），signoff 的 1.60 V 時序才成立。寫進 Phase 7 exit review 的已知限制。Caravel 穩壓器實際的精度沒有查證。（最初以最壞組合訂 75 mV、≥ 1.675 V，決定 19 改掉。）
+    - 被否決的選項：移動 block（最多再改善約 14 mV，要重做 pin 規劃、RTL 與核准，Wishbone 與時脈要跨 2–3 mm）；不改 PDN、只寫供電要求（104 mV，要求 ≥ 1.71 V）；換算成時序餘量（SRAM 沒有低電壓的特性化資料，半天到一天）。
+    - 流程上的教訓：電源進入點應該在 pad 階段就查（使用者 2026-10-12：「Caravel pad都是固定，應該早就要決定可以有哪些供電選擇」；2026-10-13：「這就是我說的一開始就應該考慮」），已寫進 `chip-floorplan-pin-planning` 規則 2。
+
+19. **IR 用慢 corner 判：電流、電壓、金屬電阻都取同一個慢 corner；「ff 電流＋ss 電阻」的最壞組合照跑但只當參考**（使用者 2026-10-13 問「你的2,3我們為什麼抓這麼保守」，看過實測後選「用慢 corner 判 (建議)」；同日要求把「建立量測以決定 max power」的方法寫進 `signoff-criteria`）。取代 Phase 5 exit review 的判法（使用者 2026-10-08：每次 harden 判最壞組合），soc_top 也適用：
+    - 依據：IR 預算 =「最低供電 − 慢 corner 的特性化電壓 1.60 V」（`pdn-ir-drop` 規則 4），保護的是慢 corner 的 setup。ff corner 的 setup 有約 8 ns 餘量，電壓低反而讓 hold 更寬鬆，不在這個預算內。最壞組合拿 ff 的電流（`p7_harden2`：ff 100°C 17.95 mW 加 SRAM port 1 浮接 5.34 mW）去比慢 corner 的預算，是兩個保守假設疊在一起；慢 corner 的電流是 ss 的 10.7–11.3 mW（浮接 0.03–0.15 mW），換成電流約是最壞組合的 0.6 倍。
+    - 實測（`p7_harden2` 版圖，含 Caravel 網路，取 `max_ss_100C` 較差）：met4 1.6 µm 65.6 mV（最壞組合 104.2），met4 4.8 µm 45.2 mV（最壞組合 72.2）。
+    - 做法：`pnr/soc_top/ir_worst.py` 判 `max_ss_n40C_1v60` 與 `max_ss_100C_1v60`（1.60 V，各自的 ss `LAYERS_RC`，加上該 PVT 的 SRAM 浮接電流），兩個取大的比 `[max_sum]`；`max_ff_n40C_1v95`／`max_ff_100C_1v95` 配 ss 電阻照跑，印成 `[INFO]`，不影響判定（EM 與紀錄用）。negative test P77（拿掉 `ss_100C` 的浮接電流）、P78（上限在兩個慢 corner 之間）改成慢 corner；P61 不變。上限：wrapper 內部與 soc_top 維持 20 mV；含 Caravel 網路 50 mV（決定 18 的供電要求）。
+    - 被否決的選項：維持最壞組合（含 Caravel 網路 72 mV，供電要求 ≥ 1.675 V）；兩個都判（慢 corner 50 mV、最壞組合 75 mV）。
+    - 量測方法（先重現 flow 的功耗、按類別拆解、.lib 沒有的電流按 PVT 加、切換率是假設、手算交叉檢查、供電點從真實 pad 起算）寫進 `signoff-criteria`「IR 用多大的電流」。
 
 ## 後果
 
