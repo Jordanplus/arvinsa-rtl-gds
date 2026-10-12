@@ -72,7 +72,7 @@
     - 原因兩個：global routing 後的 hold 修復（`GRT_RESIZER_HOLD_SLACK_MARGIN` 預設 0.05 ns）修完估計 +0.058 ns，同一條路徑繞線、RCX 後在 resizer 看得到的 `max_ff_n40C` 是 −0.043 ns，估計樂觀約 0.1 ns；resizer 的 corner 不含 ff_100C，這條路徑在 ff_100C 比 ff_n40C 再差 0.028 ns。
     - 先試的做法（退回）：`RSZ_CORNERS` 加 3 個 ff_100C。LibreLane 所有 resizer 步驟共用這份清單（`librelane/steps/openroad.py` 第 2397 行），修 slew／cap 的 `RepairDesignPostGRT` 不再把 17 顆 `a221oi_1` 放大成 `a221oi_4`，改在後面插長串 buffer（最長 254 顆），buffer 866 → 4759 顆，global routing 壅塞失敗（`GRT-0116`，總溢位 771；run `p7_harden3`）。同一份輸入單步重跑（只跑到 `repair_design`）兩邊數字完全相同；resizer 的目標 slew corner 兩邊都是 `max_ss_n40C_1v60`，ff_100C 的 .lib 也有完整 428 個 cell。為什麼不放大，查到時限為止沒有找到（`tapeout-precheck-caravel`、`drv-timing-closure` 經驗紀錄）。
     - 做法：`GRT_RESIZER_HOLD_SLACK_MARGIN` 0.2 ns（量到的約 0.1 ns 落差，加上 ff_100C 的 0.028 ns，再留餘裕）。只改 wrapper 的 config。ff_100C 由 signoff STA（15 個 corner）判，這次的違規就是它抓到的。
-    - 代價與風險：resizer 沒有直接看 ff_100C（`drv-timing-closure` 規則 11 的教訓），只靠餘量；輸入腳位路徑多插延遲 cell，ss 的 setup 可能略降（`p7_harden2` 最差 setup +0.648 ns）。驗證：`p7_harden4`（從 `p7_harden2` 第 40 步的狀態重跑，結果見下一次更新），之後正式 harden。
+    - 代價與風險：resizer 沒有直接看 ff_100C（`drv-timing-closure` 規則 11 的教訓），只靠餘量；輸入腳位路徑多插延遲 cell，ss 的 setup 可能略降（`p7_harden2` 最差 setup +0.648 ns）。驗證：`p7_harden4`（從 `p7_harden2` 第 40 步的狀態重跑，137 分鐘，flow 沒有延後錯誤）：post-GRT hold 修復修完 +0.204 ns，signoff 15 個 corner 的 hold 都沒有違規，最差 +0.148 ns（`max_ff_100C`，`wbs_adr_i[8]`）；setup 最差 +0.648 → +0.592 ns；LVS、antenna PASS，KLayout DRC 0，Magic DRC 數目與 `p7_harden2` 相同（後者已確認全部在 SRAM 內）。之後正式 harden。
     - 被否決的選項：寫 plugin 只讓修 timing 的步驟看 15 個 corner（約半天，`repair_timing` 也會放大 cell，同樣的異常可能出現）；先查根因（可能查不到，時程不確定）。
 
 ## 後果
