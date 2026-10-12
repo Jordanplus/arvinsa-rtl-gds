@@ -67,6 +67,13 @@
     - 判法：wrapper 內部的 net 維持 0.70／0.75 ns。違規的 pin 若是有外部 transition 的輸入腳位本身，或接在這種腳位 net 上的 cell 輸入，允許到「該腳位的 transition + 0.05 ns」；0.05 ns 是其他 net 從 PnR 目標到 signoff 上限的餘量（0.70 → 0.75 ns）。其他任何違規都 FAIL。
     - 實作：`check_soc.py max_slew`（每個 STA corner 讀 `checks.rpt` 的違規清單，數量要和報表的計數相同；soc_top 沒有邊界例外，違規數必須是 0）；wrapper config 的 `MAX_SLEW_VIOLATION_CORNERS` 改回 LibreLane 預設（不讓 flow 因 slew 失敗），改由這一列判定。negative test：`neg_pnr.py` P80（soc_top 植入一個內部違規）；邊界 pin 超過 transition + 0.05 ns、內部違規、計數對不上三種情況已在 `p7_harden2` 的報表上手動確認會 FAIL，`neg_pnr` 支援 wrapper 時（步驟 8）加成正式案例。
     - 被否決的選項：整體改成官方的 1.5 ns（內部 net 的 signoff 也只檢查到 1.5 ns，與 ADR-0009 不一致）；整體放寬到 1.0 ns（除了容得下 Caravel 以外沒有依據）。
+17. **wrapper 的 global routing 後修 hold 餘量 0.05 → 0.2 ns；resizer 的 corner 維持 ADR-0013 的 12 個**（使用者 2026-10-12 先選「加 ff_100C＋餘量 0.2 (建議)」；實測跑不完後改選「回 12 corner＋餘量 0.2 (建議)」）：
+    - 起因：探索 run `p7_harden2`（RSZ-0074 修好後從第 41 步接續）signoff 只剩一條 hold 違規，Caravel 送進來的 `wbs_adr_i[4]` → `_21509_`：`max_ff_100C` −0.071、`max_ff_n40C` −0.043、`nom_ff_100C` −0.024、`min_ff_100C` −0.001 ns（`runs/p7_harden2_out/attempt2_margin005/`）。這是 wrapper 才有的路徑：依決定 14 的官方約束，資料由 Caravel 的時脈（min latency 4.65 ns）加 0.79 ns 送出，wrapper 的暫存器在 5.57 ns 加內部 clock tree 約 2 ns 才取樣，ff 下資料要延遲約 2.4 ns 才夠 hold，路徑上已經有 5 顆 `dlygate4sd3_1`。
+    - 原因兩個：global routing 後的 hold 修復（`GRT_RESIZER_HOLD_SLACK_MARGIN` 預設 0.05 ns）修完估計 +0.058 ns，同一條路徑繞線、RCX 後在 resizer 看得到的 `max_ff_n40C` 是 −0.043 ns，估計樂觀約 0.1 ns；resizer 的 corner 不含 ff_100C，這條路徑在 ff_100C 比 ff_n40C 再差 0.028 ns。
+    - 先試的做法（退回）：`RSZ_CORNERS` 加 3 個 ff_100C。LibreLane 所有 resizer 步驟共用這份清單（`librelane/steps/openroad.py` 第 2397 行），修 slew／cap 的 `RepairDesignPostGRT` 不再把 17 顆 `a221oi_1` 放大成 `a221oi_4`，改在後面插長串 buffer（最長 254 顆），buffer 866 → 4759 顆，global routing 壅塞失敗（`GRT-0116`，總溢位 771；run `p7_harden3`）。同一份輸入單步重跑（只跑到 `repair_design`）兩邊數字完全相同；resizer 的目標 slew corner 兩邊都是 `max_ss_n40C_1v60`，ff_100C 的 .lib 也有完整 428 個 cell。為什麼不放大，查到時限為止沒有找到（`tapeout-precheck-caravel`、`drv-timing-closure` 經驗紀錄）。
+    - 做法：`GRT_RESIZER_HOLD_SLACK_MARGIN` 0.2 ns（量到的約 0.1 ns 落差，加上 ff_100C 的 0.028 ns，再留餘裕）。只改 wrapper 的 config。ff_100C 由 signoff STA（15 個 corner）判，這次的違規就是它抓到的。
+    - 代價與風險：resizer 沒有直接看 ff_100C（`drv-timing-closure` 規則 11 的教訓），只靠餘量；輸入腳位路徑多插延遲 cell，ss 的 setup 可能略降（`p7_harden2` 最差 setup +0.648 ns）。驗證：`p7_harden4`（從 `p7_harden2` 第 40 步的狀態重跑，結果見下一次更新），之後正式 harden。
+    - 被否決的選項：寫 plugin 只讓修 timing 的步驟看 15 個 corner（約半天，`repair_timing` 也會放大 cell，同樣的異常可能出現）；先查根因（可能查不到，時程不確定）。
 
 ## 後果
 
