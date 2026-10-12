@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P70).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P79).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -201,6 +201,9 @@ step re-run one step on a copy of that step's saved config and input state
        100C static_max_mw                             ADR-0018 decision 19)
   P78  ir_worst.py with the limit between the drops of   ir_worst.py drop (the worst of the two corners is
        its two ff corners                             judged, named in the FAIL row)
+  P79  the Caravel wrapper config without               check_inputs.py --cpu caravel inout_dont_touch (only
+       RSZ_DONT_TOUCH_RX (for every --cpu: the        row FAIL, names analog_io[0]; RepairDesignPostGRT
+       soc_top configs have no inout signal port)     stopped with RSZ-0074 on analog_io[9], run p7_harden2)
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
@@ -228,6 +231,7 @@ LL_DIR = os.environ.get("LIBRELANE_DIR", os.path.join(ROOT, ".tools", "librelane
 CHECK_SOC = os.path.join(ROOT, "pnr", "soc_top", "check_soc.py")
 CHECK_SIGNOFF = os.path.join(ROOT, "signoff", "scripts", "check_signoff.py")
 CHECK_INPUTS = os.path.join(ROOT, "pnr", "soc_top", "check_inputs.py")
+CARAVEL_CONFIG = os.path.join(ROOT, "pnr", "user_project_wrapper", "config.json")
 REVIEW = os.path.join(ROOT, "signoff", "scripts", "review_criteria.py")
 # --cpu -> (run tag, config); set_cpu() sets CPU, CONFIG, LIMITS and GOLDEN before the cases run.
 TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
@@ -1241,6 +1245,19 @@ def p78(run, d):
             f"ir_worst.py: limit between {drops} -> FAIL on {worst}")
 
 
+def p79(run, d):
+    cfg = json.load(open(CARAVEL_CONFIG))
+    cfg.pop("RSZ_DONT_TOUCH_RX")
+    p = os.path.join(d, "config.json")
+    json.dump(cfg, open(p, "w"), indent=1)
+    cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", "caravel", "--config", p], capture_output=True, text=True)
+    open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
+    fails = re.findall(r"^  \[FAIL\] (\w+):", cp.stdout, re.M)
+    return (inputs_failed(cp.returncode, cp.stdout, "inout_dont_touch") and fails == ["inout_dont_touch"]
+            and "analog_io[0]" in cp.stdout,
+            f"check_inputs.py --cpu caravel inout_dont_touch only (FAIL rows {fails}), names analog_io[0]")
+
+
 def inputs_check(d, *args):
     cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", CPU, *args], capture_output=True, text=True)
     open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
@@ -1620,7 +1637,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
          ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69),
          ("P70", p70), ("P71", p71), ("P72", p72), ("P73", p73), ("P74", p74), ("P75", p75), ("P76", p76),
-         ("P77", p77), ("P78", p78)]
+         ("P77", p77), ("P78", p78), ("P79", p79)]
 
 
 def main():

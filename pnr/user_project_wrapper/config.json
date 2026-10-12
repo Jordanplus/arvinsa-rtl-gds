@@ -1,5 +1,5 @@
 {
-    "//": "Phase 7 (ADR-0019): user_project_wrapper of ChipFoundry Caravel with the Hazard3 SoC placed flat (soc_top and the SRAM directly at the wrapper level, project-plan.md §5.5). Built from pnr/soc_top/config_hazard3.json: every setting not changed below has the same value and the same reason there. Changed: the design and file list, the clock port, the die, the Caravel fixed section (caravel_user_project b510613c openlane/user_project_wrapper/config.json, 'You should NOT edit this section'), the SRAM instance and location (decision 12), and no IR supply model yet (decision 11, step 5).",
+    "//": "Phase 7 (ADR-0019): user_project_wrapper of ChipFoundry Caravel with the Hazard3 SoC placed flat (soc_top and the SRAM directly at the wrapper level, project-plan.md §5.5). Built from pnr/soc_top/config_hazard3.json: every setting not changed below has the same value and the same reason there. Changed: the design and file list, the clock port, the die, the Caravel fixed section (caravel_user_project b510613c openlane/user_project_wrapper/config.json, 'You should NOT edit this section'), the SRAM instance and location (decision 12), the analog_io nets don't-touch for the resizer (RSZ_DONT_TOUCH_RX), and no IR supply model yet (decision 11, step 5).",
     "meta": {
         "version": 3,
         "flow": "Classic",
@@ -198,6 +198,8 @@
         "min_ss_n40C_1v60",
         "max_ss_n40C_1v60"
     ],
+    "//RSZ_DONT_TOUCH_RX": "The 29 analog_io nets (unconnected inout pins of the Caravel wrapper) are don't-touch for the resizer: repair_design with global-route parasitics (RepairDesignPostGRT) counts an inout pin as both the driver and a load, and stops with [ERROR RSZ-0074] 'failed to build tree from gloubal routes: found route to 1 pins, expected 0' (OpenROAD ec354411 BufferedNet.cc makeBufferedNetGroute; RepairDesign.cc skips don't-touch nets). Run p7_harden2 step 41 stopped at analog_io[9]; a single-step re-run of the same input with this setting finished with the same repairs. check_inputs.py inout_dont_touch checks that every inout signal port of the top module matches it.",
+    "RSZ_DONT_TOUCH_RX": "^analog_io\\[",
     "//PL_RESIZER_HOLD_SLACK_MARGIN": "0.3 ns (default 0.1): the post-CTS hold repair reached +0.100 ns, but after routing the hold on sram0 input pins (SRAM .lib hold 0.5 ns: the ADR-0007 value, kept as the floor by ADR-0010; sram0 clock delayed by CTS latency balancing) fell to -0.088 ns at min_ff_n40C (Phase 4 harden-soc 2 and 3). CTS_DELAY_BUFFER_DERATE_PCT 0 or 1 did not change the 10 delay buffers of that balancing (OpenROAD CTS-0036, single-step CTS re-run), so the margin is taken in the hold repair.",
     "PL_RESIZER_HOLD_SLACK_MARGIN": 0.3,
     "//PL_RESIZER_SETUP_SLACK_MARGIN": "0.1 ns (default 0.05; 0.6 until Phase 5). 0.6 stood in for ss_n40C while the resizer did not see it; with ss_n40C in RSZ_CORNERS (ADR-0013) it is not needed, and it blocked the hold repair: in the single-step re-run with 0.6 the hold repair left 21 sram0 dout0 -> rdata registers at -0.26 ns hold in ss_n40C (their setup there was at the 0.6 ns margin), with 0.1 they got their hold buffers (+0.62 ns).",

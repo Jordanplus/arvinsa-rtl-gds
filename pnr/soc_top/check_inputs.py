@@ -16,6 +16,11 @@ Checks:
   rtl_files   the config's VERILOG_FILES == the source files of the CPU's RTL file list, and
               VERILOG_INCLUDE_DIRS == its +incdir+ entries (the flow hardens the same RTL that the
               simulations use)
+  inout_dont_touch every inout port of the top module (DESIGN_NAME in those files) that is not a VDD_NETS /
+              GND_NETS net is matched by RSZ_DONT_TOUCH_RX (bit 0 of a vector, e.g. analog_io[0]): OpenROAD's
+              repair_design with global-route parasitics counts an inout pin as driver and load and stops
+              with RSZ-0074 (Phase 7 run p7_harden2, analog_io of the Caravel wrapper; skill
+              librelane-run-debug). One name per declaration or a comma list; ranges are dropped
   cpu_config  the two configs (config.json, config_hazard3.json; the one of --cpu replaced by --config)
               have the same value for every key except VERILOG_FILES, VERILOG_INCLUDE_DIRS,
               VERILOG_DEFINES and the comments (keys starting with //), and VERILOG_DEFINES is unset in
@@ -164,6 +169,29 @@ def main(argv):
         f"in {os.path.relpath(rtl_f, ROOT)}"
         + ("" if sorted(have_files) == sorted(files) else
            f"; only in config {sorted(set(have_files) - set(files))}, only in the file list {sorted(set(files) - set(have_files))}"))
+    # inout signal ports of the top module (supply nets excepted): RSZ_DONT_TOUCH_RX must match each
+    # (a vector is checked by its bit 0, the net name in the layout)
+    supplies = set(cfg.get("VDD_NETS") or []) | set(cfg.get("GND_NETS") or [])
+    inouts = []
+    for f in files:
+        src = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(f, encoding="utf8", errors="replace").read(), flags=re.S)
+        src = re.sub(r"^\s*`(ifdef|ifndef|elsif|else|endif|define|undef|include|timescale|default_nettype)\b[^\n]*", "",
+                     src, flags=re.M)
+        m = re.search(rf"\bmodule\s+{re.escape(cfg['DESIGN_NAME'])}\b(.*?)\bendmodule\b", src, re.S)
+        if not m:
+            continue
+        body = re.sub(r"\[[^\]]*\]", " [] ", m.group(1))   # ranges may hold ( ) and macros
+        for seg in re.findall(r"\binout\b(.*?)(?=\binput\b|\boutput\b|\binout\b|[;)]|$)", body, re.S):
+            vec = "[]" in seg
+            names = re.findall(r"\b[A-Za-z_]\w*\b", seg)
+            inouts += [n + ("[0]" if vec else "") for n in names if n not in ("wire", "tri", "logic", "signed")]
+    rx = cfg.get("RSZ_DONT_TOUCH_RX", "$^")
+    signals = [p for p in inouts if p not in supplies]
+    bad = [p for p in signals if not re.search(rx, p)]
+    row("inout_dont_touch", not bad,
+        f"{len(signals)} inout signal port(s) of {cfg['DESIGN_NAME']} {signals}, all matched by RSZ_DONT_TOUCH_RX {rx!r}"
+        if not bad else f"inout signal port(s) {bad} not matched by RSZ_DONT_TOUCH_RX {rx!r}: repair_design after "
+        "global routing stops with RSZ-0074 on an inout net (librelane-run-debug)")
     pico, h3 = configs["picorv32"], configs["hazard3"]
     differ = sorted(k for k in set(pico) | set(h3) if not k.startswith("//") and k not in CPU_KEYS and pico.get(k) != h3.get(k))
     bad_def = [f"{c} VERILOG_DEFINES = {configs[c].get('VERILOG_DEFINES')}" for c in configs

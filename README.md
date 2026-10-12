@@ -161,7 +161,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
 | 要跑 LibreLane、從中間 step 接續、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
-| run 失敗、錯誤時有時無（例如 `GRT-0229`）、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
+| run 失敗、錯誤時有時無（例如 `GRT-0229`）、`RSZ-0074 failed to build tree from gloubal routes`、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | hold delay cell 卡在 setup 吃緊的路徑上、半週期路徑、launch 與 capture 的 clock 差隨 corner 變號 | cts-clock-tree | drv-timing-closure（hold 修復本身） |
 | max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
@@ -241,6 +241,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 常見陷阱：重跑的 step 目錄多 `-1` 字尾、從中間接續後之後每一步的編號都多 1（checker 不要寫死 step 編號），而且中止那次的目錄還在（checker 只採計有 `state_out.json` 的目錄）、ODB 會快取 LEF、STA hook 只在 STA 生效、console 輸出會折行。
   - metrics 的彙總值：DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner，不是 nom_tt。state 的 metrics 會沿用前面步驟的值，flow 中途 `state_out.json` 的數字不一定是那一步量的，要看該步的 `or_metrics_out.json`。log 的 `RSZ-0032 Inserted N hold buffers` 不是總數，要數網表。
   - what-if：改 config 複本後單步重跑一個 step（例如 `IRDropReport` 換 corner 與電阻、`GeneratePDN` 換 Tcl 重產 PDN），先用現行設定確認結果與原 run 相同（Phase 5）。GRT-0229 接續後的結果不一定逐項相同。同一步還有另一種隨機中止 `GRT-0116`（溢位只有個位數），重試只在總溢位 ≤ 10 時接手。
+  - 頂層有 inout 訊號腳位（Caravel 的 `analog_io`）時，`RepairDesignPostGRT` 每次都會中止於 `RSZ-0074`：OpenROAD 把 inout 腳位同時算成 driver 和 load。config 用 `RSZ_DONT_TOUCH_RX` 把這些 net 設成 dont_touch；`check_inputs.py inout_dont_touch` 在 harden 前檢查（P79）。
 - **不在這裡**：設定值該設多少、怎麼判 PASS，看各主題的 skill。
 - **本 repo 實例**：`pnr/*/run.sh`、`pnr/librelane_flow.sh`（GRT-0229 重試，negative test `make test-flow-retry`）、`pnr/soc_top/neg_pnr.py` 的 `rerun()`。
 
