@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P79).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P80).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -201,6 +201,9 @@ step re-run one step on a copy of that step's saved config and input state
        100C static_max_mw                             ADR-0018 decision 19)
   P78  ir_worst.py with the limit between the drops of   ir_worst.py drop (the worst of the two corners is
        its two ff corners                             judged, named in the FAIL row)
+  P80  checks.rpt of max_ss_n40C_1v60 with one max   check_soc.py max_slew (only row FAIL, names
+       slew violator, sram0/clk0 at 0.80 ns            sram0/clk0: no boundary exception in soc_top;
+                                                     ADR-0019 decision 16)
   P79  the Caravel wrapper config without               check_inputs.py --cpu caravel inout_dont_touch (only
        RSZ_DONT_TOUCH_RX (for every --cpu: the        row FAIL, names analog_io[0]; RepairDesignPostGRT
        soc_top configs have no inout signal port)     stopped with RSZ-0074 on analog_io[9], run p7_harden2)
@@ -645,16 +648,16 @@ def soc_case(run, d, row, replace=None, links=None, also=(), config=None, dirs=(
     return rc != 0 and failed == {row, *also} and "soc-checks: FAIL" in out, out
 
 
-def sta_dir_with(run, d, corner, edit):
-    """A copy of the signoff STA directory made of symlinks, except <corner>/sta.log, which is
-    edit(text) of the original. Returns (relative path of the STA directory in the run, copy)."""
+def sta_dir_with(run, d, corner, edit, name="sta.log"):
+    """A copy of the signoff STA directory made of symlinks, except <corner>/<name> (default sta.log),
+    which is edit(text) of the original. Returns (relative path of the STA directory in the run, copy)."""
     src = step_dir(run, "OpenROAD.STAPostPNR")
     dst = os.path.join(d, "sta")
     for root, dirs, files in os.walk(src):
         here = os.path.join(dst, os.path.relpath(root, src))
         os.makedirs(here, exist_ok=True)
         for f in files:
-            if os.path.relpath(os.path.join(root, f), src) == os.path.join(corner, "sta.log"):
+            if os.path.relpath(os.path.join(root, f), src) == os.path.join(corner, name):
                 open(os.path.join(here, f), "w").write(edit(open(os.path.join(root, f), errors="replace").read()))
             else:
                 os.symlink(os.path.join(root, f), os.path.join(here, f))
@@ -668,6 +671,17 @@ def p30(run, d):
     ok, out = soc_case(run, d, "sram_lib", links={rel: sta})
     return ok and re.search(r"nom_ff_n40C_1v95: \['[^']*/" + re.escape(wrong) + r"'\]", out) is not None, \
         "check_soc.py sram_lib: nom_ff_n40C_1v95 read the tt SRAM .lib (only row FAIL, soc-checks: FAIL)"
+
+
+def p80(run, d):
+    viol = ("max slew\n\nPin                                        Limit        Slew       Slack\n" + "-" * 72 + "\n"
+            "sram0/clk0                              0.750000    0.800000   -0.050000 (VIOLATED)\n\n")
+    rel, sta = sta_dir_with(run, d, "max_ss_n40C_1v60",
+                            lambda t: edit_once(t, r"^max slew violation count 0$", viol + "max slew violation count 1",
+                                                "the max slew count of max_ss_n40C_1v60"), name="checks.rpt")
+    ok, out = soc_case(run, d, "max_slew", links={rel: sta})
+    return ok and "max_ss_n40C_1v60: sram0/clk0 0.8 ns" in out, \
+        "check_soc.py max_slew: one slew violator on an internal net in max_ss_n40C_1v60 (only row FAIL)"
 
 
 def p32(run, d):
@@ -1637,7 +1651,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
          ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69),
          ("P70", p70), ("P71", p71), ("P72", p72), ("P73", p73), ("P74", p74), ("P75", p75), ("P76", p76),
-         ("P77", p77), ("P78", p78), ("P79", p79)]
+         ("P77", p77), ("P78", p78), ("P79", p79), ("P80", p80)]
 
 
 def main():

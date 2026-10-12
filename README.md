@@ -164,7 +164,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | run 失敗、錯誤時有時無（例如 `GRT-0229`）、`RSZ-0074 failed to build tree from gloubal routes`、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | hold delay cell 卡在 setup 吃緊的路徑上、半週期路徑、launch 與 capture 的 clock 差隨 corner 變號 | cts-clock-tree | drv-timing-closure（hold 修復本身） |
-| max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net） |
+| max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net）、signoff-criteria（外殼給的 input transition 就超過上限：邊界 net 另判） |
 | 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
 | signoff 才在 resizer 看不到的 corner 出現 setup 違規；繞線前想看某個 corner 的 slack | drv-timing-closure（規則 9、11：用別的 corner 加餘量代替，長路徑會漏） | multicorner-sta（規則 8：繞線前怎麼量；規則 7：flow 中途 state 的 metrics 可能是舊值） |
 | CTS 後修完 setup，signoff 卻在長路徑 setup 違規；想調大 setup 餘量或加週期 | drv-timing-closure（規則 12：先量差距落在哪一段，繞線後才出現的就開 `RUN_POST_GRT_RESIZER_TIMING`） | signoff-criteria（`review_criteria.py` 印出每次修復到 signoff 的差距） |
@@ -431,7 +431,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 用 `unset_*_delay` 拿掉約束時，STA 的完整性檢查看不出來；要模擬「漏寫」，就產生一份真的少一行的 SDC。
   - 半週期路徑（一個 clock edge 送出、相反 edge 接收）要算 duty cycle。PnR 與 signoff 共用的約束放在同一個檔。
   - OpenSTA 對設了 driving cell 的腳位會忽略 `set_input_transition`，而 `base.sdc` 對所有輸入都設了 driving cell；要用 input transition，source `base.sdc` 時先暫時停用 `set_driving_cell`，改完看報表腳位的 slew 確認。
-  - 放進外殼（Caravel wrapper）時，邊界約束用外殼抽出的數值（source latency、IO delay、transition、負載）；例外路徑要確認自己的電路適用才用。
+  - 放進外殼（Caravel wrapper）時，邊界約束用外殼抽出的數值（source latency、IO delay、transition、負載）；例外路徑要確認自己的電路適用才用。外殼給的 transition 超過自己的 max transition 時照用，邊界 net 另判（`check_soc.py max_slew`，ADR-0019 決定 16）。
 - **本 repo 實例**：`pnr/soc_top/pnr.sdc`、`signoff.sdc`、`clock_uncertainty.sdc`；wrapper 的 `pnr/user_project_wrapper/caravel_base.sdc`、`caravel_io.sdc`（ADR-0019 決定 14）。negative test：P01–P03、P13、P22–P25。
 
 #### signoff-criteria：signoff 條件的推導與每次 harden 後的檢查

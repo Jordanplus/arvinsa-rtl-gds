@@ -62,6 +62,11 @@
     - 依據：`wb_clk_i` 是管理用 CPU 的核心時脈。Caravel `verilog/rtl/caravel_clocking.v`（chipfoundry／efabless `main`，兩者相同）第 93–94 行：開機時用外部時脈 `ext_clk`（duty 由板子上的振盪器決定），firmware 啟用 PLL 後用 `clock_div` 除頻（`clock_div.v` 第 83、106 行，設計成 50% duty；除數 0 時直通 PLL）。45/55% 涵蓋常見振盪器規格；PLL 的 jitter 沒有找到數字。
     - 下線風險與使用限制：PLL jitter 未知；44 ns 的週期代表管理端的核心時脈不能超過 22.7 MHz（Caravel 文件寫核心時脈上限「TBD，約 50 MHz」），測試 firmware 與板子要照這個設定，寫進 Phase 7 exit review 的已知限制。有 Caravel 的量測資料時再更新假設。
     - `user_project_wrapper` 的規劃（`pnr/user_project_wrapper/pin_plan.toml`：SRAM 在 (350.98, 413.44) µm，GPIO 37／36／35／34／33 = `uart_tx`／`uart_rx`／`trap`／`boot_mode[1]`／`boot_mode[0]`，`gpio_out` 只走 LA）經使用者核准：使用者 2026-10-12 看過規劃表與 floorplan 圖 `runs/layout_png/p7_floorplan4_modules.png`（run `p7_floorplan4`，跑到 global placement）後回覆「可以」。
+16. **slew 上限：wrapper 內部照舊，Caravel 直接驅動的邊界 net 另判**（使用者 2026-10-12：「內部照舊，邊界另判 (建議)」）：
+    - 起因：Caravel 的官方 SDC（決定 14）給 `la_oenb`、`wbs_adr_i`、`la_data_in`、`wbs_dat_i` 的 input transition 是 0.97／0.92／0.86／0.84 ns，超過本 repo 的上限（PnR 0.70、signoff 0.75 ns，ADR-0009）。探索 run `p7_harden2` 第 38 步（tt）有 384 個 max slew 違規，全部在這四組腳位與直接接在上面的第一顆 cell（64 個，多是 hold delay cell）；第一顆 cell 的 slew 0.840–0.920 ns，幾乎等於腳位的值。wrapper 內部沒有其他違規。slew 由 Caravel 那一端決定，wrapper 內部修不掉；官方範例的上限是 1.5 ns（`MAX_TRANSITION_CONSTRAINT`），所以不算違規。STA 本來就用這些真實的 transition 算 timing，這個決定只影響判定，不影響時序與版圖。
+    - 判法：wrapper 內部的 net 維持 0.70／0.75 ns。違規的 pin 若是有外部 transition 的輸入腳位本身，或接在這種腳位 net 上的 cell 輸入，允許到「該腳位的 transition + 0.05 ns」；0.05 ns 是其他 net 從 PnR 目標到 signoff 上限的餘量（0.70 → 0.75 ns）。其他任何違規都 FAIL。
+    - 實作：`check_soc.py max_slew`（每個 STA corner 讀 `checks.rpt` 的違規清單，數量要和報表的計數相同；soc_top 沒有邊界例外，違規數必須是 0）；wrapper config 的 `MAX_SLEW_VIOLATION_CORNERS` 改回 LibreLane 預設（不讓 flow 因 slew 失敗），改由這一列判定。negative test：`neg_pnr.py` P80（soc_top 植入一個內部違規）；邊界 pin 超過 transition + 0.05 ns、內部違規、計數對不上三種情況已在 `p7_harden2` 的報表上手動確認會 FAIL，`neg_pnr` 支援 wrapper 時（步驟 8）加成正式案例。
+    - 被否決的選項：整體改成官方的 1.5 ns（內部 net 的 signoff 也只檢查到 1.5 ns，與 ADR-0009 不一致）；整體放寬到 1.0 ns（除了容得下 Caravel 以外沒有依據）。
 
 ## 後果
 

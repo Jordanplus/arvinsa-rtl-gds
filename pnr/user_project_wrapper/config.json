@@ -134,7 +134,7 @@
     "//RUN_IRDROP_REPORT": "No supply-point model for the Caravel core ring yet (decision 11, step 5); until then the IR step is off and IR is not judged.",
     "RUN_IRDROP_REPORT": false,
     "ERRORS_ON_UNMATCHED_IO": "both",
-    "//CORNERS": "Fail on setup, hold, max slew and max cap in every STA corner (LibreLane's sky130 default fails setup only in tt; project-plan.md §6.2).",
+    "//CORNERS": "Fail on setup, hold and max cap in every STA corner (LibreLane's sky130 default fails setup only in tt; project-plan.md §6.2). Max slew: LibreLane's default (\"\": no corner fails the flow) and check_soc.py max_slew judges instead (ADR-0019 decision 16): Caravel drives la_oenb, la_data_in, wbs_adr_i and wbs_dat_i at 0.84-0.97 ns (caravel_io.sdc), above the 0.75 ns limit, which no repair inside the wrapper can change (run p7_harden2: all 384 violations on those pins and the first cells on their nets). The row allows exactly those pins, up to the Caravel transition + 0.05 ns, and fails on any other violation.",
     "SETUP_VIOLATION_CORNERS": [
         "*"
     ],
@@ -142,7 +142,7 @@
         "*"
     ],
     "MAX_SLEW_VIOLATION_CORNERS": [
-        "*"
+        ""
     ],
     "MAX_CAP_VIOLATION_CORNERS": [
         "*"

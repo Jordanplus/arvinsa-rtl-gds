@@ -49,6 +49,13 @@ Checks (each prints a PASS/FAIL row):
                that warning with exactly those ports). project-plan.md §7.2
                "no unconstrained endpoint". The section must be present in every corner of
                STA_CORNERS in the config, and no other corner may be there.
+  max_slew     in every corner of STA_CORNERS, every max slew violator of <corner>/checks.rpt (the count line
+               must be there and match the listed pins) is either an input port with an external transition
+               in the design's boundary SDC (DESIGNS boundary_sdc; soc_top has none, so no violator is
+               allowed) or a pin on the net of such a port, with a slew of at most that transition +
+               BOUNDARY_SLEW_MARGIN. Caravel drives la_oenb, la_data_in, wbs_adr_i, wbs_dat_i at
+               0.84-0.97 ns, above the 0.75 ns limit, and nothing inside the wrapper can change that
+               (ADR-0019 decision 16); LibreLane's MaxSlewViolations does not fail the wrapper's flow.
   pulse_width  minimum pulse width and minimum period (<corner>/pulse_width.rpt, written by
                sta_extra_corner.tcl with report_check_types) in every corner of STA_CORNERS: both
                tables present and each worst slack >= the required slack printed in the report
@@ -287,12 +294,18 @@ def read_magic_drc(path, outline=None):
 # check_setup warnings that are expected: (warning text, sorted tuple of the listed pins); set by main() from DESIGNS
 CHECK_SETUP_ALLOWED = set()   # Phase 3-5 allowed the unclocked sram0/clk1 (tied to 0); ADR-0018 decision 9
 # What differs between the designs (keyed by the config's DESIGN_NAME).
+# max_slew: a pin on a net driven by an input port with an external transition (boundary_sdc) may exceed the
+# max transition up to that transition + this margin, the PnR-to-signoff margin of every other net
+# (0.70 ns pnr.sdc -> 0.75 ns signoff; ADR-0019 decision 16)
+BOUNDARY_SLEW_MARGIN = 0.05
 DESIGNS = {
-    "soc_top": {"inst": "sram0", "clk_port": "clk", "check_setup_allowed": set(), "ir_model": "met5_left_end"},
+    "soc_top": {"inst": "sram0", "clk_port": "clk", "check_setup_allowed": set(), "ir_model": "met5_left_end",
+                "boundary_sdc": None},
     # Phase 7 (ADR-0019): the SoC flat in the wrapper. analog_io[28:0] are pads of the fixed Caravel template with
     # nothing connected (the SoC has no analog circuit), so STA lists them as unconstrained endpoints.
     "user_project_wrapper": {
         "inst": "u_soc.sram0", "clk_port": "wb_clk_i", "ir_model": "core_ring",
+        "boundary_sdc": "pnr/user_project_wrapper/caravel_io.sdc",
         "check_setup_allowed": {("There are 29 unconstrained endpoints.",
                                  tuple(sorted(f"analog_io[{i}]" for i in range(29))))}},
 }
@@ -318,6 +331,42 @@ def read_check_setup(sta_dir):
                 cur[1].append(line.strip())
         out[corner] = [(w, tuple(items)) for w, items in warns]
     return out
+
+
+def read_input_transitions(path):
+    """{port name without index: max input transition in ns} from the SDC's
+    `set_input_transition -max <v> [get_ports {<name>[*]}]` lines."""
+    out = {}
+    for v, name in re.findall(r"^set_input_transition\s+-max\s+([\d.]+)\s+\[get_ports\s+\{?([A-Za-z_]\w*)",
+                              open(path, encoding="utf8").read(), re.M):
+        out[name] = float(v)
+    return out
+
+
+def read_max_slew(path):
+    """(count, [(pin, slew), ...]) of the max slew violators in a <corner>/checks.rpt, or None without the
+    `max slew violation count` line."""
+    if not os.path.isfile(path):
+        return None
+    text = open(path, encoding="utf8", errors="replace").read()
+    m = re.search(r"^max slew violation count (\d+)$", text, re.M)
+    if not m:
+        return None
+    sec = re.search(r"^max slew\n(.*?)(?=^max (?:fanout|capacitance)\n|^=+\n|^max slew violation count)", text, re.M | re.S)
+    viol = [(p, float(sl)) for p, sl in re.findall(r"^(\S+)\s+[\d.]+\s+([\d.]+)\s+-[\d.]+ \(VIOLATED\)", sec.group(1) if sec else "",
+                                                   re.M)]
+    return int(m.group(1)), viol
+
+
+def pin_net(nl, inst, pin, cache):
+    """Net on <inst>/<pin> in the netlist text (None if not found)."""
+    key = (inst, pin)
+    if key not in cache:
+        name = inst if re.fullmatch(r"[A-Za-z_]\w*", inst) else "\\" + inst + " "
+        m = re.search(r"(?:^|\s)" + re.escape(name) + r"\s*\((.*?)\);", nl, re.S)
+        c = re.search(r"\." + re.escape(pin) + r"\(\s*([^)]*?)\s*\)", m.group(1)) if m else None
+        cache[key] = c.group(1) if c else None
+    return cache[key]
 
 
 def read_pulse_width(path):
@@ -519,6 +568,32 @@ def main(run_dir, config_path, sram_drc):
     row("sta_setup", ok, f"check_setup in {len(cs)} corners: no warning"
         + (f" other than the {len(CHECK_SETUP_ALLOWED)} allowed one(s) of {design}" if CHECK_SETUP_ALLOWED else "") if ok else
         f"{len(cs)} corners ({len(corners)} in STA_CORNERS), section missing in {missing}, unexpected warnings {dict(list(bad.items())[:2])}")
+
+    # max slew (ADR-0019 decision 16): every violator in every corner is a pin of a net driven by an input port
+    # that has an external transition (the port, or a load on its net), at most that transition + the margin
+    trans = read_input_transitions(os.path.join(ROOT, dz["boundary_sdc"])) if dz["boundary_sdc"] else {}
+    problems, allowed, excess, cache = [], 0, None, {}
+    for c in corners:
+        r = read_max_slew(os.path.join(stas[-1], c, "checks.rpt")) if stas else None
+        if r is None:
+            problems.append(f"{c}: no 'max slew violation count' in checks.rpt")
+            continue
+        count, viol = r
+        if len(viol) != count:
+            problems.append(f"{c}: {len(viol)} violators parsed, the report counts {count}")
+        for p, sl in viol:
+            net = pin_net(nl, *p.rsplit("/", 1), cache) if "/" in p else p
+            v = trans.get(re.sub(r"\[.*", "", net or ""))
+            if v is None or sl > v + BOUNDARY_SLEW_MARGIN + 1e-9:
+                problems.append(f"{c}: {p} {sl} ns" + (f" (net {net}, external transition {v} ns)" if v is not None else
+                                                       f" (net {net}: not driven by a port with an external transition)"))
+            else:
+                allowed += 1
+                excess = max(excess if excess is not None else -1e9, sl - v)
+    row("max_slew", bool(corners) and not problems,
+        f"{len(corners)} corners: " + (f"{allowed} violators, all on nets driven by input ports with an external transition, "
+                                       f"at most {excess:+.3f} ns from it (margin {BOUNDARY_SLEW_MARGIN} ns)" if allowed else "no violator")
+        if corners and not problems else f"{len(problems)} problem(s), e.g. {'; '.join(problems[:3])}")
 
     # minimum pulse width and minimum period
     pw = {c: read_pulse_width(os.path.join(stas[-1], c, "pulse_width.rpt")) if stas else None for c in corners}

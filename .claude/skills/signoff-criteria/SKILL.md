@@ -130,6 +130,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | 半週期路徑的 DCD 預算 | 同上：`-fall_from`／`-rise_from` 的 inter-edge uncertainty = 半週期 jitter + DCD + margin | STA 本身 | P24（D = 60%）、P25（預算改 60%），最差路徑必須從 sram0 下降緣送出 |
 | min pulse width、min period | `sta_extra_corner.tcl` 每個 corner 輸出報告，必要的 slack 從 SDC 的變數算 | `check_soc.py pulse_width` | P22、P23 |
 | macro 的 PVT 差異 | Phase 4：`sta_extra_corner.tcl` 的 instance derate 乘進 OCV；Phase 3.5 起：每個 PVT 一份 SRAM .lib，不加 instance derate，OCV 由 `base.sdc` 套用（ADR-0010） | STA 本身、`check_soc.py sram_lib` | P04、P30 |
+| max slew（外殼的邊界 net） | 外殼給的 input transition 超過上限、內部修不掉時：只有輸入腳位本身與直接接在它 net 上的 cell 輸入可以例外，上限是「外殼的 transition + PnR 到 signoff 的餘量」（0.05 ns），其他 net 照舊（ADR-0019 決定 16）；這時 LibreLane 的 `MAX_SLEW_VIOLATION_CORNERS` 改回預設，不讓 flow 因 slew 失敗 | `check_soc.py max_slew`（每個 corner 的違規清單，數量要等於報表計數） | P80（內部違規）；邊界超標待 wrapper 版 neg_pnr |
 | 溫度反轉 corner | `config.json` 的 `STA_CORNERS`、`LIB`（resizer 用 `RSZ_CORNERS` 另外控制，`multicorner-sta`） | `[corners]` | — |
 | IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES`；最壞組合（ff 電流＋ss 金屬電阻） | `check_signoff.py`、`check_soc.py ir_sources`、`ir_worst.py` | P07、P26–P29、P61、P62 |
 | 「typical corner slack ≥ 週期 X%」 | 降為只報告（`[info]`） | — | — |
