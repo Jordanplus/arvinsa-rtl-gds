@@ -24,7 +24,7 @@ DRY_RUN ?= 0
         neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
         sram-lib sram-confirm sram-char sram-extract neg-char openram-setup openram-macro neg-openram \
         openram-lib-template openram-char openram-power openram-lib openram-confirm openram-check-lib macro-views neg-macro-views \
-        pin-plan neg-pin-plan
+        pin-plan neg-pin-plan precheck-deck precheck-sram-ref precheck-check neg-precheck
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -32,6 +32,7 @@ help:
 	@echo "  make flow-setup           fetch LibreLane (pinned tag), nix-shell smoke test, download sky130A"
 	@echo "  make pdk-fetch            download sky130A tarballs (parallel, resumable, sha256) and install with ciel"
 	@echo "  make xpack-fetch          download the xPack riscv-none-elf-gcc (newlib) into .tools/ (byte ranges in parallel, resumable, sha256)"
+	@echo "  make precheck-deck        the KLayout deck of ChipFoundry's precheck (pinned cf-precheck wheel, sha256) into .tools/"
 	@echo "  make ci-sram-ref          re-run LibreLane CI test_sram_macro, check signoff items + local golden"
 	@echo ""
 	@echo "Phase 1 targets (see docs/spec/soc_spec.md §8):"
@@ -49,6 +50,8 @@ help:
 	@echo "  make eqy-caravel          formal equivalence of make harden D=user_project_wrapper (synthesized vs final)"
 	@echo "  make gl-caravel           gate-level lockstep of that wrapper netlist against the RTL wrapper"
 	@echo "  make ir-caravel           static IR of that wrapper from Caravel's pads with the max-power pattern"
+	@echo "  make precheck-check PRECHECK_PROJECT=<dir>  judge a precheck result by ADR-0019 decision 5 (reference: make precheck-sram-ref)"
+	@echo "  make neg-precheck         bug injection into that judgement, 24 cases (about 5 minutes; part of make regress)"
 	@echo "                            (fw/tests/maxpower windows recorded on the final netlist, slow corners)"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check py-check skill-check lint fw regress-rtl-smoke"
@@ -138,6 +141,9 @@ pdk-fetch:
 xpack-fetch:
 	bash env/fetch_xpack.sh
 
+precheck-deck:
+	bash env/fetch_precheck_deck.sh
+
 ci-sram-ref:
 	bash pnr/ci_sram_ref/run.sh
 
@@ -195,6 +201,18 @@ ir-caravel:
 	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS)) --clk-half-ns 22
 	$(PY) pnr/user_project_wrapper/ir_caravel.py runs/user_project_wrapper runs/ir_caravel \
 	  signoff/limits/user_project_wrapper.toml $(foreach w,$(IR_WINDOWS),--vcd runs/ir_caravel_vcd/win_$(w).vcd)
+
+# ChipFoundry precheck judged by ADR-0019 decision 5 (signoff/precheck/README.md). precheck-sram-ref: the pinned deck on
+# the PDK SRAM alone (the reference); precheck-check PRECHECK_PROJECT=<dir the precheck ran on> [PRECHECK_REF=<dir>].
+PRECHECK_REF ?= runs/precheck_sram_ref
+precheck-sram-ref:
+	$(PY) signoff/precheck/run_deck.py --gds $${PDK_ROOT:-$$HOME/.ciel}/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds --out $(PRECHECK_REF)
+
+precheck-check:
+	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_PROJECT) --ref-dir $(PRECHECK_REF)
+
+neg-precheck:
+	$(PY) signoff/precheck/neg_precheck.py
 
 neg-rtl: fw
 	$(PY) dv/scripts/neg.py --cpu $(CPU)

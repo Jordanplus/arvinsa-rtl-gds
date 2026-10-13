@@ -103,3 +103,14 @@ repo 的 LibreLane nix-shell 有 Magic、KLayout（含 `pya`）、Netgen、ruby�
 | oeb | FAIL（stat=6；33 個 `GPIO n: ERROR: missing gpio configuration`，原因同 gpio_defines） | 5.9 |
 
 結論：環境可用。Rosetta 模擬下最久的是 KLayout BEOL 與 LVS（各約 6.5 分鐘）。官方範例沒有 SRAM，所以 BEOL 沒有第 7 節的違規。
+
+## 9. 步驟 6：precheck 的判定 checker（2026-10-14，ADR-0019 決定 5）
+
+實作與判定內容在 `signoff/precheck/README.md`。查證與確認：
+
+- **deck 的來源**：PyPI 的 `cf-precheck==1.3.7` wheel（sha256 `bc847eb9…`），其中 `drc_scripts/sky130A_mr.drc` 的 sha256 `aeba6ab5…` 與第 7 節用的、image 裡 1.3.7 的相同。`make precheck-deck` 依 `env/versions.mk` 取得。
+- **cf-precheck 的輸出**（`checks/klayout_drc.py`、`results.py`、`runner.py`）：每項結果寫進 `.cf/project.json`（status 是 pass／fail／skip，另有 `version` 與 `input_file_hash` = GDS 的 sha1）；FEOL／BEOL 的判定就是報表 XML 有沒有 `<item>`，數目寫進 `logs/<check>_check.total`；`logs/gds.info` 記錄這次檢查的 GDS 的 sha1（`runner.py` 第 23–31 行）。
+- **兩顆 macro 依 cell 對不上、依位置完全相同**：第 7 節的報表依 cell 分，BEOL 自產 macro 有 2 個掛在 `arv_…_dummy_array`／`_0`，預建 macro 掛在 `sky130_…_replica_bitcell_array`。展開到每個 instance 後數目相同（FEOL 16,900、BEOL 50,184），但座標整體差 (5.61, 9.32) µm：自產 macro 是新版 OpenRAM 產生的，外框 694.27 × 428.415 對 683.1 × 416.54 µm，bitcell array（16,384 個 `sky130_fd_bd_sram__openram_dp_cell`，400.41 × 254.26 µm）的位置不同。以 array 左下角為原點後兩邊完全相同。
+- **真正的 wrapper GDS 預覽**（本機 KLayout 0.30.7、固定版本的 deck，不是判定）：`runs/user_project_wrapper`（f4ea9de 的確認 harden）的 GDS，FEOL 654 秒 3 個、BEOL 901 秒 264 個，和 SRAM 單獨檢查相同。checker 判這兩項 PASS：16,900／50,184 個位置都在 SRAM 內，而且都是預建 macro 單獨檢查時就有的位置（`runs/p7_precheck_preview/check.log`；這個預覽的其他 11 項沒有跑，`project.json` 裡是佔位值）。官方 image 的完整結果在步驟 7。
+- **獨立審查**（agent，2026-10-14，只讀）：找到「舊報表配新 GDS 會判 PASS」（結果目錄只比時間，沒綁到 GDS），以及版本沒比對、沒有座標值的項目被略過、比對基準沒綁到 `--ref-gds` 等問題，都已補上檢查與 negative test（共 24 個案例）。KLayout API 的用法（遞迴 instance、array、鏡像與旋轉）由審查者另做小 GDS 實測，與直接攤平的結果一致。
+- **限制**：設計裡只能有一顆 OpenRAM SRAM（bitcell cell 沒有 macro 前綴，第二顆的違規會被算成在受檢 SRAM 外而 FAIL，不會誤判 PASS）。

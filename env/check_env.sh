@@ -104,6 +104,14 @@ if [ "$xp_have" = "$xp_want" ] && [ "$xp_is" = 1 ] && [ "$xp_newlib" = 1 ]; then
 elif [ "$FLOW_STRICT" = 1 ] && [ "${CPU:-picorv32}" = hazard3 ]; then
   bad "xPack riscv-none-elf-gcc $xp_want with newlib not at $xp_dir (found: version $xp_have, '${xp_vendor:-no --version}', libc.a ${xp_libc:-none}; run: make xpack-fetch, or set XPACK_DIR)"
 else pend "xPack riscv-none-elf-gcc $xp_want not at $xp_dir (needed by make core-hazard3; run: make xpack-fetch)"; fi
+# KLayout deck of ChipFoundry's precheck, needed by make neg-precheck (Phase 7, ADR-0019 decision 5). PRECHECK_DECK
+# points at an installed copy (a clean worktree has no .tools/). Strict (FAIL) only with --flow (make regress).
+pc_deck="${PRECHECK_DECK:-.tools/cf-precheck-$(pin CF_PRECHECK_VERSION)/sky130A_mr.drc}"
+if [ -f "$pc_deck" ] && echo "$(pin CF_PRECHECK_DECK_SHA256)  $pc_deck" | shasum -a 256 -c --status; then
+  ok "precheck KLayout deck (cf-precheck $(pin CF_PRECHECK_VERSION)) at $pc_deck"
+elif [ "$FLOW_STRICT" = 1 ]; then
+  bad "precheck KLayout deck with CF_PRECHECK_DECK_SHA256 not at $pc_deck (run: make precheck-deck, or set PRECHECK_DECK)"
+else pend "precheck KLayout deck not at $pc_deck (needed by make neg-precheck; run: make precheck-deck)"; fi
 if [ "$FLOW_STRICT" = 1 ] && [ "$flow_missing" = 1 ]; then fail=1; fi
 
 echo

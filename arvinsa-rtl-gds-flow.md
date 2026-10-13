@@ -131,7 +131,7 @@ signoff（harden 結尾自動執行）
 階段收尾 ............................... phase-exit-review
 貫穿全程 ............................... librelane-run-debug（執行與除錯）
                                          signoff-checker-qualification（checker、golden、植入錯誤）
-尚未涵蓋 ............................... chip-level 整合與下線預檢（本 repo Phase 7；沒有 skill，進入前先建，規則 7）
+下線預檢（晶圓廠收件前的自動檢查）..... tapeout-precheck-caravel（本 repo Phase 7：Caravel、ChipFoundry precheck）
 ```
 
 ## 4. 逐步流程
@@ -204,17 +204,18 @@ signoff（harden 結尾自動執行）
 - gate-level 模擬：RTL 與網表 lockstep（`make gl-soc`），含電源腳位的網表（`make gl-soc-powered`），negative test `make neg-gl-soc`（`gate-level-simulation`）。外殼（Caravel wrapper）用 `make gl-caravel`：比對外殼全部的輸出腳位（`gl_lockstep` 的 `OUT_W`）。
 - power signoff（IR、EM、功耗）一律用 CPU max power pattern 的切換活動，不用 OpenSTA 的預設切換率（使用者 2026-10-13；`signoff-criteria`）。新設計要有一支 max power firmware，並在 harden、gate-level 模擬之後錄 VCD。
 - IR 的判定（Caravel wrapper，`make ir-caravel`，接在 gate-level 模擬之後）：CPU 的 max power pattern（`fw/tests/maxpower`，滿負載迴圈標在 GPIO）在最終網表的 gate-level 模擬錄成 VCD（`run_gl_soc.py --record-window`，時脈用 signoff 週期），含外殼供電網路的 IR 讀這些 VCD，在慢 corner 判（`ir_caravel.py`，ADR-0019 決定 20）。harden 內的 `ir_worst.py`（預設切換率）只當早期檢查。切換活動要用 max power pattern 的依據見 `signoff-criteria`「IR 用多大的電流」。
+- 下線預檢（本 repo Phase 7：ChipFoundry precheck）：判定只認官方 image 的結果，每次記下版本與 image digest。官方結果裡的已知工具問題不能直接放過，要寫成有比對基準的 checker：precheck 的 deck 在任何 OpenRAM SRAM（包括 PDK 預建的）裡都報 `MR_licon.SP.6`、`MR_mcon.CON.10`，`make precheck-check` 要求其他項目全 PASS，這兩條的每個違規展開後都在 SRAM 裡、而且 PDK 預建 macro 單獨檢查時同一個位置也有（ADR-0019 決定 5；比對基準 `make precheck-sram-ref`，植入錯誤 `make neg-precheck`）。做法在 `tapeout-precheck-caravel` 規則 3。
 
 ### 4.8 一鍵 regression 與來源追溯
 
 - `make regress`（Hazard3 版，`scripts/regress.py --cpu hazard3`）依序跑下列項目，第一個 FAIL 就停（實際清單：`scripts/regress.py` 的 `TARGET_LISTS`）：
   1. `env-check-flow py-check lint synth-check fw core-hazard3 regress-rtl neg-rtl regress-rtl-caravel neg-rtl-caravel`
-  2. flow 的 checker：`neg-provenance`（來源追溯的植入錯誤）、`neg-run-guard`（下游拒絕 FAIL 或別的 commit 的 run）、`neg-regress`（regression 自己的植入錯誤）、`test-flow-retry`（偶發錯誤的重試）、`test-review-hook`（criteria review 的 Stop hook）、`neg-openram`、`neg-macro-views`
+  2. flow 的 checker：`neg-provenance`（來源追溯的植入錯誤）、`neg-run-guard`（下游拒絕 FAIL 或別的 commit 的 run）、`neg-regress`（regression 自己的植入錯誤）、`test-flow-retry`（偶發錯誤的重試）、`test-review-hook`（criteria review 的 Stop hook）、`neg-openram`、`neg-macro-views`、`pin-plan`、`neg-pin-plan`、`neg-precheck`（precheck 判定的植入錯誤，Phase 7）
   3. `harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr`
   4. `provenance-final`：HEAD 與工作樹從 harden 開始後都沒變。
 - `make regress-picorv32`：PicoRV32 版，把 `core-hazard3` 換成 `core-stock`，另加 4.4 的 `harden-core gl-core neg-gl-core eqy-core neg-eqy-core`。
 - **不在 regression 裡、要另外跑的**：`ci-sram-ref`；macro 的產生、view QA、特性化與它們的確認（`openram-macro`、`macro-views`、`sram-char`／`openram-char`、`sram-confirm`／`openram-confirm`、`openram-check-lib`、`neg-char`）。這些在 macro 或量測方法有改時跑，結果進版控；regression 只檢查進版控的結果沒過期（`harden-soc` 開頭的 `check_inputs.py`）。
-- 要在乾淨的 checkout 執行；乾淨的 worktree 沒有 `.tools/`，要設 `LIBRELANE_DIR`、`XPACK_DIR` 指到已安裝的副本。
+- 要在乾淨的 checkout 執行；乾淨的 worktree 沒有 `.tools/`，要設 `LIBRELANE_DIR`、`XPACK_DIR`、`PRECHECK_DECK` 指到已安裝的副本。
 - skill：`flow-regression-reproducibility`。
 
 ### 4.9 Phase 收尾

@@ -189,7 +189,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同（連 cell 數、diode 數都變）；checker 只證明設定被讀到、靠名稱辨識結構、抓到的機制和宣稱的不同 | signoff-checker-qualification（漏洞類型表；規則 7：斷言抓到的機制、守門條件本身要有測試） | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
 | 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對、PnR 設定與上限檔要不要重做 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面）、drv-timing-closure（時序收斂） |
-| 把設計放進 Caravel 的 `user_project_wrapper`、決定用哪幾支 GPIO（先定 block 位置）；跑 ChipFoundry precheck（`cf precheck`）；precheck 的 `klayout_beol` 在 SRAM 裡報 `MR_mcon.CON.10`、`klayout_feol` 報 `MR_licon.SP.6`；Apple Silicon 上沒有 amd64 的 Docker | tapeout-precheck-caravel | drc-signoff（DRC 判讀）、lvs-signoff（SRAM black box）、hard-macro-integration、floorplan-congestion |
+| 把設計放進 Caravel 的 `user_project_wrapper`、決定用哪幾支 GPIO（先定 block 位置）；跑 ChipFoundry precheck（`cf precheck`）並判定結果（`make precheck-check`）；precheck 的 `klayout_beol` 在 SRAM 裡報 `MR_mcon.CON.10`、`klayout_feol` 報 `MR_licon.SP.6`；Apple Silicon 上沒有 amd64 的 Docker | tapeout-precheck-caravel | drc-signoff（DRC 判讀）、lvs-signoff（SRAM black box）、hard-macro-integration、floorplan-congestion |
 | 一個 Phase 收尾 | phase-exit-review | — |
 
 ### 在流程中的位置
@@ -549,14 +549,14 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **重點**：
   - precheck 一定用 Docker 跑官方 image，只有 linux/amd64，Apple Silicon 要用 colima＋Rosetta 模擬；容器每次會升級 `cf-precheck`，每次要記下版本。只有官方 image 的結果算判定。
   - precheck 自帶的 KLayout deck 比 flow 用的新：flow 的 KLayout DRC 是 0，precheck 不一定過。每顆 macro 先用 precheck 的 deck 單獨跑一次。
-  - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019）。
+  - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019 決定 5）：`make precheck-check` 把違規展開到相對 bitcell array 的位置再比（deep 模式下違規掛在哪層 cell 會隨 macro 的階層不同，比 cell 名稱連兩顆好的 macro 都對不上），植入錯誤 `make neg-precheck`；本機的 deck 用 `make precheck-deck` 固定版本與 sha256。
   - LVS 是電晶體層級，SRAM 用 `EXTRACT_ABSTRACT` 當 black box。
   - `wb_clk_i` 是管理用 CPU 的核心時脈（外部時脈或 PLL 除頻）：設計的週期就是管理端時脈的下限；wrapper 邊界的時序約束用官方 wrapper SDC 的數值（見 timing-constraints-sdc）。
   - user area 的供電：vccd1、vssd1 各只有一顆 pad（右側），經 Caravel 5 µm 的 met4 ring 與只在 wrapper ring 左右兩側的 met3 跨接線進來；wrapper 的電源 pin 不能當理想電源，IR 要從 pad 起算（`ir_caravel.py`、`caravel_pwr/`），電流用 max power pattern 量（規則 7，ADR-0019 決定 18–20）。
   - pad 與 wrapper 腳位位置都是固定的，能選的只有用哪幾支 GPIO：先依 Wishbone（下緣左段）定 block 位置，再挑最近的 GPIO，最後才寫 wrapper RTL（Phase 7 順序做反了，重做一次）。規劃與核准的做法看 chip-floorplan-pin-planning。
   - 還沒實跑確認的：XOR 要求 die 外那圈和官方空 wrapper 相同（用固定的 DEF 範本）、GPIO 設定與 `io_oeb` 的實體接線檢查、`lvs_config.json` 的路徑寫法。
 - **不在這裡**：macro 本身的 view QA 看 hard-macro-integration；DRC、LVS 的一般做法看 drc-signoff、lvs-signoff。
-- **本 repo 實例**：ADR-0019、`docs/notes/caravel_precheck_phase7.md`（Phase 7）。
+- **本 repo 實例**：ADR-0019、`docs/notes/caravel_precheck_phase7.md`、`signoff/precheck/`（Phase 7）。
 
 #### chip-floorplan-pin-planning：晶片層級的 pad、block 與 pin 規劃
 

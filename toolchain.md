@@ -36,6 +36,7 @@
 | 工具 | 用途 | 版本 | 安裝 | 驗證 |
 |---|---|---|---|---|
 | xPack riscv-none-elf-gcc | 含 newlib 的 RISC-V 工具鏈：Hazard3 上游測試（riscv-tests、sw_testcases）需要 libc（Phase 5，ADR-0011）；multilib 含 rv32imc／ilp32 | `XPACK_RISCV_VERSION = 15.2.0-1`（GCC 15.2.0），darwin-arm64 壓縮檔 `XPACK_RISCV_SIZE = 401163559` bytes，`XPACK_RISCV_SHA256 = 6588e8351455fad8aca37551f0e5a5543f3346bfa9a837cf03cbd3bdd4989f8f`（與官方 `.sha` 檔、GitHub asset digest 相同） | `make xpack-fetch`（`env/fetch_xpack.sh`：8 段平行、可續傳、比對大小與 sha256 後解壓到 `.tools/xpack-riscv-none-elf-gcc-15.2.0-1/`，約 1.5 GB；下載快取用完即刪） | 2026-10-05：`-march=rv32imc -mabi=ilp32 -specs=nano.specs -specs=nosys.specs` 編譯含 `snprintf` 的程式成功 |
+| ChipFoundry precheck 的 KLayout deck | precheck 判定的比對基準與 negative test（`make precheck-sram-ref`、`make neg-precheck`；Phase 7，ADR-0019 決定 5）。deck 是 GPLv3，不放進 repo；正式判定只認官方 image | `CF_PRECHECK_VERSION = 1.3.7`，wheel `CF_PRECHECK_WHEEL_SHA256 = bc847eb97fdb2213b71d09da1304eee4c159b5dc9b7a2e031cabaf4961d77f0f`（2026-10-14 從 PyPI 算），`drc_scripts/sky130A_mr.drc` 的 `CF_PRECHECK_DECK_SHA256 = aeba6ab5137923f2258714ab5d91ce99ca6a6f932bea55dedfe6f79aca697ba1`（與 image 裡 cf-precheck 1.3.7 的相同，release `2026.03.30_01.00`） | `make precheck-deck`（`env/fetch_precheck_deck.sh`：`pip download` 固定版本、核對 wheel 與 deck 的 sha256 後放到 `.tools/cf-precheck-1.3.7/`） | 2026-10-14：兩顆 SRAM 單獨檢查與 `make neg-precheck` |
 
 ## 2. RTL-to-GDS flow（Phase 0，2026-10-03 已安裝；`librelane --smoke-test` PASS）
 
@@ -103,7 +104,7 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 以下各值必須與 `env/versions.mk` 一致：
 `PDK = sky130A`、`STD_CELL_LIBRARY = sky130_fd_sc_hd`、`SRAM_MACRO = sky130_sram_2kbyte_1rw1r_32x512_8`、`RISCV_PREFIX = riscv64-elf-`、
 `VERILATOR_MIN = 5.050`、`ICARUS_MIN = 13.0`、`YOSYS_MIN = 0.69`、`RISCV_GCC_MIN = 16.1`、`PYTHON_MIN = 3.11`；
-xPack 工具鏈的三個值見 §1.1。乾淨 worktree 沒有 `.tools/`：設 `XPACK_DIR` 指向已安裝的目錄（與 `LIBRELANE_DIR` 相同做法）；`make env-check-flow CPU=hazard3` 檢查它。
+xPack 工具鏈與 precheck deck 的值見 §1.1。乾淨 worktree 的 precheck deck 用 `PRECHECK_DECK` 指向已安裝的檔案；`make env-check-flow` 檢查它。乾淨 worktree 沒有 `.tools/`：設 `XPACK_DIR` 指向已安裝的目錄（與 `LIBRELANE_DIR` 相同做法）；`make env-check-flow CPU=hazard3` 檢查它。
 
 ## 7. 各 regression 實際用到的工具子元件與 override（驗證紀錄）
 

@@ -50,3 +50,12 @@ SKY130_FD_BD_SRAM_COMMIT = fc63b12883b4bf458ee8c756ba64c37063e1ffb9
 OPENRAM_PDK_HASH         = e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066
 OPENRAM_PDK_COMMON_SHA256 = a37160e9a00e39e540e5e7746c064537c7331d6542ebd7a3b05b5801ef7cf044
 OPENRAM_PDK_FD_PR_SHA256  = 9795dee2b08e0ca794e39a041f661b72168cba1dd4140474bde94320d75bcb46
+
+# ---- ChipFoundry precheck (Phase 7, ADR-0019) ----
+# The judging run is the official image (docker chipfoundry/mpw_precheck, which pip-upgrades cf-precheck itself; the
+# version and image digest of each run are recorded with it). The pinned wheel gives the same KLayout deck to the local
+# tools: make precheck-deck puts drc_scripts/sky130A_mr.drc into .tools/ for the SRAM reference and neg-precheck.
+# Wheel sha256 computed on 2026-10-14 from PyPI; the deck's sha256 equals the one inside the image (cf-precheck 1.3.7).
+CF_PRECHECK_VERSION      = 1.3.7
+CF_PRECHECK_WHEEL_SHA256 = bc847eb97fdb2213b71d09da1304eee4c159b5dc9b7a2e031cabaf4961d77f0f
+CF_PRECHECK_DECK_SHA256  = aeba6ab5137923f2258714ab5d91ce99ca6a6f932bea55dedfe6f79aca697ba1
