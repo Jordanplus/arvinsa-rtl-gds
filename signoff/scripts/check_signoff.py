@@ -10,6 +10,9 @@ usage: check_signoff.py <metrics.json> <limits.toml> <golden metrics.json>
   [max]     "<metric>" = value       metric must be a finite number <= value
   [max_sum] "<name>" = {keys = [...], max = value}   every key a finite number, their sum <= value
                                      (e.g. VDD drop + GND rise against one supply budget)
+            "<name>" = {keys = [...], max = value, judged_by = "<target>"}   a limit another checker
+                                     judges on its own data (e.g. make ir-caravel, IR from Caravel's
+                                     pads): printed as INFO, not computed from this run's metrics
   [corners] names = [...]            for every corner: setup_ws_min <= timing__setup__ws__corner:<c> < slack_max
             setup_ws_min, hold_ws_min,                  hold_ws_min  <= timing__hold__ws__corner:<c>  < slack_max
             slack_max                names must be unique and equal the corners present in the metrics.
@@ -89,6 +92,13 @@ def main(metrics_path, limits_path, golden_path):
         row("max", key, have, f"<= {want}", finite(have) and have <= want)
     for name, spec in limits.get("max_sum", {}).items():
         keys, top = (spec.get("keys") or [], spec.get("max")) if isinstance(spec, dict) else ([], None)
+        if isinstance(spec, dict) and "judged_by" in spec:
+            judge = spec["judged_by"]
+            if isinstance(judge, str) and judge.strip() and keys and finite(top):
+                row("info", name, "-", f"<= {top}, judged by {judge} (not from this run's metrics)", True)
+            else:
+                row("max", name, judge, "judged_by a non-empty string, with keys and a finite max", False)
+            continue
         vals = [run.get(k, "<missing>") for k in keys]
         ok = bool(keys) and finite(top) and all(finite(v) for v in vals)
         total = sum(vals) if ok else "<missing>"

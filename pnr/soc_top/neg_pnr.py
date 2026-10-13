@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P80).
+"""make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P81).
 
 usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
@@ -204,6 +204,10 @@ step re-run one step on a copy of that step's saved config and input state
   P80  checks.rpt of max_ss_n40C_1v60 with one max   check_soc.py max_slew (only row FAIL, names
        slew violator, sram0/clk0 at 0.80 ns            sram0/clk0: no boundary exception in soc_top;
                                                      ADR-0019 decision 16)
+  P81  limits: a [max_sum] row with judged_by        check_signoff.py: the judged_by row is INFO and the
+       (another checker judges it, e.g. make          ir_vdd_drop_plus_gnd_rise row on the same metrics
+       ir-caravel), metrics 11 + 11 mV; then the      still FAILs; an empty judged_by FAILs (a limit
+       same row with judged_by = ""                   skipped without naming who judges it)
   P79  the Caravel wrapper config without               check_inputs.py --cpu caravel inout_dont_touch (only
        RSZ_DONT_TOUCH_RX (for every --cpu: the        row FAIL, names analog_io[0]; RepairDesignPostGRT
        soc_top configs have no inout signal port)     stopped with RSZ-0074 on analog_io[9], run p7_harden2)
@@ -852,6 +856,25 @@ def p29(run, d):
     return rc != 0 and [f for f in failed if f[0] == "max"] == [("max", "ir_vdd_drop_plus_gnd_rise")] \
         and "negative: design_powergrid__drop__worst__net:vssd1" in out, \
         "check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise (VDD 19 mV, GND -15 mV: sum 4 mV, a term below 0)"
+
+
+def p81(run, d):
+    keys = '["design_powergrid__drop__worst__net:vccd1", "design_powergrid__drop__worst__net:vssd1"]'
+    results = []
+    for name, judge, drop, fail_rows, info in (
+            ("named", "make ir-caravel", 0.011, [("max", "ir_vdd_drop_plus_gnd_rise")], True),
+            ("empty", "", None, [("max", "ir_judged:")], False)):
+        sub = os.path.join(d, name)
+        os.makedirs(sub)
+        edit = (lambda m: m.update({"design_powergrid__drop__worst__net:vccd1": drop,
+                                    "design_powergrid__drop__worst__net:vssd1": drop})) if drop else (lambda m: None)
+        rc, out = signoff_limits_with(run, sub, edit, "max_sum",
+                                      f'"ir_judged" = {{ keys = {keys}, max = 0.02, judged_by = "{judge}" }}')
+        failed = [f for f in re.findall(r"^  \[FAIL\] (\w+)\s+(\S+)", out, re.M) if f[0] == "max"]
+        shown = re.search(r"^  \[INFO\] info\s+ir_judged: .*judged by make ir-caravel", out, re.M) is not None
+        results.append(rc != 0 and failed == fail_rows and shown == info)
+    return all(results), "check_signoff.py [max_sum] judged_by: the row is INFO and the IR row on the same metrics " \
+        f"still FAILs; an empty judged_by FAILs ({results})"
 
 
 def p26(run, d):
@@ -1652,7 +1675,7 @@ CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), (
          ("P52", p52), ("P53", p53), ("P54", p54), ("P55", p55), ("P56", p56), ("P57", p57), ("P58", p58), ("P59", p59), ("P60", p60), ("P61", p61), ("P62", p62),
          ("P63", p63), ("P64", p64), ("P65", p65), ("P66", p66), ("P67", p67), ("P68", p68), ("P69", p69),
          ("P70", p70), ("P71", p71), ("P72", p72), ("P73", p73), ("P74", p74), ("P75", p75), ("P76", p76),
-         ("P77", p77), ("P78", p78), ("P79", p79), ("P80", p80)]
+         ("P77", p77), ("P78", p78), ("P79", p79), ("P80", p80), ("P81", p81)]
 
 
 def main():
