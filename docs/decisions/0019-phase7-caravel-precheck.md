@@ -141,9 +141,14 @@
       - `harden-soc: FAIL` 只有 `golden file: run=<missing>` 一列；signoff 上限、`check_soc.py` 13 項、`ir_worst.py`、`provenance.py`、`review_criteria.py` 全部 PASS。
       - 與 `p7_exp_pl_dens`（決定 21 的實驗）共有的 429 個 metrics 逐值相同，從 placement 到 signoff STA 可重現。
       - Caravel pad 起算的 pattern IR（決定 20，查證用，guard 關掉）：最差 max_ss_100C win_5c 19.58 mV（上限 20 mV，餘量 0.42 mV；`p7_harden5` 19.71 mV），波形 73,872 個 pin 全部標註；vectorless 45.57 mV。決定 21 留下的「pattern IR 還沒驗證」解除。
-      - criteria review（`runs/user_project_wrapper_signoff/criteria_review.md`）沒有依據不成立的 criterion。hold skew metric −3.6 ns（soc_top −1.5 ns）的成因與 golden 誤差兩列是「資料不足」，列入步驟 8。
+      - criteria review（`runs/p7_formal_signoff/criteria_review.md`，這次 run 的 signoff 目錄另存在這裡）沒有依據不成立的 criterion。hold skew metric −3.6 ns（soc_top −1.5 ns）的成因與 golden 誤差兩列是「資料不足」，列入步驟 8。
     - 建立：`signoff/golden/user_project_wrapper/metrics.json`（原檔複製）與 README（出處、sha256、主要數字、可重現性）。
     - 還要做：golden 建立後 HEAD 改變，run guard 要求 harden 的 commit 等於 HEAD，所以正式的 `make eqy-caravel`、`make gl-caravel`、`make ir-caravel` 要在下一次 harden PASS 之後跑（hazard3 同樣做法：`ad184f5` 建 golden、`940e395` 確認 harden）。
+    - 確認 harden（`f4ea9de`，`runs/p7_harden_confirm.log`，240 分鐘）：`harden-soc: PASS`，golden 455 個 metrics 全部逐值相同（沒有用到任何誤差）；criteria review `runs/p7_confirm_signoff/criteria_review.md`（signoff 目錄另存）。
+    - 正式的 eqy／gl／ir（2026-10-13，在確認 harden 的 run 上，HEAD = `f4ea9de`，run guard 開著）：
+      - `make eqy-caravel`（9 分鐘，`runs/p7_formal_eqy.log`）：PASS，16149/16149 個分區等價；第一輪 1 個沒證明（`_10122_.B`，與查證時同一個），決定 23 的 amend 重試一次（2 條 rule）後證明；2238 個 flip-flop 種類相同，2240 個 clock pin 同源（`wb_clk_i`）。
+      - `make gl-caravel`（11 分鐘，`runs/p7_formal_gl.log`）：16/16 PASS，每個 cycle 都做 RTL／網表 lockstep 比對。
+      - `make ir-caravel`（24 分鐘，`runs/p7_formal_ir.log`）：PASS，最差 max_ss_100C win_5c 19.58 mV（上限 20 mV，餘量 0.42 mV），與查證時相同；3 個視窗 × 2 個慢 corner 各 73,872 個 pin 全部標註；vectorless 45.57 mV（只列參考）。
 23. **（2026-10-13，步驟 5g）EQY 只有少數分區沒證明時，用 amend 把驅動它們輸入的分區併進來重試一次**。
     - 現象：正式 harden（`f721cff`）的網表做查證用 EQY（run guard 關掉），16149 個分區中 1 個沒證明：`_10122_.B`。同一份網表的 gate-level 模擬（查證用）16/16 PASS。
     - 根因（已驗證，`signoff/eqy/README.md`「切分點遺失邏輯關係」）：OpenROAD 對調 or4 `_10121_` 的 B、C、D（`pin_swaps()` 已排除這三個名稱）。gate 端的模型展開後與 or2 `_10119_` 共用 `a41 | _06099_`（net `_06100_`），gold 端沒有；EQY 在這條 net 的對應名稱切開，把它當獨立輸入，SAT 給出不可能出現的反例。網表等價：gold `a42|a41|a43|_06099_`，gate `a42|a43|_06099_|a41`。
