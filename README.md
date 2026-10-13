@@ -161,10 +161,10 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
 | 要跑 LibreLane、從中間 step 接續（包括已跑完的 run 改設定從中間重來）、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
-| run 失敗、錯誤時有時無（例如 `GRT-0229`）、`RSZ-0074 failed to build tree from gloubal routes`、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
+| run 失敗、錯誤時有時無（例如 `GRT-0229`）、`RSZ-0074 failed to build tree from gloubal routes`、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（繞線後 ECO 在這版 OpenROAD 做不到，會報 `RSZ-0074`；resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
 | hold delay cell 卡在 setup 吃緊的路徑上、半週期路徑、launch 與 capture 的 clock 差隨 corner 變號 | cts-clock-tree | drv-timing-closure（hold 修復本身） |
-| max slew／cap／fanout 違規 | drv-timing-closure | floorplan-congestion（繞路）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net）、signoff-criteria（外殼給的 input transition 就超過上限：邊界 net 另判） |
+| max slew／cap／fanout 違規；signoff 只有少數內部 net 略超、post-GRT 修復時卻已是 0 | drv-timing-closure（規則 13：最後一次修復後的重新 global routing 造成繞路，降 placement 密度） | floorplan-congestion（繞路、局部熱點）、antenna-signoff（diode 增加 fanout）、cts-clock-tree（clock net）、signoff-criteria（外殼給的 input transition 就超過上限：邊界 net 另判） |
 | 修某個 corner 的違規；換 PnR／sizing 工具或升版；改 corner、library 或修復餘量 | drv-timing-closure（規則 11：用違規 corner 的資料判斷修法，工具有沒有做到要用對照實驗確認；規則 10：弱 cell 檢查） | multicorner-sta（哪個 step 用哪組 corner） |
 | signoff 才在 resizer 看不到的 corner 出現 setup 違規；繞線前想看某個 corner 的 slack | drv-timing-closure（規則 9、11：用別的 corner 加餘量代替，長路徑會漏） | multicorner-sta（規則 8：繞線前怎麼量；規則 7：flow 中途 state 的 metrics 可能是舊值） |
 | CTS 後修完 setup，signoff 卻在長路徑 setup 違規；想調大 setup 餘量或加週期 | drv-timing-closure（規則 12：先量差距落在哪一段，繞線後才出現的就開 `RUN_POST_GRT_RESIZER_TIMING`） | signoff-criteria（`review_criteria.py` 印出每次修復到 signoff 的差距） |
@@ -272,6 +272,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - resizer 只看 `RSZ_CORNERS`。它看不到的 corner 用 PnR 的餘量補（setup 餘量、比 signoff 嚴的 max transition），但這只是補償，不是證明。Phase 5 證實 setup 的補償對長路徑不夠：corner 之間的延遲差和路徑長度成比例，Hazard3 一條長路徑在 ss_100C 有 +1.48 ns，signoff 在 ss_n40C 卻是 −4.16 ns。換 CPU 或改週期後，繞線前就要量一次只給 signoff 看的 corner。
   - resizer 停不下來、記憶體一直漲：OpenROAD 的 `repair_design` 修 driver 的 slew 時，可能把它換成更弱的尺寸（Phase 5：`a2111oi_2` 被換成 `a2111oi_1`）；換完若弱到連一顆最小 buffer 的輸入電容都推不動，長線修復會在同一位置無限插 buffer（Phase 5 單步重跑確認）。PDK 的 `no_synth.cells` 只擋合成，resizer 照樣會用裡面的弱 `_1`。slew 餘量越大、resizer 的 corner 越慢，會出事的 cell 越多。用除錯輸出找出那條 net；本 repo 把 `a2111oi_1` 加進 `EXTRA_EXCLUDED_CELLS`（ADR-0012），並在 harden 前用 .lib 查表檢查 resizer 可用的每個 cell（`pnr/check_weak_cells.py`）。macro 的 .lib 也曾讓這一步停不下來，換上新的先單步重跑確認時間。
   - 修哪個 corner 的違規，就用那個 corner 的資料判斷修法的影響。工具不一定做到：OpenROAD resizer 在 ss 100°C 抓到違規，卻用第一個讀進來的 tt .lib 挑尺寸（只改讀取順序，挑的尺寸就不同）。所以修完要在違規的 corner 確認被改的 cell 真的變好；換工具、升版或改 corner 設定時，用「只改 library 讀取順序或預設 corner」的對照實驗確認工具有沒有看對 corner。這條寫成規則而不只寫在腳本，是為了換工具或流程時也會重新驗證。流程設定也會讓工具看不到違規的 corner：用另一個 corner 加餘量代替，就是沒有用違規那個 corner 的資料。
+  - signoff 只有少數內部 net 的 slew 略超上限、post-GRT 修復結束時卻已是 0：slew 修復與 setup 修復修完都會重新 global routing，修的當下是直線的 net 可能被擠去繞路，之後沒有步驟再檢查 slew（Phase 7 已驗證）。在 global routing 後多插修復步驟或加迴圈都試過、無效；降 placement 目標密度解掉局部熱點（Phase 7 wrapper 55% → 50%，ADR-0019 決定 21）。繞線後 ECO 在釘版 OpenROAD 做不到（`detailed_routing` 寄生來源還沒實作）。
   - macro 的 .lib 要每個 PVT 一份，resizer 才看得到 macro 在慢 corner 的延遲；只靠 STA hook 加 derate 時，PnR 看不到。OpenRAM SRAM 的 .lib 要有 dout 在上升緣後開始變化的時序弧，STA 才會檢查接收 flop 的 hold。
   - CTS 後修完 setup，signoff 卻在長路徑違規：先量「修完 → 繞線前 → signoff」差距落在哪一段。繞線後才出現的，開 `RUN_POST_GRT_RESIZER_TIMING`，讓 resizer 用 global routing 估計的寄生再修一次（Phase 5 Hazard3：−1.131 → +0.530 ns，只換尺寸與拿掉 buffer）。不要調大 CTS 後的 setup 餘量（會擋住 hold 修復），也不要靠加週期（run 之間差約 1 ns）。
   - 放寬 signoff 上限之前先找根因；真的要放寬，由使用者決定並寫 ADR。

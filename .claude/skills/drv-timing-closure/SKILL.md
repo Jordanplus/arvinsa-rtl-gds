@@ -1,6 +1,6 @@
 ---
 name: drv-timing-closure
-description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補（為什麼對長路徑不夠，signoff 才在 ss_n40C 出現 setup 違規）、CTS 後修完 setup，signoff 卻在長路徑違規（CTS 後的估計偏樂觀，差距在繞線後才出現；開 `RUN_POST_GRT_RESIZER_TIMING`，不要調大 setup 餘量或加週期）、hold 餘量（hold delay cell 卡在 setup 吃緊的路徑時先看 cts-clock-tree；OpenROAD 只用一種 hold buffer，排除它會 `RSZ-0060 Max buffer count reached`）、resizer（`repair_design`、`RepairDesignPostGPL`、`RepairDesignPostGRT`）停不下來或記憶體一直漲到幾十 GB、只報 failed with an unexpected error（推最小負載 slew 就超過上限的弱 cell，resizer 還會自己換成更弱的 `_1` 例如 `a2111oi_1`，合成禁用的 cell 它照樣用；slew 餘量太大、corner 太多、macro .lib 的負載斜率；怎麼找出是哪條 net、harden 前的弱 cell 檢查），修某個 corner 的違規時要用那個 corner 的資料判斷修法（工具可能只看第一個讀入的 .lib；換工具或升版時怎麼驗證），以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
+description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap／max fanout（DRV）違規時使用：哪些 corner 判 FAIL、resizer 與長線修復、要排除的 cell、繞線前的寄生估計（`LAYERS_RC`）、resizer 看不到的 corner 用 PnR 餘量補（為什麼對長路徑不夠，signoff 才在 ss_n40C 出現 setup 違規）、CTS 後修完 setup，signoff 卻在長路徑違規（CTS 後的估計偏樂觀，差距在繞線後才出現；開 `RUN_POST_GRT_RESIZER_TIMING`，不要調大 setup 餘量或加週期）、signoff 只有少數內部 net 的 slew 略超上限、post-GRT 修復結束時卻已是 0（最後一次修復之後重新 global routing 把 net 擠去繞路；降 `PL_TARGET_DENSITY_PCT`，不要多插修復步驟或加迴圈）、繞線後 ECO 在這版 OpenROAD 做不到（`RSZ-0074 failed to build tree from gloubal routes`，增量繞線報 1 pin not visited）、hold 餘量（hold delay cell 卡在 setup 吃緊的路徑時先看 cts-clock-tree；OpenROAD 只用一種 hold buffer，排除它會 `RSZ-0060 Max buffer count reached`）、resizer（`repair_design`、`RepairDesignPostGPL`、`RepairDesignPostGRT`）停不下來或記憶體一直漲到幾十 GB、只報 failed with an unexpected error（推最小負載 slew 就超過上限的弱 cell，resizer 還會自己換成更弱的 `_1` 例如 `a2111oi_1`，合成禁用的 cell 它照樣用；slew 餘量太大、corner 太多、macro .lib 的負載斜率；怎麼找出是哪條 net、harden 前的弱 cell 檢查），修某個 corner 的違規時要用那個 corner 的資料判斷修法（工具可能只看第一個讀入的 .lib；換工具或升版時怎麼驗證），以及退回過的做法。SDC 寫法看 timing-constraints-sdc，corner 設定看 multicorner-sta，clock net 的 slew 與 clock tree 看 cts-clock-tree，數值怎麼定看 signoff-criteria。Use for setup/hold and slew/cap/fanout closure across corners in LibreLane/OpenROAD.
 ---
 
 # 時序與 DRV 收斂（多 corner）
@@ -18,7 +18,7 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
    3. `RUN_POST_GRT_DESIGN_REPAIR = true`，`GRT_DESIGN_REPAIR_MAX_SLEW_PCT` 30–40（50 會讓這步跑不完，見「退回過的做法」；餘量越大，越多弱 cell 會讓修復進入無窮迴圈，見規則 10）。
    4. `DESIGN_REPAIR_MAX_SLEW_PCT` 30（預設 20）。
    5. `DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 µm：大面積或細長 L 形 logic 區的長線；同時減少 antenna diode（soc_explore2 → 4：slew 50 → 20、diode 224 → 61、fanout 7 → 0）。
-   6. 殘留的少數違規若是繞路：降低 `PL_TARGET_DENSITY_PCT`（soc_top：68% → 55%，16 → 0，見 `floorplan-congestion`）。
+   6. 殘留的少數違規若是繞路：降低 `PL_TARGET_DENSITY_PCT`（soc_top：68% → 55%，16 → 0，見 `floorplan-congestion`；Phase 7 wrapper：55% → 50%，見規則 13）。
 3. **判讀違規**：讀 `*-openroad-stapostpnr/<corner>/checks.rpt` 的 max slew／fanout 段，依 driver 歸併成「幾條線」，再對照 `*-odb-reportwirelength/wire_lengths.csv` 的長度、driver cell、線上有沒有 diode 或 hold buffer。
 4. **實作與簽核分開的約束**：`PNR_SDC_FILE` 給 PnR（可比簽核更嚴），`SIGNOFF_SDC_FILE` 只給 `OpenROAD.STAPostPNR`。兩者都 `source $::env(SCRIPTS_DIR)/base.sdc` 再改一兩項。驗證方式：同一份版圖只重跑 STAPostPNR，確認只有預期的項目改變（setup／hold 數字不變）。
 5. **先找根因，再考慮放寬 signoff 上限**：殘留的少數 DRV 先查是不是繞路（`floorplan-congestion` 規則 4）。soc_top 曾經放寬到 1.0 ns（使用者決定），後來查到根因是 L 形轉角壅塞，把 `PL_TARGET_DENSITY_PCT` 從自動的 68% 降到 55% 後，0.75 ns 下全部乾淨，放寬就撤回了（ADR-0009）。真的要放寬時須由使用者決定並寫 ADR；依據可用 sky130_fd_sc_hd .lib（`default_max_transition` 1.5 ns、最嚴的 pin 1.0 ns），0.75 ns 來自 PDK 的 OpenLane 預設（`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 63 行）。
@@ -57,6 +57,12 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
     - 這一步修完也會再做一次 `global_route`，已知的隨機 GRT-0229 也會在這裡出現（`librelane-run-debug` 已知陷阱）。
     - 不要用的做法：調大 `PL_RESIZER_SETUP_SLACK_MARGIN`（會擋住 hold 修復，ADR-0013 實驗 1）；加週期（placement 與修復 buffer 鏈跟著變，run 之間差約 1 ns，見「退回過的做法」）；放寬長線上限（同表）。
     - global routing 寄生的估計比 signoff 保守（Hazard3：修完 +0.002 ns，signoff +0.530 ns），所以預設的 0.025 ns 餘量就夠。每次 harden 仍要用 `signoff-criteria` 的檢查確認差距沒有變號。
+13. **signoff 有少數內部 net 的 slew 略超上限，PnR 的 slew 修復卻報已修完：先查最後一次修復之後的重新 global routing，用 placement 密度降局部壅塞，不要在 global routing 後多插修復步驟**（Phase 7 wrapper，ADR-0019 決定 21；已驗證：比對每次 global routing 的走線、單步重跑時的量測、5 組接續實驗）
+    - 機制：slew 修復（LibreLane 的 `RepairDesignPostGRT`）用 global routing 的寄生判斷，修完插了 buffer 就重新 global routing；setup 修復（`ResizerTimingPostGRT`）修完也會重繞。修的當下是直線、slew 遠低於目標的 net，重繞時可能被擠去繞路（局部熱點），之後沒有步驟再檢查 slew，signoff 才看到。全晶片的 congestion 報告看不到這種熱點（`floorplan-congestion` 規則 5；Phase 7：全晶片使用率約 2%，那一欄 met2 卻被占滿）。
+    - **症狀**：signoff 的 `checks.rpt` 只有少數幾條內部 net 略超上限（Phase 7：0.779 對 0.75 ns），post-GRT 修復結束時的 Remaining 已經是 0，SDC 的上限也有生效。本 repo 是 `check_soc.py` 的 max_slew 列 FAIL，訊息寫 `not driven by a port with an external transition`。
+    - **怎麼發現**：check_soc 的 max_slew 列點名 net。每個 global routing 之後的 `after_grt.guide` 裡，這條 net 修的當下是直線、之後變成繞路，就是這個機制。要量修的當下的 slew：把修復步驟 `eject`（`librelane-run-debug` 規則 3），在 `repair_design` 前後加 `report_checks -through <net> -fields {slew cap}`（`-through` 不要和 `-rise_through` 一起用，會變成 No paths found）。找熱點：讀最終 DEF，數那一欄每條軌道被哪些 net 占用。
+    - **怎麼繞過**：降 `PL_TARGET_DENSITY_PCT`，一次 5%，從 global placement 接續跑到 `STAPostPNR` 比較（限時）。Phase 7 55% → 50%：內部最差 0.779 → 0.576 ns，setup 最差 +0.630 → +0.548 ns，繞線總長 +0.2%。不要只看 PASS／FAIL，要量餘量：把 `set_max_transition` 暫時降低（例如 0.50 ns）重跑 STA，排除外部 port 驅動的 net，看內部最差離上限多遠。量法先在 FAIL 的 run 上確認會重現 checker 抓到的 pin。下面幾種做法都試過、無效（「退回過的做法」表）：global routing 之後多插一次 slew 修復、global routing 階段加「重繞 → 檢查 → 修」迴圈、cell padding、繞線後 ECO（這版 OpenROAD 做不到，見「已知限制」）。
+    - **防復發**：`check_soc.py max_slew` 每次 harden 都判內部 net，植入錯誤 P80（max_ss_n40C 的一個內部 net 超標，只有這一列 FAIL）。工具升版時重看兩件事：post-GRT 修復之後，flow 是不是仍會重新 global routing 而沒有再檢查 slew；OpenROAD 有沒有實作 `detailed_routing` 寄生來源（有的話，繞線後 ECO 可能變可行）。
 
 ## 退回過的做法
 
@@ -71,14 +77,22 @@ description: 多 corner STA 出現 setup／hold 違規，或 max slew／max cap�
 | `CTS_MAX_CAP` | 沒有作用（CTS 後 DEF 逐 byte 相同） | Phase 2 試跑 #7 |
 | 週期 43 → 44 ns，想補 Hazard3 第 3 次 harden 剩下的 −0.381 ns setup | 第 4 次反而變成 −1.131 ns：週期一變，placement 與修復 buffer 鏈跟著變，run 之間差約 1 ns。週期仍維持 44 ns（使用者決定），收斂改靠規則 12 | Phase 5 第 4 次 harden，ADR-0014 |
 | `DESIGN_REPAIR_MAX_WIRE_LENGTH` 200 µm 改成不設或 600 µm，想減少關鍵路徑上的修復 buffer | 長線 buffer 少 79 顆，ss_n40C setup 沒有改善（−0.161 → −0.255 ns，在 run 之間的浮動內） | Phase 5 單步重跑第 32–37 步，ADR-0014 |
+| 規則 13 的 slew 違規：在 `ResizerTimingPostGRT` 之後多修一次 slew（`meta.substituting_steps` 的 `"+<step>"`） | slew PASS，但 hold −0.062 ns：slew 修復插的 buffer 落在 hold 修好的路徑上 | Phase 7 `p7_exp_rd2`，ADR-0019 決定 21 |
+| 同上，改在 `ResizerTimingPostGRT` 之前（`"-<step>"`） | 同一條 net 被後面的重繞拉到 0.84 ns | Phase 7 `p7_exp_rd3` |
+| 同上，global routing 階段加迴圈（repo plugin：重繞 → 檢查 → 修，最多 4 輪；「沒改動才停」與「超過目標 85% 才修」兩版） | 每輪修好上一輪的 net，重繞又擠出新的；第 4 輪最差 1.93 ns，接著 `GRT-0116` 繞線溢位 | Phase 7 `p7_exp_loop`、`p7_exp_loop22` |
+| 同上，placement 的 cell padding 2（`GPL_CELL_PADDING`、`DPL_CELL_PADDING`） | 更差：內部違規 581 個、最差 1.09 ns，繞線總長 +26%，setup 餘量 0.630 → 0.019 ns | Phase 7 `p7_exp_pl_pad` |
 
 ## 已知限制
 
-detailed routing 之後才出現的 slew 違規，LibreLane Classic flow 沒有修復步驟（post-GRT 修復當下的 Remaining 已經是 0）。可能方向：detailed routing 後的 ECO 修復（OpenROAD 有，LibreLane 沒有對應 step）、改 floorplan。
-
-## 待補：detailed routing 之後的修復（post-route ECO）
-
-**ECO**（engineering change order）：在已繞好線的版圖上只做局部修改（換 cell 尺寸、插 buffer、局部重繞），不整個重跑。LibreLane Classic flow 在 detailed routing 之後沒有 DRV／timing 修復步驟；OpenROAD 本身可以在繞線後做 `repair_design`／`repair_timing` 再做增量繞線（推測，尚未在本專案驗證）。要壓縮週期、或 detailed routing 之後仍有違規時再評估（Phase 4 改 42 ns，沒有做）：寫一個讀最終 ODB → 修復 → 增量 detailed routing → 重跑 signoff 的腳本，並用 negative test 證明它有效。SDC 的寫法與 PnR／signoff 分開的原則已移到 `timing-constraints-sdc`。
+**繞線後（detailed routing 之後）沒有 DRV／timing 修復（ECO）**。ECO（engineering change order）是在已繞好線的版圖上只做局部修改（換 cell 尺寸、插 buffer、局部重繞），不整個重跑。
+- LibreLane Classic flow 沒有對應的 step；ORFS 與 LibreLane 在繞線後都只做 `repair_antennas` 再跑一次 `detailed_route`。
+- 釘版 OpenROAD `dcf36133` 也做不到（Phase 7 原型，已驗證）：
+  - `est::set_parasitics_src detailed_routing` 是預留功能，`EstimateParasitics.cpp` 398–401、452–464、526–529 行都是 TODO。
+  - 改用 global routing 寄生時，對已繞線的設計 `global_route` 繞 0 條 net，`repair_design` 報 `[ERROR RSZ-0074] failed to build tree from gloubal routes`。
+  - 改用 placement 寄生時，Steiner 估計把繞路的 net 當直線，看不到違規。
+  - 增量 `detailed_route` 對改過的 net 缺 route guide，報 `1 pin not visited #guides`，違規停在約 5600 條不降。
+- 這一節以前寫「detailed routing 之後才出現的 slew 違規」，Phase 7 查到其實是最後一次修復之後的重新 global routing 造成（規則 13）。
+- OpenROAD 升版後要重新評估時：寫一支「讀最終 ODB → 修復 → 增量繞線 → 重跑 signoff」的腳本，用 negative test 證明它有效。SDC 的寫法與 PnR／signoff 分開的原則在 `timing-constraints-sdc`。
 
 ## negative test（單步重跑 `OpenROAD.STAPostPNR` + 對應 checker，`pnr/soc_top/neg_pnr.py`）
 
@@ -116,3 +130,4 @@ P01 setup uncertainty 30 ns → `Checker.SetupViolations`；P02 hold uncertainty
 | 2026-10-13 | 繞線後修復（post-route ECO）原型（session 暫存 `eco/proto`，讀 `p7_harden5` 第 53 步的 ODB＋第 56 步 RCX 的 SPEF） | `est::set_parasitics_src detailed_routing`：`[ERROR RSZ-0074] failed to build tree from gloubal routes: found route to 1 pins, expected 3`（對已繞線的設計 `global_route` 是 `Routed nets: 0`）；改 `placement`：修完 `_16647_/X` 仍 0.78 ns（Steiner 估它是直線）；增量 `detailed_route` 有 223 條 net `1 pin not visited #guides`，違規停在約 5600 不降 | 已驗證（原型＋OpenROAD `dcf36133` 原始碼）：`detailed_routing` 寄生來源是預留功能（`EstimateParasitics.cpp` 398–401、452–464、526–529 行都是 TODO），新改動的 net 要靠 global route；ORFS／LibreLane 只在繞線後做 `repair_antennas`＋再跑 `detailed_route` | 這版不可行（不改釘版工具，`CLAUDE.md` 規則 10）；使用者改選 global routing 階段加迴圈 | session 暫存 `eco/`（原始碼片段、原型 log） |
 | 2026-10-13 | 迴圈版 plugin step（`ResizerTimingPostGRT` 之後：legalize → global routing → 檢查 slew → `repair_design`＋hold 修復，最多 4 輪），`p7_exp_loop`、`p7_exp_loop22` | 「完全沒改動才停」：每輪插 179／133／132 顆 buffer；用「內部 net 超過 0.70 × 85% 才修」：超標 pin 42／24／33／46，第 4 輪最差 1.93 ns。兩版都在第 4 輪後的 global routing 報 `[ERROR GRT-0116]`（總溢位 71，繞線總長 1.16 → 1.32 M µm） | 已驗證：每輪都修好上一輪的 net，但重繞又擠出新的；越修越塞，不收斂 | 不採用；查繞路的原因 | `runs/p7_exp_loop`、`runs/p7_exp_loop22`（本機） |
 | 2026-10-13 | `p7_harden5` 最終 DEF 的局部繞線占用 | 全晶片 global routing 使用率約 2%、溢位 0，但 `_03489_` 想走的那一欄（x 186.3–193.2 µm、y 62–131 µm，約 15 條 met2 軌道）被 12–15 條占用；占用的 51 條 net 都是內部邏輯（無腳位 net、無電源或 blockage）。placement：`PL_ROUTABILITY_DRIVEN` true、cell padding 0、密度 55% | 局部熱點已驗證；推測是 Hazard3 register file 的 mux 樹（依 net 編號與 cell 種類，未追到 RTL） | 使用者選 placement 降局部壅塞的限時實驗（cell padding 2、密度 50%） | `runs/p7_harden5/final/def/` |
+| 2026-10-13 | 接續實驗 `p7_exp_pl_pad`、`p7_exp_pl_dens`（從 `p7_harden5` 的 floorplan 後 state，從 global placement 跑到 `STAPostPNR`，127／138 分鐘） | cell padding 2：check_soc max_slew 581 個問題、最差 1.09 ns，繞線總長 835504 → 1055909 µm，setup 最差 +0.019 ns。密度 50%：max_slew 15 個 corner PASS（剩下的全是外部 port 驅動的 net），setup +0.548、hold +0.187 ns，繞線總長 +0.2%。把上限暫時降到 0.50 ns 重跑 STA 量餘量：max_ss_n40C 內部最差 0.779（55%）→ 0.576 ns（50%），超過 0.50 ns 的內部 net 17 → 5 條；max_ss_100C 0.599 → 低於 0.50 ns | 已驗證（同一份輸入只改一個設定；量法在 `p7_harden5` 重現 check_soc 的 3 個 pin）：降密度讓 cell 散開，熱點區的繞路消失；padding 增加總繞線長度，熱點更多 | 使用者決定採用 50%（ADR-0019 決定 21），寫成規則 13 | `runs/p7_exp_pl_pad`、`runs/p7_exp_pl_dens`（本機）；量餘量的 Tcl 在 session 暫存 `margin/`（未保存進 repo） |

@@ -112,6 +112,29 @@
     - 固定切換率的比較（wrapper 網表、nom_tt）：pattern 5.88 mW；每個 net 10%／20%／50% 為 6.66／8.62／14.50 mW；OpenSTA 預設 13.70 mW。使用者 2026-10-13 問「一般都是用50% switching activities 做評估對吧」，看過比較後：「那我們還是採用pattern 評估做法」。soc_top（Hazard3）也改用同一支 maxpower firmware 的 pattern 判 IR（firmware 在 soc_top 的 RTL 已 PASS；錄波模組要改成也讀 soc_top 的 `gpio_out`），Phase 7 步驟 8 整合。
     - 已知限制：pattern 沒有包含 Wishbone 主機端的存取；零延遲的 gate-level 模擬不含 glitch 造成的切換；「最耗電」是三種 pattern 取最大，不是證明。
 
+21. **wrapper 的 placement 目標密度 55% → 50%，解掉最後一次 slew 修復後重新 global routing 造成的內部 net slew 違規**（使用者 2026-10-13 依序選「繞線後修復，先限時查可行性 (建議)」、「global routing 階段加迴圈 (建議)」、「placement 降局部壅塞，限時實驗 (建議)」；看過實驗結果後選「採用 50%，進正式 harden (建議)」）：
+    - 現象：`p7_harden5`（密度 55%）signoff 在 max_ss_n40C 有一條內部 net `_03489_` 的 slew 0.779 ns，超過 0.75 ns，`check_soc.py max_slew` FAIL。SDC 的上限有生效（PnR 0.70、signoff 0.75 ns）。
+    - 根因（已驗證，比對各步的 global routing 結果，加上單步重跑時的量測）：
+      - `RepairDesignPostGRT` 修 slew 的當下，這條 net 是 78 µm 的 met2 直線，slew 遠低於目標，所以沒修。
+      - 修完那一步插了 926 顆 buffer，接著重新做 global routing，把這條 net 擠到旁邊繞路；`ResizerTimingPostGRT` 自己的重繞又把它拉得更長。
+      - 之後沒有步驟再檢查 slew。
+      - 全晶片 global routing 使用率約 2%，但這條 net 要走的那一欄（約 15 條 met2 軌道）被 51 條內部 net 占了 12–15 條，屬於局部熱點。
+    - 試過、不採用的做法（都從 `p7_harden5` 的中間 state 接續，只跑到 `STAPostPNR`）：
+      - 在 `ResizerTimingPostGRT` 之後多修一次 slew（`p7_exp_rd2`）：slew PASS，但 hold −0.062 ns。
+      - 在 `ResizerTimingPostGRT` 之前多修一次 slew（`p7_exp_rd3`）：同一條 net 被後面的重繞拉到 0.84 ns。
+      - 繞線後 ECO：釘版 OpenROAD `dcf36133` 的 `detailed_routing` 寄生來源還沒實作（`EstimateParasitics.cpp` 的 TODO），對已繞線的設計會報 `RSZ-0074`；增量 detailed routing 的違規停在約 5600 條不降。這一版做不到，而且不改釘版工具。
+      - global routing 階段加迴圈（repo plugin，最多 4 輪「重繞 → 檢查 → 修」）：每輪修好上一輪的 net，重繞又擠出新的；第 4 輪最差 1.93 ns，接著 `GRT-0116` 繞線溢位，不收斂。
+      - placement 的 cell padding 2（`p7_exp_pl_pad`）：更差，check_soc 有 581 個問題、最差 1.09 ns，繞線總長 +26%，setup 餘量只剩 0.019 ns。
+    - 採用的 `p7_exp_pl_dens`（密度 50%，從 global placement 重跑到 `STAPostPNR`）：
+      - check_soc max_slew 在 15 個 corner PASS，剩下的違規全在外部輸入 port 驅動的 net（決定 16）。
+      - 內部 net 最差 slew 0.576 ns（max_ss_n40C，距上限 0.17 ns）；在那個 corner 超過 0.50 ns 的內部 net 從 17 條降到 5 條。量法：用釘版的 OpenSTA 把上限暫時降到 0.50 ns，排除接到外部 port 的 net；同一個量法在 `p7_harden5` 重現了 check_soc 的 3 個 pin、0.779 ns。
+      - setup 最差 +0.548 ns（55% 是 +0.630），hold 最差 +0.187 ns，繞線總長 +0.2%。
+      - soc_top 先前用同一個設定解決過同類繞路（68% → 55%，ADR-0009）。
+    - 還沒驗證、要在正式 harden 確認：
+      - pattern IR：`p7_harden5` 是 19.71 mV，只比 20 mV 上限低 0.29 mV，cell 分布一變，電流分布也會變。
+      - 熱點那一欄的 met2 占用沒有重數。直接量的是 slew，它才是 signoff 的判準。
+    - 防護：`check_soc.py max_slew` 每次 harden 都判內部 net（植入錯誤 P80），這類違規不會漏掉。工具行為與繞過方式寫進 `drv-timing-closure` 規則 13。
+
 ## 後果
 
 - Phase 7 的 exit 條件改寫為：「官方 image 的 precheck 13 項中，11 項 PASS；`klayout_feol`／`klayout_beol` 只有決定 5 的兩條規則，而且與 PDK 預建 macro 一致」。`project-plan.md` §8 同步更新。
