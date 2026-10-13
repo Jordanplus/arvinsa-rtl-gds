@@ -144,6 +144,15 @@
       - criteria review（`runs/user_project_wrapper_signoff/criteria_review.md`）沒有依據不成立的 criterion。hold skew metric −3.6 ns（soc_top −1.5 ns）的成因與 golden 誤差兩列是「資料不足」，列入步驟 8。
     - 建立：`signoff/golden/user_project_wrapper/metrics.json`（原檔複製）與 README（出處、sha256、主要數字、可重現性）。
     - 還要做：golden 建立後 HEAD 改變，run guard 要求 harden 的 commit 等於 HEAD，所以正式的 `make eqy-caravel`、`make gl-caravel`、`make ir-caravel` 要在下一次 harden PASS 之後跑（hazard3 同樣做法：`ad184f5` 建 golden、`940e395` 確認 harden）。
+23. **（2026-10-13，步驟 5g）EQY 只有少數分區沒證明時，用 amend 把驅動它們輸入的分區併進來重試一次**。
+    - 現象：正式 harden（`f721cff`）的網表做查證用 EQY（run guard 關掉），16149 個分區中 1 個沒證明：`_10122_.B`。同一份網表的 gate-level 模擬（查證用）16/16 PASS。
+    - 根因（已驗證，`signoff/eqy/README.md`「切分點遺失邏輯關係」）：OpenROAD 對調 or4 `_10121_` 的 B、C、D（`pin_swaps()` 已排除這三個名稱）。gate 端的模型展開後與 or2 `_10119_` 共用 `a41 | _06099_`（net `_06100_`），gold 端沒有；EQY 在這條 net 的對應名稱切開，把它當獨立輸入，SAT 給出不可能出現的反例。網表等價：gold `a42|a41|a43|_06099_`，gate `a42|a43|_06099_|a41`。
+    - 實驗（每次約 5 分鐘）：只排除 `_10120_.B`，或再排除 `_10119_.X`，EQY 都改用這條 net 的另一個名稱對應，仍 FAIL；`amend _10119_.X _10122_.B` 16149/16149 證明（參數順序反過來沒有作用）。
+    - 使用者 2026-10-13 選擇：「沒證明時自動 amend 重試一次 (建議)」。做法：`run_eqy.py` 第一輪 EQY 跑完、沒有常數對應與名稱衝突、沒證明的分區不超過 20 個時，對每個沒證明分區的每個輸入寫 `amend <輸入> <分區>`，整個 EQY 重跑一次，判定只看第二輪；靠重試證明的分區印成 INFO。
+    - 實作後的 negative test 發現選項說明有一句錯：選項寫「amend 只增加真實邏輯，不加任何假設，證明比原本更嚴」，但輸入是 flip-flop 輸出時，amend 把 flip-flop 併進分區，`sat` 對含 flip-flop 的分區是空洞證明（`formal-equivalence-eqy` 規則 5）。Hazard3 `nand2_to_nor2`（輸入 `_20986_`、`_20987_` 兩顆 flip-flop）重試後 16221/16221「證明」、`eqy: PASS`；negative test 的 `REQUIRE` 擋下。同一版在 wrapper 的 PASS 也含 3 個 `$sdff`，不算數。修正（仍是同一個做法，限制範圍）：只對組合邏輯驅動的輸入寫規則；第二輪被 amend 的分區有 sequential cell 就 FAIL。negative test：`nand2_comb_to_nor2`（一定走重試）`REQUIRE` 重試後仍沒證明；`nand2_flop_to_nor2` `REQUIRE` 分區沒證明。
+    - 驗證（Hazard3 `940e395` 與 wrapper `f721cff` 的網表，run guard 關掉）：wrapper 2 條 amend 規則（`_10119_.B`、`_10120_.B`），amend 後的分區只有 9 個 `$or`，16149/16149；negative test `nand2_to_nor2`、`nand2_flop_to_nor2`、`nand2_comb_to_nor2`、`o21ai_swap` 4/4 抓到，位置交叉檢查 10 組 PASS；只拿掉「不寫 flip-flop 規則」時，第二輪檢查對 `nand2_flop_to_nor2` 判 FAIL。完整的 `neg-eqy` 在步驟 8 的 regress。
+    - 不選「偵測到 pin swap 時預先加 amend」：這次的共用是 EQY 前處理產生的，從網表不一定推得出哪些分區會受影響。不選「這個分區列為豁免」：名稱每次 harden 都可能改變，等於針對特定案例繞開 checker（同決定 18 以前的理由）。
+    - 防護寫進 `formal-equivalence-eqy` 規則 7。
 
 ## 後果
 

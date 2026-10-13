@@ -43,6 +43,7 @@ PASS 需要全部成立：
 6. **兩份網表的 sequential cell（flip-flop、latch、clock gate）是同樣的 instance、同樣的功能**，只允許 drive strength 不同（Phase 4）。這一項在 EQY 之外比對，因為 EQY 的 `sat` strategy 證不到 flip-flop 本身的行為：把一顆 `dfxtp_2` 換成 reset 時會清除的 `dfrtp_2`（RESET_B 接 `resetn`），EQY 仍是 18100/18100 個分區證明通過（`neg_eqy.py flop_async_reset`）。原因推測是含 flip-flop 的分區，初始狀態的約束本身無解，base case 什麼都沒證（agent 實驗，紀錄沒有存進 repo）；soc_top 的 2639 個含 flip-flop 的分區每個都只有 2 顆 `$dff`。flip-flop 周圍的邏輯仍由 EQY 證明。
 7. **每個 sequential cell 的 clock pin 與 macro 的 `clk*` pin，在兩份網表追到同一個來源**（Phase 4 獨立審查後加）：從 pin 往回走，只穿過 buffer／inverter（含 CTS 的 clkbuf、delay buffer），走到 input port、常數或其他 cell 的輸出為止，並記下反相次數的奇偶。EQY 也看不到 clock：`sat` strategy 會先做 `formalff -clk2ff`，把所有 flip-flop 改成同一個隱含的 clock；第 6 點只比 cell 種類。審查者實測：讓一顆 flip-flop 的 CLK 經過一顆新加的反相器（變成下降緣取樣），第 6 點照樣 2639/2639 相同，切分出的 18100 個分區沒有一個以 CLK 為邊界。soc_top 是 2639 個 CLK 與 `sram0/clk0` 都追到 `clk`、`sram0/clk1` 追到常數 0；picorv32 是 2382 個 CLK 都追到 `clk`。
 8. **config 的 `MACROS` 列出的每個 instance，在兩份網表都要被解析到**（Phase 6 加）。網表的 instance 解析原本只認 `sky130_` 開頭的 cell；換成自產 macro `arv_sram_2kbyte_1rw1r_32x512_8` 之後，`sram0` 整個被略過，第 7 點的 `sram0/clk0`、`clk1` 沒有檢查，`eqy-soc` 照樣 PASS（2026-10-10，`neg-eqy-soc` 的 `clk0_inverted` 因為找不到 `sram0` 而中止時發現）。解析改成接受任何 cell 名稱；這一點是防止以後換 macro 名稱時又悄悄漏掉。修正後兩個 CPU 的 `sram0/clk0`、`clk1` 都追到 `clk`（Phase 6 起 clk1 接系統時脈，ADR-0018）。
+9. **沒證明的分區只重試一次，用 amend 把驅動它輸入的分區併進來**（Phase 7，ADR-0019 決定 23）：第一輪 EQY 跑完、沒有第 4、5 點的問題、沒證明的分區不超過 20 個（`MAX_AMEND`）時，每個沒證明的分區，對它每個由組合邏輯驅動的輸入寫一條 `amend <輸入> <分區>`（flip-flop 的輸出不寫，見下方），整個 EQY 再跑一次，判定只看第二輪（第 2、3 點都要成立），而且被 amend 的分區裡不能有 sequential cell（`$dff`、`$sdff`、latch 等），有就 FAIL。第一輪留在 `work_round1/`、`eqy_run_round1.log`；靠重試才證明的分區印成 INFO，`summary.json` 有 `amend_retry`、`round1_not_proved`、`amend_rules`。原因見下方「切分點遺失邏輯關係」。
 
 ## OpenROAD 對調等價輸入（pin swap）
 
@@ -74,7 +75,11 @@ Phase 6 再加一個案例，並修一個植入程式的錯誤：
 - **位置檢查也看分區的輸入**（使用者 2026-10-10 選擇）：Hazard3 的 `o21ai_swap`（`_10077_`）有 3 個分區沒證明：`_10077_.or0_out`、它輸出的負載 `_10099_.A`，以及 `_17299_.C`。最後這個是 or3 `_10043_` 的輸出，EQY 的 `opt` 讓它和 o21ai 裡的 OR 共用邏輯。三個分區的輸入都讀 `_10077_.or0_out`，但後兩個不在被改的 net 上，原本判成「不在植入點」。現在一個沒證明的分區，只要輸入（`work/partitions/<分區>.sv` 的 `__pi_<名稱>__assume`）有被改 instance 的節點，也算在植入點；只放寬到直接讀被改 cell 的那一層。案例之間的交叉檢查用同一個規則。
 - **`din5_stuck0` 的植入程式**：Hazard3 新網表的 `din0` 有跳脫名稱（`\sram_din0[31] `），Verilog 的跳脫名稱以空白結束；植入程式把每個 bit 的空白去掉再用逗號接回，逗號變成名稱的一部分，EQY 讀檔時語法錯誤。`neg_eqy.py` 判成「沒抓到」（12/13），checker 本身沒問題；改成跳脫名稱後面保留空白。
 
-Phase 5 的 Hazard3 版（`make neg-eqy-soc CPU=hazard3`，`--design soc_top_hazard3`，Phase 6 起 14 個）：
+Phase 7 再加兩個案例（三個設計，ADR-0019 決定 23，上方「切分點遺失邏輯關係」）：
+- **`nand2_comb_to_nor2`**：第一顆 A、B 都來自組合邏輯 cell（穿過非反相 buffer）的 nand2 換成 nor2；它的分區一定走 amend 重試，`REQUIRE` 重試後仍沒證明。
+- **`nand2_flop_to_nor2`**：第一顆 A、B 都來自 flip-flop 的 nand2 換成 nor2；`REQUIRE` 分區沒證明。amend 重試若把 flip-flop 併進分區，證明變成空洞、錯誤被判等價，這個案例就會 FAIL（第一版程式就是這樣被抓到的）。Hazard3 目前挑到的就是 `nand2_to_nor2` 的那顆（`_09960_`），但挑選條件明確，網表改了仍成立。
+
+Phase 5 的 Hazard3 版（`make neg-eqy-soc CPU=hazard3`，`--design soc_top_hazard3`，Phase 6 起 14 個，Phase 7 起 16 個）：
 
 - soc_top 的 10 個（Phase 6 起含 `o21ai_swap`）；
 - `mcycleh13_stuck1`、`minstreth8_stuck1`、`irq0_stuck0`：flip-flop 的 D 接成常數，對應 picorv32_core 那三個 GL 模擬漏掉的案例；
@@ -89,6 +94,16 @@ Phase 5 的 Hazard3 版（`make neg-eqy-soc CPU=hazard3`，`--design soc_top_haz
 
 結論：改到 reset 連接的錯誤，這兩種都由 EQY 的分區拒絕抓到，判 FAIL，不會漏過。但沒有任何案例能證明「證明本身」抓得到 reset 錯誤。`reset_b_tied1` 要求的原因是常數對應（`neg_eqy.py` 的 `REQUIRE`），別的機制碰巧 FAIL 不算。
 
+## 切分點遺失邏輯關係（Phase 7，amend 重試）
+
+EQY 在每個對應到的名稱切開，證明一個分區時，它的輸入都當成可以任意取值。gate 端若經由一條「另外也有對應名稱」的 net 算出結果，分區就在那裡被切斷，失去「這條 net 等於它其他輸入的某個函數」的關係，SAT 會找到實際電路不可能出現的反例。
+
+- 實例（2026-10-13，wrapper 正式 harden `f721cff` 的網表）：16149 個分區中 1 個沒證明，`_10122_.B`。OpenROAD 把 or4 `_10121_` 的 B、C、D 對調（`pin_swaps()` 排除這三個腳位名稱）。gate 端的 or4 模型展開後，與 or2 `_10119_` 共用 `a41 | _06099_`（net `_06100_`，對應名稱 `_10119_.X`、`_10120_.B`）；gold 端沒有這個共用。分區輸入 `_10120_.B` 被當成獨立的值，SAT 給出 `_10120_.B = 1`、其他輸入 0：gold 0、gate 1。網表本身等價（gold `a42|a41|a43|_06099_`，gate `a42|a43|_06099_|a41`，`hold*` 是 hold buffer），同一份網表的 gate-level 模擬 16/16 PASS。共用是在哪一個 Yosys 步驟產生的沒有查。
+- 實驗（scratchpad，每次約 5 分鐘）：只把 `_10120_.B` 或 `_10119_.X` 排除在名稱對應之外，EQY 改用這條 net 的另一個名稱對應，仍然 FAIL；`amend _10122_.B _10119_.X`（參數順序錯）沒有作用（`no PI/PO link`）；`amend _10119_.X _10122_.B`（把 `_10119_.X` 的分區併進 `_10122_.B`）16149/16149 證明。
+- **flip-flop 不能併進來**（2026-10-13，negative test 抓到）：第一版對每個輸入都寫規則。`nand2_to_nor2`（Hazard3 第一顆 nand2 `_09960_`，兩個輸入都是 flip-flop）重試時把 `_20986_`、`_20987_` 兩顆 flip-flop 併進分區（RTLIL 多了 2 個 `$sdff`），錯的 nor2 被「證明」等價，`eqy: PASS`。原因是第 6 點與 `formal-equivalence-eqy` 規則 5 的同一個漏洞：`sat` strategy 對含 flip-flop 的分區是空洞證明。同一版程式在 wrapper 的 PASS 也一樣（分區裡 3 個 `$sdff`），不算數。修正：輸入是 sequential cell 的輸出（instance 在 `sequential_cells()` 裡）就不寫規則；第二輪檢查被 amend 的分區 RTLIL，有 sequential cell 就 FAIL（`amended_sequential()`）。兩道各自驗證過：拿掉第一道（模擬第一版）跑 `nand2_flop_to_nor2` 的網表，第二道判 FAIL（`1 amended partition(s) contain sequential cells ... (sdff)`）；兩道都在時 `nand2_flop_to_nor2` 不觸發重試，判「分區沒證明」。
+- 只併組合邏輯時為什麼不會放過真的錯誤：加進來的是驅動輸入的實際組合邏輯，不加任何假設；每個對應名稱仍在自己的分區被證明。negative test：`nand2_comb_to_nor2`（兩個輸入都來自組合邏輯 cell 的 nand2，一定走重試）`REQUIRE` 重試後仍沒證明；`nand2_flop_to_nor2`（兩個輸入都來自 flip-flop）`REQUIRE` 分區沒證明，重試若又併入 flip-flop 就會變成證明通過而被抓到。
+- 只重試一次、最多 20 個分區：真的錯誤重試後仍 FAIL，只多花一輪時間。
+
 ## Caravel wrapper（`--design user_project_wrapper`，`make eqy-caravel`，Phase 7）
 
 Hazard3 SoC 扁平放進 Caravel `user_project_wrapper`，證明的範圍與判定都相同（合成網表對最終網表，SRAM 是 blackbox）。試跑（探索 run `p7_harden2`，暫時跳過 run guard）：16149 個分區全部證明等價，88707 個名稱配對，2238 個循序元件功能相同，2240 個 clock pin 都接到 `wb_clk_i`，`-j 4` 約 435 秒。
@@ -102,3 +117,4 @@ Hazard3 SoC 扁平放進 Caravel `user_project_wrapper`，證明的範圍與判�
 | picorv32_core（Phase 2 網表） | 15137 | 約 6.5 分鐘（`-j 8`） |
 | soc_top（Phase 3 網表，正式 run 2） | 18100 | 約 5 分鐘（297 秒，`-j 10`） |
 | user_project_wrapper（Phase 7 探索 run `p7_harden2`） | 16149 | 約 7 分鐘（435 秒，`-j 4`，同時有 harden 在跑） |
+| user_project_wrapper（Phase 7 正式 harden `f721cff`，含一次 amend 重試） | 16149 | 約 9.5 分鐘（568 秒，`-j 10`，兩輪） |

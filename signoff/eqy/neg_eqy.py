@@ -37,6 +37,13 @@ Cases (the same kinds of error as the Phase 2 GL qualification, docs/phase_exit/
                           same name and connections: a wrong function that is neither a constant
                           nor a name conflict, so only the proof step can catch it (Phase 3
                           review, docs/notes/phase3_review/eqy_nand2nor.log)
+    nand2_flop_to_nor2    first nand2 whose A and B come from two flip-flops becomes the nor2: the
+                          amend retry of run_eqy.py must not add those flip-flops (a partition with
+                          a flip-flop is proved vacuously) and the partition stays not proved
+                          (REQUIRE; Phase 7, ADR-0019 decision 23)
+    nand2_comb_to_nor2    first nand2 whose A and B come from two combinational cells becomes the
+                          nor2: its partition goes through the amend retry (the logic driving its
+                          inputs added) and must still be not proved there (REQUIRE; Phase 7)
     o21ai_swap            first o21ai (by instance name) whose A1 and B1 come from different
                           sources, and whose A1 and A2 sources no other cell reads both of (so
                           EQY cannot merge its OR with another), gets A1 and B1 swapped: not an equivalent permutation
@@ -83,7 +90,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RUNNER = os.path.join(ROOT, "signoff", "eqy", "run_eqy.py")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
 from run_guard import guard  # noqa: E402
-from run_eqy import VERDICT, data_sources, instances  # noqa: E402  (same directory as this script)
+from run_eqy import VERDICT, data_sources, instances, sequential_cells  # noqa: E402  (same directory as this script)
 CELL = r"(sky130_fd_sc_hd__\w+)"
 
 
@@ -174,6 +181,32 @@ def nand2_to_nor2(text):
     size, name = cands[0]
     rx = re.compile(r"sky130_fd_sc_hd__nand2_" + size + r"( " + re.escape(name) + r" \()")
     return rx, lambda m: "sky130_fd_sc_hd__nor2_" + size + m.group(1)
+
+
+def nand2_by_sources(text, flops):
+    """First nand2 instance (sorted by name) whose A and B both come (through non-inverting buffers,
+    run_eqy.data_sources) from sequential cell outputs (flops=True) or both from combinational cell
+    outputs (flops=False), never from a port or a constant: becomes the nor2 of the same size. With
+    combinational sources, the partition of its output has inputs that run_eqy.py's amend retry adds
+    the driving logic of, so the retry runs and must still not prove it. With flip-flop sources, the
+    retry must not add those flip-flops (a partition with a flip-flop is proved vacuously,
+    formal-equivalence-eqy rule 5): Phase 7, before run_eqy.amend_rules skipped them, the first nand2
+    of Hazard3 (inputs _20986_, _20987_) was proved after the retry and eqy-soc PASSed."""
+    seq, insts = sequential_cells(text), instances(text)
+    cands = []
+    for name, (cell, pins) in data_sources(text).items():
+        if not re.fullmatch(r"sky130_fd_sc_hd__nand2", cell) or set(pins) != {"A", "B"}:
+            continue
+        drivers = [src.rsplit(".", 1)[0] if src.rsplit(".", 1)[0] in insts else None for src in (pins["A"], pins["B"])]
+        if None in drivers or drivers[0] == drivers[1]:
+            continue
+        if all((d in seq) == flops for d in drivers):
+            cands.append(name)
+    if not cands:
+        return re.compile(r"(?!x)x"), None
+    name = sorted(cands)[0]
+    rx = re.compile(r"sky130_fd_sc_hd__nand2_(\d+)( \\?" + re.escape(name) + r" \()")
+    return rx, lambda m: "sky130_fd_sc_hd__nor2_" + m.group(1) + m.group(2)
 
 
 def o21ai_swap(text):
@@ -375,6 +408,8 @@ CASES = {
         ("x8_bit24_stuck0", lambda t: flop_d_const(r"\cpuregs[8][24] ", 0)),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
+        ("nand2_flop_to_nor2", lambda t: nand2_by_sources(t, True)),
+        ("nand2_comb_to_nor2", lambda t: nand2_by_sources(t, False)),
         ("o21ai_swap", o21ai_swap),
         ("flop_q_inverted", flop_q_inverted),
         ("flop_async_reset", flop_async_reset),
@@ -387,6 +422,8 @@ CASES = {
         ("host_rdata7_inverted", lambda t: buf_inverted("host_rdata[7]")),
         ("mux_swap", mux_swap),
         ("nand2_to_nor2", nand2_to_nor2),
+        ("nand2_flop_to_nor2", lambda t: nand2_by_sources(t, True)),
+        ("nand2_comb_to_nor2", lambda t: nand2_by_sources(t, False)),
         ("o21ai_swap", o21ai_swap),
         ("flop_q_inverted", flop_q_inverted),
         ("flop_async_reset", flop_async_reset),
@@ -401,7 +438,12 @@ CASES["soc_top_hazard3"] = CASES["soc_top"] + [
 ]
 
 # Cases that count only with this reason (the check the case is about must be the one that caught it).
-REQUIRE = {"reset_b_tied1": "mapped to a constant", "o21ai_swap": "partitions not proved"}
+# nand2_comb_to_nor2: a wrong function in a partition that run_eqy.py's amend retry extends with the
+# combinational logic driving its inputs is still not proved after the retry; nand2_flop_to_nor2: the
+# retry must not make a partition with flip-flop inputs vacuous (ADR-0019 decision 23).
+REQUIRE = {"reset_b_tied1": "mapped to a constant", "o21ai_swap": "partitions not proved",
+           "nand2_to_nor2": "partitions not proved", "nand2_flop_to_nor2": "partitions not proved",
+           "nand2_comb_to_nor2": "partitions not proved after the amend retry"}
 
 # Cases whose edit points a pin at a new net: (instance it belongs to, pin, inverter cell, new net).
 # edit() drives the new net from the pin's original net through that inverter (instance <net>_cell).
@@ -502,7 +544,8 @@ def main():
             not_proved = summ.get("partitions", 0) - summ.get("proved", 0)
             reasons = []
             if summ.get("partitions", 0) > 0 and not_proved > 0:
-                reasons.append(f"{not_proved}/{summ['partitions']} partitions not proved")
+                reasons.append(f"{not_proved}/{summ['partitions']} partitions not proved"
+                               + (" after the amend retry" if summ.get("amend_retry") else ""))
             if summ.get("constant_matches", 0) > 0:
                 reasons.append(f"{summ['constant_matches']} bit(s) mapped to a constant")
             if summ.get("conflicting_matches", 0) > 0:

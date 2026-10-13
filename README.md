@@ -182,7 +182,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | antenna 違規、macro 的 LEF 沒有 antenna 資料 | antenna-signoff | drv-timing-closure（長線修復） |
 | LVS 失敗、斷線 pin、電源 pin 有沒有真的接上；LVS PASS 但不確定 macro 的版圖有沒有進 GDS | lvs-signoff | pdn-ir-drop、hard-macro-integration（`check_macro_gds.py`） |
 | 合成設定、lint 警告、狀態機被重新編碼（formal 因此對不上） | rtl-synthesis-lint | formal-equivalence-eqy |
-| 證明兩份網表等價、EQY 當機或證不出來、EQY 在切分步驟停下（`conflicting matches`，例如 OpenROAD 對調了輸入腳位） | formal-equivalence-eqy | — |
+| 證明兩份網表等價、EQY 當機或證不出來（好網表也有一兩個分區 `Failed to prove`：切分點遺失邏輯關係）、EQY 在切分步驟停下（`conflicting matches`，例如 OpenROAD 對調了輸入腳位） | formal-equivalence-eqy | — |
 | 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
 | gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
@@ -350,7 +350,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 改到 reset 連接的錯誤（接常數、接 tie cell、繞過同步器）都在分區步驟被拒絕，不會走到證明；negative test 用 `REQUIRE` 斷言抓到的機制（Phase 5）。
   - OpenROAD 時序修復會對調可互換的輸入（pin swap，`RSZ-0043`），EQY 依「instance.腳位」名稱對應時互相矛盾而停下；`run_eqy.py` 只把這些腳位名稱排除在名稱對應外，cell 輸出照樣證明，negative test `o21ai_swap` 確認對調錯誤仍被證明抓到（Phase 6）。
   - 網表解析要涵蓋任何名稱的 macro：Phase 6 換成 `arv_sram_*` 後，SRAM 的 clock 檢查曾被悄悄略過；現在 config 列出的 macro instance 沒被解析到就 FAIL。
-- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 10 種、Hazard3 版 soc_top 14 種、picorv32 12 種）。
+  - 好網表也可能有分區證不出來：EQY 在對應名稱切開、分區輸入當獨立的值，gate 端經由另有名稱的 net 計算時會失去邏輯關係，得到不可能的反例（Phase 7 wrapper，pin swap 後共用 OR）。`run_eqy.py` 只在「分區沒證明」是唯一問題時，用 EQY 的 `amend` 把驅動輸入的組合邏輯併進來重試一次；併入 flip-flop 會變成空洞證明（真的錯誤被判 PASS），所以不併、而且第二輪檢查。negative test `nand2_comb_to_nor2`、`nand2_flop_to_nor2`。
+- **本 repo 實例**：`signoff/eqy/`。negative test：`neg_eqy.py`（soc_top 12 種、Hazard3 版 soc_top 16 種、picorv32 14 種）。
 
 #### antenna-signoff：antenna
 
