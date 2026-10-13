@@ -134,6 +134,16 @@
       - pattern IR：`p7_harden5` 是 19.71 mV，只比 20 mV 上限低 0.29 mV，cell 分布一變，電流分布也會變。
       - 熱點那一欄的 met2 占用沒有重數。直接量的是 slew，它才是 signoff 的判準。
     - 防護：`check_soc.py max_slew` 每次 harden 都判內部 net（植入錯誤 P80），這類違規不會漏掉。工具行為與繞過方式寫進 `drv-timing-closure` 規則 13。
+22. **（2026-10-13，步驟 5f／5g）wrapper 的 golden 用第一次正式 harden 直接建；誤差先沿用 soc_top_hazard3，步驟 8 再修正**。
+    - 背景：wrapper 的上限檔（`signoff/limits/user_project_wrapper.toml`，`f721cff`）由 `soc_top_hazard3.toml` 改寫，disconnected 327、unannotated 667 為 wrapper 重新推導；golden 誤差（ADR-0015）是在 soc_top_hazard3 量的，wrapper 還沒量過可重現性。
+    - 使用者 2026-10-13 選擇：「第一次正式 harden 直接建 (建議)」。選項內容：只有「沒有 golden」一列 FAIL、criteria review 合理時，用這次 run 的 metrics 建 golden；誤差先沿用 hazard3 的值（上限檔註明不是在 wrapper 量的），步驟 8 兩個乾淨 worktree 跑完後修正。做法同 ADR-0018 決定 16。
+    - 結果（`f721cff`，`runs/p7_harden_formal.log`）：
+      - `harden-soc: FAIL` 只有 `golden file: run=<missing>` 一列；signoff 上限、`check_soc.py` 13 項、`ir_worst.py`、`provenance.py`、`review_criteria.py` 全部 PASS。
+      - 與 `p7_exp_pl_dens`（決定 21 的實驗）共有的 429 個 metrics 逐值相同，從 placement 到 signoff STA 可重現。
+      - Caravel pad 起算的 pattern IR（決定 20，查證用，guard 關掉）：最差 max_ss_100C win_5c 19.58 mV（上限 20 mV，餘量 0.42 mV；`p7_harden5` 19.71 mV），波形 73,872 個 pin 全部標註；vectorless 45.57 mV。決定 21 留下的「pattern IR 還沒驗證」解除。
+      - criteria review（`runs/user_project_wrapper_signoff/criteria_review.md`）沒有依據不成立的 criterion。hold skew metric −3.6 ns（soc_top −1.5 ns）的成因與 golden 誤差兩列是「資料不足」，列入步驟 8。
+    - 建立：`signoff/golden/user_project_wrapper/metrics.json`（原檔複製）與 README（出處、sha256、主要數字、可重現性）。
+    - 還要做：golden 建立後 HEAD 改變，run guard 要求 harden 的 commit 等於 HEAD，所以正式的 `make eqy-caravel`、`make gl-caravel`、`make ir-caravel` 要在下一次 harden PASS 之後跑（hazard3 同樣做法：`ad184f5` 建 golden、`940e395` 確認 harden）。
 
 ## 後果
 
