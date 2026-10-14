@@ -184,9 +184,17 @@
       - leakage 少 0.011 mW：`ef_decap_12` 的漏電不計（少掉的 `decap_3` 的 .lib 漏電解釋 98%）；記進不分析的項目清單（`runs/p7_decap_signoff/criteria_review.md`）。
       - li1 密度（本機 KLayout，同 precheck 的算法）75.1% → 39.9%。
       - golden 照 README「何時更新」更新（ADR-0015 的程序），之後照決定 22 的前例再跑一次確認 harden，才跑正式的 eqy／gl／ir 與 `make precheck-caravel`。
+    - 查證用 precheck（`7eff65a` 的版圖，guard 關掉，49 分鐘）：11 項 PASS，`make precheck-check` PASS。LVS 的 CVC 報 74 個 HI-Z 輸入，全部是 SRAM black box 的 `dout0[31:0]` 與接在上面的 `buf_4`（筆記第 10a 節），precheck 判 LVS PASS。
+    - 確認 harden（`550869c`，`runs/p7_harden_decap_confirm.log`，182 分鐘）：`harden-soc: PASS`，golden 455 個逐值相同；criteria review `runs/p7_decap_confirm_signoff/criteria_review.md`。
+    - 正式結果（HEAD = `550869c`，run guard 開著）：
+      - `make eqy-caravel`（`runs/p7_formal2_eqy.log`）：PASS，16149/16149，`_10122_.B` 同樣靠決定 23 的 amend 重試證明。
+      - `make gl-caravel`（`runs/p7_formal2_gl.log`）：16/16 PASS，759 秒。
+      - `make ir-caravel`（`runs/p7_formal2_ir.log`）：PASS，最差 max_ss_100C win_5c 19.56 mV（上限 20 mV；`f4ea9de` 是 19.58，差的是 `decap_3` 的 .lib 漏電）。
+      - `make precheck-caravel`（`runs/p7_formal_precheck.log`，53 分鐘）：官方 image 11 項 PASS、li1 39.9%，`precheck: PASS (ADR-0019 decision 5)`。image digest、版本與結果在筆記第 10b 節。
 
 ## 後果
 
 - Phase 7 的 exit 條件改寫為：「官方 image 的 precheck 13 項中，11 項 PASS；`klayout_feol`／`klayout_beol` 只有決定 5 的兩條規則，而且與 PDK 預建 macro 一致」。`project-plan.md` §8 同步更新。
+  - 2026-10-14 達成（決定 24 的正式結果，`550869c`）。
 - 本機與官方的工具版本不同（Magic 8.3.623 vs 8.3.471、KLayout 0.30.7 vs 0.29.12、Netgen 1.5.316 vs 1.5.272、PDK `8afc834` vs `3e0e31dc`）。repo 自己的 flow 照舊用釘版的工具；precheck 的判定只認官方 image 的結果。
 - Magic DRC（precheck 的選用項目）不跑；下線時 ChipFoundry 會怎麼看自產 SRAM 內部的 Magic 違規，要另外問。

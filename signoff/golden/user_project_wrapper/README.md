@@ -13,7 +13,7 @@
 | 日期／平台 | 2026-10-13 建立（Phase 7 步驟 5g）、2026-10-14 更新（步驟 7），Apple Silicon macOS（arm64） |
 | 來源 run | Phase 7 第一次正式 harden，commit `f721cff`；log `runs/p7_harden_formal.log`。只有「沒有 golden 檔」一列 FAIL；signoff 上限、`check_soc.py` 13 項、`ir_worst.py`、`provenance.py`、`review_criteria.py` 全部 PASS。使用者 2026-10-13 事先選擇：「第一次正式 harden 直接建 (建議)」（ADR-0019 決定 22） |
 | signoff criteria 檢查 | `runs/p7_formal_signoff/criteria_review.md`（來源 run 的 signoff 目錄另存在這裡；`runs/user_project_wrapper_signoff` 之後會被新的 harden 覆蓋） |
-| Caravel 的 IR（ADR-0019 決定 20） | 查證用（run guard 關掉）：max-power pattern 從 Caravel pad 算，最差 max_ss_100C win_5c 19.58 mV（上限 20）。正式的 `make ir-caravel` 在確認 harden（`f4ea9de`）上跑：同樣 19.58 mV，PASS（`runs/p7_formal_ir.log`） |
+| Caravel 的 IR（ADR-0019 決定 20） | 查證用（run guard 關掉）：max-power pattern 從 Caravel pad 算，最差 max_ss_100C win_5c 19.58 mV（上限 20）。正式的 `make ir-caravel` 在確認 harden（`f4ea9de`）上跑：同樣 19.58 mV，PASS（`runs/p7_formal_ir.log`）。decap 改版後（`550869c`）：19.56 mV，PASS（`runs/p7_formal2_ir.log`） |
 | LibreLane／PDK／Hazard3／SRAM macro | 同 `env/versions.mk`；SRAM 是 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/` |
 | flow 設定 | `pnr/user_project_wrapper/config.json` sha256 `2604dc81338bac12acb6cb71d34e267497010b26fa1fd71d86692892694b5ebf`（建立時 `271c6f7d…`，差在 `DECAP_CELLS`、`FILL_CELLS`） |
 | 本檔 sha256 | `6d75c98cadad25b1545e36e14b9a5b9439a67c7a7d781a7ffd832bf360292c34`（建立時 `b951552f…`） |
@@ -38,6 +38,7 @@
 |---|---|
 | 正式 harden（commit `f721cff`） | 本檔來源 |
 | 確認 harden（commit `f4ea9de`，只改了 golden 與 EQY 腳本，flow 的輸入相同；`runs/p7_harden_confirm.log`，signoff 目錄另存 `runs/p7_confirm_signoff`） | 455 個全部逐值相同，`harden-soc: PASS` |
+| decap 改版後的確認 harden（commit `550869c`，`runs/p7_harden_decap_confirm.log`，signoff 目錄另存 `runs/p7_decap_confirm_signoff`） | 455 個全部逐值相同，`harden-soc: PASS` |
 | decap 改 `ef_decap_12` 的 harden（commit `7eff65a`） | 本檔現在的來源；與建立時的版本 440 個逐值相同、10 個在誤差內、5 個不同，全部是 decap／fill 改變的結果 |
 | `p7_exp_pl_dens`（`p7_harden5` 的設定 + density 50，從 global placement 重跑到 `STAPostPNR`；ADR-0019 決定 21） | 共有的 429 個逐值相同；本檔多 26 個是它沒跑的 IR、DRC、LVS、XOR 步驟 |
 

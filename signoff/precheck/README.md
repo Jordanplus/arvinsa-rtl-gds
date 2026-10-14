@@ -48,6 +48,8 @@ deck 本身是 GPLv3，不放進 repo：`make precheck-deck` 從 PyPI 下載固�
 
 `make precheck-caravel`（約 1 小時，Rosetta 模擬）：`make_project.py` → `run_precheck.sh` → `check_precheck.py`，比對基準用同一個容器產生的 `sram_ref/`，`--ref-gds` 指向 precheck 用的 PDK（`3e0e31dc`）裡的 SRAM。lima VM 要 16 GiB 記憶體：10 GiB 時 wrapper 的 KLayout BEOL 與 Magic 抽取被 OOM killer 砍掉（`docs/notes/caravel_precheck_phase7.md` 第 10 節）。這顆 GDS 和 flow 用的 PDK（`8afc834`）裡那顆 sha1 不同，所以比對基準一定要綁到實際跑的 GDS。`PRECHECK_VERIFY=1` 給還沒重新 harden 的 run 做查證。
 
+第一次正式判定（2026-10-14，`550869c` 的確認 harden，53 分鐘）：`precheck: PASS (ADR-0019 decision 5)`，`runs/p7_formal_precheck.log`；image digest、版本與各項結果在 `docs/notes/caravel_precheck_phase7.md` 第 10b 節。
+
 ## 比對基準
 
 `make precheck-sram-ref`：在本機用固定版本的 deck 跑 PDK 的 `sky130_sram_2kbyte_1rw1r_32x512_8`，輸出到 `runs/precheck_sram_ref/`。正式判定（Phase 7 步驟 7）時，比對基準在跑 precheck 的同一個 image 裡用同一份 deck 產生，checker 會用規則清單確認兩者是同一版 deck。

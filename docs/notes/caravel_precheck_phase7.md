@@ -137,3 +137,19 @@ repo 的 LibreLane nix-shell 有 Magic、KLayout（含 `pya`）、Netgen、ruby�
   - `ef_decap_12` 的 LEF（`sky130_ef_sc_hd.lef`）與 SPICE 已經在 flow 的 `CELL_LEFS`／LVS 檔案裡，`.lib` 沒有它。用 precheck 的 deck 跑一片 10 排 × 8 組（`ef_decap_12` + `fill_2` + `fill_1`，奇數排 MX 翻轉）：FEOL、BEOL 都是 0 個違規。LibreLane 原始碼裡沒有用它當 `DECAP_CELLS` 的前例，STA 會不會有問題要等 harden。
 - **比對基準**：image 裡用同一份 deck 跑 precheck PDK（`3e0e31dc`）的 `sky130_sram_2kbyte_1rw1r_32x512_8`（sha1 `de2cf967…`）：FEOL 13 個，除了 3 個 `MR_licon.SP.6`，還有控制邏輯（`…_control_logic_r`／`_rw`）裡的 `MR_psdm.SP.1` 6 個、`MR_nsdm.WID.2` 3 個、`MR_psdm.WID.2` 1 個；BEOL 264 個，與 flow PDK（`8afc834`，sha1 `a7bcbb72…`）那顆相同。也就是 **ChipFoundry 自己 PDK 裡的預建 SRAM 也過不了 FEOL**。checker 原本要求比對基準只有允許的規則，因此 FAIL。實驗：把比對基準複製一份、只留 `MR_licon.SP.6`，設計的 16,900 個位置全部在裡面（判定 `runs/p7_precheck_verify/check.log`；precheck 的專案目錄與結果另存在 `../arvinsa-rtl-gds-p7precheck/verify_f4ea9de/`，實驗在 scratchpad）。
 - **使用者 2026-10-14 決定**（ADR-0019 決定 24）：空白區改放 `ef_decap_12` 與 fill；比對基準裡其他規則的項目不列入比對。VM 記憶體改 16 GiB（本機 24 GB）。
+
+### 10a. decap 改版後的查證用 precheck（`7eff65a`，run guard 關掉；2026-10-14 11:39–12:28，49 分鐘）
+
+- 結果：11 項 PASS（`klayout_met_min_ca_density` 83.8 s、LVS 914 s、OEB 11.8 s），FEOL／BEOL 只有決定 5 的兩條規則；`make precheck-check` PASS。XOR 62.7 s（上次 253 s），BEOL 980 s 有報表（VM 16 GiB）。另存在 `../arvinsa-rtl-gds-p7precheck/verify_7eff65a/`。
+- **LVS 的 CVC 警告**：Netgen `Final result: Circuits match uniquely.`；同一支 LVS 腳本最後的 CVC（電路合理性檢查）印 `WARNING: possible errors SOFT - ... CVC 4`，`logs/cvc.log` 的 `CVC: HI-Z Inputs: 74`（其他種類都是 0）。
+  - 74 個是 37 個 gate net 上的 MOS（27 個 `mux2_1`、10 個 `buf_4`）。從抽取的 SPICE（`outputs/reports/user_project_wrapper.gds.spice.gz`）對 SRAM instance 的腳位：32 個頂層 net 正好是 SRAM 的 `dout0[31:0]`，另外 5 個是輸入接在 `dout0` 上的 `buf_4` 內部節點。
+  - 根因（已驗證）：SRAM 在 `EXTRACT_ABSTRACT`（`arv_sram_2kbyte_1rw1r_32x512_8 contains no devices`），CVC 看不到 `dout0` 的 driver。precheck 判 LVS PASS；這不是設計的問題，是 black box 的代價（第 4 節）。
+- **OEB**：用 LVS 的抽取網表，所以只要 11.8 s。報表 `outputs/reports/cvc.oeb.report`：GPIO 33／34 `USER_STD_INPUT_PULLDOWN`、36 `USER_STD_INPUT_NOPULL`、35／37 `USER_STD_OUTPUT`，與 `rtl/caravel/user_defines.v` 一致；`No warnings or errors detected`。
+
+### 10b. 正式判定（`550869c` 的確認 harden，run guard PASS；2026-10-14 14:40–15:34，53 分鐘）
+
+- `make precheck-caravel`（`runs/p7_formal_precheck.log`；專案目錄與結果另存在 `../arvinsa-rtl-gds-p7precheck/formal_550869c/`）：
+  - image `chipfoundry/mpw_precheck@sha256:f1523bcb7c959c80f2d7d6dded0c4bcf3483d84b6ff2437f49754e4ec53eac84`、cf-precheck 1.3.7、PDK `3e0e31dc`。
+  - 13 項：11 項 PASS，FEOL／BEOL FAIL（決定 5 的兩條規則）；`magic_drc` skip。li1：`li1_ca_density is 0.6010`（li1 39.9%，與本機計算相同）。LVS `Circuits match uniquely`，CVC 同 10a（HI-Z 74）。
+  - checker：`precheck: PASS (ADR-0019 decision 5)`；FEOL 16,900、BEOL 50,184 個位置都在 PDK 預建 SRAM 單獨檢查的位置裡；比對基準的其他規則（`MR_nsdm.WID.2` 3、`MR_psdm.SP.1` 6、`MR_psdm.WID.2` 1）不列入。
+- GDS 的 sha1（`29f7b599…`）和 10a 那份（`5d6e17df…`）不同，大小相同（103,184,328 bytes）；逐 byte 比對：2,040 個 byte 不同，全部在 340 個 BGNLIB／BGNSTR record 的日期欄位裡（已驗證），版圖內容相同。所以 checker 要綁 sha1，不能拿上一次 harden 的 precheck 結果代替。
