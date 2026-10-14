@@ -207,10 +207,13 @@ step re-run one step on a copy of that step's saved config and input state
   P81  limits: a [max_sum] row with judged_by        check_signoff.py: the judged_by row is INFO and the
        (another checker judges it, e.g. make          ir_vdd_drop_plus_gnd_rise row on the same metrics
        ir-caravel), metrics 11 + 11 mV; then the      still FAILs; an empty judged_by FAILs (a limit
-       same row with judged_by = ""                   skipped without naming who judges it)
+       same row with judged_by = "", "make            skipped without naming who judges it), and so do
+       no-such-target", "make clean"                  a target not in the Makefile or in no list of
+                                                     scripts/regress.py (Phase 7 review H5)
   P79  the Caravel wrapper config without               check_inputs.py --cpu caravel inout_dont_touch (only
-       RSZ_DONT_TOUCH_RX (for every --cpu: the        row FAIL, names analog_io[0]; RepairDesignPostGRT
-       soc_top configs have no inout signal port)     stopped with RSZ-0074 on analog_io[9], run p7_harden2)
+       RSZ_DONT_TOUCH_RX, then with one matching      row FAIL, names analog_io[0], then analog_io[1];
+       analog_io[0] only (for every --cpu: the        RepairDesignPostGRT stopped with RSZ-0074 on
+       soc_top configs have no inout signal port)     analog_io[9], run p7_harden2; Phase 7 review H8)
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
@@ -228,6 +231,9 @@ only the checks that are the wrapper's own (the shared checker code is qualified
   C80b the first boundary violator 0.1 ns slower       check_soc.py max_slew (beyond its external transition +
                                                       0.05 ns)
   C80c the violation count one less than the table     check_soc.py max_slew (the table and the count differ)
+  C80d the wbs_adr_i[4] row removed, count one less      check_soc.py max_slew (a port above the limit is not at
+                                                      its SDC transition: set_input_transition not applied,
+                                                      e.g. a driving cell; Phase 7 review)
   P79  as above
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
@@ -882,7 +888,9 @@ def p81(run, d):
     results = []
     for name, judge, drop, fail_rows, info in (
             ("named", "make ir-caravel", 0.011, [("max", "ir_vdd_drop_plus_gnd_rise")], True),
-            ("empty", "", None, [("max", "ir_judged:")], False)):
+            ("empty", "", None, [("max", "ir_judged:")], False),
+            ("nowhere", "make no-such-target", None, [("max", "ir_judged:")], False),   # Phase 7 review H5
+            ("off_regress", "make clean", None, [("max", "ir_judged:")], False)):
         sub = os.path.join(d, name)
         os.makedirs(sub)
         edit = (lambda m: m.update({"design_powergrid__drop__worst__net:vccd1": drop,
@@ -893,7 +901,7 @@ def p81(run, d):
         shown = re.search(r"^  \[INFO\] info\s+ir_judged: .*judged by make ir-caravel", out, re.M) is not None
         results.append(rc != 0 and failed == fail_rows and shown == info)
     return all(results), "check_signoff.py [max_sum] judged_by: the row is INFO and the IR row on the same metrics " \
-        f"still FAILs; an empty judged_by FAILs ({results})"
+        f"still FAILs; an empty judged_by, a target not in the Makefile or in no regression list FAILs ({results})"
 
 
 def p26(run, d):
@@ -1303,16 +1311,21 @@ def p78(run, d):
 
 
 def p79(run, d):
-    cfg = json.load(open(CARAVEL_CONFIG))
-    cfg.pop("RSZ_DONT_TOUCH_RX")
-    p = os.path.join(d, "config.json")
-    json.dump(cfg, open(p, "w"), indent=1)
-    cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", "caravel", "--config", p], capture_output=True, text=True)
-    open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
-    fails = re.findall(r"^  \[FAIL\] (\w+):", cp.stdout, re.M)
-    return (inputs_failed(cp.returncode, cp.stdout, "inout_dont_touch") and fails == ["inout_dont_touch"]
-            and "analog_io[0]" in cp.stdout,
-            f"check_inputs.py --cpu caravel inout_dont_touch only (FAIL rows {fails}), names analog_io[0]")
+    results = []
+    for name, edit, want in (("unset", lambda c: c.pop("RSZ_DONT_TOUCH_RX"), "analog_io[0]"),
+                             # only bit 0 covered (Phase 7 review H8: the check used to look at bit 0 only)
+                             ("bit0", lambda c: c.update(RSZ_DONT_TOUCH_RX="^analog_io\\[0\\]$"), "analog_io[1]")):
+        cfg = json.load(open(CARAVEL_CONFIG))
+        edit(cfg)
+        p = os.path.join(d, f"config_{name}.json")
+        json.dump(cfg, open(p, "w"), indent=1)
+        cp = subprocess.run([sys.executable, CHECK_INPUTS, "--cpu", "caravel", "--config", p], capture_output=True, text=True)
+        open(os.path.join(d, "run.log"), "a").write(cp.stdout + cp.stderr)
+        fails = re.findall(r"^  \[FAIL\] (\w+):", cp.stdout, re.M)
+        results.append(inputs_failed(cp.returncode, cp.stdout, "inout_dont_touch") and fails == ["inout_dont_touch"]
+                       and want in cp.stdout)
+    return (all(results), f"check_inputs.py --cpu caravel inout_dont_touch only: RSZ_DONT_TOUCH_RX unset names analog_io[0], "
+            f"one covering bit 0 only names analog_io[1] ({results})")
 
 
 def inputs_check(d, *args):
@@ -1737,6 +1750,19 @@ def c80_count(run, d):
     return slew_case(run, d, edit, "violators parsed, the report counts", "the report count one less than the table")
 
 
+def c80_port_missing(run, d):
+    """A Caravel input port above the slew limit left the table (as when a driving cell overrides its
+    set_input_transition): its row removed and the count one less, so the count still matches."""
+    def edit(t):
+        t2, n = re.subn(r"^wbs_adr_i\[4\]\s+[\d.]+\s+[\d.]+\s+-[\d.]+ \(VIOLATED\)\n", "", t, count=1, flags=re.M)
+        if n != 1:
+            raise RuntimeError("no wbs_adr_i[4] row in the max slew table")
+        m = re.search(r"^max slew violation count (\d+)$", t2, re.M)
+        return t2[:m.start()] + f"max slew violation count {int(m.group(1)) - 1}" + t2[m.end():]
+    return slew_case(run, d, edit, "input port wbs_adr_i[4] slew not a violator",
+                     "a port above the limit missing from the table, count consistent")
+
+
 def c15_ports(run, d):
     """A used Wishbone input in the disconnected table instead of an unused analog_io."""
     rel = os.path.relpath(glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "full_disconnected_pins_table.txt"))[0], run)
@@ -1765,7 +1791,7 @@ def c26_ring(run, d):
 
 
 CARAVEL_CASES = [("C00", c00), ("C09", c09), ("C15", c15_ports), ("C26", c26_ring), ("C80a", c80_internal),
-                 ("C80b", c80_boundary), ("C80c", c80_count), ("P79", p79)]
+                 ("C80b", c80_boundary), ("C80c", c80_count), ("C80d", c80_port_missing), ("P79", p79)]
 
 
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),

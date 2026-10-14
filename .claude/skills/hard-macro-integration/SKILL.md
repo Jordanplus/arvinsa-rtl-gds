@@ -1,6 +1,6 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用；自建或收到 macro 後先做 view QA（LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF SIZE 對 GDS 外框，LEF 的 DATABASE MICRONS 不能比 tech LEF 細；check_macro_views 報 internal_power outside、LEF SIZE != GDS box、signal pins differ from the LEF、LEF DATABASE MICRONS 2000 > the tech LEF's 1000、GDS pin text(s) outside the pin's LEF RECTs（LEF 腳位位置與 GDS 不符，LVS 看不到）、metal outside the LEF OBS and pins（LEF 少了 OBS）、lib_template 不符）、LEF has no FOREIGN；最終 GDS 的 macro 是空的、XOR 差異幾百萬（design__xor_difference__count）而 KLayout 印 All LEF cells have matching GDS cells、check_macro_gds 報 cell(s) of the macro missing（OpenRAM 的 LEF 沒有 FOREIGN）、OpenROAD Floorplan 報 ODB-0292 LEF data from ... is discarded due to errors（前面有 ODB-0205 LEF UNITS DATABASE MICRON convert factor (2000) is greater than the database units per micron (1000)；OpenRAM 的 LEF）；MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner（或 corner 之間的溫度）不能動時的佔位 .lib 與下線風險、確認 STA 每個 corner 只讀到一份 macro .lib（LIB／EXTRA_LIBS 不能重複帶進）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off（OpenRAM SRAM 未用 port 的時脈不能接常數）、macro 的 clock（CTS 在 macro clock pin 前插 `delaybuf_*` 對齊 latency，SRAM 半週期讀出的 setup 與 hold 變差，看 cts-clock-tree）、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用，也包括選定 macro 之前的 go／no-go（在晶片的整個操作範圍，含 corner 之間的溫度與最低供電，做 SPICE 讀寫，並用下線平台的 DRC deck 單獨檢查；macro 的矽量測或特性化範圍比 signoff corner 窄時）、換 macro 時把舊 macro 做過的檢查逐條重跑並確認每支 checker 的比對對象不是空的、macro .lib 輸出的等效驅動電阻要落在標準元件的範圍內；自建或收到 macro 後先做 view QA（LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF SIZE 對 GDS 外框，LEF 的 DATABASE MICRONS 不能比 tech LEF 細；check_macro_views 報 internal_power outside、LEF SIZE != GDS box、signal pins differ from the LEF、LEF DATABASE MICRONS 2000 > the tech LEF's 1000、GDS pin text(s) outside the pin's LEF RECTs（LEF 腳位位置與 GDS 不符，LVS 看不到）、metal outside the LEF OBS and pins（LEF 少了 OBS）、lib_template 不符）、LEF has no FOREIGN；最終 GDS 的 macro 是空的、XOR 差異幾百萬（design__xor_difference__count）而 KLayout 印 All LEF cells have matching GDS cells、check_macro_gds 報 cell(s) of the macro missing（OpenRAM 的 LEF 沒有 FOREIGN）、OpenROAD Floorplan 報 ODB-0292 LEF data from ... is discarded due to errors（前面有 ODB-0205 LEF UNITS DATABASE MICRON convert factor (2000) is greater than the database units per micron (1000)；OpenRAM 的 LEF）；MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner（或 corner 之間的溫度）不能動時的佔位 .lib 與下線風險、確認 STA 每個 corner 只讀到一份 macro .lib（LIB／EXTRA_LIBS 不能重複帶進）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off（OpenRAM SRAM 未用 port 的時脈不能接常數）、macro 的 clock（CTS 在 macro clock pin 前插 `delaybuf_*` 對齊 latency，SRAM 半週期讀出的 setup 與 hold 變差，看 cts-clock-tree）、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
 ---
 
 # Hard macro 整合
@@ -41,9 +41,30 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
 2. **擺放**：macro 位置、halo、IO pin 與壅塞的規則在 `floorplan-congestion`；這裡只檢查 `MACROS.instances` 的座標與方向和 floorplan 決定一致（`check_soc.py placement`）。
 3. **未用的 port**：輸入接 tie cell（RTL 直接寫常數，合成會產生 `conb_1`）；輸出接 RTL 具名 wire，就不算斷線。checker 要檢查實際的 tie 值（`check_soc.py port1_tieoff`）。例外：OpenRAM SRAM 的時脈腳位不能接常數；它的 chip-select 由該 port 的時脈鎖存、沒有 reset，`clk1` 固定為 0 時上電狀態可能讓一列 wordline 一直開著（已用 SPICE 實驗確認，ADR-0018 決定 9；未用 port 的時脈要接系統時脈、`csb` 接 1）。checker：`check_soc.py port1_tieoff` 從 `clk1` 沿 buffer／反相器往回追，必須到頂層時脈 port、反相器數為偶數、不是 tie 的 net；negative test P65（`clk1` 接 `conb_1` LO）。接上時脈後 STA 的 `check_setup` 不再有「`clk1` 沒有時脈」的警告，允許清單要清空。
 4. **電源**：`VDD_NETS`／`GND_NETS` 與 macro 電源 pin 同名；`PDN_MACRO_CONNECTIONS`；實體連接靠 LVS 驗證（`lvs-signoff`、`pdn-ir-drop`）。
-5. **macro 在每個 STA corner 都要先證明功能正確**：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫、以及 ss 1.60 V 室溫時讀出前一次的值；STA corner 之間的溫度（例如 25°C）STA 看不到，要另外模擬（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
+5. **macro 在每個 STA corner 都要先證明功能正確**（這一項應該在選定 macro 之前就做，見第 8 項；這裡是在實際交付的網表上重跑）：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫、以及 ss 1.60 V 室溫時讀出前一次的值；STA corner 之間的溫度（例如 25°C）STA 看不到，要另外模擬（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
 6. **macro 的 clock**：OpenROAD 的 CTS 預設把 macro 的 clock pin 分到另一棵 tree，插 delay buffer 對齊 flip-flop 的 latency。對 SRAM 這種半週期讀出（下降緣送出）的 macro，這串 buffer 的上升緣、下降緣延遲不同，會讓讀出的 setup 與 hold 同時變差；`soc_top` 用 `clock_tree_synthesis -no_insertion_delay` 關掉（ADR-0016，`cts-clock-tree` 規則 10、12）。整合新 macro 時，harden 後先看 macro clock pin 前有沒有 `delaybuf_*`，再拆 macro 讀出路徑 launch／capture 的 clock latency。
 7. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
+
+## 提早檢查（流程回顧，ADR-0020）
+
+2026-10-14 回顧 Phase 0–7（`docs/notes/flow_retro/`）後使用者決定加的三條。依據是本專案已發生的事件；時間與省下多少是從 commit 時間推算。
+
+8. **選定 macro 之前先做 go／no-go：在晶片的整個操作範圍做 SPICE 讀寫，並用下線平台的 DRC deck 單獨檢查**（提早檢查 B1；時間點在第 0 項之前、macro 寫進計畫之前；流程文件 4.3 第 0 項）。
+   - 為什麼：本 repo 用的 PDK 預建 2 KB SRAM 在 ss −40°C、tt −40°C 與 ss 25°C 1.60 V 都讀成前一次的值（ADR-0010），網表從 Phase 0 就在 PDK 裡，計畫第一版也寫了它的矽量測只到 ≥1.7 V（`project-plan.md` §5.4），比 ss corner 的 1.60 V 高；卻到 Phase 3.5 特性化才發現，Phase 3.5–5 帶著佔位 .lib，Phase 6 改自產並修讀取電路，特性化與整合做了兩次。拿掉 ss −40°C corner 救不了它，因為室溫 ss 25°C 1.60 V 也錯（回顧 README「使用者的例子」）。
+   - 做什麼：先拿到 macro 已驗證的範圍（矽量測條件、特性化 corner、.lib 是實測還是解析模型），和晶片的操作範圍比（`signoff-criteria`「提早檢查」A1）。沒涵蓋的部分用廠商或 PDK 附的電晶體級網表模擬：格點包含每個 STA PVT、corner 之間的溫度（例如 25°C）、最低供電（平台規格的下限與 ss corner 的電壓）；序列要有連續兩次讀到相反的值、寫入後馬上讀，未用的 port 照 SoC 的接法；記下輸出在 clock 兩個邊緣之後的波形（決定 .lib 要哪些時序弧）。量法與陷阱看 `openram-macro-characterization` 規則 4、13。另外用下線平台的 DRC deck 單獨跑 macro（`tapeout-precheck-caravel` 規則 2）：precheck 的 deck 對任何 OpenRAM bitcell 報 `MR_licon.SP.6`、`MR_mcon.CON.10`，deck 在 2026-05 就改了，本 repo 到 Phase 7 才看到（ADR-0019 決定 5）。
+   - 通過條件：每個格點都讀寫正確；平台 deck 的違規都有根因與比對基準。失敗時先列選項（換 macro、自產並修電路、縮規格）由使用者決定並記 ADR，再整合；選了接受風險才用第 5 項的佔位 .lib。
+   - 成本：回顧推算第一次約半天到一天（修剪網表每個 PVT 幾分鐘到幾十分鐘），之後同類 macro 1–2 小時。
+   - 自動防護：沒有（是選擇前的模擬，結果寫進 ADR）。
+9. **macro .lib 輸出的驅動能力要落在標準元件的範圍內**（提早檢查 B3，view QA 的一部分）。
+   - 為什麼：OpenROAD 把 .lib 延遲表對負載的斜率當成 driver 的強度。Phase 3.5 的 SRAM .lib 斜率等於 60–140 kΩ 的 driver，`repair_design` 跑 75 分鐘後 `failed with an unexpected error`，單步重跑 4 種 .lib 才找到原因（ADR-0010；`openram-macro-characterization` 規則 14）。
+   - 做什麼：從每條輸出弧的延遲表算等效驅動電阻（延遲變化 ÷ 負載變化），和同一份 library 標準元件的範圍比；延遲表隨負載要單調不減。
+   - 通過條件：落在範圍內；植入一份斜率過大的 .lib 必須 FAIL。
+   - 自動防護：目前沒有（`check_macro_views.py` 沒有這項），下一個專案開始時加進 view QA，並加一個植入錯誤的 Q 案例。換上任何新 macro .lib 時，照舊先單步重跑 `RepairDesignPostGPL` 確認時間（`drv-timing-closure` 規則 10）。
+10. **換 macro 時，舊 macro 做過的檢查逐條重跑，每支 checker 證明比對對象不是空的**（提早檢查 B4）。
+    - 為什麼：Phase 0 就確認過預建 SRAM 的 LEF 有 `FOREIGN`（`docs/phase_exit/phase0.md`），Phase 6 換自產 macro 時沒重查，最終 GDS 的 SRAM 是空的，第一輪 harden 白跑（第 0 項「LEF 的 FOREIGN」）；EQY 的網表解析只認 `sky130_` 開頭的 cell，SRAM 的 clock 檢查在 Phase 6 步驟 4a–4c 被略過照樣 PASS（經驗紀錄 2026-10-10）。
+    - 做什麼：把之前對舊 macro 做過的每一項檢查（不論在哪個 Phase、是不是 checker）列成清單，對新 macro 逐條重跑並附結果；每支會碰到 macro 的 checker（EQY、DRC 位置比對、最終 GDS 比對、STA 讀的 .lib）在第一次 positive run 印出讀到的 macro instance 與內容摘要；macro 換名稱時，搜尋用舊名稱或名稱前綴認東西的腳本。
+    - 通過條件：清單逐條 PASS；每支 checker 的 positive run 都印出 macro instance。
+    - 自動防護：部分已有（`formal-equivalence-eqy` 規則 5、`check_soc.py macro_gds`、`magic_drc` 的框內違規下限）；「舊檢查逐條重跑」本身沒有自動防護，下一個專案開始時做成 checker。
 
 ## negative test
 

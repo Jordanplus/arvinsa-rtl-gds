@@ -16,9 +16,13 @@ controls must PASS.
     limit_below      limit = worst - 0.01 mV                                                           "drop: worst"
     missing_result   one window x corner result removed (a run that failed without a row)              "window x corner results"
     failed_row       one row of the run turned FAIL (e.g. a corner not applied)                        that row's text
+    nan_drop         the second drop of results.json turned NaN (max() skipped it; review H4)          "not a finite number"
+    one_window       the checker with --vcd win_5b only (review H3)                                    "windows:"
+    period           win_5a with every time stamp x 1.1 (recorded at 48.4 ns, not CLOCK_PERIOD; H2)   "activity period"
   soc_top_hazard3 (the code shared with ir_caravel.py: ir_worst.run_corner, the recording)
     no_vcd           --vcd of a file that does not exist                                               "switching activity"
-    unannotated      window 5a with its scope renamed (dut_gl -> dut_xx): the IR step runs, annotates 0 "0 pins annotated"
+    unannotated      window 5a with every variable moved to a scope dut_xx but its clock (the period   "pins annotated from win_5a"
+                     check needs it), with 5b, 5c as they are: the IR step runs, annotates no logic pin
     stray_dump       recording with an extra plusarg beginning with "vcd" (tb_soc.v dumps the whole     "testbench dump"
                      testbench into wave.vcd from time 0 and the window's own $dumpfile is ignored)
     no_window        recording of a window the firmware never marks (gpio 0xee)                         "0 cycles recorded"
@@ -100,38 +104,71 @@ def main():
         res["rows"][0][0] = False
         return judge_case(d, res, lim)
 
+    def nan_drop(d):
+        res = json.loads(json.dumps(results))
+        res["drops"][sorted(res["drops"])[1]][0] = float("nan")
+        return judge_case(d, res, lim)
+
+    vcd = {w: os.path.join(vcd_dir, f"win_{w}.vcd") for w in ("5a", "5b", "5c")}
+    checker = IR_PATTERN if args.design == "soc_top_hazard3" else IR_CARAVEL
+
+    def run_checker(d, vcds):
+        return [PY, checker, run, os.path.join(d, "ir"), limits] + sum((["--vcd", v] for v in vcds), []) \
+            + (["--label", label] if checker == IR_PATTERN else [])
+
+    def period(d):
+        bad = os.path.join(d, "win_5a.vcd")
+        with open(vcd["5a"]) as src, open(bad, "w") as dst:
+            for line in src:
+                dst.write(f"#{round(int(line[1:]) * 1.1)}\n" if line[0] == "#" else line)
+        return run_checker(d, [bad, vcd["5b"], vcd["5c"]])
+
     cases = [  # (name, command builder(dir), expected text in a FAIL row or None for PASS, env)
         ("positive", lambda d: judge_case(d, results, lim), None, None),
         ("limit_above", lambda d: judge_case(d, results, worst + 1e-5), None, None),
         ("limit_below", lambda d: judge_case(d, results, worst - 1e-5), "drop: worst", None),
         ("missing_result", missing, "window x corner results", None),
         ("failed_row", failed_row, results["rows"][0][1] if results["rows"] else "?", None),
+        ("nan_drop", nan_drop, "not a finite number", None),
+        ("one_window", lambda d: run_checker(d, [vcd["5b"]]), "windows:", None),
+        ("period", period, "activity period", None),
     ]
-    vcd5a = os.path.join(vcd_dir, "win_5a.vcd")
+    vcd5a = vcd["5a"]
     if args.design == "soc_top_hazard3":
         def unannotated(d):
             bad = os.path.join(d, "win_5a.vcd")
-            n = 0
+            port = json.load(open(os.path.join(run, "resolved.json")))["CLOCK_PORT"]
+            n, clk, depth = 0, None, 0
             with open(vcd5a) as src, open(bad, "w") as dst:
                 for line in src:
+                    w = line.split()
                     if line.startswith("$scope module dut_gl "):
                         line, n = line.replace("dut_gl", "dut_xx", 1), n + 1
-                    dst.write(line)
-                    if line.startswith("$enddefinitions"):
+                    if w[:1] == ["$scope"]:
+                        depth += 1
+                    elif w[:1] == ["$upscope"]:
+                        depth -= 1
+                    elif depth == 2 and w[:1] == ["$var"] and len(w) > 4 and w[4] == port:
+                        clk = w[3]
+                    if line.startswith("$enddefinitions"):   # the clock alone stays in dut_gl (the period check)
+                        dst.write(f"$scope module tb_soc $end\n$scope module dut_gl $end\n$var wire 1 {clk} {port} $end\n"
+                                  "$upscope $end\n$upscope $end\n")
+                        dst.write(line)
                         dst.writelines(src)   # the value changes, unchanged
                         break
-            if n != 1:
-                raise RuntimeError(f"{vcd5a}: {n} '$scope module dut_gl' lines (expected 1)")
-            return [PY, IR_PATTERN, run, os.path.join(d, "ir"), limits, "--vcd", bad, "--label", label]
+                    dst.write(line)
+            if n != 1 or clk is None:
+                raise RuntimeError(f"{vcd5a}: {n} '$scope module dut_gl' lines (expected 1), clock {port} {clk}")
+            return run_checker(d, [bad, vcd["5b"], vcd["5c"]])
 
         def record(gpio, extra):
             return lambda d: [PY, RUN_GL, "--cpu", cpu, "--harden-run", run, "--tests", "maxpower", "--out", os.path.join(d, "vcd"),
-                              "--record-window", gpio, "--clk-half-ns", "22"] + sum((["--plusarg", p] for p in extra), [])
+                              "--record-window", gpio] + sum((["--plusarg", p] for p in extra), [])
 
         cases += [
             ("no_vcd", lambda d: [PY, IR_PATTERN, run, os.path.join(d, "ir"), limits, "--vcd", os.path.join(d, "none.vcd"),
                                   "--label", label], "switching activity", None),
-            ("unannotated", unannotated, "0 pins annotated", None),
+            ("unannotated", unannotated, "pins annotated from win_5a", None),
             ("stray_dump", record("5a", ["vcd_extra"]), "testbench dump", None),
             ("no_window", record("ee", []), "0 cycles recorded", None),
         ]
@@ -145,7 +182,7 @@ def main():
                 lines = open(os.path.join(dd, name)).read().splitlines(keepends=True)
                 i = next(i for i, l in enumerate(lines) if l.strip() and not l.startswith("#"))
                 open(os.path.join(dd, name), "w").writelines(lines[:i] + lines[i + 1:])
-                return [PY, IR_CARAVEL, run, os.path.join(d, "ir"), limits, "--vcd", vcd5a]
+                return run_checker(d, [vcd["5a"], vcd["5b"], vcd["5c"]])
             return build
 
         cases += [

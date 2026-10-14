@@ -10,9 +10,11 @@ usage: check_signoff.py <metrics.json> <limits.toml> <golden metrics.json>
   [max]     "<metric>" = value       metric must be a finite number <= value
   [max_sum] "<name>" = {keys = [...], max = value}   every key a finite number, their sum <= value
                                      (e.g. VDD drop + GND rise against one supply budget)
-            "<name>" = {keys = [...], max = value, judged_by = "<target>"}   a limit another checker
+            "<name>" = {keys = [...], max = value, judged_by = "make <target>"}   a limit another checker
                                      judges on its own data (e.g. make ir-caravel, IR from Caravel's
-                                     pads): printed as INFO, not computed from this run's metrics
+                                     pads): printed as INFO, not computed from this run's metrics; the
+                                     target must be defined in the Makefile and be in a list of
+                                     scripts/regress.py (TARGET_LISTS), else FAIL (Phase 7 review H5)
   [corners] names = [...]            for every corner: setup_ws_min <= timing__setup__ws__corner:<c> < slack_max
             setup_ws_min, hold_ws_min,                  hold_ws_min  <= timing__hold__ws__corner:<c>  < slack_max
             slack_max                names must be unique and equal the corners present in the metrics.
@@ -48,16 +50,40 @@ A metric missing from the run is a FAIL (a checker that silently skips is not a 
 Python stdlib only.
 """
 import fnmatch
+import importlib.util
 import json
 import math
 import os
+import re
 import sys
 import tomllib
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 # A metric whose name contains one of these counts violations or errors: never a layout tolerance.
 VIOLATION_WORDS = ("violat", "_vio_", "error", "drc", "lvs", "xor", "unannotated", "disconnected", "unmapped",
                    "illegal", "lint", "latch", "floating", "hanging", "warning")
 
+
+def judged_by_error(judge):
+    """None if judge is `make <target>` with the target in the Makefile and in a list of scripts/regress.py."""
+    m = re.fullmatch(r"make ([A-Za-z0-9_.-]+)", judge.strip())
+    if not m:
+        return "not 'make <target>'"
+    t = m.group(1)
+    try:
+        makefile = open(os.path.join(ROOT, "Makefile")).read()
+        spec = importlib.util.spec_from_file_location("regress", os.path.join(ROOT, "scripts", "regress.py"))
+        regress = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(regress)   # definitions only; main() runs under __main__
+        lists = regress.TARGET_LISTS
+    except (OSError, SyntaxError, AttributeError) as e:
+        return f"cannot read the Makefile or TARGET_LISTS of scripts/regress.py: {e}"
+    if not re.search(rf"^{re.escape(t)}:", makefile, re.M):
+        return f"no target {t} in the Makefile"
+    if not any(t in v for v in lists.values()):
+        return f"{t} is in no list of scripts/regress.py"
+    return None
 
 def main(metrics_path, limits_path, golden_path):
     run = json.load(open(metrics_path, encoding="utf8"))
@@ -94,10 +120,12 @@ def main(metrics_path, limits_path, golden_path):
         keys, top = (spec.get("keys") or [], spec.get("max")) if isinstance(spec, dict) else ([], None)
         if isinstance(spec, dict) and "judged_by" in spec:
             judge = spec["judged_by"]
-            if isinstance(judge, str) and judge.strip() and keys and finite(top):
+            why = judged_by_error(judge) if isinstance(judge, str) else "not a string"
+            if not why and keys and finite(top):
                 row("info", name, "-", f"<= {top}, judged by {judge} (not from this run's metrics)", True)
             else:
-                row("max", name, judge, "judged_by a non-empty string, with keys and a finite max", False)
+                row("max", name, judge, f"judged_by 'make <target>' of the regression, with keys and a finite max"
+                    f"{' (' + why + ')' if why else ''}", False)
             continue
         vals = [run.get(k, "<missing>") for k in keys]
         ok = bool(keys) and finite(top) and all(finite(v) for v in vals)

@@ -1,6 +1,6 @@
 ---
 name: core-migration-hazard3
-description: 把 SoC 的 CPU 從 PicoRV32（native bus）換成 Hazard3（AHB5 介面的 RISC-V core）時使用：選 hazard3_cpu_1port 或 2port、AHB5 的寫入資料晚一個 cycle 與 1RW 同步 SRAM（OpenRAM）怎麼接、讀取時 hwdata 要擋掉、讓舊 core 的建置保持不變（define＋前置處理比對）、設定參數的陷阱（CSR_COUNTER 預設 0、計數器 reset 後停住、RESET_REGFILE、A 延伸預設開、mtval 固定為 0、hazard3_config.vh 不能用 define 改）、debug／power 等 port 怎麼 tie-off、沒有 trap 腳與中斷模型不同、非同步 reset 要同步器、CPI 變小讓 cycle 數檢查失效、上游測試要 newlib 工具鏈、riscv-tests 用 SoC 的設定建測試台、rvcpp 與 RVFI 逐指令比對（rvcpp 沒有 fence、CSR 模型是全功能設定、rvfi_intr 的意義）、授權，以及 PnR 時不能直接沿用 PicoRV32 版調好的設定（resizer 要看的 corner、resizer 會換上的弱 cell、繞線後的 setup 修復、上限檔裡依設計結構推導的數字、golden 另建）。Use when migrating an SoC from PicoRV32 to Hazard3 (AHB5), covering wrapper choice, AHB5-to-SRAM timing, configuration pitfalls, tie-offs, traps/IRQ/reset differences, toolchain and ISS-trace verification.
+description: 把 SoC 的 CPU 從 PicoRV32（native bus）換成 Hazard3（AHB5 介面的 RISC-V core）時使用：選 hazard3_cpu_1port 或 2port、AHB5 的寫入資料晚一個 cycle 與 1RW 同步 SRAM（OpenRAM）怎麼接、讀取時 hwdata 要擋掉、讓舊 core 的建置保持不變（define＋前置處理比對）、設定參數的陷阱（CSR_COUNTER 預設 0、計數器 reset 後停住、RESET_REGFILE、A 延伸預設開、mtval 固定為 0、hazard3_config.vh 不能用 define 改）、debug／power 等 port 怎麼 tie-off、沒有 trap 腳與中斷模型不同、非同步 reset 要同步器、CPI 變小讓 cycle 數檢查失效、上游測試要 newlib 工具鏈、riscv-tests 用 SoC 的設定建測試台、rvcpp 與 RVFI 逐指令比對（rvcpp 沒有 fence、CSR 模型是全功能設定、rvfi_intr 的意義）、授權，以及 PnR 時不能直接沿用 PicoRV32 版調好的設定（resizer 要看的 corner、resizer 會換上的弱 cell、繞線後的 setup 修復、上限檔裡依設計結構推導的數字、golden 另建），還有新 core 放進 SoC 之前先單獨 harden、看全部 signoff corner 的 STA（換任何 core 都適用）。Use when migrating an SoC from PicoRV32 to Hazard3 (AHB5), covering wrapper choice, AHB5-to-SRAM timing, configuration pitfalls, tie-offs, traps/IRQ/reset differences, toolchain and ISS-trace verification.
 ---
 
 # 把 CPU 換成 Hazard3
@@ -79,6 +79,12 @@ SoC 層級的驗證改法看 `dv-directed-tests`、`gate-level-simulation`；合
     - CTS 後的 setup 估計在長路徑偏樂觀，開 `RUN_POST_GRT_RESIZER_TIMING`（ADR-0014、`drv-timing-closure` 規則 12）。
     - 上限檔裡依設計結構推導的數字（沒有寄生資料的 driver 數）要用新 core 的 run 重新數，不能從舊 core 的上限檔複製：PicoRV32 是 133，Hazard3 是 125（`signoff/limits/soc_top_hazard3.toml`）。golden 另建一份（`signoff/golden/soc_top_hazard3/`），而且要用幾次相同設定的 run 重新量可重現性：Hazard3 版有兩個會改變 cell 數、diode 數的不可重現步驟，PicoRV32 版沒看過（ADR-0015）。
     - 兩個 CPU 的最差 setup 都是 SRAM 讀出的半週期路徑，週期能縮多少受 duty cycle 預算限制（`signoff-criteria` 的 knowledge 檔）。
+23. **新 core 放進 SoC 之前先單獨 harden，看全部 signoff corner 的 STA**（提早檢查 D3，流程回顧 ADR-0020；流程文件 4.4；換 core 的方法通用，不限 Hazard3）。
+    - 為什麼：Phase 5 直接在 SoC 裡換上 Hazard3，harden 1–5 依序是 resizer 停不下來（弱 cell，ADR-0012）、ss −40°C −4.158 ns（ADR-0013）、−0.381 ns（週期改 44 ns）、−1.131 ns（繞線後才出現的差距，ADR-0014）、PASS；exit criteria「flow 設定只需改 design 層」沒達成，使用者接受為與計畫不同（`docs/phase_exit/phase5.md`）。差 4.158 ns 的是乘除法單元到 register file 的整週期長路徑，ss −40°C 與 ss 100°C 的資料到達時間差約 15%，單獨看新 core 就看得到。
+    - 做什麼：新 core 單獨合成並 harden（至少在合成網表上跑全部 signoff corner 的 STA，resizer 看全部 signoff corner，`drv-timing-closure` 規則 15），跑弱 cell 查表（規則 22 第二點），列出低溫 ss 對高溫 ss 延遲比例最大的長路徑。
+    - 通過條件：目標週期在所有 signoff corner 都 PASS，或已知差多少、進 SoC 之前由使用者決定。
+    - 成本：單獨 harden 一次約 30–40 分鐘（回顧推算）。
+    - 自動防護：沒有（流程步驟）；單獨 harden 本身照 4.6 的 checker 判。
 
 ## 待補
 

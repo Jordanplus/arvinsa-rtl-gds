@@ -160,6 +160,10 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 | 遇到的情況 | 先看 | 再看 |
 |---|---|---|
+| 開新設計寫計畫：定 VDD 與 Tj 的操作範圍、推 corner 清單；第一份網表後想知道哪個 corner 決定週期、代價多少；任何 harden（含子區塊單獨 harden、探索 run）之前先定 signoff 條件 | signoff-criteria（「提早檢查」A1、A3、C1） | multicorner-sta（只重跑 STA 的 what-if）、hard-macro-integration（macro 已驗證的範圍） |
+| 選下線平台：每項收件檢查、外殼邊界 SDC、供電 pad、fill 與密度上下限、平台的 PDK 與工具版本要算到本設計的數字；需要平台回覆的問題；外殼設計第一次探索 harden 之後 | tapeout-precheck-caravel（規則 9–11） | chip-floorplan-pin-planning（電源進入點）、timing-constraints-sdc（邊界約束） |
+| 選 macro 之前：macro 的矽量測或特性化範圍比 signoff corner 窄（例如只到 1.7 V、沒有 −40°C）、要不要用這顆 macro；換 macro 時舊檢查要不要重跑 | hard-macro-integration（第 8、10 項） | openram-macro-characterization（SPICE 讀寫與萃取的做法）、tapeout-precheck-caravel（平台的 DRC deck） |
+| 要放寬或補償某項條件（加長週期、加餘量、佔位 .lib、只判某個 corner、延後處理）；換設計或換 macro 後，舊的放寬還成不成立 | signoff-criteria（「提早檢查」E1，`docs/relaxation_register.md`） | phase-exit-review（已知限制引用登記表）、drv-timing-closure（規則 15：resizer 少看 corner） |
 | 要跑 LibreLane、從中間 step 接續（包括已跑完的 run 改設定從中間重來）、只重跑一個 step、重跑時保留上一次的 run | librelane-run-debug | — |
 | run 失敗、錯誤時有時無（例如 `GRT-0229`）、`RSZ-0074 failed to build tree from gloubal routes`、某一步很久不結束或記憶體一直漲 | librelane-run-debug | drv-timing-closure（繞線後 ECO 在這版 OpenROAD 做不到，會報 `RSZ-0074`；resizer 停不下來：推最小負載就超標的弱 cell、slew 餘量、post-GRT 修復的設定）、multicorner-sta（corner 太多）、openram-macro-characterization（macro .lib 的負載斜率） |
 | STA 有 setup／hold 違規 | drv-timing-closure | multicorner-sta（哪個 corner、只重跑 STA 試）、timing-constraints-sdc（約束有沒有寫錯）、cts-clock-tree（macro 的 clock 被延後） |
@@ -186,7 +190,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 網表模擬、RTL 與網表比對、X、模擬逾時 | gate-level-simulation | flow-regression-reproducibility（機器負載） |
 | gate-level 模擬或 formal 的植入錯誤沒被抓到、某個功能從沒被測到 | dv-directed-tests | gate-level-simulation |
 | signoff checker（PnR、STA、DRC、來源追溯……）的植入錯誤沒被抓到 | signoff-checker-qualification | 該 checker 所屬主題的 skill |
-| 寫或改任何 PASS／FAIL checker；建立或更新 golden；同樣設定重跑結果不同（連 cell 數、diode 數都變）；checker 只證明設定被讀到、靠名稱辨識結構、抓到的機制和宣稱的不同 | signoff-checker-qualification（漏洞類型表；規則 7：斷言抓到的機制、守門條件本身要有測試） | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
+| 寫或改任何 PASS／FAIL checker（寫完就做獨立漏洞審查）；建立或更新 golden（誤差至少 4 個樣本）；同樣設定重跑結果不同（連 cell 數、diode 數都變）；checker 只證明設定被讀到、靠名稱辨識結構、抓到的機制和宣稱的不同 | signoff-checker-qualification（漏洞類型表；規則 7：斷言抓到的機制、守門條件本身要有測試） | flow-regression-reproducibility、librelane-run-debug（哪一步不可重現） |
 | 一鍵 regression、乾淨 checkout 驗證、查 run 是哪個 commit 與哪版工具產生的、長 run 期間繼續開發或等它結束 | flow-regression-reproducibility | signoff-checker-qualification |
 | 把 SoC 的 CPU 換成 Hazard3（AHB5）：wrapper、匯流排轉接、設定參數、中斷與 reset、上游測試與 ISS 比對、PnR 設定與上限檔要不要重做 | core-migration-hazard3 | dv-directed-tests、gate-level-simulation（驗證改法）、hard-macro-integration（SRAM 介面）、drv-timing-closure（時序收斂） |
 | 把設計放進 Caravel 的 `user_project_wrapper`、決定用哪幾支 GPIO（先定 block 位置）；跑 ChipFoundry precheck（`make precheck-caravel`）並判定結果（`make precheck-check`）；precheck 的 `klayout_beol` 在 SRAM 裡報 `MR_mcon.CON.10`、`klayout_feol` 報 `MR_licon.SP.6`；`klayout_beol failed (stat=-9)`、LVS extraction 沒完成；`li1.pd.1d` 密度違規；LVS log 的 `possible errors ... CVC`；Apple Silicon 上沒有 amd64 的 Docker | tapeout-precheck-caravel | drc-signoff（DRC 判讀）、lvs-signoff（SRAM black box）、hard-macro-integration、floorplan-congestion |
@@ -259,7 +263,9 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）、重試留下的中止目錄頂替完成的那次。新 checker 要逐條對照。
   - Phase 5 獨立審查的 9 種新漏洞類型：只證明設定被讀到、沒證明生效；靠名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制的觸發條件比規則小；抓到的機制和宣稱的不同；守門條件本身沒測試；只看版本字串；暫用另一個設計的誤差；比對到資料而不是指令。規則 7 補兩條：斷言抓到它的機制、每道守門條件都要有「拿掉就 FAIL」的情境。
   - Phase 6 獨立審查的 5 種新漏洞類型：black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯。另外 `abs(x - y) > tol` 對 NaN 永遠不成立，要寫成 `not abs(x - y) <= tol`。
+  - Phase 7 獨立審查的 7 種新漏洞類型：核准紀錄只存在被檢查的檔案裡、自己算得出來；判定只看結果、不核對輸入的產生條件與來源；例外欄位接受任何字串；時間比較丟掉時區；查證用的結果被當成正式結果；向量只檢查一個 bit；例外只放寬、不要求被例外的東西存在。`max()` 遇到 NaN 也會略過它。
   - Phase 6 結案 regress 抓到的一類：checker 的某個模式（`check_inputs.py --resolved`）只有植入錯誤的案例在跑，checker 改壞成永遠 FAIL 時這些案例照樣「抓到」。每個模式都要有沒植入時必須 PASS 的對照（neg-pnr P00）。
+  - 提早檢查（流程回顧，ADR-0020）：規則 11，golden 的誤差每個設計至少用 4 個同設定的樣本（含一次乾淨 checkout）定，記下樣本數，不暫用別的設計的誤差；規則 12，新 checker 寫完就請沒寫它的 agent 做漏洞審查，不等 Phase 收尾（Phase 4–7 每次收尾都找到 7–12 個漏洞，修完整套 regression 重跑）。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
 
 #### drv-timing-closure：時序與 DRV 收斂
@@ -279,12 +285,13 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - detailed routing 之後才出現的違規，Classic flow 沒有修復步驟。
   - 附「退回過的做法」表，避免再試沒用的設定。
   - hold 修復：OpenROAD 整顆晶片只用一種 hold buffer（sky130 是 `dlygate4sd3_1`，慢 corner 約是快 corner 的 3 倍），換小 cell 會插好幾倍、碰上限 `RSZ-0060`。hold delay cell 卡在 setup 吃緊的路徑時，先從 clock 端找原因（cts-clock-tree）。繞線後的估計不一定比 signoff 悲觀，開了 post-GRT 修復仍要看 signoff。
+  - 提早檢查（流程回顧，ADR-0020）：規則 14，第一次 harden 前做 library 與工具預設值的 QA：重跑參考設計時每個 DRV 違規都要查出原因（Phase 0 的 74 個 slew 違規只列不判，Phase 2 試跑 9 次才找到根因），弱 cell 查表涵蓋所有 signoff corner（`check_weak_cells.py` 目前只查 resizer 的 corner）；規則 15，resizer 看的 corner 預設等於 signoff corner，跑不完時先找根因，要拿掉要有 what-if 與 ADR（Phase 4 減少 corner，Phase 5 在 ss −40°C 差 −4.158 ns）。兩條的自動檢查留到下一個專案。
 - **不在這裡**：SDC 寫法看 timing-constraints-sdc；corner 設定看 multicorner-sta；clock tree 看 cts-clock-tree；數值怎麼定看 signoff-criteria。
 - **本 repo 實例**：`pnr/picorv32_core/README.md`、`pnr/soc_top/README.md` 的設定表、ADR-0009、ADR-0010、ADR-0012、ADR-0013、ADR-0014、`pnr/check_weak_cells.py`、`docs/notes/repair_design_loop.md`。negative test：P01–P04、P32、P40–P42。
 
 #### hard-macro-integration：hard macro 整合
 
-- **何時用**：把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
+- **何時用**：選定 macro 之前（go／no-go）；把 SRAM、IP 這類已完成版圖的區塊放進設計，或換一顆 macro（例如 Phase 6 的 OpenRAM 自產 SRAM）；macro 的 .lib 只有 TT、或只是解析模型（沒做 SPICE 特性化）。
 - **重點**：
   - 自建或收到 macro（任何產生工具或廠商）後，先檢查每個交付檔的內容：LEF、.lib、Verilog、SPICE 的名稱、腳位與方向一致，.lib 的數字在合理範圍、面積等於 LEF 尺寸，LEF 尺寸等於 GDS 外框，LEF 的資料庫單位不比 tech LEF 細。產生工具自己的 DRC、LVS 不看這些；OpenRAM dev 的 .lib power 錯了 10 個數量級仍然 DRC／LVS 全過，它的 LEF 寫 `DATABASE MICRONS 2000`，OpenROAD 會整份丟掉（`ODB-0292`），產生 flow 用的 LEF 時要無損改成 1000；它的 LEF 也沒有 `FOREIGN`，LibreLane 的 KLayout 輸出會留下空的 macro 而不報錯（只有 XOR 抓到），要補上，harden 後再比對最終 GDS 的 macro 和 macro 自己的 GDS（`check_soc.py macro_gds`）。
   - 每種 view 的來源：GDS、補上 antenna 資料的 LEF、每個 PVT 一份的 .lib（SPICE 實測，Phase 3.5 起）、合成用的 blackbox、修正過的模擬模型。每個產生出來的檔都要能檢查是否過期。
@@ -296,6 +303,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - macro 的 clock：CTS 預設會在 macro clock pin 前插 delay buffer 對齊 flip-flop 的 latency，對 SRAM 半週期讀出反而有害；soc_top 關掉了（ADR-0016，看 cts-clock-tree）。
   - LEF 與 GDS 的幾何也要比：每支腳位的 GDS 文字要落在該腳位同層的 LEF RECT 裡，繞線金屬要在 LEF 的 OBS 與腳位內。LVS 只透過 LEF 看 macro，兩支腳位 RECT 對調時 flow 的每個檢查都 PASS（Phase 6 獨立審查）。
   - 整合清單逐項連到各 signoff skill（時序、antenna、DRC、LVS、模擬、EQY）。
+  - 提早檢查（流程回顧，ADR-0020）：第 8 項，選定 macro 之前做 go／no-go：在晶片的整個操作範圍（STA corner、corner 之間的溫度、最低供電）做 SPICE 讀寫，並用下線平台的 DRC deck 單獨檢查（預建 SRAM 的低溫與室溫 ss 讀取失敗、precheck 的兩條規則都可以在選 macro 時就看到）；第 9 項，.lib 輸出的等效驅動電阻要落在標準元件的範圍內；第 10 項，換 macro 時舊檢查逐條重跑、每支 checker 證明比對對象不是空的（`FOREIGN`、EQY 只認 `sky130_` 的教訓）。第 9、10 項的自動檢查留到下一個專案。
 - **本 repo 實例**：`pnr/soc_top/config.json`、`ip/sram/`、`pnr/soc_top/check_inputs.py`、`scripts/check_macro_views.py`（`make macro-views`）、ADR-0006／0007／0008／0010／0016／0018。negative test：Q1–Q20（`make neg-macro-views`）、P08、P09、P14、P16–P20、P30、P32、P63–P76。
 
 #### openram-macro-characterization：SRAM macro 的 SPICE 特性化
@@ -323,6 +331,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 產生 .lib 的程式本身也要有 checker：另寫一支不 import 它的程式，從量測 JSON 重算每個數字；在 .lib 採用的值上做確認模擬；檢查量測 JSON 的來源與數值、模擬快取是否完整。假的測試資料每格要不同，否則公式錯誤測不出來。
   - 量漏電：ngspice 的 gmin（預設 1e-12 S）會蓋過 bitcell 的漏電（sky130 每顆約 13 pS，漏電幾乎不隨溫度變），單顆 bitcell deck 用 gmin 1e-17 並以 1e-18 核對（`bitcell leakage depends on gmin`）。不要用 DC 工作點（`.nodeset`＋`.op`）量：ngspice 直接疊代不收斂，退回的方法會翻掉鎖存器。低溫時量測窗的漏電一直緩降，平穩度判準只放行小幅下降（保守），短量測窗看不出窗後的緩慢漂移，要寫進已知限制。
   - 每個 PVT 先證明讀寫正確再量時序。PDK 的 sky130 SRAM 在低溫（tt −40°C、ss −40°C 到 1.95 V）與 ss 1.60 V 室溫（25°C）連續讀到不同值時會讀成前一次的值：sense amp 沒有自己的預充電，column mux 只有 NMOS，內部節點拉不回去。測試序列要有連續讀取不同值的讀取；不能動的 PVT 只記下錯的讀取，給 STA 一份佔位 .lib。
+  - 提早檢查（流程回顧，ADR-0020）：規則 29，特性化之前先試整顆版圖萃取，寄生倍數用萃取量到的值（Phase 3.5 假設 × 1.6，Phase 6 萃取是 2.0 倍；dout0 transition 寫 0.5 ns、實際 1.4–2.2 ns，wrapper 的 setup 只剩 +0.151 ns）。
 - **不在這裡**：macro 的整合與擺放（hard-macro-integration）；餘量怎麼定（signoff-criteria）；corner 清單（multicorner-sta）。
 - **本 repo 實例**：ADR-0010、ADR-0018、`ip/sram/char/`（腳本與方法）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/`、`ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（結果）、`ip/sram/openram/`（產生 macro）；植入錯誤 N1–N21（`make neg-char`）、O1–O8、I1–I4、T1–T3、D1–D3、L1–L2 與 C1–C2（`make neg-openram`），以及 P04、P17、P30、P32–P36。
 
@@ -371,11 +380,12 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **重點**：
   - clock pin 到 clock tree 根部的線不在 resizer 的修復範圍內。對策是把 pin 擺在 flip-flop 重心附近，或用 `CTS_CLK_MAX_WIRE_LENGTH` 讓 CTS 把這段線切開加 buffer（soc_top 這樣做之後通過，但同一次 run 也改了別的設定，這一項的效果沒有單獨實驗）。
   - clock buffer 的 fanout／cap 違規：`CTS_SINK_CLUSTERING_SIZE`、`CTS_DISTANCE_BETWEEN_BUFFERS`。PDK 的 `RT_CLOCK_MIN_LAYER` 在 LibreLane 3 沒有生效，clock 實際走 met1／met2。
-  - skew 的 metric 含 clock uncertainty 與 derate，不是 skew 的真值。
+  - skew 的 metric 含 clock uncertainty 與 derate，不是 skew 的真值；彙總的 `clock__skew__worst_hold` 是各 corner 的最大值（最不負），要看最差 corner 讀 `__corner:` 的值。
   - CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚（插 delay buffer），`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步。這串 buffer 的上升緣、下降緣延遲不同，讓 SRAM 半週期路徑的 setup 與讀出的 hold 一起變差。關掉用 `clock_tree_synthesis -no_insertion_delay`；LibreLane 沒有對應設定，本 repo 用 LibreLane plugin 換掉 CTS step（ADR-0016）。
   - setup／hold 違規先拆 launch 與 capture 的 clock latency（各 corner、上升緣與下降緣），來自 clock 結構就在 clock 端修。在 data 端補 hold 很貴：delay cell 在慢 corner 的延遲是快 corner 的約 3 倍。
   - 有記錄試過但沒有作用的設定，例如 `CTS_MAX_CAP`。
   - macro latency 對齊的防護改成結構判斷：`sram0/clk0` 上方「只驅動下一級」的 clock buffer 連續幾級（對齊 11–12、沒對齊 0），不靠 `delaybuf_*` 名稱；比 tree 總級數分不出來（Phase 5 獨立審查）。
+  - 提早檢查（流程回顧，ADR-0020）：規則 13，第一次帶 macro 的 harden 就檢查 macro clock 的結構與兩個邊緣的 latency；flow 的變數關不掉時查到底層工具的指令選項（Phase 4 判定「關不掉」，Phase 5 才找到 `-no_insertion_delay`）。
 - **本 repo 實例**：`pnr/soc_top/README.md` 的設定表、`pnr/soc_top/pin_order.cfg`、`pnr/librelane_plugin_arvinsa/`（negative test P52–P54、P58–P60（結構判斷））。
 
 #### pdn-ir-drop：電源網路與 IR drop
@@ -388,7 +398,8 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
-  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`、soc_top 的 `make ir-soc`，ADR-0019 決定 20、25；negative test `make neg-ir-soc`／`neg-ir-caravel`；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估 5 倍以上）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`、soc_top 的 `make ir-soc`，ADR-0019 決定 20、25；negative test `make neg-ir-soc`／`neg-ir-caravel`；判定前先核對 run guard、window 齊全、VCD 的時脈週期等於 `CLOCK_PERIOD`；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估約 9 倍）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+  - 提早檢查（流程回顧，ADR-0020）：規則 14，定 die 的 floorplan 試跑時 IR 就要成立（真實 pad、慢 corner，gate-level 模擬能跑之後用 max power pattern）；結果比預算小 100 倍以上先查供電模型（本 repo 的 IR 模型分四個 Phase 才修完）。
 - **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29、P61、P62、P77、P78。
 
 #### lvs-signoff：LVS 與連接性
@@ -422,6 +433,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - macro 座標要對齊 site 格點。halo 要嘛留出夠寬的 row，要嘛蓋過 core 邊界，否則會出現 PDN 接不到的窄 row。
   - 繞路用「繞線長度 ÷ 端點直線距離」判讀；全域的 congestion 報告看不到局部繞路。
   - logic 區是 L 形時要手動設 placement 目標密度（soc_top：自動的 68% 改 55%，轉角繞路消失）。
+  - 提早檢查（流程回顧，ADR-0020）：規則 7，定 die 尺寸時整顆設計加 macro 只跑到 PDN、global placement、global routing，看窄 row、目標密度對 logic 區使用率、溢位，出 floorplan 圖（Phase 3 約 8 次探索 run 與一度放寬的 max transition 可以提早看到）；繞完線才出現的局部熱點仍看不到。自動判定留到下一個專案。
 - **本 repo 實例**：ADR-0006、`pnr/soc_top/config.json`、`pnr/soc_top/pin_order.cfg`。
 
 #### timing-constraints-sdc：時序約束
@@ -440,7 +452,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 
 #### signoff-criteria：signoff 條件的推導與每次 harden 後的檢查
 
-- **何時用**：每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）；決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up、macro SPICE 特性化值的餘量；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
+- **何時用**：開新設計寫計畫時（操作範圍、corner 清單、corner 的代價）與任何 harden 之前；要放寬或補償某項條件時（登記表）；每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）；決定或檢討任何 signoff 條件的數值，例如 clock uncertainty（jitter、duty cycle、margin）、OCV derate、PVT corner 與溫度反轉、IO delay、IR drop 預算、EM、SI、max transition／cap／fanout、antenna、density、latch-up、macro SPICE 特性化值的餘量；或要說明某個工具沒分析的效應用哪一筆 margin 涵蓋。
 - **重點**：
   - 每個條件都要回答四件事：防什麼、數值怎麼算、預設值出自哪裡、工具有沒有分析。LibreLane 的預設值多半是沿用的常數，沒有成分說明。
   - 推導前要先有的輸入：clock 來源、供電範圍、溫度、外部介面時序。沒有就寫「假設」。
@@ -458,6 +470,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
     - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；依據不成立的 criterion 提給使用者決定，不自己改。
   - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號。
   - 第一部分新增 `uncertainty_applied`（逐條路徑核對 STA 實際套用的 uncertainty），`checkers_ran` 加 `ir_worst.py`，`harden-core` 也跑（`--design picorv32_core`）。判斷原則補：criterion 的依據是在哪個設計量的，換設計就要重量（Phase 5 的 IR）。sky130 的 knowledge 檔補了 Phase 5 確認的製程事實 S20–S24：推不動負載的弱 cell、`dlygate` 被當成 buffer、`clkbuf_16` 下降緣較慢、預設 PDN（via4 只有 1 個 cut）與最壞組合 IR 約是 nom_tt 的 1.4 倍、SRAM 內的 Magic DRC 計數隨上方金屬改變。
+  - 提早檢查（流程回顧，ADR-0020，「提早檢查」一節）：A1 寫計畫時的操作範圍對照表（VDD、Tj 由使用者決定，corner 清單由它推出，對照 macro 與 library 已驗證的範圍；macro 在某個 corner 不能動時不拿掉 corner）；A3 第一份網表後的 corner 代價 what-if；C1 任何 harden 之前（含子區塊與探索 run）limits 每列有出處、IR 判法一次定清楚；E1 放寬與補償登記表（`docs/relaxation_register.md`）。每次 harden 後的「合不合理」多兩列：最差 corner 在不在 resizer 的清單、登記表。C1 與 E1 的自動檢查留到下一個專案。
 - **本 repo 實例**：`docs/notes/signoff_criteria_soc_top.md`；negative test：`neg_pnr.py` P43–P49（`review_criteria.py` 的每個檢查項）、`make test-review-hook`（Stop hook）。
 
 #### rtl-synthesis-lint：合成與 lint
@@ -497,6 +510,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - what-if 的正式證據要用 LibreLane 單步重跑全部 corner；單一 corner 的 `sta` 腳本只能當探索。
   - 最小週期要從關鍵路徑推，不能用 `report_clock_min_period`（它排除半週期路徑）。
   - PnR 中途的 STA（`STAMidPNR`）只看預設 corner；flow 中途 state 裡其他 corner 的 metrics 是 placement 前那一步留下的舊值，不能拿來判斷。決策看 signoff STA。
+  - 提早檢查（流程回顧，ADR-0020）：規則 3 補充，新設計的 resizer 預設看全部 signoff corner，「resizer 用原本的 corner」只在找過根因、做過 what-if、寫了 ADR 之後才用（`drv-timing-closure` 規則 15）。
 - **本 repo 實例**：`pnr/soc_top/config.json`、`sta_extra_corner.tcl`。negative test：P01–P04、P22–P25、P30。
 
 #### dv-directed-tests：directed 測試補驗證缺口
@@ -522,6 +536,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 要放寬門檻或改比對規則時先問使用者，並記錄決定。
   - 收尾時分析本階段的重大任務是否需要新 skill，並逐一對照每個 skill、README 與 `description` 有沒有寫回。
   - 規則 1 補：再前一個階段沒結的限制也要延續；「沒變」要在新設計上重新量過才算（Phase 5 的 IR 原本寫沒變，實際超過上限）。
+  - 提早檢查（流程回顧，ADR-0020）：規則 10，收尾時找 checker 漏洞的審查只審本 Phase 最後改過的 checker（其他在寫完時就審過）；已知限制裡的放寬引用放寬與補償登記表，並核對依據的設計是不是本 Phase 的設計。
 - **本 repo 實例**：`docs/phase_exit/phase0.md`–`phase4.md`。
 
 #### core-migration-hazard3：把 CPU 換成 Hazard3
@@ -539,15 +554,16 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 轉成 native bus 時，AHB 讀取的 `hwdata` 要擋掉（它會變動或是 X）；`mtval` 固定為 0；中斷進入次數與 cycle 數的期望值要依 CPU 分開訂。
   - PnR 與 signoff：PicoRV32 版調好的設定不能直接沿用。resizer 要看 signoff 的所有慢 corner、resizer 會換上的弱 cell 要重查、開繞線後的 setup 修復；上限檔裡依設計結構推導的數字（例如沒有寄生資料的 driver 數）要用新 core 的 run 重數，golden 另建一份，並重新量同設定 run 之間的差異（ADR-0015）。
   - core 層級驗證：測試台的設定檔從 SoC 的參數自動產生；上游測試台與 riscv-tests 都在 `runs/` 建置，submodule 不留檔案；rvcpp 要補 `fence`，而且它的 CSR 模型是全功能設定，所以逐指令比對只做 user-level 指令、從測試本體開始。
+  - 提早檢查（流程回顧，ADR-0020）：規則 23，新 core 放進 SoC 之前先單獨 harden，看全部 signoff corner 的 STA（Phase 5 直接在 SoC 裡換，harden 5 次才 PASS）；換任何 core 都適用。
 - **不在這裡**：SoC 驗證的一般寫法看 dv-directed-tests、gate-level-simulation；SRAM 整合看 hard-macro-integration。
 - **本 repo 實例**：ADR-0011～0014、`rtl/cpu/`、`dv/core_hazard3/`（`make core-hazard3`）、`signoff/limits/soc_top_hazard3.toml`、`signoff/golden/soc_top_hazard3/`、`docs/phase_exit/phase5.md`（Phase 5）。
 
 #### tapeout-precheck-caravel：Caravel 整合與 ChipFoundry precheck
 
 - **名詞**：Caravel 是 ChipFoundry 的載具晶片，pad、電源、管理用 RISC-V 都做好了，使用者的設計放在 `user_project_wrapper`（2920 × 3520 µm）；precheck 是 ChipFoundry 收件前的自動檢查（`cf precheck`）。
-- **何時用**：把設計放進 Caravel；跑或判讀 precheck；precheck 和 flow 的結果不一致。
+- **何時用**：選定下線平台時（平台試算表、要問平台的問題）；把設計放進 Caravel；外殼設計第一次探索 harden 之後；跑或判讀 precheck；precheck 和 flow 的結果不一致。
 - **重點**：
-  - precheck 一定用 Docker 跑官方 image，只有 linux/amd64，Apple Silicon 要用 colima＋Rosetta 模擬；容器每次會升級 `cf-precheck`，每次要記下版本。只有官方 image 的結果算判定。
+  - precheck 一定用 Docker 跑官方 image，只有 linux/amd64，Apple Silicon 要用 VM＋Rosetta 模擬（本 repo 用 lima，docker context `lima-cf-precheck`）；容器每次會升級 `cf-precheck`，每次要記下版本。只有官方 image 的結果算判定。
   - precheck 自帶的 KLayout deck 比 flow 用的新：flow 的 KLayout DRC 是 0，precheck 不一定過。每顆 macro 先用 precheck 的 deck 單獨跑一次。
   - OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10` 與 `MR_licon.SP.6`：2026-05 的 deck 拿掉了 SRAM 核心區（`areaid.ce`）的豁免，沒有參數能關。本 repo 的判定是只允許這兩條、而且要和 PDK 預建 macro 一致（ADR-0019 決定 5）：`make precheck-check` 把違規展開到相對 bitcell array 的位置再比（deep 模式下違規掛在哪層 cell 會隨 macro 的階層不同，比 cell 名稱連兩顆好的 macro 都對不上），植入錯誤 `make neg-precheck`；本機的 deck 用 `make precheck-deck` 固定版本與 sha256。precheck 所用 PDK 的預建 SRAM 本身另有 nsdm／psdm 的 FEOL 違規，比對基準只比允許的這兩條（決定 24）。
   - 官方 image 在 VM 裡記憶體不夠時，`klayout_beol` 報 `stat=-9`、LVS 報 `extraction did not complete successfully`、OEB 報 `stat=5`；先看 VM 的 `dmesg` 有沒有 OOM kill（本 repo 的 wrapper 要 16 GiB）。
@@ -558,6 +574,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - user area 的供電：vccd1、vssd1 各只有一顆 pad（右側），經 Caravel 5 µm 的 met4 ring 與只在 wrapper ring 左右兩側的 met3 跨接線進來；wrapper 的電源 pin 不能當理想電源，IR 要從 pad 起算（`ir_caravel.py`、`caravel_pwr/`），電流用 max power pattern 量（規則 7，ADR-0019 決定 18–20）。
   - pad 與 wrapper 腳位位置都是固定的，能選的只有用哪幾支 GPIO：先依 Wishbone（下緣左段）定 block 位置，再挑最近的 GPIO，最後才寫 wrapper RTL（Phase 7 順序做反了，重做一次）。規劃與核准的做法看 chip-floorplan-pin-planning。
   - 2026-10-14 官方 image 正式判定 PASS（13 項中 11 項 PASS，FEOL／BEOL 只有 SRAM 的兩條規則）。XOR、GPIO 設定、`io_oeb` 的實體接線、`lvs_config.json` 的路徑寫法都實跑 PASS；違反時會不會 FAIL 沒有實測。
+  - 提早檢查（流程回顧，ADR-0020）：規則 9，選定下線平台時做平台試算表（每項收件檢查、邊界 SDC、供電、fill 與密度上下限、平台的 PDK 與工具版本都算到本設計的數字），需要平台回覆的問題當天送出；規則 10，採用官方邊界 SDC 前先試算 input transition 與邊界 hold；規則 11，第一次探索 harden 之後就用探索 GDS 跑一次完整 precheck、量 VM 記憶體，密度上下限做成 harden 內的 checker（留到下一個專案）。Phase 7 的單顆 vccd1 pad、邊界 slew 與 hold、li1 密度、precheck PDK 的預建 SRAM、fill 誰補，都是 harden 之後才發現。
 - **不在這裡**：macro 本身的 view QA 看 hard-macro-integration；DRC、LVS 的一般做法看 drc-signoff、lvs-signoff。
 - **本 repo 實例**：ADR-0019、`docs/notes/caravel_precheck_phase7.md`、`signoff/precheck/`（Phase 7）。
 
@@ -566,7 +583,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **何時用**：開新的頂層設計，或要決定、改變用哪幾支 pad／GPIO、block 與 macro 放哪裡；被 hook 或 `make pin-plan` 擋下時。
 - **重點**：
   - 順序是 pad（含電源 pad 與電源進入點）→ block 位置 → pin 指定 → 頂層 RTL 的腳位對應 → harden。block 位置依有時序要求的介面定，pin 挑離 block 最近的。
-  - 電源進入點和訊號 pad 一樣在 pad 階段查清楚：外殼從哪幾邊、哪些點把電源接進來，查不到的列成幾種供電模型，定 block 位置時一起考慮，採用的模型（signoff IR 用它）在核准規劃時一起決定。Phase 7 到 harden 後才量，Caravel wrapper 左下角的 SoC 在整圈供電 6.87 mV、只從上側 143 mV（上限 20 mV）。
+  - 電源進入點和訊號 pad 一樣在 pad 階段查清楚：外殼從哪幾邊、哪些點把電源接進來，查不到的列成幾種供電模型，定 block 位置時一起考慮，採用的模型（signoff IR 用它）在核准規劃時一起決定。Phase 7 到 harden 後才量，Caravel wrapper 左下角的 SoC 用 ff 電流加 ss 電阻的悲觀估法，整圈供電 6.87 mV、只從上側 143 mV（signoff 已改用慢 corner 與 max power pattern，ADR-0019 決定 19、20）。
   - 規劃寫在 `pnr/<design>/pin_plan.toml`。LibreLane 只跑到套用 DEF 範本（看腳位）或 global placement（看邏輯分布，幾分鐘）就出圖（`scripts/plot_floorplan.py`），連同規劃請使用者確認。
   - 使用者核准後，在 `[approval]` 填日期、原話、ADR 與規劃的 sha256；規劃之後再改，核准就失效。
   - 四層強制：規則（`CLAUDE.md` 規則 14）、規劃文件、checker（`make pin-plan`，harden 與 regress 都跑；植入錯誤 `make neg-pin-plan`）、Claude Code 的 PreToolUse hook（核准前擋下受管轄檔案的編輯）。用 Bash 改檔 hook 看不到，要到 checker 才擋。

@@ -30,7 +30,7 @@
 
 1. **讀對的那一份**：GitHub `github.com/Jordanplus/arvinsa-rtl-gds` 的 main，或本機的 main checkout。不要讀 `arvinsa-rtl-gds-p5*` 這類舊的 git worktree，它們停在舊 commit，skill 是舊版。
 2. **在新專案寫一份自己的 `CLAUDE.md`（Codex 是 `AGENTS.md`）**：寫一行「流程照 arvinsa-rtl-gds 的 `arvinsa-rtl-gds-flow.md`」，並把第 2 節的規則抄進去（或寫明照做）。只靠對話交代的話，下一次對話就忘了。
-3. **照 4.0 建環境**，照 4.1 寫新設計的計畫（Phase、exit criteria、negative test 總表）。
+3. **照 4.0 建環境**，照 4.1 寫新設計的計畫（Phase、exit criteria、negative test 總表）。第 4 節標「目前沒有自動防護，下一個專案開始時做成 checker」的提早檢查（ADR-0020 決定 2），在新專案第一次 harden 之前做成 checker 並加 negative test，排進計畫。
 4. **需要沿用的程式複製進新 repo**（來源追溯要求所有用到的檔案都已 commit，不能從這裡引用），在新專案記下複製時本 repo 的 commit；複製後修掉的錯誤，通用的部分寫回本 repo。
 5. 開始每一步之前，用 README 的「依情況找 skill」表找到 skill，讀對應的 `.claude/skills/<name>/SKILL.md`。
 
@@ -100,11 +100,14 @@ SKILL.md 是一般的 Markdown，任何 agent 都能讀。它們放在專案層�
 ```
 環境與釘版 ............................ （不做成 skill）toolchain.md、env/setup.md
 規格與計畫 ............................ project-plan.md、ADR
+ └ 操作範圍對照表、corner 代價（提早檢查 A1、A3）... signoff-criteria
+ └ 下線平台試算表（A2）.................. tapeout-precheck-caravel（平台是 Caravel 時）
  └ pad（含電源進入點）、block 位置、pin 指定（寫 RTL 前）... chip-floorplan-pin-planning
 RTL：合成、lint ........................ rtl-synthesis-lint
  └ RTL 模擬與 directed 測試 ............ dv-directed-tests
  └ 換 CPU core ......................... core-migration-hazard3
 macro 產生或取得（memory compiler、廠商 IP）
+ └ 選定前的 go／no-go（B1：操作範圍的 SPICE 讀寫、平台 deck）... hard-macro-integration
  └ view QA（每個交付檔的內容）........ hard-macro-integration（清單第 0 項）
  └ 整顆 macro 的 DRC ................... drc-signoff
  └ 各 corner 功能確認、SPICE 特性化、.lib ... openram-macro-characterization
@@ -138,6 +141,14 @@ signoff（harden 結尾自動執行）
 
 每一步的格式：**做什麼**、**怎麼跑**、**PASS 條件**（checker 與 negative test）、**skill**。括號裡是本 repo 的 target；新專案照同樣的結構建自己的 target。
 
+**提早檢查（A1–E3）**：2026-10-14 回顧 Phase 0–7（三個沒參與實作的 agent 讀 ADR、exit review、筆記與 git，報告在 [`docs/notes/flow_retro/`](docs/notes/flow_retro/README.md)），找出處理很久或必須放寬要求、其實應該早一點看的事，合併成 19 條提早檢查；使用者決定全部寫進流程（[ADR-0020](docs/decisions/0020-flow-shift-left.md)）。下面各步驟用「提早檢查 A1」這樣的標記，編號對應回顧 README 的表，每條寫做什麼、通過條件與本 repo 的例子。共同的教訓有五個：signoff 條件太晚定；平台、library、macro 的 QA 太晚；平台規定只讀了項目名稱、沒有算到自己的數字；放寬的依據只在一個設計上量過；換東西時舊檢查沒有重套。能做成自動 checker 的幾條，使用者決定這次只寫進流程（ADR-0020 決定 2：Phase 7 在收尾，加 checker 要擴大範圍、延後 regress），各條寫明「目前沒有自動防護，下一個專案開始時做成 checker」。時間與「省下多少」是從 commit 時間推算，只能看量級。
+
+**貫穿全程：放寬與補償登記表**（提早檢查 E1，ADR-0020 決定 3；登記表 [`docs/relaxation_register.md`](docs/relaxation_register.md)）：
+- 做什麼：每一項放寬或補償（加長週期、resizer 餘量、golden 誤差、佔位 .lib、只判某個 corner、延後處理）在決定的同時登記：原因、依據的量測、在哪個設計上量的、什麼情況要重新驗證、回收的條件。換設計、換 macro、或原因被修掉時，逐項做 what-if（多半只要重跑 STA 或 IR），能回收的提給使用者決定。每次 criteria review（4.6）對照登記表。
+- 通過條件：沒有「原因已經不在、卻沒評估」或「依據不是現在這個設計量的」項目。
+- 本 repo 的例子：IR 只判 nom_tt、resizer 用 0.6 ns 餘量代替 ss −40°C、golden 誤差，三項的依據都是在 PicoRV32 上量的，Phase 5 換成 Hazard3 時三項都失效（`docs/phase_exit/phase5.md`、ADR-0013、ADR-0015、ADR-0017）；週期 44 ns、hold 餘量 0.3 ns、PnR max transition 0.70 ns 的原因後來由 ADR-0014、0016 處理，設定沒有回頭評估（回顧 `retro_p35_5.md` #12，回收效果是推算）。
+- 自動防護：沒有（登記表是文件；「依據的設計等於現在的設計」可以做成 checker，下一個專案開始時做）。
+
 **本 repo 的設計選擇**：目前主要設計是 Hazard3 版 SoC。`CPU` 預設是 `picorv32`（`Makefile` 的 `CPU ?= picorv32`），所以 `fw`、`sim`、`regress-rtl`、`neg-rtl`、`synth-check`、`harden-soc`、`eqy-soc`、`neg-eqy-soc`、`gl-soc`、`gl-soc-powered`、`neg-gl-soc`、`neg-pnr`、`provenance-final` 要加 `CPU=hazard3`，否則跑的是 PicoRV32 版（run 在 `runs/soc_top`，Hazard3 版在 `runs/soc_top_hazard3`）。`make regress` 固定跑 Hazard3 版。
 
 ### 4.0 環境與釘版
@@ -145,14 +156,31 @@ signoff（harden 結尾自動執行）
 - 做什麼：所有工具、PDK、IP 釘到確切的版本或 commit，安裝方式可重現。
 - 怎麼跑：逐步說明在 `env/setup.md`。`make nix-install`、`make flow-setup`、`make pdk-fetch`、`make xpack-fetch`（RISC-V toolchain，`core-hazard3` 要用）；macro 用 OpenRAM 產生時加 `make openram-setup`。版本在 `env/versions.mk`，說明在 `toolchain.md`（兩者由 `env/check_toolchain_doc.py` 檢查一致）。
 - PASS 條件：`make env-check`（本機工具與 IP）、`make env-check-flow`（加上 Nix、LibreLane、PDK）；用 LibreLane 官方範例重跑一次當參考（`make ci-sram-ref`）。
-- skill：不做成 skill（`CLAUDE.md` 規則 6）。
+- **參考設計當成工具預設值的 QA**（提早檢查 C2 的前半）：重跑官方範例時，它的每一個 DRV 違規（max slew、max cap、max fanout）都要查出原因，不能只比「和官方結果一樣」。
+  - 通過條件：違規 0，或每個違規都有寫下的原因（例如某個設定沒開、某類 cell 太弱）。
+  - 本 repo 的例子：Phase 0 的參考設計有 74 個 max slew、2 個 max cap 違規，因為和官方相符只列不判（`signoff/golden/ci_sram_ref/README.md`）；Phase 2 單獨 harden CPU 時試跑 9 次才找到根因：繞線前的寄生估計表 `LAYERS_RC` 沒啟用、弱 cell 沒排除（`docs/phase_exit/phase2.md`、`pnr/picorv32_core/README.md`）。
+  - 後半（弱 cell 查表涵蓋所有 signoff corner）在 4.5。
+- skill：不做成 skill（`CLAUDE.md` 規則 6）；DRV 的根因看 `drv-timing-closure`。
 
 ### 4.1 規格與計畫
 
 - 做什麼：規格（本 repo `docs/spec/`）、分 Phase 的計畫與每個 Phase 的 exit criteria（`project-plan.md` 第 8 章）、negative test 總表（第 7.3 節）。
 - 重大選擇（PDK、core、SRAM、週期、corner、餘量）由使用者決定，記成 ADR。
-- 晶片層級的規劃要在寫外殼 RTL 之前做，順序是：pad／外殼腳位（含電源 pad 與電源進入點）→ block 位置 → pin 指定（使用者 2026-10-12：「block擺放位置應該在後段開始前就應該先確認之後出pin決定好」）。電源從外殼的哪幾邊、哪些點進來，在 pad 階段就查清楚，查不到的列成幾種供電模型，定 block 位置時一起考慮，採用哪個模型（signoff IR 用它）在核准規劃時一起決定（使用者 2026-10-12：「Caravel pad都是固定，應該早就要決定可以有哪些供電選擇」；Phase 7 到 harden 後才量，整圈供電 6.87 mV、只從上側 143 mV）。外殼的腳位位置固定時（本 repo Phase 7 的 Caravel：pad 與 wrapper 腳位都固定，XOR 檢查），pin 指定就是選用哪幾支 GPIO：先依有時序要求的介面（Caravel 是 Wishbone）定 block 位置，再挑離 block 最近的 GPIO（`tapeout-precheck-caravel` 規則 5）。
-  - 規劃寫在 `pnr/<design>/pin_plan.toml`，LibreLane 只跑到套用 DEF 範本或 global placement 就出 floorplan 圖，連同規劃請使用者核准；核准前 Claude Code 的 hook 擋下受管轄檔案的編輯，`make pin-plan` 在 harden 與 regress 擋下沒核准或與規劃不符的設計（植入錯誤 `make neg-pin-plan`）。做法在 skill `chip-floorplan-pin-planning`（使用者 2026-10-12，ADR-0019 決定 13）。
+- **操作範圍對照表**（提早檢查 A1，寫計畫時）：
+  - 做什麼：晶片要操作的 VDD 範圍（最低、典型、最高）與接面溫度 Tj 範圍，從下線平台的規格取得，由使用者決定並記 ADR。STA 的 corner 清單由它推出：先掃描 PDK 所有 .lib，比較同一電壓、不同溫度的延遲，有溫度反轉（低電壓時低溫反而比較慢）就把那個 corner 放進清單（`signoff-criteria` 的「PVT corner」一列）。再逐一對照每個 macro／IP 與 standard cell library **已驗證**的範圍：矽量測的條件、廠商或 memory compiler 特性化的 corner、.lib 是實測還是解析模型（公式估算）。
+  - 通過條件：每個 corner 都對應到規格的某個角落；規格裡沒被驗證涵蓋的範圍，列成「選定前要確認」，交給 4.3 的 go／no-go（B1）。macro 在某個 corner 不能動時，不要因此拿掉 corner：corner 由操作規格決定，要縮規格（例如只在室溫、最低 1.8 V 操作）由使用者在這一步決定並寫進 ADR 與使用限制。
+  - 本 repo 的例子：計畫第一版就寫了 OpenRAM 1 KB macro 的矽量測只在 ≥1.7 V 不出錯（`project-plan.md` §5.4），比 ss corner 的 1.60 V 高，這個落差在 Phase 0 就看得到；SRAM 的低溫讀取失敗到 Phase 3.5 特性化才發現（ADR-0010），同一顆 SRAM 在 ss 25°C 1.60 V（不是 STA corner）也讀錯，所以拿掉 ss −40°C corner 救不了它（回顧 README「使用者的例子」）。ss −40°C 是為了標準元件的溫度反轉與 Caravel Tj −40°C 在 Phase 4 加的（ADR-0004、`docs/notes/signoff_criteria_soc_top.md`），和 SRAM 無關。
+- **下線平台試算表**（提早檢查 A2，選定下線平台時）：
+  - 做什麼：平台的每一項收件檢查、外殼的邊界 SDC（input transition、IO delay、clock source latency）、供電結構（電源 pad 數量與位置，見本節最後一點的 pad 規劃）、fill 由誰做與密度的上下限、平台用的 PDK 與工具版本，逐條算出「對本設計是多少」，和本設計的 signoff 上限並排。平台的工具或 PDK 版本和 flow 不同的，寫明誰的結果算判定，並用平台的版本另取一份平台會用到的 macro（例如 PDK 預建 SRAM）。需要平台回覆的問題（已知 deck 問題、自產 macro 的 DRC 怎麼看、fill 誰做）當天送出，記下送出日期與回覆。
+  - 通過條件：每一條都有數字，或寫「待查，在哪一步查」；有衝突的（例如官方 input transition 超過自己的 slew 上限）在第一次 harden 前已列選項、由使用者決定；每個問題是「已送出（日期）」或「使用者決定不送（原話）」。
+  - 本 repo 的例子：Phase 7 的 Caravel 單顆 vccd1 pad、官方 SDC 的 input transition 0.84–0.97 ns 超過 0.70／0.75 ns 的上限、邊界路徑的 hold、預設 `decap_3` 讓 li1 密度 75%、precheck PDK 的預建 SRAM 另有違規、metal fill 誰補，全部在 harden 之後才發現，粗估重做約 2 天、3 項放寬（ADR-0019 決定 16–20、24；回顧 `retro_p6_7.md` #2–#10）；這些每項試算只要 10 分鐘到半天。給 ChipFoundry 的 issue 到 Phase 7 結案仍是草稿（ADR-0019 決定 26）。
+  - 自動防護：沒有（試算表與問題清單是文件）。
+- **corner 代價 what-if**（提早檢查 A3，第一份網表出來之後；本 repo 是 Phase 2 單獨 harden CPU 時）：
+  - 做什麼：用同一份版圖只重跑 STA（`multicorner-sta` 規則 5），列出每個「決定週期」的 corner 的代價：有它和沒有它時的最小週期差多少，交給使用者確認操作規格。
+  - 通過條件：每個會決定週期的 corner 都有代價數字，使用者確認過規格（記 ADR）。
+  - 本 repo 的例子：週期三次加長（40 → 42 → 43 → 44 ns）都由 ss −40°C 決定，當時 ss 100°C 分別還有 +0.07、+0.47、+0.955 ns（ADR-0004 的三段補充；回顧 `retro_p35_5.md` #3）；原因是標準元件與 clock tree 的溫度反轉，不是 SRAM。
+- 晶片層級的規劃要在寫外殼 RTL 之前做，順序是：pad／外殼腳位（含電源 pad 與電源進入點）→ block 位置 → pin 指定（使用者 2026-10-12：「block擺放位置應該在後段開始前就應該先確認之後出pin決定好」）。電源從外殼的哪幾邊、哪些點進來，在 pad 階段就查清楚，查不到的列成幾種供電模型，定 block 位置時一起考慮，採用哪個模型（signoff IR 用它）在核准規劃時一起決定（使用者 2026-10-12：「Caravel pad都是固定，應該早就要決定可以有哪些供電選擇」；Phase 7 到 harden 後才量，用 ff 電流加 ss 電阻的悲觀估法，整圈供電 6.87 mV、只從上側 143 mV；signoff 已改用慢 corner 與 max power pattern）。外殼的腳位位置固定時（本 repo Phase 7 的 Caravel：pad 與 wrapper 腳位都固定，XOR 檢查），pin 指定就是選用哪幾支 GPIO：先依有時序要求的介面（Caravel 是 Wishbone）定 block 位置，再挑離 block 最近的 GPIO（`tapeout-precheck-caravel` 規則 5）。
+  - 規劃寫在 `pnr/<design>/pin_plan.toml`，LibreLane 只跑到套用 DEF 範本或 global placement 就出 floorplan 圖，連同規劃請使用者核准；核准前 Claude Code 的 hook 擋下受管轄檔案的編輯，`make pin-plan` 在 harden 與 regress 擋下沒核准或與規劃不符的設計（植入錯誤 `make neg-pin-plan`）。核准的版本要記在 ADR：同一行寫使用者原話、日期與規劃的 `plan_sha256`，只改規劃檔裡的 digest 不算核准（Phase 7 審查）。做法在 skill `chip-floorplan-pin-planning`（使用者 2026-10-12，ADR-0019 決定 13）。
 
 ### 4.2 RTL 與 RTL 驗證
 
@@ -169,33 +197,80 @@ signoff（harden 結尾自動執行）
 - 自己產生才修得了電路：sky130 預建 2 KB SRAM 在 ss −40°C 讀出前一次的值，Phase 3.5 只能給佔位 .lib、列為下線風險；自產時加了 sense amp 輸入端預充電（ADR-0018 決定 8），5 個 PVT 都讀對。未用 port 的時脈接法、量測的功耗、外框尺寸也因為有產生流程才查得清楚。
 - 本 repo 的歷程（ADR-0007、0010、0018）：Phase 3 預建＋保守 .lib → Phase 3.5 實測 .lib → Phase 6 換成自產，同樣的特性化與整合做了兩次。
 
+0. **選定 macro 之前的 go／no-go**（提早檢查 B1；原本放在第 4 項「取得 macro 之後」，ADR-0020 移到這裡）：寫進計畫之前，先證明這顆 macro 在晶片要操作的整個範圍能動，而且過得了下線平台的 DRC。
+   - 做什麼：用廠商或 PDK 附的電晶體級網表（和 GDS 同一顆電路），在 4.1 操作範圍對照表（A1）的格點做 SPICE 讀寫：每個 STA PVT、corner 之間的溫度（例如 ss 25°C）、最低供電（平台規格的下限，例如 Caravel 1.62 V，以及 ss corner 的 1.60 V）。測試序列要有「連續兩次讀到相反的值」與「寫入後馬上讀」，未用的 port 照實際 SoC 的接法；同時記下輸出在 clock 兩個邊緣之後的波形（.lib 需要的時序弧，例如 OpenRAM SRAM 的 `rising_edge` hold 弧）。修剪過的網表要先在一個點和完整網表對照。另外用**下線平台的 DRC deck**（不只 flow 的 deck）單獨檢查 macro（`tapeout-precheck-caravel` 規則 2）。
+   - 通過條件：每個格點都讀寫正確；平台 deck 的每個違規都有根因與比對基準（例如和平台自己的預建 macro 位置相同）。有任何一點失敗，先列選項（換 macro、自產並修電路、縮規格）由使用者決定並記 ADR，再整合。
+   - 本 repo 的例子：PDK 預建 2 KB SRAM 在 ss −40°C、tt −40°C 與 ss 25°C 1.60 V 都讀成前一次的值（ADR-0010），網表從 Phase 0 就在 PDK 裡，卻到 Phase 3.5 特性化才發現；結果 Phase 3.5–5 帶著佔位 .lib、Phase 6 改自產並修讀取電路（ADR-0018 決定 8），特性化與整合做了兩次。回顧推算第一次做約半天到一天（修剪網表每個 PVT 幾分鐘到幾十分鐘）。precheck 的 deck 對任何 OpenRAM bitcell 報 `MR_licon.SP.6`、`MR_mcon.CON.10`，deck 在 2026-05 改的，比本專案開工早，到 Phase 7 才看到（ADR-0019 決定 5）。
 1. **取得或產生**：PDK 預建 macro、memory compiler（本 repo：OpenRAM，`make openram-macro`）、廠商 IP。產生工具自己的 DRC／LVS 要讀報告判斷，不能只看 exit code（OpenRAM 在 LVS 不一致時仍 exit 0）。本 repo 對 OpenRAM 執行結果、安裝、patch、macro DRC 比對、.lib 範本與自產 macro 特性化來源的 negative test：`make neg-openram`。
 2. **view QA**（`CLAUDE.md` 規則 12，`hard-macro-integration` 清單第 0 項）：`scripts/check_macro_views.py` 檢查 LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF 尺寸等於 GDS 外框，LEF 的資料庫單位與 `FOREIGN`（缺 `FOREIGN` 時 KLayout 輸出的最終 GDS 裡 macro 是空的，不報錯），以及 LEF 與 GDS 的幾何：每支腳位的 GDS 文字落在該腳位同層的 LEF RECT 裡、繞線金屬在 LEF 的 OBS 與腳位內（LVS 只透過 LEF 看 macro，腳位位置錯了 flow 的每個檢查都看不到）。產生鏈上的中間檔（例如 .lib 範本）也要能對回它的來源。harden 後再用 `scripts/check_macro_gds.py` 比對最終 GDS 的 macro 與 macro 自己的 GDS（本 repo `check_soc.py macro_gds`）。產生 macro 的 target 要接這一步；整合中的 macro 用 `make macro-views`。FAIL 的 view 修正或替換後重跑到 PASS，做法記進該 macro 的 README 或 ADR。negative test：`make neg-macro-views`。
+   - **.lib 輸出的驅動能力**（提早檢查 B3）：從 macro .lib 輸出弧的延遲表算等效驅動電阻（延遲變化 ÷ 負載變化），和標準元件的範圍比；延遲表要隨負載單調不減。通過條件：落在標準元件的範圍內；植入一份斜率過大的 .lib 必須 FAIL。本 repo 的例子：Phase 3.5 的 SRAM .lib 延遲表斜率等於 60–140 kΩ 的 driver，`repair_design` 跑 75 分鐘後異常結束，單步重跑 4 種 .lib 才找到原因（ADR-0010；`openram-macro-characterization` 規則 14）。目前沒有自動防護（`check_macro_views.py` 沒有這項），下一個專案開始時做成 checker。
 3. **整顆 macro 的 DRC**：用 full 規則，和已知 baseline 逐種類比較，不只比總數：不能出現 baseline 沒有的規則種類，每一種的違規區域（相接的錯誤框合併後的塊數）不能超過 baseline，面積只容許 Magic 切框造成的微小差異（本 repo 0.05%）。不比框數：Magic 會把同一個違規切成幾個框，切法隨 cell 的座標變（本 repo 自產 SRAM 3 種多了幾百個框，合併後與預建完全相同，ADR-0018 決定 19）（`ip/sram/openram/macro_drc.py`；negative test 在 `neg-openram` 的 D1–D7）。再用 flow 簽核用的 KLayout deck 跑整顆 macro，要 0（`macro_klayout_drc.py`，K0–K6）：memory compiler 的 DRC 與 Magic deck 都沒報的錯誤，macro 進了晶片才被 flow 的 KLayout DRC 抓到（本 repo：nwell.6、psdm.1、m2.2，ADR-0018 決定 17）。deck 若依名稱排除某些 cell（sky130：`*sky130_sram_*kbyte_*`），macro 不能取這種名字。
-4. **每個 corner 的功能確認**：先證明 macro 在每個 STA corner 與 corner 之間的溫度都讀寫正確，再談時序。不能動的 corner 用標明 PLACEHOLDER 的佔位 .lib，列為下線風險。未用的 port 照實際 SoC 的接法模擬（OpenRAM SRAM 未用 port 的時脈要打時脈，ADR-0018 決定 9）。
-5. **SPICE 特性化**：延遲、setup／hold、最小週期與 pulse width、internal power，每個 PVT 一份 .lib。量測方法先驗證誤差，再用植入錯誤證明量得對（`make neg-char`），最後在 .lib 採用的數值上跑確認模擬（`make sram-confirm`／`openram-confirm`），並由不 import 產生器的程式獨立重算（`check_char_lib.py`：每次 `harden-soc` 開頭由 `check_inputs.py` 執行，預建與自產 macro 都是；產生 .lib 之後也可以單獨跑，自產 macro 用 `make openram-check-lib`）。特性化本身用 `make sram-char`／`openram-char`。internal power 與漏電也用 SPICE 量（自產 macro：`make openram-power`，再 `make openram-lib` 寫進 .lib），不用 memory compiler 的解析值；漏電要在所有 port 都 precharge、時脈停住的待機狀態量；單顆 bitcell 的漏電 deck 要把 ngspice 的 gmin 調小並用再小 10 倍的值核對（`bitcell leakage depends on gmin`，`make neg-char` N21），量測窗的平穩度只放行小幅下降（`openram-macro-characterization` 規則 25、28）。沒用到的 port 在 SoC 接法下可能浮接、漏出額外的靜態電流，它不進 .lib，要另外記錄並列為已知限制（`openram-macro-characterization` 規則 25）。
-- skill：`hard-macro-integration`、`openram-macro-characterization`、`drc-signoff`。
+4. **每個 corner 的功能確認**：主要的檢查已移到第 0 項（選定之前）。這裡在實際交付的網表上重跑同一套序列：產生或取得的電路和第 0 項模擬的不是同一份時（自產、加了 patch、換了設定），一定要重跑（本 repo Phase 6：自產 macro 照預設設定也讀錯，修讀取電路後 7 個條件重跑才讀對，ADR-0018 決定 8）。先證明 macro 在每個 STA corner、corner 之間的溫度與最低供電都讀寫正確，再談時序。不能動的 corner 用標明 PLACEHOLDER 的佔位 .lib，列為下線風險（這是第 0 項由使用者決定接受風險之後的做法）。未用的 port 照實際 SoC 的接法模擬（OpenRAM SRAM 未用 port 的時脈要打時脈，ADR-0018 決定 9）。
+5. **SPICE 特性化**：**開始之前先試版圖萃取**（提早檢查 B2）：從 GDS 萃取含走線寄生的網表（Magic 用平面輸出 `ext2spice hierarchy off`，並檢查沒有總電容為負的節點，`openram-macro-characterization` 規則 10），能模擬就直接用萃取網表特性化；只能用電路圖網表時，寄生的倍數用萃取量到的值，不用假設。通過條件：萃取網表在 tt、最慢的 ss、最低溫的 ss 讀寫正確；.lib 的延遲與 transition 不低於萃取值。本 repo 的例子：Phase 3.5 假設寄生 × 1.6，Phase 6 最後才萃取，實際是 2.0 倍；dout0 transition .lib 寫 0.5 ns、實際 1.4–2.2 ns，Phase 7 wrapper 換成實際值後最差 setup 從 +0.548 剩 +0.151 ns，使用者選擇不重產 .lib、寫進已知限制（ADR-0018 決定 20；回顧 `retro_p6_7.md` #15）。萃取試跑約 3 小時。
+   之後：延遲、setup／hold、最小週期與 pulse width、internal power，每個 PVT 一份 .lib。量測方法先驗證誤差，再用植入錯誤證明量得對（`make neg-char`），最後在 .lib 採用的數值上跑確認模擬（`make sram-confirm`／`openram-confirm`），並由不 import 產生器的程式獨立重算（`check_char_lib.py`：每次 `harden-soc` 開頭由 `check_inputs.py` 執行，預建與自產 macro 都是；產生 .lib 之後也可以單獨跑，自產 macro 用 `make openram-check-lib`）。特性化本身用 `make sram-char`／`openram-char`。internal power 與漏電也用 SPICE 量（自產 macro：`make openram-power`，再 `make openram-lib` 寫進 .lib），不用 memory compiler 的解析值；漏電要在所有 port 都 precharge、時脈停住的待機狀態量；單顆 bitcell 的漏電 deck 要把 ngspice 的 gmin 調小並用再小 10 倍的值核對（`bitcell leakage depends on gmin`，`make neg-char` N21），量測窗的平穩度只放行小幅下降（`openram-macro-characterization` 規則 25、28）。沒用到的 port 在 SoC 接法下可能浮接、漏出額外的靜態電流，它不進 .lib，要另外記錄並列為已知限制（`openram-macro-characterization` 規則 25）。
+6. **換 macro 時的檢查單**（提早檢查 B4）：
+   - 做什麼：之前對舊 macro 做過的每一項檢查（不論在哪個 Phase、是不是 checker），對新 macro 逐條重跑一次，列成清單附結果。每支會碰到 macro 的 checker（EQY、DRC 位置比對、最終 GDS 比對、STA 讀的 .lib），在第一次 positive run 印出它讀到的 macro instance 與內容摘要，確認比對的對象不是空的。macro 換名稱時，搜尋 repo 中用舊名稱或名稱前綴認東西的腳本（`hard-macro-integration` 經驗紀錄 2026-10-10）。
+   - 通過條件：清單逐條 PASS；每支 checker 的 positive run 都印出 macro instance。
+   - 本 repo 的例子：Phase 0 就確認過預建 SRAM 的 LEF 有 `FOREIGN`（`docs/phase_exit/phase0.md`），Phase 6 換成自產 macro 時沒重查，最終 GDS 裡的 SRAM 是空的，flow 的 log 還印 `All LEF cells have matching GDS cells`，第一輪 harden（兩個 CPU）白跑（`hard-macro-integration` 清單第 0 項與經驗紀錄）；第二輪又因為 flow 的 KLayout deck 到這時才對 SRAM 檢查而白跑（ADR-0018 決定 17，第 3 項的「再用 flow 簽核用的 KLayout deck 跑整顆 macro」就是為此加的）；EQY 的網表解析只認 `sky130_` 開頭的 cell，SRAM 的 clock 檢查在 Phase 6 步驟 4a–4c 一直被略過照樣 PASS（`docs/phase_exit/phase6.md`）。
+   - 自動防護：部分 checker 已會擋空的比對對象（`formal-equivalence-eqy` 規則 5、`check_soc.py macro_gds` 與 `magic_drc` 的下限）；「舊檢查逐條重跑」本身目前沒有自動防護，下一個專案開始時做成 checker。
+- skill：`hard-macro-integration`、`openram-macro-characterization`、`drc-signoff`；下線平台的 deck 看 `tapeout-precheck-caravel`。
 
-### 4.4 子區塊單獨 harden（可選）
+### 4.4 子區塊單獨 harden（可選）、換 core、定 die 時的 floorplan 試跑
 
 - 做什麼：先單獨 harden 一個主要區塊（本 repo：PicoRV32），打通流程並取得面積與時序實測值，估計 SoC 的 die 尺寸（`make soc-area`）。
+- 開跑前：4.5 的 signoff 條件要先定好（提早檢查 C1：「第一次 harden」包括這裡的子區塊 harden），resizer 看的 corner 也照 4.5 的 C3。
 - 怎麼跑：`make harden-core`；之後 `make gl-core`、`make eqy-core`。
 - PASS 條件：同 4.6、4.7；negative test `make neg-gl-core`、`make neg-eqy-core`。
+- **換 core 時新 core 先單獨 harden**（提早檢查 D3；換 core 時這一步不是可選）：
+  - 做什麼：新 core 單獨合成並 harden（至少在合成網表上跑全部 signoff corner 的 STA），列出低溫 ss 對高溫 ss 延遲比例最大的長路徑，再放進 SoC。
+  - 通過條件：目標週期在所有 signoff corner 都 PASS，或已知差多少、進 SoC 之前由使用者決定。
+  - 本 repo 的例子：Phase 5 直接在 SoC 裡換上 Hazard3，harden 1–5 依序是 resizer 停不下來、−4.158 ns、−0.381 ns（週期 44 ns）、−1.131 ns、PASS；exit criteria「flow 設定只需改 design 層」沒達成，使用者接受為與計畫不同（ADR-0012、0013、0014；`docs/phase_exit/phase5.md`）。單獨 harden 一次約 30–40 分鐘（回顧推算）。做法看 `core-migration-hazard3` 規則 22、23。
+- **定 die 尺寸時的 floorplan 試跑**（提早檢查 D1、D2）：
+  - 做什麼：整顆設計加 macro，只跑到 PDN、global placement 與 global routing（幾分鐘到二十分鐘），看三件事：PDN 有沒有窄 row 錯誤（`PDN-0179`）；global placement log 的目標密度（`GPL-0052`）和 logic 區實際使用率差多少；global routing 的溢位。出 floorplan 圖（`scripts/plot_floorplan.py`）給使用者看。同一個試跑也跑 IR（D2）：供電點從平台的真實 pad 起算（4.1 的供電模型）、在預算所保護的慢 corner 判；gate-level 模擬能跑之後，電流改用 CPU max power pattern（4.7）。
+  - 通過條件：沒有窄 row 錯誤、溢位 0、目標密度不高於「logic 區使用率＋約定的餘裕」（餘裕由使用者決定）；IR ≤ 預算。IR 結果比預算小 100 倍以上時，先檢查供電模型（多半是把電源 pin 都當成理想電源），不要當成 PASS。
+  - 本 repo 的例子：Phase 3 為了 ss corner 的 max slew 跑了約 8 次探索 run，signoff 的 max transition 一度放寬到 1.0 ns 又撤回，根因是 LibreLane 自動算的 68% 目標密度把 cell 擠在 L 形 logic 區的轉角（ADR-0009；`floorplan-congestion` 規則 6）；Phase 3 的 IR 0.3 mV 是把 PDN 的 pin 全當理想電源算的，供電與電流模型到 Phase 7 才修完（`docs/phase_exit/phase3.md`、ADR-0017、ADR-0019 決定 18–20）。限制：只在繞完線才出現的局部熱點，試跑看不到（Phase 7 wrapper 的 55% → 50%，ADR-0019 決定 21，`floorplan-congestion` 規則 5）。
+  - 自動防護：PDN 錯誤會讓試跑直接失敗；密度與溢位的判定目前沒有自動防護，下一個專案開始時做成 checker。
 
 ### 4.5 約束與 signoff 條件（第一次 harden 前）
 
 - 做什麼：定週期與 STA corner、寫 SDC（`timing-constraints-sdc`、`multicorner-sta`）；推導每個 signoff 門檻（防什麼、數值怎麼算、預設值出自哪裡、工具有沒有分析），寫進 `signoff/limits/<tag>.toml`（`signoff-criteria`「先要有的輸入」）。製程的事實與量到的校準資料在 `signoff-criteria/knowledge/<製程>.md`。
+- **任何 harden 之前定好並強制 signoff 條件**（提早檢查 C1；「任何」包括 4.4 的子區塊與探索 run）：
+  - 做什麼：`signoff/limits/<tag>.toml` 每一列寫出處（推導筆記或 ADR 的哪一節）；STA 的 corner 清單等於 4.1 操作範圍對照表（A1）推出的清單。IR 的判法一次定清楚：預算保護什麼（慢 corner 的 setup）、電流、電壓、金屬電阻取同一個 corner、電流來自 CPU max power pattern（firmware 在 RTL 階段就寫好）、供電點從真實 pad 起算（`signoff-criteria`「IR 用多大的電流」）。
+  - 通過條件：上面每一項都有出處；`make harden` 開頭檢查 limits 檔存在、每列有出處、corner 清單等於規格推出的清單。目前沒有自動防護，下一個專案開始時做成 checker（加 negative test）。
+  - 本 repo 的例子：Phase 2、3 用 LibreLane 與 PDK 的預設值判 PASS，Phase 3 收尾才推導（`docs/notes/signoff_criteria_soc_top.md`）；加嚴後 40 ns 不過，週期改 42 ns（ADR-0004）。IR 的判法在 Phase 7 一天內改了三次（最壞組合 → 慢 corner → max power pattern），最後餘量不到 0.5 mV（ADR-0019 決定 18–20）。
+- **library 與工具預設值的 QA：弱 cell 查表涵蓋所有 signoff corner**（提早檢查 C2 的後半；前半在 4.0）：
+  - 做什麼：用規劃的 slew 上限與每個修復步驟的餘量，對 resizer 可用的每個 cell 在**每個 signoff corner**（不只 resizer 看的 corner）查表，確認推得動 resizer 最小的 buffer（`drv-timing-closure` 規則 10）。改 slew 上限、餘量、corner 或 cell library 時重跑。
+  - 通過條件：排除之後沒有弱 cell。
+  - 本 repo 的例子：resizer 停不下來發生 4 次（Phase 3、3.5、4、5），Phase 5 一個修復步驟跑 108 分鐘、記憶體 92.9 GB（機器 24 GB）才查到是弱 cell（ADR-0012）；查表腳本跑幾秒。`pnr/check_weak_cells.py` 目前只查 resizer 的 corner（`RSZ_CORNERS`）；涵蓋所有 signoff corner 目前沒有自動防護，下一個專案開始時做成 checker。
+- **resizer 看的 corner 預設等於 signoff corner**（提早檢查 C3）：
+  - 做什麼：resizer 的 corner（LibreLane `RSZ_CORNERS`）預設就是全部 signoff corner。要拿掉某個 corner，要有根因（不能只因為「跑不完」，先照 `drv-timing-closure` 規則 10 找）、what-if 與 ADR；每次 criteria review 檢查「最差 setup／hold 的 corner 在不在 resizer 的清單裡」。
+  - 通過條件：沒有拿掉；或拿掉的每個 corner 都有 ADR，criteria review 有那一列。
+  - 本 repo 的例子：Phase 4 因為 15 個 corner 時修復步驟停不下來，resizer 只看 9 個，ss −40°C 用 0.6 ns 餘量代替（`multicorner-sta` 規則 3）；Phase 5 換成 Hazard3 後 ss −40°C 差 −4.158 ns（ADR-0013）。Phase 7 wrapper 的 resizer 不看 ff 100°C，用 hold 餘量 0.2 ns 代替，有 ADR（ADR-0019 決定 17）。criteria review 的這一列目前沒有自動防護（`review_criteria.py` 沒有），下一個專案開始時做成 checker。
+- **外殼設計：邊界約束先試算**（提早檢查 C4）：
+  - 做什麼：採用外殼的官方邊界 SDC 時，第一次 harden 前先算兩件事：官方的 input transition 和自己的 slew 上限並排比；用官方的 clock source latency（min／max）、min input delay 加上預估的 clock tree，算邊界 hold 需要多少延遲，決定 hold 餘量與 resizer 要看的 corner。
+  - 通過條件：有衝突的項目在 harden 前已列選項、由使用者決定。
+  - 本 repo 的例子：Caravel 官方 SDC 的 input transition 0.84–0.97 ns 超過本 repo 的 0.70／0.75 ns，floorplan 試跑的網表上就量到 0.84 ns 卻沒拿去比，到探索 harden 才處理（ADR-0019 決定 16）；邊界路徑在 ff 100°C hold −0.071 ns，ff 下資料要多延遲約 2.4 ns，多跑了 `p7_harden3`、`p7_harden4` 一輪（決定 17）。做法看 `tapeout-precheck-caravel`。
 
 ### 4.6 harden 與 signoff（floorplan → PDN → placement → CTS → routing → signoff）
 
 - 開跑前：`pnr/<design>/check_inputs.py` 檢查輸入。本 repo 檢查 RTL 檔案清單與 config 一致、兩顆 CPU 的 config 只差 RTL（本 repo 專屬）、macro 產生器的輸出沒被改過（sha256 對產生紀錄）、flow 讀的 macro view 通過 view QA、macro 的 .lib、antenna LEF 與模擬模型是產生器的最新輸出、.lib 的數字由 `check_char_lib.py` 獨立重算、STA 每個 corner 只讀到一份 macro .lib、`LIB`／`EXTRA_LIBS` 沒有帶進別的 macro .lib、弱 cell。harden 只能在已 commit 的工作樹上開（來源追溯）。
 - 怎麼跑：`make harden-soc`（本 repo 要加 `CPU=hazard3`）。它呼叫 `pnr/soc_top/run.sh`：LibreLane（`pnr/librelane_flow.sh` 對已知的偶發錯誤做有上限的重試），接著自動執行 signoff 的全部 checker：
   - `check_signoff.py`：`signoff/limits/<tag>.toml` 的門檻（多 corner 的 setup、hold、slew、cap，DRC、LVS、antenna、IR）與 golden 比對；
-  - `check_soc.py`（加 `sram_drc_alone.py`）、`check_inputs.py --resolved`（這次 run 真的用了這些輸入）、`ir_worst.py`（IR 在預算所保護的兩個慢 corner 判：該 corner 的電流、1.60 V、ss 金屬電阻，加上 macro 不在 .lib 裡的電流，取大的判上限；ff 電流＋ss 電阻只列為參考，ADR-0019 決定 19；IR 用多大的電流怎麼決定見 `signoff-criteria`）、外殼的 `ir_caravel.py`（Caravel wrapper：把 Caravel 從 pad 到 wrapper ring 的供電網路加進模型，同樣在慢 corner 判，上限就是對板子的供電要求，ADR-0019 決定 18）、`provenance.py --verify`、`review_criteria.py`。
+  - `check_soc.py`（加 `sram_drc_alone.py`）、`check_inputs.py --resolved`（這次 run 真的用了這些輸入）、`ir_worst.py`（IR 在預算所保護的兩個慢 corner 判：該 corner 的電流、1.60 V、ss 金屬電阻，加上 macro 不在 .lib 裡的電流，取大的判上限；ff 電流＋ss 電阻只列為參考，ADR-0019 決定 19；IR 用多大的電流怎麼決定見 `signoff-criteria`）、外殼的 `ir_caravel.py`（Caravel wrapper：把 Caravel 從 pad 到 wrapper ring 的供電網路加進模型，電流用 CPU max power pattern 的切換活動、在兩個慢 corner 判 20 mV，接在 gl 模擬之後的 `make ir-caravel`，ADR-0019 決定 18–20；決定 18 原本的「對板子的供電要求」已由決定 20 取消）、`provenance.py --verify`、`review_criteria.py`。
 - 結果：`runs/<tag>_signoff/`（`signoff.txt`、`soc_checks.txt`、`ir_worst.txt`、整體結果 `result.txt`）。
 - 每一步的設定與已知問題：`floorplan-congestion`、`pdn-ir-drop`、`drv-timing-closure`、`cts-clock-tree`、`antenna-signoff`、`multicorner-sta`、`drc-signoff`、`lvs-signoff`；執行與除錯看 `librelane-run-debug`。
-- 跑完（PASS 或 FAIL）：`CLAUDE.md` 規則 9 的 criteria review（`signoff-criteria`「每次 harden 後的檢查」，寫 `runs/<tag>_signoff/criteria_review.md`），學到的數字寫進該製程的 knowledge 檔。
+- 跑完（PASS 或 FAIL）：`CLAUDE.md` 規則 9 的 criteria review（`signoff-criteria`「每次 harden 後的檢查」，寫 `runs/<tag>_signoff/criteria_review.md`），學到的數字寫進該製程的 knowledge 檔。criteria review 也對照放寬與補償登記表（E1），並檢查最差 corner 在不在 resizer 的清單裡（4.5 的 C3）。
+- **第一次帶 macro 的 harden：檢查 macro 的 clock 結構**（提早檢查 D4）：
+  - 做什麼：CTS 之後看每個 macro clock pin 前有沒有被插入對齊 latency 用的 buffer 鏈，報出 macro clock pin 的上升緣與下降緣 latency、和接收端 flip-flop 比，列出半週期路徑（一個邊緣送出、相反邊緣接收）。flow 的變數關不掉某個工具行為時，查到底層工具的指令選項，再判斷是不是真的沒辦法。
+  - 通過條件：沒有預期外的對齊 buffer，或已記錄決定；半週期路徑兩個邊緣的 latency 差已列出。結構 checker（本 repo `check_soc.py cts_macro_latency`，數 macro clock pin 上方只驅動下一級的 clock buffer 有幾級）從第一次帶 macro 的 harden 就啟用。
+  - 本 repo 的例子：Phase 4 就看到 CTS 在 `sram0/clk0` 前插了 10 顆 delay buffer，當時判定「LibreLane 沒有設定可以關」，改用 hold 餘量 0.3 ns 補；Phase 5 才查到 OpenROAD 的 `clock_tree_synthesis -no_insertion_delay`，用 LibreLane plugin 關掉，PicoRV32 的 setup −0.113 → +0.765 ns（ADR-0016；`cts-clock-tree` 規則 10）。Phase 3.5 的 42 → 43 ns 有一部分可能也來自它（回顧推測，沒有在 42 ns 重跑驗證）。
+- **外殼設計的第一次探索 harden：跑一次平台的完整收件檢查**（提早檢查 D5）：
+  - 做什麼：外殼設計（本 repo 的 Caravel wrapper）第一次探索 harden 之後，用探索的 GDS 跑一次平台的完整收件檢查（查證用，結論標明不是正式判定），順便量平台工具跑在 VM 時的記憶體峰值；fill 與 decap cell 的選擇依結果決定。平台的密度上下限（4.1 平台試算表的結果）做成 harden 內的 checker，不要等平台檢查（本 repo 約 1 小時）才知道。
+  - 通過條件：除了已由使用者決定的項目，其他全 PASS；VM 記憶體峰值低於配置。
+  - 本 repo 的例子：wrapper 的空白被 PDK 預設的 `decap_3` 填滿，li1 密度 75%（precheck 上限 60%），246 萬個 decap 也讓 10 GiB 的 VM 被 OOM 砍掉，到 Phase 7 步驟 7 官方 precheck 才發現，整段約 14 小時、多兩次 harden（ADR-0019 決定 24；`tapeout-precheck-caravel` 規則 1、8）。li1 密度本機算只要 84 秒（回顧 `retro_p6_7.md` #8）。
+  - 自動防護：harden 內的密度 checker 目前沒有（`tapeout-precheck-caravel` 規則 8：要等 precheck 才抓得到），下一個專案開始時做成 checker。
 - **golden**：第一次 signoff 全部 PASS、criteria review 也確認後，把那次 run 的 metrics 存成 golden（`signoff/golden/<tag>/`）。之後改了工具、PDK、RTL、config、SDC、macro 的產生檔，golden 比對一定 FAIL，要照 `signoff-checker-qualification` 規則 6 更新：先確認所有門檻與 checker PASS，逐項說明差異，複製並記 sha256，再跑一次確認 PASS。同樣設定重跑的差異怎麼給誤差也在該 skill。
+  - **誤差至少用 4 個樣本定**（提早檢查 E2，`signoff-checker-qualification` 規則 11）：每個設計第一次建 golden 時，同一個設定至少 4 個樣本（含一次乾淨 checkout；可以是完整 harden，或從不可重現的步驟單步重跑後接著跑完），依每一類 metric 的實際差異定誤差，golden 的 README 寫明每一類用了幾個樣本；不能暫用別的設計的誤差。通過條件：樣本彼此都在誤差內。本 repo 的例子：Phase 2 用 3 次 run 定的誤差，Phase 4 regress 第 2 次就 FAIL（繞線器中間各輪的 DRC 數），Phase 5 Hazard3 的 golden 比對又 FAIL（ADR-0015），PicoRV32 暫用 Hazard3 的誤差被審查抓到，多跑兩輪 regress（`docs/phase_exit/phase4.md`、`phase5.md`）。每個設計多 2–3 次 harden。wrapper 的三組比較都逐值相同、量不出誤差大小，仍暫用 Hazard3 的值並寫明理由（ADR-0019 決定 26）。
 - negative test：`make neg-pnr`（本 repo P00–P81）。
 
 ### 4.7 網表驗證
@@ -203,8 +278,8 @@ signoff（harden 結尾自動執行）
 - 等價證明：合成網表對最終網表（`make eqy-soc`，外殼用 `make eqy-caravel`，`formal-equivalence-eqy`），negative test `make neg-eqy-soc`。OpenROAD 時序修復對調的等價輸入（pin swap）只排除那幾個腳位名稱的對應，cell 輸出照樣證明（negative test `o21ai_swap`）；config 列出的 macro instance 必須在網表中被解析到，macro 的 clock 檢查才不會被略過（Phase 6）。只有一兩個分區沒證明、沒有別的問題時，用 EQY 的 `amend` 把驅動它們輸入的組合邏輯併進來重跑一次，判定看第二輪（好網表也會因切分點遺失邏輯關係而證不出來）；flip-flop 不能併進來（會變成空洞證明），被 amend 的分區有 sequential cell 就 FAIL。negative test `nand2_comb_to_nor2` 要求重試後仍 FAIL、`nand2_flop_to_nor2` 防止併入 flip-flop（Phase 7）。**限制**：RTL 到合成網表這一段沒有 formal 證明（合成會重新編碼狀態機），由 gate-level 模擬加 directed 測試補（README「專案狀態」、`formal-equivalence-eqy`）。
 - gate-level 模擬：RTL 與網表 lockstep（`make gl-soc`），含電源腳位的網表（`make gl-soc-powered`），negative test `make neg-gl-soc`（`gate-level-simulation`）。外殼（Caravel wrapper）用 `make gl-caravel`：比對外殼全部的輸出腳位（`gl_lockstep` 的 `OUT_W`）。
 - power signoff（IR、EM、功耗）一律用 CPU max power pattern 的切換活動，不用 OpenSTA 的預設切換率（使用者 2026-10-13；`signoff-criteria`）。新設計要有一支 max power firmware，並在 harden、gate-level 模擬之後錄 VCD。
-- IR 的判定（Caravel wrapper，`make ir-caravel`，接在 gate-level 模擬之後）：CPU 的 max power pattern（`fw/tests/maxpower`，滿負載迴圈標在 GPIO）在最終網表的 gate-level 模擬錄成 VCD（`run_gl_soc.py --record-window`，時脈用 signoff 週期），含外殼供電網路的 IR 讀這些 VCD，在慢 corner 判（`ir_caravel.py`，ADR-0019 決定 20）。harden 內的 `ir_worst.py`（預設切換率）只當早期檢查。切換活動要用 max power pattern 的依據見 `signoff-criteria`「IR 用多大的電流」。
-- 下線預檢（本 repo Phase 7：ChipFoundry precheck）：判定只認官方 image 的結果，每次記下版本與 image digest。官方結果裡的已知工具問題不能直接放過，要寫成有比對基準的 checker：precheck 的 deck 在任何 OpenRAM SRAM（包括 PDK 預建的）裡都報 `MR_licon.SP.6`、`MR_mcon.CON.10`，`make precheck-check` 要求其他項目全 PASS，這兩條的每個違規展開後都在 SRAM 裡、而且 PDK 預建 macro 單獨檢查時同一個位置也有（ADR-0019 決定 5；比對基準 `make precheck-sram-ref`，植入錯誤 `make neg-precheck`）。做法在 `tapeout-precheck-caravel` 規則 3。比對基準要用 precheck 實際用的那顆預建 macro、在同一個 image 跑（`make precheck-caravel` 一次做完：組專案目錄、跑官方 image、產生比對基準、判定）；它若另有別的規則，只比允許的那幾條（ADR-0019 決定 24）。官方 image 跑在 VM 裡時，記憶體不足會讓 BEOL、LVS、OEB 沒跑完，先看 VM 的 OOM kill。外殼的 user area 很大、頂層又有標準 cell 時，空白區的 fill 會決定整體 li1 密度：sky130 預設的 `decap_3` 填滿會超過 precheck 的 60%，要改用 li1 較少的 decap 與 fill，harden 後先在本機算 li1 密度再送 precheck（`tapeout-precheck-caravel` 規則 8）。
+- IR 的判定（Caravel wrapper，`make ir-caravel`，接在 gate-level 模擬之後）：CPU 的 max power pattern（`fw/tests/maxpower`，滿負載迴圈標在 GPIO）在最終網表的 gate-level 模擬錄成 VCD（`run_gl_soc.py --record-window`，時脈用 signoff 週期），含外殼供電網路的 IR 讀這些 VCD，在慢 corner 判（`ir_caravel.py`，ADR-0019 決定 20）。判定前先核對輸入：harden run 通過 run guard、window 齊全、VCD 的時脈週期等於 run 的 `CLOCK_PERIOD`（錄波的週期也從 `CLOCK_PERIOD` 取）。harden 內的 `ir_worst.py`（預設切換率）只當早期檢查。切換活動要用 max power pattern 的依據見 `signoff-criteria`「IR 用多大的電流」。
+- 下線預檢（本 repo Phase 7：ChipFoundry precheck）：判定只認官方 image 的結果，每次記下版本與 image digest。官方結果裡的已知工具問題不能直接放過，要寫成有比對基準的 checker：precheck 的 deck 在任何 OpenRAM SRAM（包括 PDK 預建的）裡都報 `MR_licon.SP.6`、`MR_mcon.CON.10`，`make precheck-check` 要求其他項目全 PASS，這兩條的每個違規展開後都在 SRAM 裡、而且 PDK 預建 macro 單獨檢查時同一個位置也有（ADR-0019 決定 5；比對基準 `make precheck-sram-ref`，植入錯誤 `make neg-precheck`）。正式判定的專案要來自通過 run guard 的 harden run（`arvinsa_source.json`）；查證用的結果要加 `--verification`，結論標明不是 signoff 結果。做法在 `tapeout-precheck-caravel` 規則 3。比對基準要用 precheck 實際用的那顆預建 macro、在同一個 image 跑（`make precheck-caravel` 一次做完：組專案目錄、跑官方 image、產生比對基準、判定）；它若另有別的規則，只比允許的那幾條（ADR-0019 決定 24）。官方 image 跑在 VM 裡時，記憶體不足會讓 BEOL、LVS、OEB 沒跑完，先看 VM 的 OOM kill。外殼的 user area 很大、頂層又有標準 cell 時，空白區的 fill 會決定整體 li1 密度：sky130 預設的 `decap_3` 填滿會超過 precheck 的 60%，要改用 li1 較少的 decap 與 fill，harden 後先在本機算 li1 密度再送 precheck（`tapeout-precheck-caravel` 規則 8）。
 
 ### 4.8 一鍵 regression 與來源追溯
 
@@ -217,11 +292,16 @@ signoff（harden 結尾自動執行）
 - `make regress-caravel`（本 repo Phase 7：晶片層級的外殼，`scripts/regress.py --cpu caravel`，約 6 小時）：外殼裡的 RTL 測試、外殼的 harden、EQY、gate-level、從 pad 起算的 IR、官方 image 的 precheck（`env-check-flow` 先檢查 VM），以及**只屬於外殼的** negative test（`neg-eqy-caravel`、`neg-gl-caravel`、`neg-ir-caravel`、`neg-pnr-caravel`）。和內部設計共用的 checker 由 `make regress` 的完整 negative test 驗證，外殼不重複植入（ADR-0019 決定 25：完整移植每輪多 4–6 小時）。結案時三條 regress 各在一個乾淨 worktree 跑，外部共用的目錄（precheck 的 VM 工作目錄）依 checkout 分開。
 - **不在 regression 裡、要另外跑的**：`ci-sram-ref`；macro 的產生、view QA、特性化與它們的確認（`openram-macro`、`macro-views`、`sram-char`／`openram-char`、`sram-confirm`／`openram-confirm`、`openram-check-lib`、`neg-char`）。這些在 macro 或量測方法有改時跑，結果進版控；regression 只檢查進版控的結果沒過期（`harden-soc` 開頭的 `check_inputs.py`）。
 - 要在乾淨的 checkout 執行；乾淨的 worktree 沒有 `.tools/`，要設 `LIBRELANE_DIR`、`XPACK_DIR`、`PRECHECK_DECK` 指到已安裝的副本。
-- skill：`flow-regression-reproducibility`。
+- **新 checker 寫完就做獨立漏洞審查**（提早檢查 E3）：
+  - 做什麼：每支新的或大改的 checker，寫完、第一次正式 harden 或放進 regression 之前，就請一個沒寫它的 agent 找「該 FAIL 卻 PASS」的漏洞：做植入錯誤的實驗加對照組，不能只讀程式（`signoff-checker-qualification` 規則 12）。Phase 收尾時只審最後改過的 checker。
+  - 通過條件：每支新 checker 有獨立審查的紀錄與 negative test；收尾審查沒有新的高、中嚴重度漏洞。
+  - 本 repo 的例子：每個 Phase 收尾的審查都找到一批漏洞，修完要整套 regression 重跑：Phase 4 有 10 個、Phase 3.5 有 12 個、Phase 5 有 8 個、Phase 6 有 7 個、Phase 7 有 8 個加 1 個缺口（各 Phase 的 exit review「獨立審查」；ADR-0019 決定 26）。Phase 7 那次三條 regression 要重跑，wrapper 一條約 6 小時。
+  - 自動防護：沒有（審查要 agent 做實驗）；審查紀錄齊不齊可以做成 checker，下一個專案開始時做。
+- skill：`flow-regression-reproducibility`；審查的做法看 `signoff-checker-qualification`。
 
 ### 4.9 Phase 收尾
 
-- 獨立審查、exit review（`docs/phase_exit/`）、經驗寫回 skill（`phase-exit-review`）。exit review 的證據只能來自乾淨 checkout 的端到端 run（該 skill 規則 2）。
+- 獨立審查、exit review（`docs/phase_exit/`）、經驗寫回 skill（`phase-exit-review`）。exit review 的證據只能來自乾淨 checkout 的端到端 run（該 skill 規則 2）。收尾時找 checker 漏洞的那份審查只審本 Phase 最後改過的 checker，其餘在寫完時已審過（文件核對照舊全部做）（E3，`phase-exit-review` 規則 10）。已知限制裡的放寬引用登記表（E1）。
 - 清空 `runs/todo.md`（`CLAUDE.md` 規則 11）。
 
 ## 5. 遇到工具缺陷時
@@ -233,3 +313,4 @@ signoff（harden 結尾自動執行）
 - 流程的步驟、順序、checker 或 negative test 有改，同一個 commit 更新本文件；README 的「流程（簡易版）」只在大方向改變時才跟著改。
 - 新專案發現的通用流程經驗寫回這裡（1.6）。
 - 本文件 2026-10-09 建立後，由獨立 agent 逐條對照 repo 審查過一次（14 項中重度問題已修正）。
+- 2026-10-14 依 ADR-0020 加入 19 條提早檢查（第 4 節標「提早檢查」的各點）；它們的 checker 在下一個專案開始時做，做好後把各點的「目前沒有自動防護」改成 checker 與 negative test 的名稱。

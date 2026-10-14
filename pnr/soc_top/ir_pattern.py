@@ -15,6 +15,12 @@ their libraries, 1.60 V and their own metal resistance, the SRAM's port 1 floati
 IR step is re-run with the run's own supply points (ir_worst.run_corner with the window's VCD). Every window
 must annotate all pins (0 unannotated) and every corner must have been applied; then the largest VDD drop +
 GND rise over windows and corners <= [max_sum] ir_vdd_drop_plus_gnd_rise of the limits file.
+Inputs, checked before any tool runs (check_inputs(), shared with ir_caravel.py; Phase 7 review H2, H3):
+the run passes the run guard (harden-soc: PASS, made from HEAD); the --vcd files are exactly the windows
+WINDOWS (win_5a, win_5b, win_5c: every marked segment of fw/tests/maxpower); in each, the clock port of the
+run (CLOCK_PORT of its resolved.json, in scope tb_soc.dut_gl) toggles with the run's CLOCK_PERIOD (an activity
+recorded at another period scales the power and the IR). Every drop must be a finite number (a NaN would be
+skipped by max()).
 Writes <out>/ir_pattern/ (the step runs and results.json: the rows and drops, so that --judge can re-apply a
 limit without re-running the tools) and prints `<label>: PASS` / `<label>: FAIL` last; exit code 0 only on
 PASS. ir_caravel.py (the wrapper, supplied from Caravel's pads) writes and judges the same results.json.
@@ -22,6 +28,7 @@ Python stdlib only (LibreLane runs inside its nix-shell).
 """
 import glob
 import json
+import math
 import os
 import shutil
 import sys
@@ -29,6 +36,68 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ir_worst  # noqa: E402
+sys.path.insert(0, os.path.join(ir_worst.ROOT, "signoff", "scripts"))
+from run_guard import guard  # noqa: E402
+
+WINDOWS = ("5a", "5b", "5c")   # the busy segments fw/tests/maxpower marks on gpio_out (0x5A, 0x5B, 0x5C)
+
+
+def vcd_clock_period(path, scope, port, edges=11):
+    """The period (ps) between the first `edges` rising edges of `port` in `scope` of a VCD, or an error string."""
+    stack, ident, unit, t = [], None, None, 0
+    rises = []
+    with open(path, errors="replace") as f:
+        for line in f:
+            w = line.split()
+            if not w:
+                continue
+            if ident is None or unit is None:
+                if w[0] == "$timescale":
+                    unit = w[1] if len(w) > 1 and w[1] != "$end" else next(f).strip()
+                elif w[0] == "$scope" and len(w) > 2:
+                    stack.append(w[2])
+                elif w[0] == "$upscope":
+                    stack.pop()
+                elif w[0] == "$var" and len(w) > 4 and w[4] == port and w[2] == "1" and stack == scope:
+                    ident = w[3]
+                elif w[0] == "$enddefinitions":
+                    return f"no 1-bit {port} in scope {'.'.join(scope)} (or no $timescale)"
+                continue
+            if line[0] == "#":
+                t = int(line[1:])
+            elif line.rstrip("\n") == "1" + ident:
+                rises.append(t)
+                if len(rises) == edges:
+                    break
+    if unit not in ("1ps", "1 ps"):
+        return f"timescale {unit!r}, expected 1ps"
+    periods = {b - a for a, b in zip(rises, rises[1:])}
+    if len(rises) < edges or len(periods) != 1:
+        return f"{len(rises)} rising edges of {port}, periods {sorted(periods)} ps"
+    return periods.pop()
+
+
+def check_inputs(run, vcds):
+    """Rows on the run and the windows, before any tool runs (Phase 7 review H2, H3)."""
+    errs = guard(run, "harden-soc: PASS")
+    rows = [(not errs, "run guard: " + ("; ".join(errs) if errs else f"{run} passed harden-soc at HEAD"))]
+    names = sorted(os.path.splitext(os.path.basename(v))[0] for v in vcds)
+    want = sorted(f"win_{w}" for w in WINDOWS)
+    rows.append((names == want, f"windows: --vcd {names}, expected {want} (every marked segment of fw/tests/maxpower)"))
+    missing = [v for v in vcds if not os.path.isfile(v)]
+    if missing:
+        return rows + [(False, f"switching activity: need --vcd window(s) of the max-power pattern, missing {missing}")]
+    try:
+        cfg = json.load(open(os.path.join(run, "resolved.json")))
+        period, port = float(cfg["CLOCK_PERIOD"]), cfg["CLOCK_PORT"]
+    except (OSError, ValueError, KeyError) as e:
+        return rows + [(False, f"activity period: no CLOCK_PERIOD/CLOCK_PORT in {run}/resolved.json ({e})")]
+    for v in vcds:
+        got = vcd_clock_period(v, ["tb_soc", "dut_gl"], port)
+        ok = not isinstance(got, str) and abs(got - period * 1000) < 0.5
+        rows.append((ok, f"activity period: {os.path.basename(v)} {port} "
+                         + (got if isinstance(got, str) else f"{got / 1000:g} ns") + f" vs the run's CLOCK_PERIOD {period:g} ns"))
+    return rows
 
 
 def write_results(path, rows, drops, expected, what):
@@ -41,7 +110,10 @@ def judge(results, lim):
     """The verdict rows of a results.json against the limit lim (V)."""
     rows = [(ok, msg) for ok, msg in results["rows"]]
     drops, n = results["drops"], results["expected"]
-    if len(drops) != n:
+    bad = sorted(c for c, v in drops.items() if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in v))
+    if bad:
+        rows.append((False, f"drop: not a finite number in {bad}"))
+    elif len(drops) != n:
         rows.append((False, f"drop: {len(drops)} of the {n} window x corner results (a run failed)"))
     elif drops:
         worst = max(drops, key=lambda c: sum(drops[c]))
@@ -96,16 +168,17 @@ def main(argv):
     if lim is None:
         return finish([(False, f"limit: no [max_sum] {ir_worst.KEY} with two keys in {limits_path}")], label)
     vcds = opts.get("--vcd") or []
-    if not vcds or not all(os.path.isfile(v) for v in vcds):
-        return finish([(False, f"switching activity: need --vcd window(s) of the max-power pattern, got {vcds}")], label)
+    work = os.path.join(out, "ir_pattern")
+    shutil.rmtree(work, ignore_errors=True)   # only this check's own output, before the run guard
+    rows = check_inputs(run, vcds)
+    if not all(ok for ok, _ in rows):
+        return finish(rows, label)
     steps = sorted((d for d in glob.glob(os.path.join(run, "[0-9]*-openroad-irdropreport*"))
                     if os.path.isfile(os.path.join(d, "state_out.json"))), key=lambda d: int(os.path.basename(d).split("-")[0]))
     if not steps:
         return finish([(False, f"no finished OpenROAD.IRDropReport step in {run}")], label)
-    work = os.path.join(out, "ir_pattern")
-    shutil.rmtree(work, ignore_errors=True)   # only this check's own output
     os.makedirs(work)
-    rows, drops = [], {}
+    drops = {}
     for vcd in vcds:
         tag = "_" + os.path.splitext(os.path.basename(vcd))[0]
         for corner, voltage, ss_r in ir_worst.JUDGED:
@@ -119,7 +192,7 @@ def main(argv):
                 r.append((False, f"{corner}{tag} drop: {[metrics.get(k) for k in keys]} (missing or negative)"))
             rows += r
     results = os.path.join(work, "results.json")
-    write_results(results, rows, drops, len(vcds) * len(ir_worst.JUDGED),
+    write_results(results, rows, drops, len(WINDOWS) * len(ir_worst.JUDGED),
                   "(max-power pattern, slow corner, the run's supply points)")
     return finish(judge(json.load(open(results)), lim), label)
 

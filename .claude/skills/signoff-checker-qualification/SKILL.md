@@ -1,6 +1,6 @@
 ---
 name: signoff-checker-qualification
-description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差、處理同樣設定重跑結果不同（包括 cell 數、diode 數、面積也跟著變，或 key 只出現在一邊：`[golden_layout_tolerance]`、`[golden_optional]`），或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表（包括 checker 或重試規則綁死 step 名稱，flow 換掉或多開 step 時靜默失效；重試留下的中止 step 目錄頂替完成的那次；只證明設定被讀到、沒證明生效（SDC 印了 uncertainty 但 STA 沒套用）；靠 instance 名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制（Stop hook）的觸發條件比規則小；抓到錯誤的機制和案例宣稱的不同；守門條件本身沒有測試；只檢查版本字串；暫用另一個設計的誤差；比對的對象是空的時 checker 空過（最終 GDS 的 macro 是空的，框內 0 個 DRC 違規也 PASS）；black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯；`abs(x - y) > tol` 對 NaN 永遠不成立；checker 的某個模式只有植入錯誤的案例在跑，checker 改壞成永遠 FAIL 也看不出來），新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
+description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差（每個設計至少 4 個同設定的樣本，含一次乾淨 checkout，不能暫用別的設計的誤差）、新 checker 寫完就請沒寫它的 agent 做漏洞審查（不要等 Phase 收尾）、處理同樣設定重跑結果不同（包括 cell 數、diode 數、面積也跟著變，或 key 只出現在一邊：`[golden_layout_tolerance]`、`[golden_optional]`），或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表（包括 checker 或重試規則綁死 step 名稱，flow 換掉或多開 step 時靜默失效；重試留下的中止 step 目錄頂替完成的那次；只證明設定被讀到、沒證明生效（SDC 印了 uncertainty 但 STA 沒套用）；靠 instance 名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制（Stop hook）的觸發條件比規則小；抓到錯誤的機制和案例宣稱的不同；守門條件本身沒有測試；只檢查版本字串；暫用另一個設計的誤差；比對的對象是空的時 checker 空過（最終 GDS 的 macro 是空的，框內 0 個 DRC 違規也 PASS）；black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯；`abs(x - y) > tol` 對 NaN 永遠不成立；checker 的某個模式只有植入錯誤的案例在跑，checker 改壞成永遠 FAIL 也看不出來；核准紀錄只存在被檢查的檔案裡、自己算得出來；判定只看結果、不核對輸入的產生條件與來源；例外欄位接受任何字串；時間比較丟掉時區；查證用的結果被當成正式結果；向量只檢查一個 bit；例外只放寬、不要求被例外的東西存在），新 checker 要逐條對照。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
 ---
 
 # Checker 設計、golden 與 testbench qualification
@@ -57,6 +57,17 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - 每個 target 都要在 Makefile 宣告它需要的建置步驟。例如 `gl-soc` 需要 `fw`：第一次 `make phase3` 停在 harden-soc，沒有發現這個缺漏；第二次在乾淨 checkout 跑到 gl-soc，12/13 支測試報找不到 firmware。
    - 檢查方式：`cat .gitignore`，對每個被忽略的目錄 grep 有哪些腳本讀它，確認對應的 target 有宣告建置步驟。
    - 新寫的 negative test 腳本要先單獨跑完一次，再加進 phase target（`neg_gl_soc.py` 沒跑過就加進 `make phase3`，第三次 `make phase3` 才發現上面那個編譯錯誤）。
+11. **golden 的誤差至少用 4 個樣本定，並記下樣本數**（提早檢查 E2，流程回顧 ADR-0020；流程文件 4.6。比規則 5 的「至少重跑一次」嚴格，新設計照這條）。
+   - 為什麼：Phase 2 用 3 次 run 定的誤差，Phase 4 regress 第 2 次就 FAIL（繞線器中間各輪的 DRC 數，規則 5 第二點）；Phase 5 Hazard3 的 golden 比對又 FAIL（ADR-0015）；PicoRV32 暫用 Hazard3 的誤差被獨立審查抓到，又補樣本、多跑兩輪 regress（`docs/phase_exit/phase4.md`、`phase5.md`）。新的不可重現來源（Phase 5 的 global routing）要等設計變大才出現，所以每個設計都要各自量。
+   - 做什麼：每個設計第一次建 golden 時，同一個設定至少 4 個樣本，其中一次在乾淨 checkout；樣本可以是完整 harden，或從不可重現的步驟單步重跑後接著跑完（規則 5 第一點）。依每一類 metric 的實際差異定誤差；golden 的 README 寫明每一類用了幾個樣本、哪幾個 run。不能暫用別的設計的誤差；量不出大小時（本 repo wrapper 三組比較都逐值相同）寫明理由並登記在放寬與補償登記表（ADR-0019 決定 26）。
+   - 通過條件：樣本彼此都在誤差內。
+   - 成本：每個設計多 2–3 次 harden（本 repo 每次約 15–40 分鐘）。
+   - 自動防護：沒有（「README 寫了樣本數、樣本 ≥ 4」可以做成 `check_signoff.py` 的檢查，下一個專案開始時做）。
+12. **新 checker 寫完就做獨立漏洞審查，不要等 Phase 收尾**（提早檢查 E3，流程回顧 ADR-0020；流程文件 4.8；規則 8 的時間點）。
+   - 為什麼：每個 Phase 收尾的審查都找到一批漏洞，修完要整套 regression 重跑：Phase 4 有 10 個、Phase 3.5 有 12 個、Phase 5 有 8 個、Phase 6 有 7 個、Phase 7 有 8 個加 1 個缺口（各 Phase exit review 的「獨立審查」；ADR-0019 決定 26）。Phase 7 那次三條 regression 要重跑，wrapper 一條約 6 小時；回顧推算每批審查約 1–2 小時 agent 時間。
+   - 做什麼：每支新的或大改的 checker，寫完、第一次正式 harden 或放進 regression 之前，請一個沒寫它的 agent 找「該 FAIL 卻 PASS」的漏洞：做植入錯誤的實驗加對照組，不能只讀程式；逐條對照下面的漏洞類型表。審查紀錄（日期、找到什麼、怎麼修、對應的 negative test）寫在該 checker 的 README 或 ADR。Phase 收尾時只審最後改過的 checker（`phase-exit-review` 規則 10）。
+   - 通過條件：每支新 checker 有審查紀錄與 negative test；收尾審查沒有新的高、中嚴重度漏洞。
+   - 自動防護：沒有（審查要 agent 做實驗）；「每支 checker 都有審查紀錄」可以做成 checker，下一個專案開始時做。
 
 ## 已知的 checker 漏洞類型（新 checker 要逐條對照）
 
@@ -89,7 +100,7 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 判定只看一半的量 | LibreLane 的 `ir__drop__worst` 只有 VDD；20 mV 的預算是 VDD 降壓 + GND 抬升 | Phase 4 IR 研究 |
 | 產生器的公式沒有獨立驗證 | `gen_char_lib.py` 由 `char.json` 產生 .lib：`--check` 只比「同一支程式的輸出」，公式寫錯時 .lib 與 JSON 照樣一致；N5–N8 的測試資料每格相同、又被下限蓋過，取最大與取最小弄反、少乘 1.6 都 PASS。要用不 import 產生器的獨立重算，或每格不同、高過下限的測試資料 | Phase 3.5 獨立審查；Phase 5 開頭修：`check_char_lib.py`，改壞公式的產生器 M1–M5 都要 FAIL（N12） |
 | 斷言分不出 FAIL 的原因 | P17 只看 `char_lib` 列 FAIL：char 目錄多一個 `.DS_Store` 也 FAIL，判定照樣成立；N8 斷言的 PVT 名稱一定出現在「expected exactly」那串清單裡 | Phase 3.5 獨立審查；Phase 5 開頭修：斷言訊息內容（P17 要 STALE 並指名檔案、N8 解析缺的是哪一個），沒有 positive control 的補上（P32） |
-| 非有限的數值被比較吞掉 | `char.json` 的 setup 是 NaN 時，`max(下限, nan)` 默默變成下限；hold 弧寫出 `nan` 的 .lib 也被接受。`abs(v - want) > tol` 判「不符」時，NaN 永遠不算不符（Phase 6 修 H7 時自己踩到）：寫成 `not abs(v - want) <= tol` | Phase 3.5 獨立審查；Phase 5 開頭修（N11）；Phase 6 `check_char_lib.py power_problems`，C6 |
+| 非有限的數值被比較吞掉 | `char.json` 的 setup 是 NaN 時，`max(下限, nan)` 默默變成下限；hold 弧寫出 `nan` 的 .lib 也被接受。`abs(v - want) > tol` 判「不符」時，NaN 永遠不算不符（Phase 6 修 H7 時自己踩到）：寫成 `not abs(v - want) <= tol` | Phase 3.5 獨立審查；Phase 5 開頭修（N11）；Phase 6 `check_char_lib.py power_problems`，C6；Phase 7 審查 H4：`max(drops, key=...)` 遇到 NaN 一律比較為假，NaN 排第二時被略過、判 PASS，排第一時才 FAIL（結果看順序）。取值時用 `math.isfinite` 擋下 |
 | 失敗時留下新舊混合的輸出 | 特性化有一個 PVT 失敗、印 FAIL，`char.json` 已經寫入其他 PVT 的新結果，失敗的 PVT 留舊紀錄，之後照樣產生 5 份 .lib | Phase 3.5 獨立審查；Phase 5 開頭修：有失敗就不寫檔（N16） |
 | 被測的模型本身太樂觀 | IR 用「所有 pin 形狀都是理想電源」，算出 0.3 mV，任何門檻都會 PASS | Phase 4 IR 研究（`pdn-ir-drop` 規則 10） |
 | 只證明「設定被讀到」，沒證明「生效」 | `review_criteria.py` 的 uncertainty 檢查只找 SDC 印出的那一行：把 15 個 corner 報表裡的 uncertainty 全刪掉仍 PASS；setup／hold 的 0.25 又剛好等於 LibreLane 預設，單看數字分不出來。要從工具的結果核對實際套用的值 | Phase 5 獨立審查；`review_criteria.py uncertainty_applied`（50,670 條路徑逐條比對），P56 |
@@ -108,6 +119,13 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 暫用另一個設計的數字 | PicoRV32 的版圖誤差暫用 Hazard3 量到的值：diode +54、standard cell +69 這種真實改變也 PASS。沒有這顆設計的實測就不給誤差，量到再訂 | Phase 5 獨立審查；`signoff/limits/soc_top.toml`，P50（沒有誤差項時 +1 就 FAIL） |
 | 比對到資料，不是指令；只看第一個指令 | 全域守門 hook 用 regex 找 `make harden`，把 heredoc 裡「README 提到 `make harden-soc`」也當成要開 harden 而擋下。比對前先拿掉 heredoc 內容與引號內字串。同一個 hook 在 `git push origin main && git push gitlab main` 只看第一個 push，誤報「gitlab 還沒推」：一行裡的每一個指令都要看 | 2026-10-08；`~/.claude/hooks/guard-bash.py shell_text()`，`test_guard_bash.py` |
 | checker 的某個模式只有植入錯誤的案例在跑 | `check_inputs.py --resolved` 只被 P20、P36、P39、P42 呼叫，四個都是「植入後必須 FAIL」。`37c99b4` 修審查漏洞時重複使用了變數名稱 `files`（RTL 檔案清單被 view 檔名的字典蓋掉），`resolved` 列對每個 run 都 FAIL，四個案例照樣「抓到」。直到乾淨 worktree regress 的 harden 才露出來，兩輪各浪費一次 harden。checker 的每個模式（每組參數）都要有一個沒植入時必須 PASS 的對照；改 checker 之後先跑對照，不要只跑植入案例 | Phase 6 結案；P00 加上 `check_inputs.py --resolved` 必須 PASS，用修正前的 checker 實測 P00 FAIL |
+| 核准紀錄只存在被檢查的檔案裡，自己算得出來 | `check_pin_plan.py` 的核准：規劃改了以後，用 `--digest` 重算 `plan_sha256` 填回 `[approval]` 就 PASS，不需要使用者；ADR 只要找得到引文，引文「可以」兩個字在 ADR 裡出現 4 次。核准的版本（digest）要記在另一份會進 diff 的文件（ADR 的同一行有原話、日期與 digest），改核准一定會留下痕跡 | Phase 7 審查 H1；`check_pin_plan.py approval`，`neg-pin-plan` A4 |
+| 判定只看結果，不看輸入是怎麼產生的 | IR 用 max power pattern 判：VCD 用別的週期錄（時間 × 1.1）、已被 run guard 拒絕的 run、只給三個 window 中 IR 最小的一個，全部 PASS（正式結果離上限只剩 0.44 mV）。判定前先核對輸入：產生條件（從 VCD 量 clock 週期 = `CLOCK_PERIOD`）、來源（run guard）、完整性（window 齊全） | Phase 7 審查 H2、H3；`ir_pattern.check_inputs()`，`neg-ir` `period`、`one_window`，`neg-run-guard` 的 IR 兩支 |
+| 例外欄位接受任何字串 | `[max_sum]` 的 `judged_by = "make no-such-target"` 讓一個上限變成 INFO，不檢查那個 target 存不存在、有沒有在 regression 裡跑。把上限交給別的 checker 時，要確認那個 checker 確實存在、會被執行 | Phase 7 審查 H5；`check_signoff.py judged_by_error()`，P81 |
+| 時間比較丟掉時區 | `check_precheck.py` 把 `project.json` 的時間戳 `replace(tzinfo=None)` 後比，+08:00 的時間戳在結果目錄開始前寫入也 PASS。先換成同一個時區（UTC）再比，沒有時區就 FAIL | Phase 7 審查 H6；`neg-precheck` `results_after_tz`、`no_tz` |
+| 查證用的結果被當成正式結果 | `check_precheck.py` 遇到 `verification: true`（沒過 run guard）或根本沒有來源檔的專案，仍印 `precheck: PASS`。預設模式要求正式來源；查證用要另給旗標，結論也印成「只供查證」 | Phase 7 審查 H7；`--verification`，`neg-precheck` `verification_source`、`no_source`、`source_gds`、`verification_flag` |
+| 向量只檢查一個 bit | `check_inputs.py inout_dont_touch` 只看 `analog_io[0]`：`RSZ_DONT_TOUCH_RX = ^analog_io\[0\]$` 也 PASS，harden 卻會在 `analog_io[9]` 中止（RSZ-0074）。範圍要展開到每個 bit（巨集從 `` `define `` 取值，算不出來就 FAIL） | Phase 7 審查 H8；P79 `bit0` |
+| 例外只放寬、不要求 | `check_soc.py max_slew` 允許 Caravel 輸入腳位超過上限到「外部 transition + 0.05 ns」，但不要求它出現：driving cell 蓋掉 `set_input_transition` 時腳位 slew 變成約 0.02 ns，報表裡消失，照樣 PASS。放寬的例外要反過來確認被例外的東西確實存在、數值符合依據 | Phase 7 文件核對（`timing-constraints-sdc` 規則 14 的防護沒做）；`max_slew` 的反向檢查，C80d |
 
 ## 用完後
 

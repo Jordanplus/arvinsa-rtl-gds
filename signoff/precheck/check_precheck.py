@@ -2,7 +2,7 @@
 """Judge a ChipFoundry precheck result the way ADR-0019 decision 5 says (Phase 7; skill tapeout-precheck-caravel rule 3).
 
 usage: check_precheck.py --project <dir> --ref-dir <dir> [--results <precheck_results/...>] [--out <dir>]
-                         [--top user_project_wrapper] [--macro <SRAM cell>] [--ref-gds <PDK SRAM gds>]
+                         [--top user_project_wrapper] [--macro <SRAM cell>] [--ref-gds <PDK SRAM gds>] [--verification]
 
 Why: the precheck's KLayout deck (cf-precheck commit 08f559e30a, 2026-05-07) reports MR_mcon.CON.10 and MR_licon.SP.6
 inside every OpenRAM bitcell, the PDK's own sky130_sram_* macros too, and nothing turns that off. The official result of
@@ -18,7 +18,12 @@ Checks:
   - project.json: cf-precheck is CF_PRECHECK_VERSION of env/versions.mk; its 13 checks are all there and nothing else
     (magic_drc may be skip or pass); every check but klayout_feol / klayout_beol is pass; input_file_hash = sha1 of
     gds/<top>.gds; the results directory's logs/gds.info names that same sha1 (a report of an earlier run is not read)
-    and project.json was written after that directory's start;
+    and project.json was written after that directory's start (its time stamp must carry a time zone and is compared
+    in UTC, the zone of the directory name; Phase 7 review H6);
+  - arvinsa_source.json (make_project.py): the project was made from a harden run that passed the run guard, not as a
+    verification, and its gds/<top>.gds sha1 is the one recorded from that run (Phase 7 review H7). --verification
+    accepts a project made with make_project.py --verification (an older run) and prints
+    `precheck: PASS (verification only, not a signoff result)`;
   - per DRC check: the report's top cell is <top>, its item count = logs/<check>_check.total, status fail with items and
     pass without; the deck's rule list (names and descriptions) equals the reference report's (same deck); the
     reference's input.sha1 is that of --ref-gds;
@@ -194,6 +199,7 @@ def main():
     ap.add_argument("--top", default="user_project_wrapper")
     ap.add_argument("--macro", default="arv_sram_2kbyte_1rw1r_32x512_8")
     ap.add_argument("--ref-gds", default=ref_gds())
+    ap.add_argument("--verification", action="store_true", help="a project of make_project.py --verification")
     args = ap.parse_args()
     lines, ok = [], True
 
@@ -220,11 +226,6 @@ def main():
         except ValueError:
             pass
     print(f"[precheck] cf-precheck {pre.get('version')}, {pre.get('timestamp')}, results {os.path.relpath(res, ROOT)}")
-    src = os.path.join(args.project, "arvinsa_source.json")
-    if os.path.exists(src):
-        s = json.load(open(src))
-        print(f"  [INFO] project from {s.get('run')} (commit {s.get('run_commit')}, HEAD then {s.get('head')}): "
-              + ("verification, run guard skipped" if s.get("verification") else "run guard PASS"))
     want = pin("CF_PRECHECK_VERSION")
     line(pre.get("version") == want, f"cf-precheck {pre.get('version')} (pinned {want}; another version: read its deck "
          "and checks, then update env/versions.mk)")
@@ -245,16 +246,42 @@ def main():
     info = os.path.join(res, "logs", "gds.info")
     got = open(info).read().strip() if os.path.exists(info) else None
     line(got == f"{args.top}.gds: {h}", f"the results directory checked this GDS (logs/gds.info: {got})")
-    t = datetime.datetime.fromisoformat(pre["timestamp"]).replace(tzinfo=None) if pre.get("timestamp") else None
-    line(t is not None and start is not None and t >= start,
-         f"project.json written {t}, after the results directory's start {start}")
+    try:
+        t = datetime.datetime.fromisoformat(pre.get("timestamp") or "")
+    except ValueError:
+        t = None
+    if t is not None and t.tzinfo is None:
+        line(False, f"project.json time stamp {pre.get('timestamp')} has no time zone")
+    else:
+        t = t.astimezone(datetime.timezone.utc).replace(tzinfo=None) if t is not None else None
+        line(t is not None and start is not None and t >= start,
+             f"project.json written {t} UTC, after the results directory's start {start}")
+    src = os.path.join(args.project, "arvinsa_source.json")
+    try:
+        s = json.load(open(src))
+    except (OSError, ValueError) as e:
+        s = None
+        line(False, f"source: cannot read {src} ({e}); make the project with make_project.py")
+    if s is not None:
+        rec = ((s.get("files") or {}).get(f"gds/{args.top}.gds") or {}).get("sha1")
+        line(rec is not None and rec == h, f"source: gds/{args.top}.gds sha1 {h} = the one recorded from {s.get('run')} "
+             f"({rec})")
+        formal = s.get("run_guard") == "PASS" and s.get("verification") is False
+        what = (f"project from {s.get('run')} (commit {s.get('run_commit')}, HEAD then {s.get('head')}): run guard "
+                f"{s.get('run_guard')}, verification {s.get('verification')}")
+        if args.verification:
+            lines.append(f"  [INFO] source: {what} (--verification)")
+            print(lines[-1])
+        else:
+            line(formal, f"source: {what}" + ("" if formal else "; not a signoff result (check it with --verification)"))
     for c in ALLOWED:
         if c not in checks:
             continue
         errs, summary = judge_drc(c, args, res, checks[c]["status"], args.out)
         line(not errs, f"{c}: {checks[c]['status']}, " + ("; ".join(errs) if errs else summary))
     n_fail = sum(1 for x in lines if "[FAIL]" in x)
-    print(f"precheck: {'PASS' if ok else 'FAIL'} " + ("(ADR-0019 decision 5)" if ok else f"{n_fail} line(s) FAIL"))
+    print(f"precheck: {'PASS' if ok else 'FAIL'} " + (("(verification only, not a signoff result)" if args.verification
+                                                        else "(ADR-0019 decision 5)") if ok else f"{n_fail} line(s) FAIL"))
     return 0 if ok else 1
 
 

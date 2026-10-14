@@ -31,7 +31,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 
 9. **錄 IR 用的切換活動（max power pattern，`run_gl_soc.py --record-window`，ADR-0019 決定 20）**：
    - 做法：firmware 把每段滿負載迴圈標在 GPIO_OUT（`fw/tests/maxpower`：0x5A／0x5B／0x5C），`dv/gl_soc/vcd_window.v` 只在 GPIO 等於 `+irwin_gpio` 時錄 `tb_soc.dut_gl`，那段一結束就 `$finish`；每段各跑一次模擬，輸出 `win_<hex>.vcd`。GPIO 讀 `tb_soc.gpio_out`（RTL 那份的 soc_top 埠），soc_top 與 Caravel 兩種 build 都有；原本讀 Caravel 才有的 `la_data_out[9:2]`，Phase 7 步驟 8 為了 soc_top 的 `make ir-soc` 改掉（Caravel build 裡 `caravel_pins` 每週期比對兩者相同）。
-   - 時脈用 signoff 的週期（`--clk-half-ns 22`，44 ns；testbench 預設 40 ns），讓模擬與 signoff 的條件一致。實測影響很小：同一段 pattern 40 ns 錄 5.99 mW、44 ns 錄 5.87 mW（nom_tt，約 2%）；原本以為 VCD 是每秒切換次數、會差約 10%，實測不是，看起來 OpenSTA 依 SDC 的時脈週期換算（推測，沒讀原始碼）。clock net 的功耗 OpenSTA 照 SDC 算，不受 VCD 影響。
+   - 時脈用 signoff 的週期（testbench 預設 40 ns），讓模擬與 signoff 的條件一致：`--record-window` 從 harden run 的 `resolved.json` 取 `CLOCK_PERIOD`（奇數 ns 或與 `--clk-half-ns` 不同就 FAIL），IR 的判定再從 VCD 量 clock 週期核對（`ir_pattern.check_inputs()`；Phase 7 審查 H2：原本 Makefile 寫死 22，VCD 用別的週期錄也 PASS）。實測影響很小：同一段 pattern 40 ns 錄 5.99 mW、44 ns 錄 5.87 mW（nom_tt，約 2%）；原本以為 VCD 是每秒切換次數、會差約 10%，實測不是，看起來 OpenSTA 依 SDC 的時脈週期換算（推測，沒讀原始碼）。clock net 的功耗 OpenSTA 照 SDC 算，不受 VCD 影響。
    - 只錄 `dut_gl`、只錄那一段：從時間 0 錄整個 testbench，開機與印 UART 的時間會把平均切換率拉低。三段各約 5000 個週期，每段約 300–350 MB。
    - 每段的檢查：錄到至少 1000 個週期、VCD 非空、錄完前沒有 lockstep 不一致、run 目錄沒有 testbench 自己的 `wave.vcd`（下一條）。完整跑一次 maxpower 的 `gl-caravel` 要 PASS（網表在這個 pattern 下與 RTL 逐週期一致，錄到的活動才可信）。
    - **plusarg 名稱不能是現有 plusarg 的延伸**（工具行為的防護，CLAUDE.md 規則 10）：

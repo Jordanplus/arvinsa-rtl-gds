@@ -196,7 +196,7 @@ gl-caravel:
 	$(PY) dv/gl_soc/run_gl_soc.py --cpu caravel
 
 # IR with the max-power pattern (ADR-0019 decision 20): record the busy windows of fw/tests/maxpower on the
-# final netlist at the signoff period (44 ns), then the IR from Caravel's pads with that activity.
+# final netlist at the run's signoff period (CLOCK_PERIOD, run_gl_soc.py), then the IR from Caravel's pads with that activity.
 IR_WINDOWS := 5a 5b 5c
 comma := ,
 empty :=
@@ -204,7 +204,7 @@ space := $(empty) $(empty)
 ir-caravel:
 	$(MAKE) -C fw CPU=hazard3 all check-bootrom
 	$(PY) dv/gl_soc/run_gl_soc.py --cpu caravel --tests maxpower --out runs/ir_caravel_vcd \
-	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS)) --clk-half-ns 22
+	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS))
 	$(PY) pnr/user_project_wrapper/ir_caravel.py runs/user_project_wrapper runs/ir_caravel \
 	  signoff/limits/user_project_wrapper.toml $(foreach w,$(IR_WINDOWS),--vcd runs/ir_caravel_vcd/win_$(w).vcd)
 
@@ -213,7 +213,7 @@ ir-caravel:
 ir-soc:
 	$(MAKE) -C fw CPU=hazard3 all check-bootrom
 	$(PY) dv/gl_soc/run_gl_soc.py --cpu hazard3 --tests maxpower --out runs/ir_soc_vcd \
-	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS)) --clk-half-ns 22
+	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS))
 	$(PY) pnr/soc_top/ir_pattern.py runs/soc_top_hazard3 runs/ir_soc signoff/limits/soc_top_hazard3.toml \
 	  $(foreach w,$(IR_WINDOWS),--vcd runs/ir_soc_vcd/win_$(w).vcd)
 
@@ -245,7 +245,8 @@ precheck-sram-ref:
 	$(PY) signoff/precheck/run_deck.py --gds $${PDK_ROOT:-$$HOME/.ciel}/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds --out $(PRECHECK_REF)
 
 precheck-check:
-	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_PROJECT) --ref-dir $(PRECHECK_REF) $(if $(PRECHECK_REF_GDS),--ref-gds $(PRECHECK_REF_GDS))
+	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_PROJECT) --ref-dir $(PRECHECK_REF) $(if $(PRECHECK_REF_GDS),--ref-gds $(PRECHECK_REF_GDS)) \
+	  $(if $(filter 1,$(PRECHECK_VERIFY)),--verification)
 
 # The official precheck of user_project_wrapper (Phase 7 step 7): the project directory from runs/user_project_wrapper
 # (run guard; PRECHECK_VERIFY=1 skips it for an older run), the image under the lima VM, then the judgement against the
@@ -259,7 +260,8 @@ precheck-caravel:
 	PRECHECK_WORK=$(abspath $(PRECHECK_WORK)) zsh signoff/precheck/run_precheck.sh $(PRECHECK_DIR) \
 	  || echo "run-precheck: exit $$? (cf-precheck fails on klayout_feol/beol by design; judged below)"
 	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_DIR) --ref-dir $(PRECHECK_DIR)/sram_ref \
-	  --ref-gds $(PRECHECK_WORK)/pdks/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds
+	  --ref-gds $(PRECHECK_WORK)/pdks/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds \
+	  $(if $(filter 1,$(PRECHECK_VERIFY)),--verification)
 
 neg-precheck:
 	$(PY) signoff/precheck/neg_precheck.py

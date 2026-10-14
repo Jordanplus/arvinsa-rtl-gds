@@ -1,6 +1,6 @@
 ---
 name: multicorner-sta
-description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與每個 corner 都會執行的 hook、做時序 what-if（只重跑 STA：改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期，繞線前量 resizer 看不到的 corner（`STAMidPNR` 只看預設 corner，`PNR_CORNERS` 沒設就只有 nom_tt；flow 中途 state 裡其他 corner 的 metrics 是 placement 前的舊值），或 corner 增加後 PnR 時間暴增時使用。PnR 不納入的 corner 為什麼不能只靠餘量補看 drv-timing-closure；corner 清單怎麼定看 signoff-criteria。Use when configuring multi-corner STA in LibreLane (adding PVT corners, per-corner hooks and reports), running STA what-if experiments, deriving the minimum clock period, or when more corners slow down PnR.
+description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與每個 corner 都會執行的 hook、做時序 what-if（只重跑 STA：改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期，繞線前量 resizer 看不到的 corner（`STAMidPNR` 只看預設 corner，`PNR_CORNERS` 沒設就只有 nom_tt；flow 中途 state 裡其他 corner 的 metrics 是 placement 前的舊值），或 corner 增加後 PnR 時間暴增時使用（新設計的 resizer 預設看全部 signoff corner，跑不完時先找根因再考慮減少 corner）。PnR 不納入的 corner 為什麼不能只靠餘量補看 drv-timing-closure；corner 清單怎麼定看 signoff-criteria。Use when configuring multi-corner STA in LibreLane (adding PVT corners, per-corner hooks and reports), running STA what-if experiments, deriving the minimum clock period, or when more corners slow down PnR.
 ---
 
 # 多 corner STA：設定、hook、what-if 與最小週期
@@ -22,6 +22,7 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner 與
    - `OpenROAD.RepairDesignPostGRT` 卻從 31 秒變成 35 分鐘以上沒結束。同一份輸入 state 只把 resizer 改回 9 個 corner 單步重跑，58 秒完成；9 個再加 1 個 `max_ss_n40C` 也是 4 分鐘以上不結束（`docs/phase_exit/phase4.md` 收斂過程第 1 次）。
    - 做法：resizer 用原本的 corner，新加的 corner 只在 signoff STA 判定；signoff 若在新 corner 出現 slew／cap 違規，再另外處理。
    - 這個做法的 setup 部分 Phase 5 證實不夠：resizer 看不到的 corner 用其他 corner 的餘量代替，長路徑會漏掉（`drv-timing-closure` 規則 9、11）。只給 signoff 看的 corner，在繞線前就要用規則 8 量一次。soc_top Phase 5 起 resizer 也看 ss_n40C（ADR-0013）；要讓 resizer 看新 corner，先跑弱 cell 檢查（`drv-timing-closure` 規則 10），它會列出那個 corner 要多排除的 cell。
+   - 新設計的預設（提早檢查 C3，流程回顧 ADR-0020）：resizer 看的 corner 等於全部 signoff corner；上面「resizer 用原本的 corner」只在找過根因、做過 what-if、寫了 ADR 之後才用（`drv-timing-closure` 規則 15）。Phase 4 跑不完時沒找根因就減少 corner，根因其實是弱 cell（ADR-0012）。
 4. **每個 corner 的 hook**（`STA_EXTRA_CORNER_TCL_FILE`）：
    - LibreLane 的 STA step 在每個 corner 讀完 SDC 之後 source 它（`scripts/openroad/sta/corner.tcl` 59–61 行），變數 `$corner_name` 是 corner 名稱；resizer、CTS 看不到。
    - 適合放 instance derate（例如 macro 只有一份 .lib 時依 corner 加 derate；有每個 PVT 的 .lib 就不需要，ADR-0010）與 LibreLane 沒有輸出的報告。

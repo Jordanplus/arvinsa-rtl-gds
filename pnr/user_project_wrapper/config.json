@@ -133,7 +133,7 @@
     "PDN_MACRO_CONNECTIONS": [
         "u_soc.sram0 vccd1 vssd1 vccd1 vssd1"
     ],
-    "//RUN_IRDROP_REPORT": "IR inside the wrapper (ADR-0019 decision 18): one supply point where each met5 strap of the net meets the left and the right side of the net's core ring, the two sides where Caravel's manual_power_connections bridges land (54 left, 53 right; no bridge on the top or bottom side). Points at the exact bridge positions crashed OpenROAD PSM (Signal 11, cause not found). 1.80 V = the nom_tt voltage of the IR step; ir_worst.py rewrites it for the ff corners. The drop from the pads through Caravel's own network is judged separately (ir_caravel.py), its limit being the board supply requirement.",
+    "//RUN_IRDROP_REPORT": "IR inside the wrapper (ADR-0019 decision 18): one supply point where each met5 strap of the net meets the left and the right side of the net's core ring, the two sides where Caravel's manual_power_connections bridges land (54 left, 53 right; no bridge on the top or bottom side). Points at the exact bridge positions crashed OpenROAD PSM (Signal 11, cause not found). 1.80 V = the nom_tt voltage of the IR step; ir_worst.py rewrites it for the corners it runs (1.60 V in the two judged slow corners, ADR-0019 decision 19). The drop from the pads through Caravel's own network is judged separately (make ir-caravel, ir_caravel.py) with the max-power pattern at 20 mV (decision 20, which dropped the board supply requirement of decision 18).",
     "RUN_IRDROP_REPORT": true,
     "VSRC_LOC_FILES": {
         "vccd1": "dir::pnr/user_project_wrapper/vsrc/vccd1.vsrc",

@@ -65,6 +65,12 @@ Checks (each prints a PASS/FAIL row):
                BOUNDARY_SLEW_MARGIN. Caravel drives la_oenb, la_data_in, wbs_adr_i, wbs_dat_i at
                0.84-0.97 ns, above the 0.75 ns limit, and nothing inside the wrapper can change that
                (ADR-0019 decision 16); LibreLane's MaxSlewViolations does not fail the wrapper's flow.
+               And the other way round: every bit of a port whose external transition is above the
+               corner's slew limit must be a violator with a slew within BOUNDARY_SLEW_MARGIN of that
+               transition. OpenSTA ignores set_input_transition on a port with a driving cell
+               (timing-constraints-sdc rule 14): the slew then drops to about 0.02 ns and the port would
+               leave the table unnoticed (Phase 7 review). Ports below the limit (wb_clk_i 0.61, io_in
+               0.38 ns, ...) are not in checks.rpt, so they are not covered.
   pulse_width  minimum pulse width and minimum period (<corner>/pulse_width.rpt, written by
                sta_extra_corner.tcl with report_check_types) in every corner of STA_CORNERS: both
                tables present and each worst slack >= the required slack printed in the report
@@ -359,8 +365,8 @@ def read_input_transitions(path):
 
 
 def read_max_slew(path):
-    """(count, [(pin, slew), ...]) of the max slew violators in a <corner>/checks.rpt, or None without the
-    `max slew violation count` line."""
+    """(count, [(pin, slew), ...], largest limit or None) of the max slew violators in a <corner>/checks.rpt, or None
+    without the `max slew violation count` line."""
     if not os.path.isfile(path):
         return None
     text = open(path, encoding="utf8", errors="replace").read()
@@ -368,9 +374,8 @@ def read_max_slew(path):
     if not m:
         return None
     sec = re.search(r"^max slew\n(.*?)(?=^max (?:fanout|capacitance)\n|^=+\n|^max slew violation count)", text, re.M | re.S)
-    viol = [(p, float(sl)) for p, sl in re.findall(r"^(\S+)\s+[\d.]+\s+([\d.]+)\s+-[\d.]+ \(VIOLATED\)", sec.group(1) if sec else "",
-                                                   re.M)]
-    return int(m.group(1)), viol
+    rows = re.findall(r"^(\S+)\s+([\d.]+)\s+([\d.]+)\s+-[\d.]+ \(VIOLATED\)", sec.group(1) if sec else "", re.M)
+    return int(m.group(1)), [(p, float(sl)) for p, _, sl in rows], max((float(lim) for _, lim, _ in rows), default=None)
 
 
 def top_ports(nl, top):
@@ -696,13 +701,24 @@ def main(run_dir, config_path, sram_drc):
     # max slew (ADR-0019 decision 16): every violator in every corner is a pin of a net driven by an input port
     # that has an external transition (the port, or a load on its net), at most that transition + the margin
     trans = read_input_transitions(os.path.join(ROOT, dz["boundary_sdc"])) if dz["boundary_sdc"] else {}
-    problems, allowed, excess, cache = [], 0, None, {}
+    problems, allowed, excess, cache, seen = [], 0, None, {}, 0
+    ports = top_ports(nl, design) if trans else {}
     for c in corners:
         r = read_max_slew(os.path.join(stas[-1], c, "checks.rpt")) if stas else None
         if r is None:
             problems.append(f"{c}: no 'max slew violation count' in checks.rpt")
             continue
-        count, viol = r
+        count, viol, limit = r
+        got = dict(viol)
+        for name, v in trans.items():   # a port above the limit must show its external transition
+            if limit is None or v <= limit:
+                continue
+            for b in [q for q in ports if ports[q] == "input" and re.sub(r"\[.*", "", q) == name]:
+                if b not in got or abs(got[b] - v) > BOUNDARY_SLEW_MARGIN + 1e-9:
+                    problems.append(f"{c}: input port {b} slew {got.get(b, 'not a violator')} ns, the SDC's transition {v} ns "
+                                    f"(above the limit {limit}): set_input_transition not applied?")
+                else:
+                    seen += 1
         if len(viol) != count:
             problems.append(f"{c}: {len(viol)} violators parsed, the report counts {count}")
         for p, sl in viol:
@@ -716,7 +732,8 @@ def main(run_dir, config_path, sram_drc):
                 excess = max(excess if excess is not None else -1e9, sl - v)
     row("max_slew", bool(corners) and not problems,
         f"{len(corners)} corners: " + (f"{allowed} violators, all on nets driven by input ports with an external transition, "
-                                       f"at most {excess:+.3f} ns from it (margin {BOUNDARY_SLEW_MARGIN} ns)" if allowed else "no violator")
+                                       f"at most {excess:+.3f} ns from it (margin {BOUNDARY_SLEW_MARGIN} ns); "
+                                       f"{seen} port bit(s) above the limit at their SDC transition" if allowed else "no violator")
         if corners and not problems else f"{len(problems)} problem(s), e.g. {'; '.join(problems[:3])}")
 
     # minimum pulse width and minimum period

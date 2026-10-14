@@ -82,8 +82,8 @@
 # VPWR and VGND before the ss STA stops being pessimistic (user decision 2026-10-04; was 5 % of VDD
 # = 90 mV on the VDD drop alone in project-plan.md §7.2). LibreLane's ir__drop__worst is the VDD
 # drop only, so both nets are summed here (the sum of the two worst values is >= the worst sum on
-# any one cell). Supply model: one side only (VSRC_LOC_FILES in config.json); the worst corner
-# combination of that model is in docs/notes/ir_worst_case_soc_top.md; pnr/soc_top/ir_worst.py
+# any one cell). Supply model: soc_top one side only, the wrapper the left and right sides of its core
+# ring (VSRC_LOC_FILES in config.json; ADR-0019 decision 18); pnr/soc_top/ir_worst.py
 # judges it in every run in the two slow corners, the ones this budget protects (their currents, 1.60 V and
 # ss metal resistance, with the SRAM's port 1 floating current; ff currents + ss R only reported,
 # ADR-0019 decision 19; until 2026-10-13 that ff combination was judged). The SRAM current comes

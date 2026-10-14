@@ -21,3 +21,4 @@
 | [0017](0017-met5-strap-width-worst-case-ir.md) | met5 strap 加寬到 4.8 µm（`PDN_HWIDTH`），每次 harden 檢查最壞組合 IR（ff 電流 + ss 金屬電阻，`ir_worst.py`）：Hazard3 的最壞組合 25.75 mV 超過 20 mV 上限，加寬後 14.13 mV，via4 EM 78% → 18% | 2026-10-08 |
 | [0018](0018-openram-self-generated-macro.md) | Phase 6 用 OpenRAM 自產 2 KB 1rw1r macro：本機 macOS 原生先試、Colab 當對照；OpenRAM dev `3608704c`；讀取失敗先重現再試 `words_per_row = 1`，5 個 PVT 量完再選 | 2026-10-08 |
 | [0019](0019-phase7-caravel-precheck.md) | Phase 7：Hazard3 SoC 扁平放進 Caravel `user_project_wrapper`，目標 ChipFoundry precheck PASS（不下線）；本機 colima＋Rosetta 跑官方 image；`klayout_feol`／`klayout_beol` 只允許 OpenRAM bitcell 的兩條新規則，且與 PDK 預建 macro 一致 | 2026-10-12 |
+| [0020](0020-flow-shift-left.md) | 流程回顧（Phase 0–7 哪些事太晚才看）的 19 條提早檢查寫進流程文件與 skill：選 macro 前在整個操作範圍做 SPICE 讀寫、選平台時算出收件規定對本設計的數字、harden 前定好 signoff 條件等；checker 留到下一個專案；放寬與補償登記表從本專案開始 | 2026-10-14 |

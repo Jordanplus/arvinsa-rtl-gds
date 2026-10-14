@@ -8,6 +8,7 @@ Code hook .claude/hooks/require_pin_plan.py on it.
 Checker (must FAIL at the named row, every other row PASS; P0 is the positive control):
   P0 approved plan, files as planned: PASS          A1 no approval
   A2 the ADR does not contain the quote             A3 the plan changed after the approval
+  A4 the plan changed, plan_sha256 recomputed in [approval] but not in the ADR (Phase 7 review H1)
   G1 a reserved GPIO (3)                            G2 one GPIO planned twice
      (G1, G2 also FAIL gpio_modes and localparams: the RTL still has the GPIO the plan had)
   G3 a pin farther than max_pin_distance_um without a reason (limit lowered to 100 um)
@@ -64,7 +65,18 @@ def approve(d, quote_in_adr=True):
     open(p, "w", encoding="utf8").write(
         head + f'[approval]\ndate = "2026-10-12"\nquote = "{QUOTE}"\nadr = "{ADR}"\nplan_sha256 = "{digest}"\n')
     os.makedirs(os.path.join(d, os.path.dirname(ADR)), exist_ok=True)
-    open(os.path.join(d, ADR), "w", encoding="utf8").write(f"# ADR\n\n{QUOTE if quote_in_adr else 'other words'}\n")
+    open(os.path.join(d, ADR), "w", encoding="utf8").write(
+        f"# ADR\n\n{QUOTE if quote_in_adr else 'other words'} (2026-10-12, plan_sha256 {digest})\n")
+
+
+def renew(d):
+    """A4: the plan changed, then plan_sha256 recomputed in [approval] only (the ADR still records the old one)."""
+    sub(d, PLAN, r"^max_pin_distance_um = 1000", "max_pin_distance_um = 1100")
+    p = os.path.join(d, PLAN)
+    text = open(p, encoding="utf8").read()
+    import hashlib
+    new = hashlib.sha256(re.split(r"^\[approval\]", text, maxsplit=1, flags=re.M)[0].encode()).hexdigest()
+    sub(d, PLAN, r'^plan_sha256 = "[0-9a-f]+"', f'plan_sha256 = "{new}"')
 
 
 def project(change=None, approved=True, quote_in_adr=True, after=None):
@@ -130,6 +142,8 @@ def main():
     case_checker("A2", "ADR without the quote", "approval", quote_in_adr=False)
     case_checker("A3", "plan changed after the approval", "approval",
                  after=lambda d: sub(d, PLAN, r"^max_pin_distance_um = 1000", "max_pin_distance_um = 1100"))
+    case_checker("A4", "plan changed, digest renewed without the ADR", "approval", text="has no line with the quote",
+                 after=renew)
     case_checker("G1", "reserved GPIO 3", "pins", also=("gpio_modes", "localparams"), text="GPIO 3 (uart_tx) is reserved",
                  change=lambda d: sub(d, PLAN, r"^gpio = 37$", "gpio = 3"))
     case_checker("G2", "GPIO 36 planned twice", "pins", also=("gpio_modes", "localparams"), text="GPIO 36 planned twice",

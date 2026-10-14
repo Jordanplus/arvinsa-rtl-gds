@@ -128,6 +128,8 @@ repo 的 LibreLane nix-shell 有 Magic、KLayout（含 `pya`）、Netgen、ruby�
 | `oeb` | `OEB FAILED (stat=5)` | 同上，第二次 Magic 抽取被砍（`anon-rss:9247140kB`） |
 | `klayout_met_min_ca_density` | 211 個 `li1.pd.1d`（「0.4 min li1 ca pattern density」） | li1 佔 wrapper 75%，見下 |
 
+`dmesg` 的原文當時只在 VM 的終端機看過，沒有存檔；旁證是 `verify_f4ea9de` 沒有 `klayout_beol_check.xml`、`ext.log` 停在 `Extracting`，VM 改 16 GiB 後三項都跑完。
+
 - **li1 密度**（`drc_scripts/met_min_ca_density.lydrc`，cf-precheck 1.3.7 wheel）：`li1_ca_density = 1 - (67/* 除 5、10、44 + 56/28 的面積) / (235/4 的面積)`，小於 0.4 就把每一個 235/4 形狀輸出成一個違規。211 個違規其實是同一個整體數值（log：`li1_ca_density is 0.2491910395100405`），只是印在每個帶 235/4 的 cell 上（wrapper 1 個、SRAM 子 cell 210 個）。這條規則 efabless 的 `mpw_precheck` 就有。
   - 本機 KLayout flat 計算：235/4 合併面積 10,278,400 µm²（就是 wrapper 的 2920 × 3520）、li1 合併面積 7,717,115 µm²（75%）。
   - 按 cell 拆：`sky130_fd_sc_hd__decap_3` 貢獻 8.02 mm²。網表有 2,461,688 個 `decap_3`（Fill Insertion 用 PDK 預設 `DECAP_CELL "sky130_fd_sc_hd__decap_3"`，`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 第 45 行），佔 9.24 mm²；不算 decap 的 li1 只有 0.30 mm²。

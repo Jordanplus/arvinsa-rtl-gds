@@ -1,6 +1,6 @@
 ---
 name: phase-exit-review
-description: 一個 Phase（階段）收尾時使用：對照 project-plan.md 的 exit criteria 整理證據（只用乾淨 checkout 的最後一次 run）、寫 docs/phase_exit/phase<N>.md、列出與計畫不同的做法與帶到下一階段的已知限制、開結案 regress 前先讓最後改過的 checker 在現有 run 上跑過 positive control（改了沒跑就開 regress，兩次各浪費一輪）、請沒參與實作的 agent 做獨立審查、記錄使用者決定，以及收尾時分析本階段任務是否需要新 skill、逐一對照每個 skill 與 README 有沒有寫回、推送規則。Use when closing a project phase (exit criteria evidence, deviations from plan, known limitations, independent review, user decisions, skill and README write-back).
+description: 一個 Phase（階段）收尾時使用：對照 project-plan.md 的 exit criteria 整理證據（只用乾淨 checkout 的最後一次 run）、寫 docs/phase_exit/phase<N>.md、列出與計畫不同的做法與帶到下一階段的已知限制、開結案 regress 前先讓最後改過的 checker 在現有 run 上跑過 positive control（改了沒跑就開 regress，兩次各浪費一輪）、請沒參與實作的 agent 做獨立審查（找 checker 漏洞的審查只審本 Phase 最後改過的 checker，其他在寫完時就審過）、已知限制引用放寬與補償登記表、記錄使用者決定，以及收尾時分析本階段任務是否需要新 skill、逐一對照每個 skill 與 README 有沒有寫回、推送規則。Use when closing a project phase (exit criteria evidence, deviations from plan, known limitations, independent review, user decisions, skill and README write-back).
 ---
 
 # Phase exit review 與獨立審查
@@ -14,7 +14,7 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
    - **開結案 regress 之前，最後改過的每支 checker 都要先在現有的 run 上跑一次 positive control**（沒植入時必須 PASS），植入錯誤的案例也要跑。兩次都是改了沒跑就開 regress：Phase 3.5 的 P17 改寫後先清空檔案再讀，Phase 6 的 `check_inputs.py --resolved` 對每個 run 都 FAIL。各浪費一輪 regress（Phase 6 兩輪共 76 分鐘）。
 3. **每個數字都要對得回證據檔，而且用對 metric 的意思**：
    - Phase 3 文件核對找到 6 個寫錯的數字或事實（案例數、clock skew、使用率、cell 組成、最長線的來源、密度）。
-   - 容易誤讀的彙總值：`power__total` 是最後寫入的 corner；`clock__skew__worst_setup` 是各 corner 的最小值；DRV 計數是各 corner 的最大值（`librelane-run-debug` 規則 4）。
+   - 容易誤讀的彙總值：`power__total` 是最後寫入的 corner；`clock__skew__worst_setup` 是各 corner 的最小值，`clock__skew__worst_hold` 是各 corner 的最大值（最不負，不是最差）；DRV 計數是各 corner 的最大值（`librelane-run-debug` 規則 4）。
 4. **章節**（Phase 3 的版本）：結論與執行紀錄 → exit criteria 表（每列：結果、證據）→ signoff metrics → 面積與時序 → 怎麼收斂 → 可重現性（每個 run 與 golden 比對）→ checker qualification（每個植入錯誤：植入、預期的 checker、結果、與計畫的差異）→ 本階段找到並修正的 checker 問題 → 與計畫不同的地方（編號）→ 已知限制（編號，每條寫為什麼不影響本次結果，或缺什麼）→ 使用者決定 → 獨立審查 → 交付物。
 5. **獨立審查用兩個沒參與實作的 agent**：一個逐條核對文件與證據（數字、說法），一個找 checker 漏洞（要做實驗，不能只讀程式）。審查找到的問題：修正並重跑，或列為已知限制並寫理由；沒有重跑就不能寫「已修正」。
 6. **要使用者決定的事**（放寬或收緊門檻、接受風險、改計畫）：用選擇題問，選項附建議與理由；答案連同日期寫進「使用者決定」，並同步到相關文件。
@@ -22,6 +22,10 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
 8. **分析本階段的重大任務，沒有對應 skill 的就新建**（使用者 2026-10-04：「這個 phase 4 的重要任務也要分析建立對應的skill」）：列出本階段做過的重大任務，逐一對照既有 skill；涵蓋得到的寫回該 skill，涵蓋不到的新建（Phase 4 新建了 `flow-regression-reproducibility`、`multicorner-sta`、`dv-directed-tests` 與本 skill）。新建或改名時同步更新 README 的 skill 一節與 `CLAUDE.md`。
    - **對照方法**：先看每個 skill 的經驗紀錄有沒有本階段的列（`git diff --stat <上一階段結案 commit> HEAD -- .claude/skills`）；再拿 exit 文件的「收斂過程」與設計的設定表逐項找對應的 skill。沒有更新的 skill 要說得出理由。Phase 4 第一輪只從任務清單對照，漏了 CTS（SRAM clock 的 latency 對齊、clock pin 線切段）與 resizer 餘量，使用者結案後再問才補上。
 9. **收尾**：README 的狀態行與 roadmap、專案記憶、各 skill 的經驗紀錄與規則回寫；有改到的 skill，README 的說明與 `SKILL.md` 的 `description` 也要跟著改，並跑 `make skill-check`（使用者 2026-10-04：「skill更新時README說明也要更新」）。推送只在使用者明確要求時做，兩個 remote 都推並用 `git ls-remote` 確認；repo 是 public，推送前檢查本機絕對路徑與機密。
+10. **收尾的 checker 漏洞審查只審本 Phase 最後改過的 checker；其他 checker 在寫完時就審過**（提早檢查 E3，流程回顧 ADR-0020；做法在 `signoff-checker-qualification` 規則 12）。
+    - 為什麼：審查都排在收尾，Phase 4 到 7 每次都找到 7–12 個漏洞（Phase 7 是 8 個加 1 個缺口），修完要整套 regression 重跑，經驗紀錄的 Phase 5、6 兩列就是這樣多跑的輪數。
+    - 做法：收尾時先列出本 Phase 新增或改過的 checker，確認每支都有寫完時的審查紀錄；沒有的補審，最後改過的（審查之後又改的）再審一次。文件核對（規則 5 的第一個 agent）照舊全部做。
+    - 已知限制裡的每一項放寬或補償，引用放寬與補償登記表（`docs/relaxation_register.md`，`signoff-criteria`「提早檢查」E1；ADR-0020 決定 3），並核對登記表的「依據的設計」是不是本 Phase 的設計（規則 1 的「沒變要重新量過」）。
 
 ## 用完後 / 經驗紀錄
 

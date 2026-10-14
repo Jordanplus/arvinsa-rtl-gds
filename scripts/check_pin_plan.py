@@ -11,7 +11,10 @@ another one needs pnr/D/pin_plan.toml). --digest PLAN prints the plan_sha256 to 
 when the user approved it. For each plan:
   approval      date (YYYY-MM-DD), the user's quote, an ADR file under ROOT that contains it, and
                 plan_sha256 = sha256 of the plan text before its [approval] line (a plan changed after
-                the approval is no longer approved)
+                the approval is no longer approved); one line of the ADR has the quote, the date and the full
+                plan_sha256 together (the approved version is recorded in the ADR: re-approving a changed plan
+                changes the ADR too and shows in its diff, not only the digest in [approval]; a short quote
+                such as 「可以」 alone matches anywhere; Phase 7 review H1)
   governs       every governed file exists
   pads=fixed:
     template    the template DEF exists and has every planned pin (io_in[<gpio>]) placed
@@ -61,6 +64,9 @@ def approval(root, plan_path):
         return False, f"{name}: ADR {adr} does not contain the quote {quote!r}"
     if digest != plan_digest(text):
         return False, f"{name}: the plan changed after the approval of {date} (plan_sha256 differs); the user has to approve it again"
+    if not any(quote in ln and date in ln and digest in ln for ln in open(adr_path, encoding="utf8").read().splitlines()):
+        return False, (f"{name}: ADR {adr} has no line with the quote, the date {date} and plan_sha256 {digest} together "
+                       "(the approval of this version of the plan is not recorded); the user has to approve it")
     return True, f"{name}: approved {date} ({adr})"
 
 

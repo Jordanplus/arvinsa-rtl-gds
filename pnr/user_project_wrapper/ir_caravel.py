@@ -20,9 +20,11 @@ right ring sides only (caravel_pwr/README.md), so most of the drop is outside th
      file (20 mV: lowest pad supply 1.62 V - 1.60 V). Every window must annotate all pins (0 unannotated).
      The same corners with OpenSTA's vectorless activity are printed as [INFO] (decision 19's value, about
      2.2 times the max-power pattern on p7_harden2).
-Also required: 54 + 53 bridges per net (left + right), two pad straps per net, the via definitions found.
+Also required: 54 + 53 bridges per net (left + right), two pad straps per net, the via definitions found; and,
+before any tool runs, ir_pattern.check_inputs(): the run guard, exactly the windows win_5a/5b/5c, each recorded
+with the run's CLOCK_PERIOD (Phase 7 review H2, H3).
 Writes <out>/ir_caravel/ (with results.json, which ir_pattern.py --judge re-judges) and prints `ir-caravel: PASS` /
-`ir-caravel: FAIL` last; exit code 0 only on PASS. Negative test: make neg-ir (neg_ir.py).
+`ir-caravel: FAIL` last; exit code 0 only on PASS. Negative test: make neg-ir-caravel (neg_ir.py).
 Python stdlib only (LibreLane and OpenROAD run inside LibreLane's nix-shell).
 """
 import glob
@@ -166,18 +168,21 @@ def main(argv):
         return 2
     run, out, limits_path = (os.path.abspath(a) for a in pos)
     ll_dir = opts.get("--ll-dir") or os.environ.get("LIBRELANE_DIR") or os.path.join(ROOT, ".tools", "librelane")
-    rows = []
     spec = __import__("tomllib").load(open(limits_path, "rb")).get("max_sum", {}).get(KEY)
     if not spec or len(spec.get("keys", [])) != 2:
         return finish([(False, f"limit: no [max_sum] {KEY} with two keys in {limits_path}")])
     lim, keys = spec["max"], spec["keys"]
+    work = os.path.join(out, "ir_caravel")
+    shutil.rmtree(work, ignore_errors=True)   # only this check's own output, before the run guard
+    rows = ir_pattern.check_inputs(run, opts.get("--vcd") or [])
+    if not all(ok for ok, _ in rows):
+        return finish(rows)
+    vcds = opts["--vcd"]
     steps = sorted((s for s in glob.glob(os.path.join(run, "[0-9]*-openroad-irdropreport*"))
                     if os.path.isfile(os.path.join(s, "state_out.json"))), key=lambda s: int(os.path.basename(s).split("-")[0]))
     if not steps:
-        return finish([(False, f"no finished OpenROAD.IRDropReport step in {run}")])
+        return finish(rows + [(False, f"no finished OpenROAD.IRDropReport step in {run}")])
     step = steps[-1]
-    work = os.path.join(out, "ir_caravel")
-    shutil.rmtree(work, ignore_errors=True)   # only this check's own output
     os.makedirs(work)
     cfg = json.load(open(os.path.join(step, "config.json")))
     state = json.load(open(os.path.join(step, "state_in.json")))
@@ -218,9 +223,6 @@ def main(argv):
     pcfg = dict(cfg, VSRC_LOC_FILES=vsrc)
     json.dump(pcfg, open(os.path.join(pstep, "config.json"), "w"), indent=1)
     json.dump(state, open(os.path.join(pstep, "state_in.json"), "w"), indent=1)
-    vcds = opts.get("--vcd") or []
-    if not vcds or not all(os.path.isfile(v) for v in vcds):
-        return finish(rows + [(False, f"switching activity: need --vcd window(s) of the max-power pattern, got {vcds}")])
     drops, info = {}, []
     for vcd in vcds + [None]:
         tag = "_" + os.path.splitext(os.path.basename(vcd))[0] if vcd else "_vectorless"
@@ -240,7 +242,7 @@ def main(argv):
             else:   # vectorless: recorded, not judged (ADR-0019 decision 20)
                 info += [("" if ok else "not applied: ") + msg for ok, msg in r]
     results = os.path.join(work, "results.json")   # ir_pattern.py --judge re-applies a limit to it (neg_ir.py)
-    ir_pattern.write_results(results, rows, drops, len(vcds) * len(ir_worst.JUDGED),
+    ir_pattern.write_results(results, rows, drops, len(ir_pattern.WINDOWS) * len(ir_worst.JUDGED),
                              "from Caravel's pads (max-power pattern, slow corner)")
     return finish(ir_pattern.judge(json.load(open(results)), lim), info)
 

@@ -29,6 +29,7 @@ code 0 only on PASS. Python stdlib only (LibreLane runs inside its nix-shell).
 """
 import glob
 import json
+import math
 import os
 import re
 import shutil
@@ -52,9 +53,10 @@ def limit(limits_path):
 
 
 def drop(metrics, keys):
-    """VDD drop + GND rise in V, or None when a key is missing or negative."""
+    """VDD drop + GND rise in V, or None when a key is missing, not a finite number (NaN compares false in
+    max(), so a NaN corner would be skipped as the worst) or negative."""
     vals = [metrics.get(k) for k in keys]
-    return None if any(not isinstance(v, (int, float)) or v < 0 for v in vals) else vals
+    return None if any(not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 for v in vals) else vals
 
 
 def verdict(metrics, limits_path, applied):

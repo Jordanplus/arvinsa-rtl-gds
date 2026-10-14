@@ -14,7 +14,9 @@ Fake runs in runs/neg_run_guard/<case>/ have only <run>_signoff/result.txt and p
 For each case the step's output directory first holds a file stale.txt, which must be gone
 afterwards (a refused run leaves no output of an earlier run behind).
 Steps: run_eqy.py (soc_top, picorv32_core), run_gl_soc.py, run_gl_core.py, neg_eqy.py (soc_top,
-picorv32_core), neg_gl_soc.py, neg_gl_core.py, neg_pnr.py. Prints `neg-run-guard: PASS n/n` / `FAIL ...`; exit
+picorv32_core), neg_gl_soc.py, neg_gl_core.py, neg_pnr.py, the five of user_project_wrapper (run_eqy.py,
+run_gl_soc.py, neg_eqy.py, neg_gl_soc.py, neg_pnr.py with --cpu caravel), and the IR checks ir_pattern.py and
+ir_caravel.py (their stale file is in their own <out>/ir_pattern, <out>/ir_caravel). Prints `neg-run-guard: PASS n/n` / `FAIL ...`; exit
 code 0 only on PASS.
 """
 import json
@@ -52,7 +54,14 @@ STEPS = [
                                                 "--out", "{out}"], "neg-gl-soc: FAIL"),
     ("neg_pnr_caravel", "user_project_wrapper", [PY, S("pnr/soc_top/neg_pnr.py"), "--cpu", "caravel", "--run", "{run}", "--out", "{out}"],
      "neg-pnr: FAIL"),
+    # the IR checks with the max-power pattern (Phase 7 review H3): they own <out>/ir_pattern, <out>/ir_caravel
+    ("ir_pattern_soc", "soc_top", [PY, S("pnr/soc_top/ir_pattern.py"), "{run}", "{out}", S("signoff/limits/soc_top_hazard3.toml")]
+     + sum((["--vcd", f"{{out}}/win_{w}.vcd"] for w in ("5a", "5b", "5c")), []), "ir-soc: FAIL"),
+    ("ir_caravel", "user_project_wrapper", [PY, S("pnr/user_project_wrapper/ir_caravel.py"), "{run}", "{out}",
+                                            S("signoff/limits/user_project_wrapper.toml")]
+     + sum((["--vcd", f"{{out}}/win_{w}.vcd"] for w in ("5a", "5b", "5c")), []), "ir-caravel: FAIL"),
 ]
+STALE_DIR = {"ir_pattern_soc": "ir_pattern", "ir_caravel": "ir_caravel"}   # where a step keeps its own output under {out}
 VERDICT = {"soc_top": "harden-soc: PASS", "picorv32_core": "harden-core: PASS", "user_project_wrapper": "harden-soc: PASS"}
 CASES = {"not_pass": "does not say", "other_commit": "was made from commit",
          "no_record": "cannot read the source record", "current": None}
@@ -85,12 +94,13 @@ def main():
             d = os.path.join(OUT, f"{step}__{case}")
             run = fake_run(d, design, case)
             out = os.path.join(d, "out")
-            os.makedirs(out)
-            open(os.path.join(out, "stale.txt"), "w").write("output of an earlier run\n")
+            own = os.path.join(out, STALE_DIR.get(step, ""))
+            os.makedirs(own)
+            open(os.path.join(own, "stale.txt"), "w").write("output of an earlier run\n")
             cp = subprocess.run([c.format(run=run, out=out) for c in cmd], capture_output=True, text=True, timeout=600)
             text = cp.stdout + cp.stderr
             open(os.path.join(d, "run.log"), "w").write(text)
-            stale_gone = not os.path.exists(os.path.join(out, "stale.txt"))
+            stale_gone = not os.path.exists(os.path.join(own, "stale.txt"))
             failed = cp.returncode != 0 and fail_line in cp.stdout
             if want:
                 ok = failed and want in cp.stdout and stale_gone

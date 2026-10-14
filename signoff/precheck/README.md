@@ -13,7 +13,8 @@
 | 檢查項目齊全 | `project.json` 剛好是 cf-precheck 1.3.7 的 13 項；`magic_drc`（選用，預設不跑）只能是 skip 或 pass | precheck 升版加了新檢查、少了一項 |
 | 其他 11 項 | 全部 pass | `lvs: fail` |
 | 版本 | cf-precheck 是 `env/versions.mk` 的 `CF_PRECHECK_VERSION` | image 升級了 cf-precheck，檢查內容可能變了 |
-| 檢查的是這份 GDS | `gds/<top>.gds` 的 sha1 = `project.json` 的 `input_file_hash` = 結果目錄 `logs/gds.info` 記的 sha1；`project.json` 在結果目錄開始之後寫入 | precheck 跑完後 GDS 被換掉、讀到前一次 run 的報表 |
+| 檢查的是這份 GDS | `gds/<top>.gds` 的 sha1 = `project.json` 的 `input_file_hash` = 結果目錄 `logs/gds.info` 記的 sha1；`project.json` 在結果目錄開始之後寫入（時間戳要有時區，換成 UTC 再比，Phase 7 審查 H6） | precheck 跑完後 GDS 被換掉、讀到前一次 run 的報表 |
+| 專案來自正式的 harden run | `arvinsa_source.json` 存在、`run_guard` 是 PASS、`verification` 是 false，記錄的 GDS sha1 = `gds/<top>.gds`（Phase 7 審查 H7）。`--verification`（`PRECHECK_VERIFY=1`）接受查證用的專案，結論印成 `precheck: PASS (verification only, not a signoff result)` | 拿查證用的結果當正式證據 |
 | 報表本身一致 | 報表的 top cell、`<item>` 數 = `logs/<check>_check.total`、status 是 pass 恰好在沒有違規時 | 讀到別次的報表 |
 | 同一版 deck、對的比對基準 | 報表與比對基準的規則清單（名稱與描述）相同；比對基準的 `input.sha1` 是 `--ref-gds` 的 sha1 | 比對基準是舊 deck 或別版 PDK 的 macro 產生的 |
 | 規則 | 設計的 FEOL 只有 `MR_licon.SP.6`，BEOL 只有 `MR_mcon.CON.10`；比對基準的其他規則印出、不列入比對（ADR-0019 決定 24：precheck 的 PDK `3e0e31dc` 裡的預建 SRAM，FEOL 控制邏輯另有 10 個 nsdm／psdm 違規） | 多了 `m1.1`；比對基準與設計都有同一條其他規則 |
@@ -34,7 +35,7 @@
 
 | 檔案 | 用途 |
 |---|---|
-| `make_project.py` | 從 harden run 組出 precheck 的專案目錄：GDS、帶電源的網表、`user_defines.v`、`lvs_config.json`（SRAM 在 `EXTRACT_ABSTRACT`，網表沒有它的 module，當 black box 比，照 ChipFoundry `caravel_user_sram` 範例）。要通過 run guard；`--verification` 略過 guard 做查證，來源記在 `arvinsa_source.json`，checker 會印出來 |
+| `make_project.py` | 從 harden run 組出 precheck 的專案目錄：GDS、帶電源的網表、`user_defines.v`、`lvs_config.json`（SRAM 在 `EXTRACT_ABSTRACT`，網表沒有它的 module，當 black box 比，照 ChipFoundry `caravel_user_sram` 範例）。要通過 run guard；`--verification` 略過 guard 做查證，來源記在 `arvinsa_source.json`，checker 要求它是正式來源（查證用要加 `--verification`） |
 | `run_precheck.sh` | 在 lima VM 用官方 image 跑 precheck（照 `cf precheck` 的 `docker run`），記下開始時間、image digest、PDK、cf-precheck 版本、結束碼；同一個容器接著用 image 自己的 deck 與 KLayout 跑 precheck PDK 的 SRAM，當比對基準（`<project>/sram_ref/`） |
 | `check_precheck.py` | 判定（上表） |
 | `rdb_flatten.py` | KLayout 腳本：報表的違規展開到頂層、換回 SRAM 座標、以 bitcell array 為原點 |
@@ -56,4 +57,4 @@ deck 本身是 GPLv3，不放進 repo：`make precheck-deck` 從 PyPI 下載固�
 
 ## negative test
 
-`make neg-precheck`（25 個案例，約 5 分鐘）：用 `make_fixture.py` 做一份只有 SRAM 的 `user_project_wrapper`，用 deck 跑出真的 FEOL／BEOL 報表，加上一份其他項目都 pass 的 `project.json`，再逐項植入錯誤。每個植入的錯誤都必須在**它自己那一列** FAIL，三個正向案例（原樣、沒有違規、比對基準多一條其他規則）必須 PASS。案例清單在 `neg_precheck.py` 的說明。
+`make neg-precheck`（31 個案例，約 5 分鐘）：用 `make_fixture.py` 做一份只有 SRAM 的 `user_project_wrapper`，用 deck 跑出真的 FEOL／BEOL 報表，加上一份其他項目都 pass 的 `project.json`，再逐項植入錯誤。每個植入的錯誤都必須在**它自己那一列** FAIL，四個正向案例（原樣、沒有違規、比對基準多一條其他規則、查證用的專案加 `--verification`）必須 PASS。案例清單在 `neg_precheck.py` 的說明。

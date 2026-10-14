@@ -9,8 +9,9 @@ set_max_fanout 8 [current_design]
 # Max transition 0.70 ns for PnR only (signoff keeps 0.75 ns, signoff.sdc). The resizer repairs with
 # the 9 corners of RSZ_CORNERS; the temperature-inversion corner ss_n40C, checked only at signoff,
 # has about 25 % slower transitions than ss_100C, and one data net ended at 0.766 ns there (Phase 4
-# harden-soc 4). The resizer cannot see ss_n40C itself: RepairDesignPostGRT then does not finish
-# (pnr/soc_top/config.json RSZ_CORNERS).
+# harden-soc 4). The resizer could not see ss_n40C then (RepairDesignPostGRT did not finish); since ADR-0013
+# it does (RSZ_CORNERS), so this reason is gone, but 0.70 ns has not been re-evaluated
+# (docs/relaxation_register.md T15).
 set_max_transition 0.70 [current_design]
 # Clock uncertainty by component (setup, hold, half-cycle paths); same file as signoff.sdc.
 source [file join [file dirname [info script]] clock_uncertainty.sdc]

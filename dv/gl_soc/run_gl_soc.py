@@ -45,8 +45,10 @@ usage: run_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--netlist <p
                 marks on GPIO_OUT (dv/gl_soc/vcd_window.v): one simulation per window, <out>/win_<hex>.vcd,
                 at least MIN_WINDOW_CYCLES cycles, no lockstep mismatch before the window ended. For the IR
                 max-power pattern (fw/tests/maxpower, ADR-0019 decision 20); prints `gl-record: PASS/FAIL`.
-  --clk-half-ns half period of the testbench clock (default the testbench's 20 ns); the IR recording
-                uses the signoff period, 22 (44 ns), so that the activity per second is the signoff one
+  --clk-half-ns half period of the testbench clock (default the testbench's 20 ns). --record-window
+                takes it from CLOCK_PERIOD of the harden run's resolved.json (the signoff period, so that the
+                activity per second is the signoff one; an odd period in ns FAILs: tb_soc.v's half period is
+                an integer); a --clk-half-ns that differs from it FAILs (Phase 7 review H2)
   --plusarg     an extra plusarg for every --record-window simulation (repeatable; pnr/soc_top/neg_ir.py
                 passes one beginning with "vcd" to check that a stray testbench dump FAILs)
 Prints `gl-soc: PASS` / `gl-soc: FAIL` (`gl-soc-powered: ...` with --powered); exit code 0 only
@@ -121,7 +123,7 @@ def main():
     netlist = Path(args.netlist).resolve() if args.netlist else default_nl
     out = Path(args.out or ROOT / "runs" / (("gl_soc_powered" if args.powered else "gl_soc") + suffix)).resolve()
     flags = GL_FLAGS + (["-DUSE_POWER_PINS"] if args.powered else [])
-    if args.clk_half_ns:
+    if args.clk_half_ns and not args.record_window:
         flags += [f"-DTB_CLK_HALF_NS={args.clk_half_ns}"]
     windows = [w.strip().lower() for w in args.record_window.split(",")] if args.record_window else []
     if windows:
@@ -144,6 +146,13 @@ def main():
     if not resolved.is_file():
         return fail(f"{resolved} not found; run `make harden-soc` first")
     cell_models = json.loads(resolved.read_text())["CELL_VERILOG_MODELS"]
+    if windows:   # the recording runs at the run's signoff period
+        period = json.loads(resolved.read_text()).get("CLOCK_PERIOD")
+        if not isinstance(period, (int, float)) or period % 2:
+            return fail(f"CLOCK_PERIOD {period!r} of {resolved}: the testbench's half period is an integer number of ns")
+        if args.clk_half_ns and args.clk_half_ns * 2 != period:
+            return fail(f"--clk-half-ns {args.clk_half_ns} is not half of the run's CLOCK_PERIOD {period} ns")
+        flags += [f"-DTB_CLK_HALF_NS={int(period) // 2}"]
     try:
         tests = dvlib.load_tests()
     except (OSError, dvlib.DvError) as e:

@@ -17,7 +17,8 @@ Checks:
               VERILOG_INCLUDE_DIRS == its +incdir+ entries (the flow hardens the same RTL that the
               simulations use)
   inout_dont_touch every inout port of the top module (DESIGN_NAME in those files) that is not a VDD_NETS /
-              GND_NETS net is matched by RSZ_DONT_TOUCH_RX (bit 0 of a vector, e.g. analog_io[0]): OpenROAD's
+              GND_NETS net is matched by RSZ_DONT_TOUCH_RX, every bit of a vector (analog_io[0] .. [28]; the
+              range is evaluated with the `define values of those files, else FAIL; Phase 7 review H8): OpenROAD's
               repair_design with global-route parasitics counts an inout pin as driver and load and stops
               with RSZ-0074 (Phase 7 run p7_harden2, analog_io of the Caravel wrapper; skill
               librelane-run-debug). One name per declaration or a comma list; ranges are dropped
@@ -169,29 +170,51 @@ def main(argv):
         f"in {os.path.relpath(rtl_f, ROOT)}"
         + ("" if sorted(have_files) == sorted(files) else
            f"; only in config {sorted(set(have_files) - set(files))}, only in the file list {sorted(set(files) - set(have_files))}"))
-    # inout signal ports of the top module (supply nets excepted): RSZ_DONT_TOUCH_RX must match each
-    # (a vector is checked by its bit 0, the net name in the layout)
+    # inout signal ports of the top module (supply nets excepted): RSZ_DONT_TOUCH_RX must match each bit
     supplies = set(cfg.get("VDD_NETS") or []) | set(cfg.get("GND_NETS") or [])
-    inouts = []
+    inouts, unknown = [], []
+    texts = {f: re.sub(r"/\*.*?\*/|//[^\n]*", "", open(f, encoding="utf8", errors="replace").read(), flags=re.S)
+             for f in files}
+    macros = {k: v.strip() for t in texts.values() for k, v in re.findall(r"^\s*`define\s+(\w+)[ \t]+([^\n]+)", t, re.M)}
+
+    def bound(expr):
+        e = re.sub(r"`(\w+)", lambda d: f"({macros.get(d.group(1), 'x')})", expr)
+        return int(eval(e, {"__builtins__": {}})) if re.fullmatch(r"[\d\s+\-*/()]+", e) else None
+
     for f in files:
-        src = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(f, encoding="utf8", errors="replace").read(), flags=re.S)
+        src = texts[f]
         src = re.sub(r"^\s*`(ifdef|ifndef|elsif|else|endif|define|undef|include|timescale|default_nettype)\b[^\n]*", "",
                      src, flags=re.M)
         m = re.search(rf"\bmodule\s+{re.escape(cfg['DESIGN_NAME'])}\b(.*?)\bendmodule\b", src, re.S)
         if not m:
             continue
-        body = re.sub(r"\[[^\]]*\]", " [] ", m.group(1))   # ranges may hold ( ) and macros
+        ranges = []
+        body = re.sub(r"\[([^\]]*)\]", lambda r: (ranges.append(r.group(1)), f" [#{len(ranges) - 1}] ")[1],
+                      m.group(1))   # ranges may hold ( ) and macros
         for seg in re.findall(r"\binout\b(.*?)(?=\binput\b|\boutput\b|\binout\b|[;)]|$)", body, re.S):
-            vec = "[]" in seg
-            names = re.findall(r"\b[A-Za-z_]\w*\b", seg)
-            inouts += [n + ("[0]" if vec else "") for n in names if n not in ("wire", "tri", "logic", "signed")]
+            k = re.search(r"\[#(\d+)\]", seg)
+            names = [n for n in re.findall(r"\b[A-Za-z_]\w*\b", re.sub(r"\[#\d+\]", "", seg))
+                     if n not in ("wire", "tri", "logic", "signed")]
+            if not k:
+                inouts += names
+                continue
+            msb, _, lsb = ranges[int(k.group(1))].partition(":")
+            hi, lo = bound(msb), bound(lsb or msb)
+            if hi is None or lo is None:
+                unknown += [f"{n}[{ranges[int(k.group(1))]}]" for n in names]
+                continue
+            inouts += [f"{n}[{i}]" for n in names for i in range(min(hi, lo), max(hi, lo) + 1)]
     rx = cfg.get("RSZ_DONT_TOUCH_RX", "$^")
     signals = [p for p in inouts if p not in supplies]
     bad = [p for p in signals if not re.search(rx, p)]
-    row("inout_dont_touch", not bad,
-        f"{len(signals)} inout signal port(s) of {cfg['DESIGN_NAME']} {signals}, all matched by RSZ_DONT_TOUCH_RX {rx!r}"
-        if not bad else f"inout signal port(s) {bad} not matched by RSZ_DONT_TOUCH_RX {rx!r}: repair_design after "
-        "global routing stops with RSZ-0074 on an inout net (librelane-run-debug)")
+    row("inout_dont_touch", not bad and not unknown,
+        f"{len(signals)} inout signal port bit(s) of {cfg['DESIGN_NAME']} "
+        f"{signals if len(signals) <= 4 else signals[:2] + ['...'] + signals[-1:]}, all matched by RSZ_DONT_TOUCH_RX {rx!r}"
+        if not bad and not unknown else
+        (f"inout ranges {unknown} not evaluated (`define not found); " if unknown else "")
+        + (f"inout signal port bit(s) {bad[:4]}{' ...' if len(bad) > 4 else ''} ({len(bad)}) not matched by "
+           f"RSZ_DONT_TOUCH_RX {rx!r}: repair_design after global routing stops with RSZ-0074 on an inout net "
+           "(librelane-run-debug)" if bad else ""))
     pico, h3 = configs["picorv32"], configs["hazard3"]
     differ = sorted(k for k in set(pico) | set(h3) if not k.startswith("//") and k not in CPU_KEYS and pico.get(k) != h3.get(k))
     bad_def = [f"{c} VERILOG_DEFINES = {configs[c].get('VERILOG_DEFINES')}" for c in configs

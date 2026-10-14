@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """make neg-precheck: bug injection into the input of check_precheck.py (ADR-0019 decision 5); every injected case must
-FAIL at its own line, the two positive controls must PASS.
+FAIL at its own line, the positive controls (positive, clean, ref_extra_rule, verification_flag) must PASS.
 
 usage: neg_precheck.py
 
@@ -8,8 +8,8 @@ Fixture (runs/neg_precheck/, rebuilt every time, about 2 minutes):
   base/  a precheck project made without the image: gds/user_project_wrapper.gds = the self-generated SRAM mirrored
          (DEF FS) in an otherwise empty top cell (make_fixture.py); precheck_results/<time>/ with the pinned deck's
          FEOL/BEOL reports of it (run_deck.py, the OpenRAM bitcell markers only); .cf/project.json with every other
-         check pass, magic_drc skip, input_file_hash and logs/gds.info = sha1 of the GDS; two_macros.gds has a second
-         copy of the SRAM.
+         check pass, magic_drc skip, input_file_hash and logs/gds.info = sha1 of the GDS; arvinsa_source.json as
+         make_project.py writes it for a run that passed the run guard; two_macros.gds has a second copy of the SRAM.
   ref/   the same deck on the PDK SRAM alone (as make precheck-sram-ref).
 Cases (expected text in a FAIL line of check_precheck.py):
   positive         base as it is: PASS
@@ -21,6 +21,12 @@ Cases (expected text in a FAIL line of check_precheck.py):
   other_version    cf-precheck 1.3.8                          "pinned 1.3.7"
   stale_results    logs/gds.info of another GDS (an earlier run's reports)  "checked this GDS"
   results_after    project.json older than the results directory  "after the results directory's start"
+  results_after_tz the same in +08:00 (07:00 = 23:00 UTC the day before; review H6)  "after the results directory's start"
+  no_tz            project.json time stamp without a time zone    "has no time zone"
+  no_source        arvinsa_source.json removed (review H7)        "source: cannot read"
+  verification_source  arvinsa_source.json of make_project.py --verification  "not a signoff result"
+  source_gds       arvinsa_source.json records another GDS sha1   "the one recorded from"
+  verification_flag  the verification source with --verification: PASS (verification only)
   status_skip      klayout_beol status skip with its items    "status skip with"
   other_top        BEOL report of another top cell            "report top cell"
   unplaced         MR_mcon.CON.10 in a cell the GDS does not have  "not placed"
@@ -105,6 +111,9 @@ def build():
     json.dump({"precheck": {"version": "1.3.7", "timestamp": "2026-10-14T00:20:00+00:00", "pdk": "sky130A",
                             "passed": False, "input_file_hash": cp.sha1(gds), "checks": checks}},
               open(os.path.join(base, ".cf", "project.json"), "w"), indent=2)
+    json.dump({"run": "runs/user_project_wrapper", "run_commit": "f" * 40, "head": "f" * 40, "run_guard": "PASS",
+               "verification": False, "files": {"gds/user_project_wrapper.gds": {"sha1": cp.sha1(gds)}}},
+              open(os.path.join(base, "arvinsa_source.json"), "w"), indent=1)
     print(f"[neg-precheck] fixture: FEOL {counts['klayout_feol']}, BEOL {counts['klayout_beol']} item(s); reference in "
           f"{os.path.relpath(ref, ROOT)}", flush=True)
     return base, ref
@@ -223,6 +232,19 @@ def clean(p, r):
     pj_edit(lambda pre: [pre["checks"][c].update(status="pass") for c in CHECKS])(p, r)
 
 
+def source_edit(f):
+    def m(p, _r):
+        path = os.path.join(p, "arvinsa_source.json")
+        d = json.load(open(path))
+        f(d)
+        json.dump(d, open(path, "w"), indent=1)
+    return m
+
+
+def as_verification(d):
+    d.update(run_guard=["the harden run was made from commit 0000000, but HEAD is ffffff"], verification=True)
+
+
 def total_off(p, _r):
     path = os.path.join(p, "precheck_results", START, "logs", "klayout_beol_check.total")
     n = int(open(path).read())
@@ -240,6 +262,14 @@ CASES = [  # (name, mutation, extra args, expected text in a FAIL line or None f
     ("stale_results", gds_info_edit(f"user_project_wrapper.gds: {'0' * 40}\n"), [], "checked this GDS"),
     ("results_after", pj_edit(lambda pre: pre.update(timestamp="2026-10-13T23:59:00+00:00")), [],
      "after the results directory's start"),
+    ("results_after_tz", pj_edit(lambda pre: pre.update(timestamp="2026-10-14T07:00:00+08:00")), [],
+     "after the results directory's start"),
+    ("no_tz", pj_edit(lambda pre: pre.update(timestamp="2026-10-14T00:20:00")), [], "has no time zone"),
+    ("no_source", lambda p, _r: os.remove(os.path.join(p, "arvinsa_source.json")), [], "source: cannot read"),
+    ("verification_source", source_edit(as_verification), [], "not a signoff result"),
+    ("source_gds", source_edit(lambda d: d["files"]["gds/user_project_wrapper.gds"].update(sha1="0" * 40)), [],
+     "the one recorded from"),
+    ("verification_flag", source_edit(as_verification), ["--verification"], None),
     ("status_skip", pj_edit(lambda pre: pre["checks"]["klayout_beol"].update(status="skip")), [], "status skip with"),
     ("other_top", xml_edit("design", "klayout_beol", other_top), [], "report top cell"),
     ("unplaced", xml_edit("design", "klayout_beol", unplaced), [], "not placed"),
