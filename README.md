@@ -388,7 +388,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
-  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`，ADR-0019 決定 20；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估 5 倍以上）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`、soc_top 的 `make ir-soc`，ADR-0019 決定 20、25；negative test `make neg-ir-soc`／`neg-ir-caravel`；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估 5 倍以上）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
 - **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29、P61、P62、P77、P78。
 
 #### lvs-signoff：LVS 與連接性

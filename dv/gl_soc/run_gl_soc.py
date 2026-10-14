@@ -47,6 +47,8 @@ usage: run_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--netlist <p
                 max-power pattern (fw/tests/maxpower, ADR-0019 decision 20); prints `gl-record: PASS/FAIL`.
   --clk-half-ns half period of the testbench clock (default the testbench's 20 ns); the IR recording
                 uses the signoff period, 22 (44 ns), so that the activity per second is the signoff one
+  --plusarg     an extra plusarg for every --record-window simulation (repeatable; pnr/soc_top/neg_ir.py
+                passes one beginning with "vcd" to check that a stray testbench dump FAILs)
 Prints `gl-soc: PASS` / `gl-soc: FAIL` (`gl-soc-powered: ...` with --powered); exit code 0 only
 on PASS. Python stdlib only.
 """
@@ -108,6 +110,7 @@ def main():
     ap.add_argument("--powered", action="store_true")
     ap.add_argument("--record-window")
     ap.add_argument("--clk-half-ns", type=int)
+    ap.add_argument("--plusarg", action="append", default=[])
     args = ap.parse_args()
     cpu = dvlib.CPUS[args.cpu]
     suffix = "" if args.cpu == "picorv32" else f"_{args.cpu}"
@@ -217,7 +220,7 @@ def record_windows(name, windows, tests, b, cpu, args, out, label):
         vcd = out / f"win_{w}.vcd"
         r = dvlib.run_test(name, "icarus", out_root=str(out / f"run_{w}"), build_result=b, quiet=True,
                            rtl_f=cpu["rtl_f"], fw_dir=cpu["fw_dir"], cpu=args.cpu,
-                           extra_plusargs=[f"irwin_gpio={w}", f"irwin_vcd={vcd}"],
+                           extra_plusargs=[f"irwin_gpio={w}", f"irwin_vcd={vcd}"] + args.plusarg,
                            timeout=gl_timeout(dvlib.for_cpu(tests[name], args.cpu)["max_cycles"]))
         logs = "".join(p.read_text(errors="replace") for p in (ROOT / r.get("run_dir", "")).glob("*.log"))
         m = re.search(r"\[vcd_window\] end after (\d+) cycles", logs)

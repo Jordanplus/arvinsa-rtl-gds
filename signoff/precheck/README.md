@@ -46,7 +46,7 @@ deck 本身是 GPLv3，不放進 repo：`make precheck-deck` 從 PyPI 下載固�
 
 ## 正式的流程
 
-`make precheck-caravel`（約 1 小時，Rosetta 模擬）：`make_project.py` → `run_precheck.sh` → `check_precheck.py`，比對基準用同一個容器產生的 `sram_ref/`，`--ref-gds` 指向 precheck 用的 PDK（`3e0e31dc`）裡的 SRAM。lima VM 要 16 GiB 記憶體：10 GiB 時 wrapper 的 KLayout BEOL 與 Magic 抽取被 OOM killer 砍掉（`docs/notes/caravel_precheck_phase7.md` 第 10 節）。這顆 GDS 和 flow 用的 PDK（`8afc834`）裡那顆 sha1 不同，所以比對基準一定要綁到實際跑的 GDS。`PRECHECK_VERIFY=1` 給還沒重新 harden 的 run 做查證。
+`make precheck-caravel`（約 1 小時，Rosetta 模擬）：`make_project.py` → `run_precheck.sh` → `check_precheck.py`，比對基準用同一個容器產生的 `sram_ref/`，`--ref-gds` 指向 precheck 用的 PDK（`3e0e31dc`）裡的 SRAM。lima VM 要 16 GiB 記憶體：10 GiB 時 wrapper 的 KLayout BEOL 與 Magic 抽取被 OOM killer 砍掉（`docs/notes/caravel_precheck_phase7.md` 第 10 節）。這顆 GDS 和 flow 用的 PDK（`8afc834`）裡那顆 sha1 不同，所以比對基準一定要綁到實際跑的 GDS。`PRECHECK_VERIFY=1` 給還沒重新 harden 的 run 做查證。專案目錄在 `$(PRECHECK_WORK)/<repo 目錄名>`（例如 `../arvinsa-rtl-gds-p7precheck/arvinsa-rtl-gds`），兩個 worktree 同時跑不會互相覆蓋（ADR-0019 決定 25）；`make regress-caravel` 的 `env-check-flow` 先檢查 VM（docker context、image、16 GiB、PDK）。
 
 第一次正式判定（2026-10-14，`550869c` 的確認 harden，53 分鐘）：`precheck: PASS (ADR-0019 decision 5)`，`runs/p7_formal_precheck.log`；image digest、版本與各項結果在 `docs/notes/caravel_precheck_phase7.md` 第 10b 節。
 

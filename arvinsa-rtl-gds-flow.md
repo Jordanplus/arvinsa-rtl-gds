@@ -211,9 +211,10 @@ signoff（harden 結尾自動執行）
 - `make regress`（Hazard3 版，`scripts/regress.py --cpu hazard3`）依序跑下列項目，第一個 FAIL 就停（實際清單：`scripts/regress.py` 的 `TARGET_LISTS`）：
   1. `env-check-flow py-check lint synth-check fw core-hazard3 regress-rtl neg-rtl regress-rtl-caravel neg-rtl-caravel`
   2. flow 的 checker：`neg-provenance`（來源追溯的植入錯誤）、`neg-run-guard`（下游拒絕 FAIL 或別的 commit 的 run）、`neg-regress`（regression 自己的植入錯誤）、`test-flow-retry`（偶發錯誤的重試）、`test-review-hook`（criteria review 的 Stop hook）、`neg-openram`、`neg-macro-views`、`pin-plan`、`neg-pin-plan`、`neg-precheck`（precheck 判定的植入錯誤，Phase 7）
-  3. `harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr`
+  3. `harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr ir-soc neg-ir-soc`（`ir-soc`：用 CPU 的 max-power pattern 判 IR，ADR-0019 決定 20、25）
   4. `provenance-final`：HEAD 與工作樹從 harden 開始後都沒變。
 - `make regress-picorv32`：PicoRV32 版，把 `core-hazard3` 換成 `core-stock`，另加 4.4 的 `harden-core gl-core neg-gl-core eqy-core neg-eqy-core`。
+- `make regress-caravel`（本 repo Phase 7：晶片層級的外殼，`scripts/regress.py --cpu caravel`，約 6 小時）：外殼裡的 RTL 測試、外殼的 harden、EQY、gate-level、從 pad 起算的 IR、官方 image 的 precheck（`env-check-flow` 先檢查 VM），以及**只屬於外殼的** negative test（`neg-eqy-caravel`、`neg-gl-caravel`、`neg-ir-caravel`、`neg-pnr-caravel`）。和內部設計共用的 checker 由 `make regress` 的完整 negative test 驗證，外殼不重複植入（ADR-0019 決定 25：完整移植每輪多 4–6 小時）。結案時三條 regress 各在一個乾淨 worktree 跑，外部共用的目錄（precheck 的 VM 工作目錄）依 checkout 分開。
 - **不在 regression 裡、要另外跑的**：`ci-sram-ref`；macro 的產生、view QA、特性化與它們的確認（`openram-macro`、`macro-views`、`sram-char`／`openram-char`、`sram-confirm`／`openram-confirm`、`openram-check-lib`、`neg-char`）。這些在 macro 或量測方法有改時跑，結果進版控；regression 只檢查進版控的結果沒過期（`harden-soc` 開頭的 `check_inputs.py`）。
 - 要在乾淨的 checkout 執行；乾淨的 worktree 沒有 `.tools/`，要設 `LIBRELANE_DIR`、`XPACK_DIR`、`PRECHECK_DECK` 指到已安裝的副本。
 - skill：`flow-regression-reproducibility`。

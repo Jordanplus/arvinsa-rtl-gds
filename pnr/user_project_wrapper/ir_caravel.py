@@ -21,7 +21,8 @@ right ring sides only (caravel_pwr/README.md), so most of the drop is outside th
      The same corners with OpenSTA's vectorless activity are printed as [INFO] (decision 19's value, about
      2.2 times the max-power pattern on p7_harden2).
 Also required: 54 + 53 bridges per net (left + right), two pad straps per net, the via definitions found.
-Writes <out>/ir_caravel/ and prints `ir-caravel: PASS` / `ir-caravel: FAIL` last; exit code 0 only on PASS.
+Writes <out>/ir_caravel/ (with results.json, which ir_pattern.py --judge re-judges) and prints `ir-caravel: PASS` /
+`ir-caravel: FAIL` last; exit code 0 only on PASS. Negative test: make neg-ir (neg_ir.py).
 Python stdlib only (LibreLane and OpenROAD run inside LibreLane's nix-shell).
 """
 import glob
@@ -35,9 +36,10 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "pnr", "soc_top"))
+import ir_pattern  # noqa: E402
 import ir_worst  # noqa: E402
 
-DATA = os.path.join(HERE, "caravel_pwr")
+DATA = os.environ.get("IR_CARAVEL_DATA", os.path.join(HERE, "caravel_pwr"))   # neg_ir.py points it at an edited copy
 DX, DY = 121740, 1037000              # wrapper origin in caravel_core (DEF units, 1000/um)
 NETS = ("vccd1", "vssd1")
 BRIDGES = {"left": 54, "right": 53}   # per net (caravel_pwr/README.md)
@@ -237,11 +239,10 @@ def main(argv):
                     drops[corner + tag] = vals
             else:   # vectorless: recorded, not judged (ADR-0019 decision 20)
                 info += [("" if ok else "not applied: ") + msg for ok, msg in r]
-    if len(drops) == len(vcds) * len(ir_worst.JUDGED):
-        worst = max(drops, key=lambda c: sum(drops[c]))
-        rows.append((sum(drops[worst]) <= lim, f"drop: worst {worst} {sum(drops[worst]) * 1e3:.2f} mV from Caravel's pads "
-                                               f"(max-power pattern, slow corner) vs max {lim * 1e3:.1f} mV"))
-    return finish(rows, info)
+    results = os.path.join(work, "results.json")   # ir_pattern.py --judge re-applies a limit to it (neg_ir.py)
+    ir_pattern.write_results(results, rows, drops, len(vcds) * len(ir_worst.JUDGED),
+                             "from Caravel's pads (max-power pattern, slow corner)")
+    return finish(ir_pattern.judge(json.load(open(results)), lim), info)
 
 
 def finish(rows, info=()):

@@ -191,6 +191,17 @@
       - `make gl-caravel`（`runs/p7_formal2_gl.log`）：16/16 PASS，759 秒。
       - `make ir-caravel`（`runs/p7_formal2_ir.log`）：PASS，最差 max_ss_100C win_5c 19.56 mV（上限 20 mV；`f4ea9de` 是 19.58，差的是 `decap_3` 的 .lib 漏電）。
       - `make precheck-caravel`（`runs/p7_formal_precheck.log`，53 分鐘）：官方 image 11 項 PASS、li1 39.9%，`precheck: PASS (ADR-0019 decision 5)`。image digest、版本與結果在筆記第 10b 節。
+25. **（2026-10-14，步驟 8）結案 regress 的範圍：三條分開、wrapper 只植入它特有的判斷、precheck 放進 regress**。
+    - 背景：soc_top 的 `make regress` 約 2.5 小時；wrapper 單項 harden 182、eqy 13、gl 13、ir 24、precheck 55 分鐘。eqy、gl、pnr 的 negative test 都還不支援 wrapper；完整移植時，neg-eqy 每個案例要跑一次 13 分鐘的 EQY（約 18 個），neg-pnr 71 個案例有些要在 wrapper 版圖上重跑 Magic DRC（每次約 25 分鐘）或 LVS，每輪 regress 多 4–6 小時。
+    - 使用者 2026-10-14 的三個選擇，原話都是「(建議)」那一項：
+      - 「只做 wrapper 特有的部分 (建議)」：eqy、gl、pnr 的共用 checker 照舊在 soc_top 上做完整的 negative test；wrapper 只對它自己才有的判斷植入錯誤：邊界 slew（決定 16）、沒用到的腳位（`disconnected` 的 wrapper 判法）、IR 供電點、SRAM 原點（`check_soc.py magic_drc`）、`ir_caravel.py` 與錄波、EQY 的 amend 重試（決定 23），以及 gate-level 1–2 個案例。風險：共用程式在 wrapper 上的特殊組合沒有逐一植入。
+      - 「三條分開、平行跑 (建議)」：`make regress`（soc_top Hazard3，加上決定 20 的 soc_top pattern IR）、新的 `make regress-caravel`（wrapper 全鏈）、`make regress-picorv32`，各在一個乾淨 worktree。先同時跑 caravel 與 hazard3，hazard3 跑完再接 picorv32。wrapper golden 的誤差（決定 22）用這次乾淨 run 加上先前同機的 4 次 run 判斷。
+      - 「放進 regress-caravel (建議)」：precheck 是 Phase 7 的 exit 條件，證據要來自乾淨 checkout 的完整 run；每個 worktree 用自己的 precheck 目錄，避免互相覆蓋。代價：regress 依賴 lima VM 與網路（容器每次 `pip install --upgrade cf-precheck`）。
+    - 實作：
+      - soc_top 的 pattern IR（決定 20 的「soc_top 也改用」）：`dv/gl_soc/vcd_window.v` 的時間窗改讀 `tb_soc.gpio_out`（兩種 build 都有；Caravel build 裡 `caravel_pins` 每週期比對它與 `la_data_out[9:2]`）；`pnr/soc_top/ir_pattern.py` 用 run 自己的供電點、兩個慢 corner、每段 VCD 判 20 mV，`make ir-soc`。harden 內 `ir_worst.py` 的預設切換率照舊判定：它比 pattern 悲觀，pattern 只是多一道實測活動的判定，沒有放寬任何東西。
+      - `ir_pattern.py` 與 `ir_caravel.py` 都寫 `results.json`，`ir_pattern.py --judge` 只重判不重跑工具；negative test `pnr/soc_top/neg_ir.py`（`make neg-ir-soc` 9 個、`make neg-ir-caravel` 7 個）。`run_gl_soc.py --plusarg` 給錄波撞名的案例用。
+      - wrapper 的植入：`neg_pnr.py --cpu caravel`（C00 positive、C09 SRAM 移位、C15 腳位表、C26 供電點、C80a–c 邊界 slew、P79）、`neg_eqy.py --design user_project_wrapper`（1 例：組合邏輯驅動的 nand2 改 nor2，走 amend 重試後仍證不出來。試過但拿掉的：CSR flip-flop D 綁常數，常數對應讓重試不跑、連帶列出 `_10122_.B`；同一顆 D 接反相器，反相器輸入沿用原 net 名稱，EQY 名稱衝突；flip-flop 驅動的 nand2，同樣名稱衝突。三者 EQY 都 FAIL，只是不是被重試這一關抓到。`u_soc.` 底下的名稱對應由 eqy-caravel 本身證明，2238 顆 flip-flop 相同）、`neg_gl_soc.py --cpu caravel`（1 例）；`neg_run_guard.py` 加 wrapper 的 5 個下游步驟（57 個案例）。
+      - `scripts/regress.py --cpu caravel`（`make regress-caravel`）；`make harden-caravel`；`PRECHECK_DIR` 依 checkout 目錄名分開；`env/check_env.sh` 在 `CPU=caravel` 時檢查 VM（docker context、image、≥ 15 GB、PDK）。
 
 ## 後果
 

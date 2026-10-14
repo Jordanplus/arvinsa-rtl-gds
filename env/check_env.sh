@@ -112,6 +112,17 @@ if [ -f "$pc_deck" ] && echo "$(pin CF_PRECHECK_DECK_SHA256)  $pc_deck" | shasum
 elif [ "$FLOW_STRICT" = 1 ]; then
   bad "precheck KLayout deck with CF_PRECHECK_DECK_SHA256 not at $pc_deck (run: make precheck-deck, or set PRECHECK_DECK)"
 else pend "precheck KLayout deck not at $pc_deck (needed by make neg-precheck; run: make precheck-deck)"; fi
+# The official precheck image in the lima VM, needed by make precheck-caravel (Phase 7, ADR-0019 decisions 4, 24, 25).
+# Strict (FAIL) only with --flow and CPU=caravel (make regress-caravel); otherwise reported. 16 GiB: with 10 GiB
+# the wrapper's KLayout BEOL and Magic extraction were OOM-killed (docs/notes/caravel_precheck_phase7.md section 10).
+pc_work="${PRECHECK_WORK:-../arvinsa-rtl-gds-p7precheck}"
+pc_mem=$(docker --context lima-cf-precheck info --format '{{.MemTotal}}' 2>/dev/null || echo 0)
+pc_img=$(docker --context lima-cf-precheck image inspect chipfoundry/mpw_precheck:latest --format '{{index .RepoDigests 0}}' 2>/dev/null || echo none)
+if [ "${pc_mem:-0}" -ge 15000000000 ] && [ "$pc_img" != none ] && [ -d "$pc_work/pdks/sky130A/libs.ref/sky130_sram_macros" ]; then
+  ok "precheck VM: docker context lima-cf-precheck, $((pc_mem / 1000000000)) GB, $pc_img, PDK at $pc_work/pdks"
+elif [ "$FLOW_STRICT" = 1 ] && [ "${CPU:-picorv32}" = caravel ]; then
+  bad "precheck VM not ready (docker context lima-cf-precheck memory ${pc_mem:-0} B, need >= 15 GB; image $pc_img; PDK dir $pc_work/pdks/sky130A): limactl start cf-precheck (docs/notes/caravel_precheck_phase7.md section 8)"
+else pend "precheck VM not ready (needed by make precheck-caravel; limactl start cf-precheck)"; fi
 if [ "$FLOW_STRICT" = 1 ] && [ "$flow_missing" = 1 ]; then fail=1; fi
 
 echo

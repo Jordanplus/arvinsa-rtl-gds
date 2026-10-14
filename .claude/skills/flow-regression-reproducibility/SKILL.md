@@ -34,7 +34,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - `<run>_signoff/result.txt` 是 harden 的**整體**判定 PASS。
    - `provenance.json` 的 `repo_head` 等於現在的 HEAD。只看 `result.txt` 時，commit 新的 RTL 後單獨跑 `make eqy-soc` 仍會拿舊網表 PASS。
    - 檢查之前先刪掉自己的輸出目錄：被拒絕時不能留下上一次的 PASS 結果讓人誤讀。
-   - negative test：每個下游步驟 × 3 種壞 run（不是 PASS、別的 commit、沒有紀錄）＋ positive control（PASS 且是 HEAD 的 run 要通過檢查、再因為缺檔而 FAIL，證明檢查不是永遠拒絕）。`neg_run_guard.py` 共 37 個案例（9 個下游步驟），3 秒。
+   - negative test：每個下游步驟 × 3 種壞 run（不是 PASS、別的 commit、沒有紀錄）＋ positive control（PASS 且是 HEAD 的 run 要通過檢查、再因為缺檔而 FAIL，證明檢查不是永遠拒絕）。`neg_run_guard.py` 共 57 個案例（14 個下游步驟，Phase 7 加了 Caravel wrapper 的 5 個），約 1 分鐘。
 5. **長時間 run 期間不要改主工作目錄**：harden 結束時的來源追溯會因為未提交的修改判 FAIL。要邊跑邊開發，就另開 worktree 與分支（`git worktree add -b dev ../<repo>-dev HEAD`），commit 在分支上，run 結束後在主目錄 `git merge --ff-only dev`。
 6. **拿舊 run 測試新寫的 checker**（dev fixture）：
    - 下游檢查會拒絕舊 commit 的 run，所以開發測試要另建一個假的 run 目錄：真目錄，裡面每個檔案 symlink 到舊 run，`<run>_signoff/` 寫 PASS 與現在的 HEAD。

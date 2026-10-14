@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bug injection into a final netlist; signoff/eqy/run_eqy.py must FAIL on each case.
 
-usage: neg_eqy.py --design picorv32_core|soc_top|soc_top_hazard3 [--run <dir>] [--out <dir>] [-j N]
+usage: neg_eqy.py --design picorv32_core|soc_top|soc_top_hazard3|user_project_wrapper [--run <dir>] [--out <dir>] [-j N]
 The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now);
 run_eqy.py checks it again for every case.
 
@@ -74,6 +74,18 @@ Cases (the same kinds of error as the Phase 2 GL qualification, docs/phase_exit/
                           synchronizer, not a constant) was refused at the partition step as well
                           (2026-10-08), but it is not a case: its location scope covers the whole
                           reset tree and accepted mcycleh13_stuck1's FAIL name (signoff/eqy/README.md)
+  user_project_wrapper (the Hazard3 SoC flat in the Caravel wrapper, Phase 7): only what the wrapper adds
+  (ADR-0019 decision 25; the shared checks are qualified on soc_top_hazard3): the amend retry on this netlist
+  (decision 23, where it proved _10122_.B)
+    nand2_comb_to_nor2    as for picorv32_core: the retry runs on this netlist and still does not prove it
+    Tried and left out (2026-10-14; each was still eqy: FAIL, but not by the retry this design adds):
+    - a CSR flip-flop under u_soc. with D tied to 1: the constant mapping stops the retry (rule 7), so
+      _10122_.B, which this netlist proves only with the retry (decision 23), is listed too;
+    - the same flip-flop with D through an extra inverter: the inverter's input keeps the old D net name,
+      so EQY matches one gold bit to two places and refuses at the partition step;
+    - nand2_flop_to_nor2: the first such nand2 (_09878_) drives a flip-flop D directly, the same refusal.
+    The names under u_soc. are covered by make eqy-caravel itself (2238 flip-flops identical); the rule that
+    the retry adds no flip-flop is qualified on the soc_top designs.
 Prints `neg-eqy: PASS n/n caught` / `neg-eqy: FAIL ...`; exit code 0 only on PASS.
 """
 import argparse
@@ -435,6 +447,10 @@ CASES["soc_top_hazard3"] = CASES["soc_top"] + [
     ("minstreth8_stuck1", lambda t: flop_d_const(r"\u_cpu.u_core.core.csr_u.minstreth[8] ", 1)),
     ("irq0_stuck0", lambda t: flop_d_const(r"\u_cpu.u_core.core.csr_u.irq[0] ", 0)),
     ("reset_b_tied1", flop_reset_tied1),
+]
+
+CASES["user_project_wrapper"] = [
+    ("nand2_comb_to_nor2", lambda t: nand2_by_sources(t, False)),
 ]
 
 # Cases that count only with this reason (the check the case is about must be the one that caught it).

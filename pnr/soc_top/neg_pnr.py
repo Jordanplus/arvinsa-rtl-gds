@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """make neg-pnr: bug injection into the soc_top flow and its results (project-plan.md §7.3 P01-P12, plus P00, P13-P81).
 
-usage: neg_pnr.py [--cpu picorv32|hazard3] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
+usage: neg_pnr.py [--cpu picorv32|hazard3|caravel] [--run <dir>] [--out <dir>] [--cases P01,P02,...] [-j N]
 The run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now): the
 cases compare against it ("real run: none", golden, metrics).
 --cpu (default picorv32; hazard3: Phase 5, ADR-0011) picks the soc_top run of that CPU (default
@@ -214,6 +214,21 @@ step re-run one step on a copy of that step's saved config and input state
   P59  an extra <n>-openroad-cts-1 directory         check_soc.py cts_macro_latency (a repeated step
   P60  an extra <n>-arvinsa-ctsnoinsertiondelay-1    gets a suffix; the old glob missed it)
        directory
+--cpu caravel (make neg-pnr-caravel, Phase 7, ADR-0019 decision 25): runs/user_project_wrapper and its config, and
+only the checks that are the wrapper's own (the shared checker code is qualified by the soc_top cases in make regress):
+  C00  positive control on the wrapper run: check_soc.py PASS (magic_drc with the SRAM origin of u_soc.sram0: the
+       loop variable that overwrote it was fixed in cbf2c5e), check_inputs.py --cpu caravel --resolved PASS
+  C09  final DEF: u_soc.sram0 moved by 10 um          check_soc.py placement (with magic_drc)
+  C15  disconnected-pin table: wbs_cyc_i in place of   check_soc.py disconnected (unused_ports: a used Wishbone
+       analog_io[0]                                   input disconnected and an unused port connected)
+  C26  VSRC_LOC_FILES: one vccd1 source 7 um off       check_soc.py ir_sources (core_ring: one point where each
+       its met5 stripe                                met5 stripe meets the left and the right ring side)
+  C80a checks.rpt max_ss_n40C_1v60: u_soc.sram0/clk0   check_soc.py max_slew (an internal pin has no boundary
+       at 0.80 ns, count + 1                          exception, ADR-0019 decision 16)
+  C80b the first boundary violator 0.1 ns slower       check_soc.py max_slew (beyond its external transition +
+                                                      0.05 ns)
+  C80c the violation count one less than the table     check_soc.py max_slew (the table and the count differ)
+  P79  as above
 A check_soc.py case is caught only if the injected row is the only FAIL row and the verdict is
 `soc-checks: FAIL` (the row alone failing does not prove the verdict follows it). Two cases have a
 second row that must FAIL with it: P09 magic_drc (the DEF moved, the GDS did not, and the DRC
@@ -241,7 +256,9 @@ CHECK_INPUTS = os.path.join(ROOT, "pnr", "soc_top", "check_inputs.py")
 CARAVEL_CONFIG = os.path.join(ROOT, "pnr", "user_project_wrapper", "config.json")
 REVIEW = os.path.join(ROOT, "signoff", "scripts", "review_criteria.py")
 # --cpu -> (run tag, config); set_cpu() sets CPU, CONFIG, LIMITS and GOLDEN before the cases run.
-TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json")}
+TAGS = {"picorv32": ("soc_top", "config.json"), "hazard3": ("soc_top_hazard3", "config_hazard3.json"),
+        "caravel": ("user_project_wrapper", os.path.join("..", "user_project_wrapper", "config.json"))}
+TOP = "soc_top"   # the design (top module and final/ file names); set_cpu() sets it from the config
 CPU = "picorv32"
 CONFIG = os.path.join(ROOT, "pnr", "soc_top", "config.json")
 SRAM = "arv_sram_2kbyte_1rw1r_32x512_8"   # OpenRAM self-generated (Phase 6, ADR-0018)
@@ -256,10 +273,11 @@ GOLDEN = os.path.join(ROOT, "signoff", "golden", "soc_top", "metrics.json")
 
 
 def set_cpu(cpu):
-    global CPU, CONFIG, LIMITS, GOLDEN
+    global CPU, CONFIG, LIMITS, GOLDEN, TOP
     tag, config = TAGS[cpu]
     CPU = cpu
-    CONFIG = os.path.join(ROOT, "pnr", "soc_top", config)
+    CONFIG = os.path.normpath(os.path.join(ROOT, "pnr", "soc_top", config))
+    TOP = json.load(open(CONFIG))["DESIGN_NAME"]
     LIMITS = os.path.join(ROOT, "signoff", "limits", f"{tag}.toml")
     GOLDEN = os.path.join(ROOT, "signoff", "golden", tag, "metrics.json")
 sys.path.insert(0, os.path.join(ROOT, "signoff", "scripts"))
@@ -614,12 +632,13 @@ def fake_run(run, d, replace, links=None):
     ({relative path: new text}), which are written as edited copies, and the files or directories
     in `links` ({relative path: other path}), which point elsewhere. Linked: the final netlist and
     DEF, the disconnected-pin logs, the Magic DRC report, the last signoff STA directory and the
-    logs of the CTS step (ADR-0016)."""
+    logs of the CTS step (ADR-0016); the wrapper's disconnected-pin table (check_soc.py unused_ports)."""
     links = links or {}
     fr = os.path.join(d, "run")
     sta = os.path.relpath(step_dir(run, "OpenROAD.STAPostPNR"), run)
-    for rel in ["final/nl/soc_top.nl.v", "final/def/soc_top.def", "final/gds/soc_top.gds", sta] + \
+    for rel in [f"final/nl/{TOP}.nl.v", f"final/def/{TOP}.def", f"final/gds/{TOP}.gds", sta] + \
             [os.path.relpath(p, run) for p in glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "*.log"))
+             + glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "full_disconnected_pins_table.txt"))
              + glob.glob(os.path.join(run, "*-magic-drc", "reports", "drc.magic.rpt"))
              + glob.glob(os.path.join(run, "*-arvinsa-ctsnoinsertiondelay", "*.log"))]:
         dst = os.path.join(fr, rel)
@@ -1665,6 +1684,90 @@ def p51(run, d):
         f"key pattern FAIL, a wildcard warning FAIL ({results})"
 
 
+# The Caravel wrapper (--cpu caravel, ADR-0019 decision 25): only the checks that are the wrapper's own. The checker
+# code shared with soc_top is qualified by the soc_top cases above, in make regress.
+def c00(run, d):
+    return p00(run, d)
+
+
+def c09(run, d):
+    rel = f"final/def/{TOP}.def"
+    df = open(os.path.join(run, rel)).read()
+    new, n = re.subn(r"(-\s+u_soc\.sram0\s+" + SRAM + r"\s*\+\s*\w+\s*\(\s*)(\d+)",
+                     lambda m: m.group(1) + str(int(m.group(2)) + 10000), df, count=1)
+    if n != 1:
+        return False, "u_soc.sram0 component not found"
+    ok, _ = soc_case(run, d, "placement", replace={rel: new}, also=("magic_drc",))
+    return ok, "check_soc.py placement (with magic_drc, whose SRAM origin is the DEF position of u_soc.sram0)"
+
+
+def slew_case(run, d, edit, expect, what):
+    rel, sta = sta_dir_with(run, d, "max_ss_n40C_1v60", edit, name="checks.rpt")
+    ok, out = soc_case(run, d, "max_slew", links={rel: sta})
+    return ok and expect in out, f"check_soc.py max_slew: {what} (only row FAIL)"
+
+
+def c80_internal(run, d):
+    """An internal pin over the limit: no boundary exception (ADR-0019 decision 16)."""
+    def edit(t):
+        m = re.search(r"^max slew violation count (\d+)$", t, re.M)
+        t = t[:m.start()] + f"max slew violation count {int(m.group(1)) + 1}" + t[m.end():]
+        return edit_once(t, r"(^-{72}\n)", r"\1u_soc.sram0/clk0                        0.750000    0.800000   -0.050000 (VIOLATED)\n",
+                         "the max slew table of max_ss_n40C_1v60")
+    return slew_case(run, d, edit, "u_soc.sram0/clk0 0.8 ns", "an internal violator (u_soc.sram0/clk0 0.80 ns)")
+
+
+def c80_boundary(run, d):
+    """A boundary pin 0.1 ns beyond its external transition + margin."""
+    pin = []
+
+    def edit(t):
+        m = re.search(r"^(\S+)(\s+)(0\.750000)(\s+)(\d\.\d+)(\s+)(-\d\.\d+) \(VIOLATED\)$", t, re.M)
+        pin.append(m.group(1))
+        slew = float(m.group(5)) + 0.1
+        return t[:m.start()] + f"{m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}{slew:.6f}{m.group(6)}{0.75 - slew:.6f} (VIOLATED)" + t[m.end():]
+    ok, msg = slew_case(run, d, edit, "external transition", "a boundary pin 0.1 ns beyond its external transition")
+    return ok and bool(pin), msg + (f" ({pin[0]})" if pin else "")
+
+
+def c80_count(run, d):
+    def edit(t):
+        m = re.search(r"^max slew violation count (\d+)$", t, re.M)
+        return t[:m.start()] + f"max slew violation count {int(m.group(1)) - 1}" + t[m.end():]
+    return slew_case(run, d, edit, "violators parsed, the report counts", "the report count one less than the table")
+
+
+def c15_ports(run, d):
+    """A used Wishbone input in the disconnected table instead of an unused analog_io."""
+    rel = os.path.relpath(glob.glob(os.path.join(run, "*-odb-reportdisconnectedpins", "full_disconnected_pins_table.txt"))[0], run)
+    text = open(os.path.join(run, rel)).read()
+    new = edit_once(text, r"│ analog_io\[0\]    │", "│ wbs_cyc_i       │", "analog_io[0] in the disconnected table")
+    ok, out = soc_case(run, d, "disconnected", replace={rel: new})
+    return ok and "unexpectedly disconnected: ['wbs_cyc_i']" in out and "expected unused but connected: ['analog_io[0]']" in out, \
+        "check_soc.py disconnected: wbs_cyc_i disconnected, analog_io[0] connected (only row FAIL)"
+
+
+def c26_ring(run, d):
+    """A vccd1 source point 7 um off its met5 stripe (the wrapper's model: stripe x ring side)."""
+    cfg = json.load(open(CONFIG))
+    src = os.path.join(ROOT, cfg["VSRC_LOC_FILES"]["vccd1"].replace("dir::", "", 1))
+    lines = open(src).read().splitlines()
+    x, y, size, volt = lines[1].split(",")
+    lines[1] = ",".join([x, f"{float(y) - 7.0:.3f}", size, volt])
+    vsrc = os.path.join(d, "vccd1.vsrc")
+    open(vsrc, "w").write("\n".join(lines) + "\n")
+    cfg["VSRC_LOC_FILES"]["vccd1"] = vsrc
+    cfg_p = os.path.join(d, "config.json")
+    json.dump(cfg, open(cfg_p, "w"), indent=1)
+    ok, out = soc_case(run, d, "ir_sources", config=cfg_p)
+    return ok and "vccd1:" in out and "1 not exactly one per stripe and side" in out, \
+        "check_soc.py ir_sources: a vccd1 source off its stripe/ring-side point (only row FAIL)"
+
+
+CARAVEL_CASES = [("C00", c00), ("C09", c09), ("C15", c15_ports), ("C26", c26_ring), ("C80a", c80_internal),
+                 ("C80b", c80_boundary), ("C80c", c80_count), ("P79", p79)]
+
+
 CASES = [("P00", p00), ("P01", p01), ("P02", p02), ("P03", p03), ("P04", p04), ("P05", p05), ("P06", p06), ("P07", p07),
          ("P08", p08), ("P09", p09), ("P10", p10), ("P11", p11), ("P12", p12), ("P13", p13), ("P14", p14),
          ("P15", p15), ("P16", p16), ("P17", p17), ("P18", p18), ("P19", p19), ("P20", p20), ("P21", p21),
@@ -1690,10 +1793,11 @@ def main():
     run = os.path.abspath(args.run or os.path.join(ROOT, "runs", TAGS[args.cpu][0]))
     out = os.path.abspath(args.out or (OUT if args.cpu == "picorv32" else f"{OUT}_{args.cpu}"))
     shutil.rmtree(out, ignore_errors=True)  # only the output directory is removed, before any check
-    cases = CASES
+    all_cases = CARAVEL_CASES if args.cpu == "caravel" else CASES
+    cases = all_cases
     if args.cases:
         want = args.cases.split(",")
-        cases = [c for c in CASES if c[0] in want]
+        cases = [c for c in all_cases if c[0] in want]
         if len(cases) != len(want):
             print(f"neg-pnr: FAIL (unknown case in {want})")
             return 1

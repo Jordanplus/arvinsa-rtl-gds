@@ -30,7 +30,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
    - 速度：3 支短測試約 11 秒，與不帶電源差不多；15 支約 17 分鐘（memtest 1004 秒，當時另有 EQY 在跑）。
 
 9. **錄 IR 用的切換活動（max power pattern，`run_gl_soc.py --record-window`，ADR-0019 決定 20）**：
-   - 做法：firmware 把每段滿負載迴圈標在 GPIO_OUT（`fw/tests/maxpower`：0x5A／0x5B／0x5C），`dv/gl_soc/vcd_window.v` 只在 GPIO 等於 `+irwin_gpio` 時錄 `tb_soc.dut_gl`，那段一結束就 `$finish`；每段各跑一次模擬，輸出 `win_<hex>.vcd`。
+   - 做法：firmware 把每段滿負載迴圈標在 GPIO_OUT（`fw/tests/maxpower`：0x5A／0x5B／0x5C），`dv/gl_soc/vcd_window.v` 只在 GPIO 等於 `+irwin_gpio` 時錄 `tb_soc.dut_gl`，那段一結束就 `$finish`；每段各跑一次模擬，輸出 `win_<hex>.vcd`。GPIO 讀 `tb_soc.gpio_out`（RTL 那份的 soc_top 埠），soc_top 與 Caravel 兩種 build 都有；原本讀 Caravel 才有的 `la_data_out[9:2]`，Phase 7 步驟 8 為了 soc_top 的 `make ir-soc` 改掉（Caravel build 裡 `caravel_pins` 每週期比對兩者相同）。
    - 時脈用 signoff 的週期（`--clk-half-ns 22`，44 ns；testbench 預設 40 ns），讓模擬與 signoff 的條件一致。實測影響很小：同一段 pattern 40 ns 錄 5.99 mW、44 ns 錄 5.87 mW（nom_tt，約 2%）；原本以為 VCD 是每秒切換次數、會差約 10%，實測不是，看起來 OpenSTA 依 SDC 的時脈週期換算（推測，沒讀原始碼）。clock net 的功耗 OpenSTA 照 SDC 算，不受 VCD 影響。
    - 只錄 `dut_gl`、只錄那一段：從時間 0 錄整個 testbench，開機與印 UART 的時間會把平均切換率拉低。三段各約 5000 個週期，每段約 300–350 MB。
    - 每段的檢查：錄到至少 1000 個週期、VCD 非空、錄完前沒有 lockstep 不一致、run 目錄沒有 testbench 自己的 `wave.vcd`（下一條）。完整跑一次 maxpower 的 `gl-caravel` 要 PASS（網表在這個 pattern 下與 RTL 逐週期一致，錄到的活動才可信）。
@@ -39,7 +39,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
      - 原因（已驗證）：`tb_soc.v` 用 `$test$plusargs("vcd")` 開整個 testbench 的錄波；`$test$plusargs` 比對的是前綴，`+vcd_win=5a` 也算，於是從時間 0 錄進 `wave.vcd`，之後模組自己的 `$dumpfile` 被忽略（一個模擬只能有一個 dump 檔）。
      - 怎麼發現：`gl-record` 的那一列印出 VCD 大小與 `testbench dump ... present`。
      - 繞過：用不撞名的前綴（`irwin_gpio`、`irwin_vcd`）。
-     - 防復發：`record_windows()` 要求 VCD 非空、run 目錄沒有 `wave.vcd`，否則 FAIL。
+     - 防復發：`record_windows()` 要求 VCD 非空、run 目錄沒有 `wave.vcd`，否則 FAIL；negative test `make neg-ir-soc`（`pnr/soc_top/neg_ir.py`）的 `stray_dump`（多傳一個 `vcd` 開頭的 plusarg，`run_gl_soc.py --plusarg`）與 `no_window`（firmware 沒標的 GPIO 值，0 個週期）。
 
 ## 待補
 - **SDF 反標的時序模擬**：LibreLane 的 STA step 會輸出各 corner 的 `.sdf`（`*-openroad-stapostpnr/<corner>/*.sdf`）。Icarus 對 `$setuphold` 的支援有限，不能當 signoff 證據；要做 timing check 需另找模擬器（規劃提到 CVC，x86_64 Linux）。signoff 仍以全部 corner（soc_top 15 個）的 STA 為準。

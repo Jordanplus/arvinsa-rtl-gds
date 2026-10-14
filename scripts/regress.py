@@ -2,10 +2,11 @@
 """make regress / make regress-picorv32: the whole regression in one command (project-plan.md §7.5,
 §8 Phase 4, §10 item 1).
 
-usage: regress.py [--cpu hazard3|picorv32] [--list]
+usage: regress.py [--cpu hazard3|picorv32|caravel] [--list]
 
 --cpu picks the CPU of soc_top (ADR-0011 user decision 4): hazard3 (default, `make regress`, the
-main design since Phase 5) or picorv32 (`make regress-picorv32`, the Phase 1-4 design). Every
+main design since Phase 5) or picorv32 (`make regress-picorv32`, the Phase 1-4 design); caravel
+(`make regress-caravel`, Phase 7, ADR-0019 decision 25) is the Hazard3 SoC in the Caravel wrapper. Every
 target runs with CPU=<cpu> in its environment (the Makefile's `CPU ?= picorv32` takes it), each as
 its own `make <target>`, in this order, and the run stops at the first one that FAILs (later
 targets use earlier results, e.g. eqy-soc uses the run of harden-soc):
@@ -15,7 +16,15 @@ targets use earlier results, e.g. eqy-soc uses the run of harden-soc):
   checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook neg-openram neg-macro-views
                                pin-plan neg-pin-plan neg-precheck
   soc_top with Hazard3         harden-soc eqy-soc neg-eqy-soc gl-soc gl-soc-powered neg-gl-soc neg-pnr
+                               ir-soc neg-ir-soc (IR with the max-power pattern, ADR-0019 decision 25)
   end                          provenance-final (HEAD unchanged, working tree still clean)
+  caravel (the wrapper's own targets; the checkers it shares with soc_top are qualified by make regress)
+  RTL                          env-check-flow py-check lint regress-rtl-caravel neg-rtl-caravel
+  checkers of the flow         pin-plan neg-pin-plan neg-precheck
+  wrapper                      harden-caravel eqy-caravel neg-eqy-caravel gl-caravel neg-gl-caravel
+                               ir-caravel neg-ir-caravel neg-pnr-caravel precheck-caravel (the official image in the
+                               lima VM: env-check-flow checks it with CPU=caravel)
+  end                          provenance-final
   picorv32
   RTL and firmware (Phase 1)   env-check-flow py-check lint synth-check fw core-stock regress-rtl neg-rtl
   checkers of the flow         neg-provenance neg-run-guard neg-regress test-flow-retry test-review-hook neg-openram neg-macro-views
@@ -45,17 +54,21 @@ import time
 from xml.sax.saxutils import escape
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-OUTS = {"hazard3": os.path.join(ROOT, "runs", "regress"), "picorv32": os.path.join(ROOT, "runs", "regress_picorv32")}
+OUTS = {"hazard3": os.path.join(ROOT, "runs", "regress"), "picorv32": os.path.join(ROOT, "runs", "regress_picorv32"),
+        "caravel": os.path.join(ROOT, "runs", "regress_caravel")}
 SOC = ["harden-soc", "eqy-soc", "neg-eqy-soc", "gl-soc", "gl-soc-powered", "neg-gl-soc", "neg-pnr"]
 FLOW_CHECKERS = ["neg-provenance", "neg-run-guard", "neg-regress", "test-flow-retry", "test-review-hook", "neg-openram", "neg-macro-views",
                  "pin-plan", "neg-pin-plan", "neg-precheck"]
 TARGET_LISTS = {
     "hazard3": ["env-check-flow", "py-check", "lint", "synth-check", "fw", "core-hazard3", "regress-rtl", "neg-rtl",
                 "regress-rtl-caravel", "neg-rtl-caravel"]
-               + FLOW_CHECKERS + SOC + ["provenance-final"],
+               + FLOW_CHECKERS + SOC + ["ir-soc", "neg-ir-soc", "provenance-final"],
     "picorv32": ["env-check-flow", "py-check", "lint", "synth-check", "fw", "core-stock", "regress-rtl", "neg-rtl"]
                 + FLOW_CHECKERS + SOC
                 + ["harden-core", "gl-core", "neg-gl-core", "eqy-core", "neg-eqy-core", "provenance-final"],
+    "caravel": ["env-check-flow", "py-check", "lint", "regress-rtl-caravel", "neg-rtl-caravel", "pin-plan", "neg-pin-plan",
+                "neg-precheck", "harden-caravel", "eqy-caravel", "neg-eqy-caravel", "gl-caravel", "neg-gl-caravel",
+                "ir-caravel", "neg-ir-caravel", "neg-pnr-caravel", "precheck-caravel", "provenance-final"],
 }
 
 

@@ -41,8 +41,19 @@ STEPS = [
     ("neg_gl_soc", "soc_top", [PY, S("dv/gl_soc/neg_gl_soc.py"), "--harden-run", "{run}", "--out", "{out}"], "neg-gl-soc: FAIL"),
     ("neg_gl_core", "picorv32_core", [PY, S("dv/gl_core/neg_gl_core.py"), "--harden-run", "{run}", "--out", "{out}"], "neg-gl-core: FAIL"),
     ("neg_pnr", "soc_top", [PY, S("pnr/soc_top/neg_pnr.py"), "--run", "{run}", "--out", "{out}"], "neg-pnr: FAIL"),
+    # the Caravel wrapper (Phase 7, ADR-0019 decision 25); the IR recording (--record-window) is run_gl_soc.py too
+    ("run_eqy_caravel", "user_project_wrapper", [PY, S("signoff/eqy/run_eqy.py"), "--design", "user_project_wrapper", "--run", "{run}",
+                                                 "--out", "{out}"], "eqy: FAIL"),
+    ("run_gl_caravel", "user_project_wrapper", [PY, S("dv/gl_soc/run_gl_soc.py"), "--cpu", "caravel", "--harden-run", "{run}",
+                                                "--out", "{out}"], "gl-soc: FAIL"),
+    ("neg_eqy_caravel", "user_project_wrapper", [PY, S("signoff/eqy/neg_eqy.py"), "--design", "user_project_wrapper", "--run", "{run}",
+                                                 "--out", "{out}"], "neg-eqy: FAIL"),
+    ("neg_gl_caravel", "user_project_wrapper", [PY, S("dv/gl_soc/neg_gl_soc.py"), "--cpu", "caravel", "--harden-run", "{run}",
+                                                "--out", "{out}"], "neg-gl-soc: FAIL"),
+    ("neg_pnr_caravel", "user_project_wrapper", [PY, S("pnr/soc_top/neg_pnr.py"), "--cpu", "caravel", "--run", "{run}", "--out", "{out}"],
+     "neg-pnr: FAIL"),
 ]
-VERDICT = {"soc_top": "harden-soc: PASS", "picorv32_core": "harden-core: PASS"}
+VERDICT = {"soc_top": "harden-soc: PASS", "picorv32_core": "harden-core: PASS", "user_project_wrapper": "harden-soc: PASS"}
 CASES = {"not_pass": "does not say", "other_commit": "was made from commit",
          "no_record": "cannot read the source record", "current": None}
 GUARD_TEXT = [t for t in CASES.values() if t]

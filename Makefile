@@ -24,7 +24,7 @@ DRY_RUN ?= 0
         neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
         sram-lib sram-confirm sram-char sram-extract neg-char openram-setup openram-macro neg-openram \
         openram-lib-template openram-char openram-power openram-lib openram-confirm openram-check-lib macro-views neg-macro-views \
-        pin-plan neg-pin-plan precheck-deck precheck-sram-ref precheck-check neg-precheck precheck-caravel
+        pin-plan neg-pin-plan precheck-deck precheck-sram-ref precheck-check neg-precheck precheck-caravel ir-soc neg-ir-soc neg-ir-caravel harden-caravel neg-eqy-caravel neg-gl-caravel neg-pnr-caravel regress-caravel
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -50,6 +50,8 @@ help:
 	@echo "  make eqy-caravel          formal equivalence of make harden D=user_project_wrapper (synthesized vs final)"
 	@echo "  make gl-caravel           gate-level lockstep of that wrapper netlist against the RTL wrapper"
 	@echo "  make ir-caravel           static IR of that wrapper from Caravel's pads with the max-power pattern"
+	@echo "  make ir-soc               static IR of soc_top (Hazard3) with the max-power pattern, slow corners (ADR-0019 decision 25)"
+	@echo "  make neg-ir-soc / neg-ir-caravel  bug injection into those IR checks and the window recording"
 	@echo "  make precheck-check PRECHECK_PROJECT=<dir>  judge a precheck result by ADR-0019 decision 5 (reference: make precheck-sram-ref)"
 	@echo "  make precheck-caravel     the official precheck of runs/user_project_wrapper in the lima VM and its judgement (~1 h)"
 	@echo "  make neg-precheck         bug injection into that judgement, 25 cases (about 5 minutes; part of make regress)"
@@ -89,9 +91,12 @@ help:
 	@echo "                            2.5 hours): Phase 1 RTL checks, flow checkers, soc_top (harden, EQY, GL, L5, negative"
 	@echo "                            tests), PicoRV32 alone, provenance-final; logs, summary.md, junit.xml in runs/regress_picorv32/"
 	@echo "                            (it was make regress until Phase 5)"
+	@echo "  make regress-caravel      EVERYTHING for the Caravel wrapper (Phase 7, ADR-0019 decision 25): RTL in the wrapper,"
+	@echo "                            harden, EQY, GL, IR from the pads, the official precheck in the lima VM, the wrapper's own"
+	@echo "                            negative tests, provenance-final (about 6 hours); runs/regress_caravel/"
 	@echo "  make gl-soc-powered       L5: the powered netlist (final/pnl) in lockstep with the RTL, cells powered by VPWR/VGND"
 	@echo "  make provenance-final     HEAD and working tree unchanged since the harden runs of CPU started"
-	@echo "                            (hazard3: harden-soc; picorv32: harden-soc and harden-core)"
+	@echo "                            (hazard3: harden-soc; caravel: harden-caravel; picorv32: harden-soc and harden-core)"
 	@echo "  make py-check             every name a tracked Python file reads is defined in that file, no file emptied before it is read (seconds)"
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
 	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, and stop at a FAIL"
@@ -203,6 +208,36 @@ ir-caravel:
 	$(PY) pnr/user_project_wrapper/ir_caravel.py runs/user_project_wrapper runs/ir_caravel \
 	  signoff/limits/user_project_wrapper.toml $(foreach w,$(IR_WINDOWS),--vcd runs/ir_caravel_vcd/win_$(w).vcd)
 
+# The same max-power pattern judged on soc_top with Hazard3 (ADR-0019 decisions 20, 25): its own supply points,
+# the slow corners of ir_worst.py; the harden run's vectorless ir_worst.py stays as it is (the more pessimistic).
+ir-soc:
+	$(MAKE) -C fw CPU=hazard3 all check-bootrom
+	$(PY) dv/gl_soc/run_gl_soc.py --cpu hazard3 --tests maxpower --out runs/ir_soc_vcd \
+	  --record-window $(subst $(space),$(comma),$(IR_WINDOWS)) --clk-half-ns 22
+	$(PY) pnr/soc_top/ir_pattern.py runs/soc_top_hazard3 runs/ir_soc signoff/limits/soc_top_hazard3.toml \
+	  $(foreach w,$(IR_WINDOWS),--vcd runs/ir_soc_vcd/win_$(w).vcd)
+
+# Bug injection into those IR checks (pnr/soc_top/neg_ir.py): after make ir-soc / make ir-caravel, on their outputs.
+# The Caravel wrapper's regression targets (make regress-caravel, ADR-0019 decision 25): the wrapper's own negative tests.
+harden-caravel:
+	$(MAKE) harden D=user_project_wrapper
+
+neg-eqy-caravel:
+	$(PY) signoff/eqy/neg_eqy.py --design user_project_wrapper
+
+neg-gl-caravel:
+	$(MAKE) -C fw CPU=hazard3 all check-bootrom
+	$(PY) dv/gl_soc/neg_gl_soc.py --cpu caravel
+
+neg-pnr-caravel:
+	$(PY) pnr/soc_top/neg_pnr.py --cpu caravel
+
+neg-ir-soc:
+	$(PY) pnr/soc_top/neg_ir.py --design soc_top_hazard3
+
+neg-ir-caravel:
+	$(PY) pnr/soc_top/neg_ir.py --design user_project_wrapper
+
 # ChipFoundry precheck judged by ADR-0019 decision 5 (signoff/precheck/README.md). precheck-sram-ref: the pinned deck on
 # the PDK SRAM alone (the reference); precheck-check PRECHECK_PROJECT=<dir the precheck ran on> [PRECHECK_REF=<dir>].
 PRECHECK_REF ?= runs/precheck_sram_ref
@@ -217,7 +252,8 @@ precheck-check:
 # reference made in the same container (<project>/sram_ref, the precheck PDK's SRAM). The project directory is made anew,
 # so a precheck that stopped early leaves no results and the judgement FAILs.
 PRECHECK_WORK ?= ../arvinsa-rtl-gds-p7precheck
-PRECHECK_DIR = $(PRECHECK_WORK)/user_project_wrapper
+# one directory per checkout (the repo directory's name), so two worktrees can run it at the same time
+PRECHECK_DIR = $(PRECHECK_WORK)/$(notdir $(CURDIR))
 precheck-caravel:
 	$(PY) signoff/precheck/make_project.py --out $(PRECHECK_DIR) $(if $(filter 1,$(PRECHECK_VERIFY)),--verification)
 	PRECHECK_WORK=$(abspath $(PRECHECK_WORK)) zsh signoff/precheck/run_precheck.sh $(PRECHECK_DIR) \
@@ -289,8 +325,9 @@ neg-run-guard:
 gl-soc-powered: fw
 	$(PY) dv/gl_soc/run_gl_soc.py --cpu $(CPU) --powered
 
-# The harden runs of this CPU's regression: soc_top_hazard3 (hazard3), soc_top and picorv32_core (picorv32).
-PROV_RECORDS = $(if $(filter hazard3,$(CPU)),runs/soc_top_hazard3_signoff/provenance.json,runs/soc_top_signoff/provenance.json runs/picorv32_core_signoff/provenance.json)
+# The harden runs of this CPU's regression: soc_top_hazard3 (hazard3), user_project_wrapper (caravel), soc_top and
+# picorv32_core (picorv32).
+PROV_RECORDS = $(if $(filter hazard3,$(CPU)),runs/soc_top_hazard3_signoff/provenance.json,$(if $(filter caravel,$(CPU)),runs/user_project_wrapper_signoff/provenance.json,runs/soc_top_signoff/provenance.json runs/picorv32_core_signoff/provenance.json))
 
 provenance-final:
 	$(PY) signoff/scripts/provenance.py --final $(PROV_RECORDS)
@@ -407,6 +444,9 @@ regress:
 
 regress-picorv32:
 	$(PY) scripts/regress.py --cpu picorv32
+
+regress-caravel:
+	$(PY) scripts/regress.py --cpu caravel
 
 py-check:
 	$(PY) scripts/check_py_names.py

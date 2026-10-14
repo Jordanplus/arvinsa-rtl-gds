@@ -2,7 +2,7 @@
 """make neg-gl-soc: bug injection into the soc_top final netlist; `make gl-soc` must FAIL on each,
 because the RTL/GL lockstep comparison (dv/monitors/gl_lockstep.v) sees a difference.
 
-usage: neg_gl_soc.py [--cpu picorv32|hazard3] [--harden-run <dir>] [--out <dir>] [--cases a,b]
+usage: neg_gl_soc.py [--cpu picorv32|hazard3|caravel] [--harden-run <dir>] [--out <dir>] [--cases a,b]
        (defaults picorv32, runs/soc_top, runs/neg_gl_soc, all; --cpu hazard3: runs/soc_top_hazard3,
        runs/neg_gl_soc_hazard3, and run_gl_soc.py gets --cpu hazard3)
 The harden run must pass signoff/scripts/run_guard.py (PASS, made from the commit checked out now).
@@ -31,6 +31,10 @@ compile error or some other failure).
   mcycleh13_stuck1      flip-flop u_cpu...csr_u.mcycleh[13] D tied to 1 (rdcycleh)      test counters
   minstreth8_stuck1     flip-flop u_cpu...csr_u.minstreth[8] D tied to 1 (rdinstreth)   test counters
   irq0_stuck0           flip-flop u_cpu...csr_u.irq[0] D tied to 0 (external IRQ)        test irq
+  --cpu caravel (Phase 7, ADR-0019 decision 25): runs/user_project_wrapper, its final/nl/user_project_wrapper.nl.v,
+  and only the wrapper's own case (the hazard3 cases qualify the shared checks; the soc_top cases name sram0 and
+  the soc_top ports, which the wrapper does not have):
+  mcycleh13_stuck1      flip-flop u_soc.u_cpu...csr_u.mcycleh[13] D tied to 1            test counters
 Prints `neg-gl-soc: PASS n/n caught` / `neg-gl-soc: FAIL ...`; exit code 0 only on PASS.
 """
 import argparse
@@ -72,6 +76,11 @@ CPU_CASES = {
         ("minstreth8_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_cpu.u_core.core.csr_u.minstreth[8] ", 1), ["counters"], False),
         ("irq0_stuck0", lambda t: neg_eqy.flop_d_const(r"\u_cpu.u_core.core.csr_u.irq[0] ", 0), ["irq"], False),
     ],
+    # The Caravel wrapper (ADR-0019 decision 25): one case for what the wrapper adds, the netlist names under u_soc.
+    # and the tests reaching the SoC through Wishbone; the hazard3 cases qualify the rest.
+    "caravel": [
+        ("mcycleh13_stuck1", lambda t: neg_eqy.flop_d_const(r"\u_soc.u_cpu.u_core.core.csr_u.mcycleh[13] ", 1), ["counters"], False),
+    ],
 }
 
 
@@ -83,9 +92,10 @@ def main():
     ap.add_argument("--cases", help="comma-separated subset of cases")
     args = ap.parse_args()
     suffix = "" if args.cpu == "picorv32" else f"_{args.cpu}"
-    harden_run = os.path.abspath(args.harden_run or os.path.join(ROOT, "runs", f"soc_top{suffix}"))
+    top = "user_project_wrapper" if args.cpu == "caravel" else "soc_top"   # the Caravel build hardens the wrapper
+    harden_run = os.path.abspath(args.harden_run or os.path.join(ROOT, "runs", top if args.cpu == "caravel" else f"soc_top{suffix}"))
     OUT = os.path.abspath(args.out or os.path.join(ROOT, "runs", f"neg_gl_soc{suffix}"))
-    netlist = os.path.join(harden_run, "final", "nl", "soc_top.nl.v")
+    netlist = os.path.join(harden_run, "final", "nl", f"{top}.nl.v")
     shutil.rmtree(OUT, ignore_errors=True)  # only the output directory is removed, before any check
     errs = guard(harden_run, "harden-soc: PASS")
     if errs:
@@ -97,7 +107,7 @@ def main():
     text = open(netlist, encoding="utf8").read()
     t0 = time.time()
 
-    pnl_path = os.path.join(harden_run, "final", "pnl", "soc_top.pnl.v")
+    pnl_path = os.path.join(harden_run, "final", "pnl", f"{top}.pnl.v")
     pnl = open(pnl_path, encoding="utf8").read() if os.path.isfile(pnl_path) else ""
 
     def one(case):
@@ -107,7 +117,7 @@ def main():
         new, err = neg_eqy.edit(name, pnl if powered else text, fn)
         if err:
             return name, False, f"injection: {err}"
-        edited = os.path.join(d, "soc_top.pnl.v" if powered else "soc_top.nl.v")
+        edited = os.path.join(d, f"{top}.pnl.v" if powered else f"{top}.nl.v")
         open(edited, "w", encoding="utf8").write(new)
         verdict = "gl-soc-powered: FAIL" if powered else "gl-soc: FAIL"
         cp = subprocess.run([sys.executable, RUNNER, "--cpu", args.cpu, "--harden-run", harden_run, "--netlist", edited,
@@ -121,10 +131,13 @@ def main():
                               f"expected {verdict} with fail.gl_lockstep > 0; " + cp.stdout.strip().splitlines()[-1])
 
     cases = [(n, fn, TESTS, False) for n, fn in neg_eqy.CASES["soc_top"] if n in GL_CASES]
-    if len(cases) != len(GL_CASES):
+    if args.cpu == "caravel":   # ADR-0019 decision 25: only the wrapper's own case (the shared ones name soc_top's sram0 and ports)
+        cases = list(CPU_CASES["caravel"])
+    elif len(cases) != len(GL_CASES):
         print(f"neg-gl-soc: FAIL (cases {GL_CASES} not all found in neg_eqy.py)")
         return 1
-    cases += CPU_CASES[args.cpu] + [("host_rdata7_unpowered", lambda t: unpowered("host_rdata[7]"), ["hello"], True)]
+    else:
+        cases += CPU_CASES[args.cpu] + [("host_rdata7_unpowered", lambda t: unpowered("host_rdata[7]"), ["hello"], True)]
     if args.cases:
         want = args.cases.split(",")
         if set(want) - {c[0] for c in cases}:
