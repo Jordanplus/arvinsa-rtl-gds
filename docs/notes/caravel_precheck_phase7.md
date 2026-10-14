@@ -82,7 +82,7 @@ repo 的 LibreLane nix-shell 有 Magic、KLayout（含 `pya`）、Netgen、ruby�
 ## 8. precheck 環境（2026-10-12，ADR-0019 決定 4）
 
 - **VM 用 lima 直接建，不經 colima**：colima 要從 GitHub release 下載自己的 VM image（332 MB），本機到 GitHub release 的總頻寬只有約 80 KB/s（8 條連線分段下載合計也一樣；同時 Cloudflare 8.6 MB/s、ubuntu ports 5 MB/s、Docker Hub 9 MB/s），估計要 1 小時。colima 本身就是包在 lima 外面，改用 lima 2.2.0 的 `template:docker`：base image 是 ubuntu 26.04 `release-20260720` arm64，本機 lima 快取已有，不必下載。
-  - `limactl create --name=cf-precheck --vm-type=vz --rosetta --cpus=6 --memory=10 --disk=60 --mount-type=virtiofs --mount-only <工作目錄>:w template:docker`：只掛一個可寫的工作目錄（`../arvinsa-rtl-gds-p7precheck`，在 repo 外），VM 看不到其他檔案。
+  - `limactl create --name=cf-precheck --vm-type=vz --rosetta --cpus=6 --memory=10 --disk=60 --mount-type=virtiofs --mount-only <工作目錄>:w template:docker`：只掛一個可寫的工作目錄（`../arvinsa-rtl-gds-p7precheck`，在 repo 外），VM 看不到其他檔案。2026-10-14 改成 16 GiB（`limactl edit --memory 16 cf-precheck`）：wrapper 的 KLayout BEOL 與 Magic 抽取各用到約 9.2 GB，10 GiB 時被 OOM killer 砍掉（第 10 節）。
   - docker context `lima-cf-precheck`；`/proc/sys/fs/binfmt_misc/rosetta` 為 enabled，amd64 容器 `uname -m` 回 `x86_64`。
 - **官方 image**：`chipfoundry/mpw_precheck:latest`，digest `sha256:f1523bcb7c959c80f2d7d6dded0c4bcf3483d84b6ff2437f49754e4ec53eac84`，解開 6.9 GB，pull 180 秒。容器內 `pip install --upgrade cf-precheck` 後仍是 1.3.7。
 - **PDK `3e0e31dc`**：照 cf-cli 的做法用 ciel（3.0.1，裝在 scratchpad 的 venv），`--data-source static-web:https://chipfoundry.github.io/ciel-releases`、`--pdk-root <工作目錄>/pdks`（不碰 `~/.ciel`：`ciel enable` 會改 PDK root 裡 `sky130A` 的連結，flow 用的是 `~/.ciel`），`-l sky130_fd_sc_hd -l sky130_sram_macros`。檔案放在 GitHub release，下載 47 分鐘。
@@ -114,3 +114,26 @@ repo 的 LibreLane nix-shell 有 Magic、KLayout（含 `pya`）、Netgen、ruby�
 - **真正的 wrapper GDS 預覽**（本機 KLayout 0.30.7、固定版本的 deck，不是判定）：`runs/user_project_wrapper`（f4ea9de 的確認 harden）的 GDS，FEOL 654 秒 3 個、BEOL 901 秒 264 個，和 SRAM 單獨檢查相同。checker 判這兩項 PASS：16,900／50,184 個位置都在 SRAM 內，而且都是預建 macro 單獨檢查時就有的位置（`runs/p7_precheck_preview/check.log`；這個預覽的其他 11 項沒有跑，`project.json` 裡是佔位值）。官方 image 的完整結果在步驟 7。
 - **獨立審查**（agent，2026-10-14，只讀）：找到「舊報表配新 GDS 會判 PASS」（結果目錄只比時間，沒綁到 GDS），以及版本沒比對、沒有座標值的項目被略過、比對基準沒綁到 `--ref-gds` 等問題，都已補上檢查與 negative test（共 24 個案例）。KLayout API 的用法（遞迴 instance、array、鏡像與旋轉）由審查者另做小 GDS 實測，與直接攤平的結果一致。
 - **限制**：設計裡只能有一顆 OpenRAM SRAM（bitcell cell 沒有 macro 前綴，第二顆的違規會被算成在受檢 SRAM 外而 FAIL，不會誤判 PASS）。
+
+## 10. 步驟 7：官方 image 第一次跑 wrapper（2026-10-14，查證用）
+
+- **輸入**：`make_project.py --verification` 從 `runs/user_project_wrapper`（`f4ea9de` 的確認 harden）組出專案目錄；HEAD 已是 `1f9d3d9`，run guard 不成立，所以只算查證（同步驟 5g 的前例）。`run_precheck.sh` 在 lima VM（6 CPU、當時 10 GiB）跑。
+- **版本**：image `chipfoundry/mpw_precheck@sha256:f1523bcb…`、cf-precheck 1.3.7、KLayout 0.29.12、PDK `3e0e31dc`；image 裡的 deck sha256 `aeba6ab5…`，與 `env/versions.mk` 相同。83 分鐘。
+- **結果**：8 項 PASS（Top Cell、GPIO Defines、XOR、Offgrid、Pin Label、ZeroArea、Spike、Cellname）；`magic_drc` skip；`klayout_feol` 3 個 `MR_licon.SP.6`（bitcell）；其餘 4 項 FAIL：
+
+| 檢查 | 現象 | 根因（已驗證） |
+|---|---|---|
+| `klayout_beol` | `failed (stat=-9)`，沒有報表 | VM 的 OOM killer：`Killed process (klayout) anon-rss:9284284kB`（`sudo dmesg`） |
+| `lvs` | `Error: extraction did not complete successfully`；`ext.log` 停在 `Extracting user_project_wrapper`，沒有 `exttospice finished.` | 同上，`Killed process (magicdnull) anon-rss:9201940kB` |
+| `oeb` | `OEB FAILED (stat=5)` | 同上，第二次 Magic 抽取被砍（`anon-rss:9247140kB`） |
+| `klayout_met_min_ca_density` | 211 個 `li1.pd.1d`（「0.4 min li1 ca pattern density」） | li1 佔 wrapper 75%，見下 |
+
+- **li1 密度**（`drc_scripts/met_min_ca_density.lydrc`，cf-precheck 1.3.7 wheel）：`li1_ca_density = 1 - (67/* 除 5、10、44 + 56/28 的面積) / (235/4 的面積)`，小於 0.4 就把每一個 235/4 形狀輸出成一個違規。211 個違規其實是同一個整體數值（log：`li1_ca_density is 0.2491910395100405`），只是印在每個帶 235/4 的 cell 上（wrapper 1 個、SRAM 子 cell 210 個）。這條規則 efabless 的 `mpw_precheck` 就有。
+  - 本機 KLayout flat 計算：235/4 合併面積 10,278,400 µm²（就是 wrapper 的 2920 × 3520）、li1 合併面積 7,717,115 µm²（75%）。
+  - 按 cell 拆：`sky130_fd_sc_hd__decap_3` 貢獻 8.02 mm²。網表有 2,461,688 個 `decap_3`（Fill Insertion 用 PDK 預設 `DECAP_CELL "sky130_fd_sc_hd__decap_3"`，`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 第 45 行），佔 9.24 mm²；不算 decap 的 li1 只有 0.30 mm²。
+  - 各 cell 的 li1 比例（PDK `8afc834` 的 GDS，li1 合併面積 / cell 面積）：`decap_3` 87%、`decap_4` 90%、`fd decap_12` 97%、`ef_sc_hd__decap_12` 52%、`fill_*` 12.5%、`tapvpwrvgnd_1` 56%。
+  - 估計：空白全換成 `ef_decap_12` 約 50%（ca 0.50），全換 fill 約 14%。
+  - ChipFoundry 的 `caravel_user_project`（`b510613c`）與 `caravel_user_sram`（`adf59a8f`）的 wrapper config 都是 `RUN_FILL_INSERTION: false`、`RUN_TAP_ENDCAP_INSERTION: false`，但它們的 wrapper 只放 macro；我們的 wrapper 頂層有標準 cell，不能照抄。
+  - `ef_decap_12` 的 LEF（`sky130_ef_sc_hd.lef`）與 SPICE 已經在 flow 的 `CELL_LEFS`／LVS 檔案裡，`.lib` 沒有它。用 precheck 的 deck 跑一片 10 排 × 8 組（`ef_decap_12` + `fill_2` + `fill_1`，奇數排 MX 翻轉）：FEOL、BEOL 都是 0 個違規。LibreLane 原始碼裡沒有用它當 `DECAP_CELLS` 的前例，STA 會不會有問題要等 harden。
+- **比對基準**：image 裡用同一份 deck 跑 precheck PDK（`3e0e31dc`）的 `sky130_sram_2kbyte_1rw1r_32x512_8`（sha1 `de2cf967…`）：FEOL 13 個，除了 3 個 `MR_licon.SP.6`，還有控制邏輯（`…_control_logic_r`／`_rw`）裡的 `MR_psdm.SP.1` 6 個、`MR_nsdm.WID.2` 3 個、`MR_psdm.WID.2` 1 個；BEOL 264 個，與 flow PDK（`8afc834`，sha1 `a7bcbb72…`）那顆相同。也就是 **ChipFoundry 自己 PDK 裡的預建 SRAM 也過不了 FEOL**。checker 原本要求比對基準只有允許的規則，因此 FAIL。實驗：把比對基準複製一份、只留 `MR_licon.SP.6`，設計的 16,900 個位置全部在裡面（判定 `runs/p7_precheck_verify/check.log`；precheck 的專案目錄與結果另存在 `../arvinsa-rtl-gds-p7precheck/verify_f4ea9de/`，實驗在 scratchpad）。
+- **使用者 2026-10-14 決定**（ADR-0019 決定 24）：空白區改放 `ef_decap_12` 與 fill；比對基準裡其他規則的項目不列入比對。VM 記憶體改 16 GiB（本機 24 GB）。

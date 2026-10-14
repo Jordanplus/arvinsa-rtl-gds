@@ -22,7 +22,8 @@ Checks:
   - per DRC check: the report's top cell is <top>, its item count = logs/<check>_check.total, status fail with items and
     pass without; the deck's rule list (names and descriptions) equals the reference report's (same deck); the
     reference's input.sha1 is that of --ref-gds;
-  - per DRC check with items: only its allowed rule (FEOL MR_licon.SP.6, BEOL MR_mcon.CON.10); rdb_flatten.py places
+  - per DRC check with items: only its allowed rule (FEOL MR_licon.SP.6, BEOL MR_mcon.CON.10; markers of other rules
+    in the reference are left out of the comparison and printed, ADR-0019 decision 24); rdb_flatten.py places
     every marker over every instance of its cell (KLayout reads as many items as the XML has): none outside the one
     <macro> instance, none unplaced (an item without a value counts); the bitcell
     arrays (sky130_fd_bd_sram__openram_dp_cell instances) of <macro> and the PDK macro have the same count and size;
@@ -146,9 +147,9 @@ def judge_drc(check, args, res, status, out):
     other = collections.Counter(c for c, _ in items if c not in ALLOWED[check])
     if other:
         errs.append(f"rule(s) other than {sorted(ALLOWED[check])}: {dict(other)}")
-    other = collections.Counter(c for c, _ in ritems if c not in ALLOWED[check])
-    if other:
-        errs.append(f"reference has rule(s) other than {sorted(ALLOWED[check])}: {dict(other)}")
+    # The PDK macro of the precheck's PDK (3e0e31dc) also has FEOL MR_nsdm.WID.2 / MR_psdm.* in its control logic
+    # (ADR-0019 decision 24): those do not excuse anything in the design, which may have the allowed rule only.
+    r_other = collections.Counter(c for c, _ in ritems if c not in ALLOWED[check])
     os.makedirs(out, exist_ok=True)
     d = flatten(os.path.join(args.project, "gds", f"{args.top}.gds"), args.top, args.macro, xml,
                 os.path.join(out, f"{check}_design.json"))
@@ -171,7 +172,7 @@ def judge_drc(check, args, res, status, out):
         errs.append(f"{len(d['outside'])} marker(s) outside {args.macro}, e.g. {o[0]} in {o[1]} at "
                     f"({o[2] / 1000:.3f}, {o[3] / 1000:.3f}) um")
     have = collections.Counter({tuple(m[:5]): m[5] for m in d["inside"]})
-    want = collections.Counter({tuple(m[:5]): m[5] for m in r["inside"]})
+    want = collections.Counter({tuple(m[:5]): m[5] for m in r["inside"] if m[0] in ALLOWED[check]})
     extra = have - want
     if extra:
         k = sorted(extra)[0]
@@ -180,7 +181,8 @@ def judge_drc(check, args, res, status, out):
     n, nr = sum(have.values()), sum(want.values())
     return errs, (f"{len(items)} item(s) = {n} marker(s), all {'/'.join(sorted(ALLOWED[check]))} inside {args.macro} "
                   f"at places the PDK macro alone also has ({nr} there"
-                  + (")" if n == nr else f"; {nr - n} of them not in the design)"))
+                  + (")" if n == nr else f"; {nr - n} of them not in the design)")
+                  + (f"; the reference's other rule(s), not compared: {dict(r_other)}" if r_other else ""))
 
 
 def main():
@@ -218,6 +220,11 @@ def main():
         except ValueError:
             pass
     print(f"[precheck] cf-precheck {pre.get('version')}, {pre.get('timestamp')}, results {os.path.relpath(res, ROOT)}")
+    src = os.path.join(args.project, "arvinsa_source.json")
+    if os.path.exists(src):
+        s = json.load(open(src))
+        print(f"  [INFO] project from {s.get('run')} (commit {s.get('run_commit')}, HEAD then {s.get('head')}): "
+              + ("verification, run guard skipped" if s.get("verification") else "run guard PASS"))
     want = pin("CF_PRECHECK_VERSION")
     line(pre.get("version") == want, f"cf-precheck {pre.get('version')} (pinned {want}; another version: read its deck "
          "and checks, then update env/versions.mk)")

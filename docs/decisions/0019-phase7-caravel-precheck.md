@@ -161,6 +161,23 @@
     - 驗證（Hazard3 `940e395` 與 wrapper `f721cff` 的網表，run guard 關掉）：wrapper 2 條 amend 規則（`_10119_.B`、`_10120_.B`），amend 後的分區只有 9 個 `$or`，16149/16149；negative test `nand2_to_nor2`、`nand2_flop_to_nor2`、`nand2_comb_to_nor2`、`o21ai_swap` 4/4 抓到，位置交叉檢查 10 組 PASS；只拿掉「不寫 flip-flop 規則」時，第二輪檢查對 `nand2_flop_to_nor2` 判 FAIL。完整的 `neg-eqy` 在步驟 8 的 regress。
     - 不選「偵測到 pin swap 時預先加 amend」：這次的共用是 EQY 前處理產生的，從網表不一定推得出哪些分區會受影響。不選「這個分區列為豁免」：名稱每次 harden 都可能改變，等於針對特定案例繞開 checker（同決定 18 以前的理由）。
     - 防護寫進 `formal-equivalence-eqy` 規則 7。
+24. **（2026-10-14，步驟 7）wrapper 的空白區改放 `sky130_ef_sc_hd__decap_12` 與 fill；比對基準裡允許規則以外的項目不列入比對**。
+    - 背景：官方 image 第一次跑 wrapper（查證用，`f4ea9de` 的確認 harden，`docs/notes/caravel_precheck_phase7.md` 第 10 節）：8 項 PASS、FEOL 符合決定 5；`klayout_beol`、`lvs`、`oeb` 沒跑完，`klayout_met_min_ca_density` FAIL；checker 另外判比對基準 FAIL。
+    - 根因（已驗證）：
+      - li1 密度：`li1.pd.1d` 要求 li1 不超過 wrapper 面積的 60%，實際 75%。Fill Insertion 用 PDK 預設的 `decap_3`（87% 是 li1）把空白填了 2,461,688 個，佔 9.24 mm²；其他 li1 只有 0.30 mm²。
+      - 沒跑完的三項：VM 只有 10 GiB，KLayout BEOL 與兩次 Magic 抽取各用到約 9.2 GB，被 OOM killer 砍掉（`dmesg`）。246 萬個 decap instance 是主要的量。
+      - 比對基準：precheck 的 PDK（`3e0e31dc`）裡那顆預建 SRAM，FEOL 控制邏輯另有 10 個 nsdm／psdm 違規（flow 的 PDK `8afc834` 那顆沒有）；checker 原本要求比對基準只有允許的規則。
+    - 使用者 2026-10-14 選擇：「都選建議的」。選項內容：
+      - 空白區（A，建議）：`DECAP_CELLS` 改 `sky130_ef_sc_hd__decap_12`（li1 52%），`FILL_CELLS` 加 `fill_8`、`fill_4`；估計 li1 約 50%、instance 約四分之一。它的 LEF 與 SPICE 已在 flow 裡，沒有 `.lib`，STA 要在 harden 確認；precheck deck 對它的小陣列 0 個違規。不選 B（只放 fill，li1 約 14%）：邏輯旁的 decap 也一起沒了，而靜態 IR 看不到這個差別，不會被任何檢查發現。
+      - 比對基準（甲，建議）：只比對比對基準裡允許的規則，其他規則印出、不列入；設計仍然只能有允許的規則。實驗：設計的 16,900 個 FEOL 位置全部在 `3e0e31dc` 那顆的 `MR_licon.SP.6` 位置裡。不選乙（改用 flow PDK 的 SRAM 當比對基準）：checker 不用改，但比對的不是 ChipFoundry 實際用的那顆 macro。
+    - 不需要決定、照做：VM 記憶體 10 → 16 GiB（本機 24 GB）。
+    - 實作：
+      - `pnr/user_project_wrapper/config.json` 的 `DECAP_CELLS`、`FILL_CELLS`。
+      - `check_precheck.py`：比對基準只取允許規則的位置，其他規則印在該列的說明。
+      - negative test：
+        - 原本的 `ref_other_rule`（比對基準有其他規則就 FAIL）改成兩個案例：`ref_extra_rule` 必須 PASS；`ref_other_rule` 是比對基準與設計都有同一條其他規則，必須在「rule(s) other than」那一列 FAIL，確認比對基準的其他規則不會讓設計的違規被放過。
+        - 共 25 個案例。
+    - 驗證：重新 harden 後用 `make precheck-caravel` 正式判定（步驟 8）。
 
 ## 後果
 

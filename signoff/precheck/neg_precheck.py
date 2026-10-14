@@ -32,7 +32,9 @@ Cases (expected text in a FAIL line of check_precheck.py):
   outside          MR_mcon.CON.10 in the top cell, off the SRAM  "outside arv_sram"
   moved            one bitcell marker moved 0.1 um            "that the PDK macro alone does not have"
   other_deck       a rule description changed in the reference  "different decks"
-  ref_other_rule   the reference has an item of another rule  "reference has rule(s) other than"
+  ref_extra_rule   the reference has an item of another rule (the PDK macro of 3e0e31dc has FEOL nsdm/psdm ones):
+                   PASS, printed as not compared
+  ref_other_rule   both the reference and the design have a bitcell item of another rule  "rule(s) other than"
   ref_sha          the reference's input.sha1 of another GDS   "the reference was not made from"
   other_ref_gds    the reference GDS (and its input.sha1) is not the PDK macro  "bitcell arrays differ"
   no_macro         --macro names a cell not in the design      "instance(s) of"
@@ -178,8 +180,9 @@ def no_value(root):
     add_item(root, "MR_mcon.CON.10", cp.ANCHOR, None)
 
 
-def ref_other_rule(root):
-    other_rule(root)
+def ref_other_rule(p, r):
+    xml_edit("ref", "klayout_beol", other_rule)(p, r)
+    xml_edit("design", "klayout_beol", other_rule)(p, r)
 
 
 def other_top(root):
@@ -248,7 +251,8 @@ CASES = [  # (name, mutation, extra args, expected text in a FAIL line or None f
     ("outside", xml_edit("design", "klayout_beol", outside), [], f"outside {MACRO}"),
     ("moved", xml_edit("design", "klayout_beol", moved), [], "that the PDK macro alone does not have"),
     ("other_deck", xml_edit("ref", "klayout_beol", other_deck), [], "different decks"),
-    ("ref_other_rule", xml_edit("ref", "klayout_beol", ref_other_rule), [], "reference has rule(s) other than"),
+    ("ref_extra_rule", xml_edit("ref", "klayout_beol", other_rule), [], None),
+    ("ref_other_rule", ref_other_rule, [], "rule(s) other than"),
     ("ref_sha", ref_sha, [], "the reference was not made from"),
     ("other_ref_gds", ref_from_macro, ["--ref-gds", MACRO_GDS], "bitcell arrays differ"),
     ("no_macro", None, ["--macro", cp.REF_MACRO], "instance(s) of"),

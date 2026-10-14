@@ -331,6 +331,17 @@
     "CTS_DISTANCE_BETWEEN_BUFFERS": 50,
     "//PL_TARGET_DENSITY_PCT": "Global placement target density. LibreLane's default here was 68 % while the L-shaped logic region is about half used, so cells crowd near the corner below-left of the SRAM; nets there detoured up to 3x their pin distance (soc_top run 1: 117 um apart, 353 um routed, 1.42 ns slew in ss). 55 % (soc_explore10): max slew/cap/fanout 0 in all 9 corners at 0.75 ns. See README.md. The wrapper uses 50 %: at 55 % (p7_harden5) the global routing redone after the last slew repair pushed internal net _03489_ into a detour, 0.779 ns in max_ss_n40C; at 50 % (p7_exp_pl_dens) the worst internal slew is 0.576 ns, setup +0.548 ns, hold +0.187 ns. ADR-0019 decision 21.",
     "PL_TARGET_DENSITY_PCT": 50,
+    "//DECAP_CELLS": "ADR-0019 decision 24 (user decision 2026-10-14): ChipFoundry precheck klayout_met_min_ca_density checks li1.pd.1d, li1 at most 60 % of the area in 235/4 (the 2920 x 3520 um wrapper). With the PDK default (sky130_fd_sc_hd__decap_3, 87 % li1) Fill Insertion put 2,461,688 decap_3 in the empty wrapper (9.24 mm2) and li1 was 75 % (run f4ea9de); the 2.46 million instances also took KLayout BEOL and Magic extraction (LVS, OEB) over the 10 GiB of the precheck VM. sky130_ef_sc_hd__decap_12 has 52 % li1 (fd decap_12: 97 %; fill: 12.5 %), estimate 50 %; its LEF and SPICE are already in the flow, it has no .lib. The precheck deck finds nothing on an array of it with fill_2/fill_1 (docs/notes/caravel_precheck_phase7.md section 10). caravel_user_project turns fill insertion off, but its wrapper has macros only.",
+    "DECAP_CELLS": [
+        "sky130_ef_sc_hd__decap_12"
+    ],
+    "//FILL_CELLS": "With 12-site decaps, fill_8 and fill_4 fill the gaps in fewer instances than fill_2 / fill_1 alone (the PDK default).",
+    "FILL_CELLS": [
+        "sky130_fd_sc_hd__fill_8",
+        "sky130_fd_sc_hd__fill_4",
+        "sky130_fd_sc_hd__fill_2",
+        "sky130_fd_sc_hd__fill_1"
+    ],
     "//DESIGN_REPAIR_MAX_WIRE_LENGTH": "Splits nets longer than 200 um with buffers in the repair before CTS. Without it (run soc_explore2): 48 nets on SRAM inputs up to 355 um long (the SRAM LEF has no antenna data, so they are not antenna-checked), 50 max-slew violations in the ss corners (up to 1.09 ns on nets of about 300-700 um), and 7 max-fanout violations from antenna repair putting 10-11 diodes on single long nets. The same limit after global routing (GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH 200) is not set: run soc_explore3 with it stopped with GRT-0229 'Vertical edge usage exceeds the maximum allowed. (79, 0) usage=65534' at the clk pin, but that error was later found to happen at random in OpenROAD.RepairDesignPostGRT without it too (2 of 4 re-runs of the same step; pnr/librelane_flow.sh retries it), so whether the setting matters is not known; 400 um changed nothing (run soc_explore9). See README.md.",
     "DESIGN_REPAIR_MAX_WIRE_LENGTH": 200,
     "PNR_SDC_FILE": "dir::pnr/user_project_wrapper/pnr.sdc",

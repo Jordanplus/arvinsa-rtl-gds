@@ -24,7 +24,7 @@ DRY_RUN ?= 0
         neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
         sram-lib sram-confirm sram-char sram-extract neg-char openram-setup openram-macro neg-openram \
         openram-lib-template openram-char openram-power openram-lib openram-confirm openram-check-lib macro-views neg-macro-views \
-        pin-plan neg-pin-plan precheck-deck precheck-sram-ref precheck-check neg-precheck
+        pin-plan neg-pin-plan precheck-deck precheck-sram-ref precheck-check neg-precheck precheck-caravel
 
 help:
 	@echo "Phase 0 environment (run in your own terminal):"
@@ -51,7 +51,8 @@ help:
 	@echo "  make gl-caravel           gate-level lockstep of that wrapper netlist against the RTL wrapper"
 	@echo "  make ir-caravel           static IR of that wrapper from Caravel's pads with the max-power pattern"
 	@echo "  make precheck-check PRECHECK_PROJECT=<dir>  judge a precheck result by ADR-0019 decision 5 (reference: make precheck-sram-ref)"
-	@echo "  make neg-precheck         bug injection into that judgement, 24 cases (about 5 minutes; part of make regress)"
+	@echo "  make precheck-caravel     the official precheck of runs/user_project_wrapper in the lima VM and its judgement (~1 h)"
+	@echo "  make neg-precheck         bug injection into that judgement, 25 cases (about 5 minutes; part of make regress)"
 	@echo "                            (fw/tests/maxpower windows recorded on the final netlist, slow corners)"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check py-check skill-check lint fw regress-rtl-smoke"
@@ -209,7 +210,20 @@ precheck-sram-ref:
 	$(PY) signoff/precheck/run_deck.py --gds $${PDK_ROOT:-$$HOME/.ciel}/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds --out $(PRECHECK_REF)
 
 precheck-check:
-	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_PROJECT) --ref-dir $(PRECHECK_REF)
+	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_PROJECT) --ref-dir $(PRECHECK_REF) $(if $(PRECHECK_REF_GDS),--ref-gds $(PRECHECK_REF_GDS))
+
+# The official precheck of user_project_wrapper (Phase 7 step 7): the project directory from runs/user_project_wrapper
+# (run guard; PRECHECK_VERIFY=1 skips it for an older run), the image under the lima VM, then the judgement against the
+# reference made in the same container (<project>/sram_ref, the precheck PDK's SRAM). The project directory is made anew,
+# so a precheck that stopped early leaves no results and the judgement FAILs.
+PRECHECK_WORK ?= ../arvinsa-rtl-gds-p7precheck
+PRECHECK_DIR = $(PRECHECK_WORK)/user_project_wrapper
+precheck-caravel:
+	$(PY) signoff/precheck/make_project.py --out $(PRECHECK_DIR) $(if $(filter 1,$(PRECHECK_VERIFY)),--verification)
+	PRECHECK_WORK=$(abspath $(PRECHECK_WORK)) zsh signoff/precheck/run_precheck.sh $(PRECHECK_DIR) \
+	  || echo "run-precheck: exit $$? (cf-precheck fails on klayout_feol/beol by design; judged below)"
+	$(PY) signoff/precheck/check_precheck.py --project $(PRECHECK_DIR) --ref-dir $(PRECHECK_DIR)/sram_ref \
+	  --ref-gds $(PRECHECK_WORK)/pdks/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds
 
 neg-precheck:
 	$(PY) signoff/precheck/neg_precheck.py
