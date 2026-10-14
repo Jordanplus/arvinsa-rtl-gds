@@ -95,6 +95,7 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-13 | 同上，與 density 55 的 `p7_harden5` 比較 | 44 ns | density 55 → 50：內部 net 最差 slew；setup | 0.779 → 0.576 ns（上限 0.75，max_ss_n40C）；setup +0.630 → +0.548 ns；繞線總長 +0.2% | 局部 met2 熱點的繞路用降低 placement 密度解決（`drv-timing-closure` 規則 13、ADR-0019 決定 21） | ADR-0019 決定 21 |
 | 2026-10-13 | 同上 | 44 ns | `timing__unannotated_net__count`；`design__disconnected_pin__count` | 667（組成見 `signoff/limits/user_project_wrapper.toml`；density 55 時 661）；327 = 321 個沒用到的訊號 port + 6 個電源 port | 上限隨 CTS 改變，wrapper 要自己推導，不能抄 soc_top | 上限檔 |
 | 2026-10-13 | 同上 | 44 ns | 從 Caravel pad 算的 IR（max-power pattern 對 vectorless，slow corner，met4 strap 4.8 µm） | pattern 最差 19.58 mV（max_ss_100C，VDD 11.93 + GND 7.65），vectorless 45.57 mV，比值 0.43；density 55 時 19.71／45.87 mV | vectorless 會高估約 2.3 倍；20 mV 上限要用 pattern 判（ADR-0019 決定 20）。density 55 → 50 對 IR 影響 0.13 mV | `runs/user_project_wrapper_signoff/criteria_review.md`；ADR-0019 決定 22 |
+| 2026-10-14 | user_project_wrapper（`runs/user_project_wrapper`，`7eff65a`，`DECAP_CELLS` 改 `ef_decap_12`） | 44 ns | 空白區 2,461,688 個 `decap_3` → 543,617 個 `ef_decap_12` + fill；fill 類 instance、leakage、IR | fill 類 2,608,464 → 974,801；leakage 0.7506 → 0.7396 mW（−0.0110，= 少掉的 decap_3 × ff_100C 4.379 pW 的 98%）；li1 密度 75.1% → 39.9%（`li1.pd.1d` 上限 60%）；IR 最差 0.00205633 → 0.00205617 V；timing、DRC、LVS 逐值相同；harden 240 → 約 182 分鐘 | 沒有 .lib 的 decap 不進功耗報告（S29）；decap 換種類不影響 timing 與靜態 IR | `runs/user_project_wrapper_signoff/criteria_review.md`、ADR-0019 決定 24 |
 
 S20. **sky130_fd_sc_hd 有推不動負載的弱 cell**（Phase 5，單步重跑確認；ADR-0012、0013）：
     - 在 ss_n40C_1v60，有些驅動力 `_1`（少數 `_2`）的 cell 連最小負載都推不到 slew 上限內。resizer 修 slew 時會把 driver 換成它們，然後停不下來：Hazard3 第一次 harden 記憶體漲到 92.9 GB。
@@ -136,6 +137,11 @@ S28. **sky130 OpenRAM dp bitcell（`sky130_fd_bd_sram__openram_dp_cell`）的待
     - 待機（4 條 bitline 接 VDD、wordline 接地，Q=0 與 Q=1 相同）每顆漏電，gmin 1e-17：tt 25°C 0.53 pW、ss 100°C 1.01 pW、ff −40°C 0.37 pW、ss −40°C 0.21 pW、ff 100°C 556 pW。
     - ngspice 預設 gmin（1e-12 S）時每顆多約 13.1 pS × VDD²（約 13 個反向偏壓接面），tt 量成 42.7 pW；除了 ff 100°C，量到的幾乎都是 gmin。
     - 2 KB 1rw1r 自產 macro 整顆待機漏電（修剪網表＋單顆 × 15120）：tt 462 nW、ss 100°C 1.26 µW、ff −40°C 252 nW、ss −40°C 81 nW、ff 100°C 409 µW；tt 與 −40°C 不是穩態值（ADR-0018 已知限制）。
+
+S29. **sky130_fd_sc_hd 的 decap／fill 與 li1 密度**（PDK `8afc8346` 的 GDS，li1 = 67/20 合併面積 / cell 面積；ADR-0019 決定 24、`docs/notes/caravel_precheck_phase7.md` 第 10 節）：
+    - li1 比例：`decap_3` 87%、`decap_4` 90%、`decap_12` 97%、`sky130_ef_sc_hd__decap_12` 52%、`fill_1`–`fill_8` 12.5%、`tapvpwrvgnd_1` 56%。
+    - PDK 預設 `DECAP_CELL` 只有 `decap_3`（`libs.tech/openlane/sky130_fd_sc_hd/config.tcl` 第 45 行）。大片空白（例如 Caravel wrapper）全部填 `decap_3` 時 li1 約 75%，超過 ChipFoundry precheck `li1.pd.1d` 的 60%（分母是 235/4，整個 wrapper）；改 `ef_decap_12`（加 fill_8／4／2／1）後實測 39.9%（本機 KLayout flat 合併面積；同一算法在舊版圖得 75.08%，與 precheck log 的 `li1_ca_density is 0.2492` 一致）。
+    - `ef_decap_12` 有 LEF（`sky130_ef_sc_hd.lef`）與 SPICE，沒有 .lib：STA 不報錯，但它的漏電不進功耗報告（Phase 7 wrapper：報告的 leakage 少了 0.011 mW，正好是被換掉的 `decap_3` 的 .lib 漏電）。實際的閘極漏電沒有數字，下線的功耗要另外估。
 
 ## 待確認（推測，不能當規則用）
 

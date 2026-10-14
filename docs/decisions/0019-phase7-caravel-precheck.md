@@ -177,7 +177,13 @@
       - negative test：
         - 原本的 `ref_other_rule`（比對基準有其他規則就 FAIL）改成兩個案例：`ref_extra_rule` 必須 PASS；`ref_other_rule` 是比對基準與設計都有同一條其他規則，必須在「rule(s) other than」那一列 FAIL，確認比對基準的其他規則不會讓設計的違規被放過。
         - 共 25 個案例。
-    - 驗證：重新 harden 後用 `make precheck-caravel` 正式判定（步驟 8）。
+    - harden（`7eff65a`，`runs/p7_harden_decap.log`，約 182 分鐘；上次 240）：
+      - 只有 golden 6 列 FAIL；signoff 上限、`check_soc.py` 13 項、IR 4.94 mV、來源追溯、criteria review 全部 PASS。
+      - Fill Insertion 放了 543,617 個 `ef_decap_12`、fill 428,280 個；fill 類 instance 2,608,464 → 974,801。STA 沒有因為 `ef_decap_12` 沒有 .lib 報錯。
+      - timing、DRC、LVS、XOR、antenna 與上次逐值相同（Fill Insertion 在 detailed routing 之後）。
+      - leakage 少 0.011 mW：`ef_decap_12` 的漏電不計（少掉的 `decap_3` 的 .lib 漏電解釋 98%）；記進不分析的項目清單（`runs/p7_decap_signoff/criteria_review.md`）。
+      - li1 密度（本機 KLayout，同 precheck 的算法）75.1% → 39.9%。
+      - golden 照 README「何時更新」更新（ADR-0015 的程序），之後照決定 22 的前例再跑一次確認 harden，才跑正式的 eqy／gl／ir 與 `make precheck-caravel`。
 
 ## 後果
 

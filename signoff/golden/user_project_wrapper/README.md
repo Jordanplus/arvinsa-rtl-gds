@@ -9,13 +9,14 @@
 | 項目 | 值 |
 |---|---|
 | 產生方式 | `make harden D=user_project_wrapper`（tag `user_project_wrapper`）的 `runs/user_project_wrapper_signoff/metrics.json`，原檔複製，沒有修改 |
-| 日期／平台 | 2026-10-13（Phase 7 步驟 5g），Apple Silicon macOS（arm64） |
+| 更新（2026-10-14，Phase 7 步驟 7） | decap 改 `ef_decap_12`（ADR-0019 決定 24）後的 harden，commit `7eff65a`，log `runs/p7_harden_decap.log`，signoff 目錄另存 `runs/p7_decap_signoff`。只有 golden 6 列 FAIL；與前一版 golden 的差異 15 個 metrics，全部由 decap／fill 的改變解釋（`runs/p7_decap_signoff/criteria_review.md`）：fill 類 instance 2,608,464 → 974,801、leakage −0.011 mW（`ef_decap_12` 沒有 .lib，漏電不計）、IR 平均值與最差值的小變化；timing、DRC、LVS、XOR、antenna 逐值相同 |
+| 日期／平台 | 2026-10-13 建立（Phase 7 步驟 5g）、2026-10-14 更新（步驟 7），Apple Silicon macOS（arm64） |
 | 來源 run | Phase 7 第一次正式 harden，commit `f721cff`；log `runs/p7_harden_formal.log`。只有「沒有 golden 檔」一列 FAIL；signoff 上限、`check_soc.py` 13 項、`ir_worst.py`、`provenance.py`、`review_criteria.py` 全部 PASS。使用者 2026-10-13 事先選擇：「第一次正式 harden 直接建 (建議)」（ADR-0019 決定 22） |
 | signoff criteria 檢查 | `runs/p7_formal_signoff/criteria_review.md`（來源 run 的 signoff 目錄另存在這裡；`runs/user_project_wrapper_signoff` 之後會被新的 harden 覆蓋） |
 | Caravel 的 IR（ADR-0019 決定 20） | 查證用（run guard 關掉）：max-power pattern 從 Caravel pad 算，最差 max_ss_100C win_5c 19.58 mV（上限 20）。正式的 `make ir-caravel` 在確認 harden（`f4ea9de`）上跑：同樣 19.58 mV，PASS（`runs/p7_formal_ir.log`） |
 | LibreLane／PDK／Hazard3／SRAM macro | 同 `env/versions.mk`；SRAM 是 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/` |
-| flow 設定 | `pnr/user_project_wrapper/config.json` sha256 `271c6f7d6560dc374e932c16f4f190f672cdd7055600fe9c80890ac74020551e` |
-| 本檔 sha256 | `b951552f3470b9942a0fdbb6cc0aba2ca4579588291dfb9e91b28bccb9bbc432` |
+| flow 設定 | `pnr/user_project_wrapper/config.json` sha256 `2604dc81338bac12acb6cb71d34e267497010b26fa1fd71d86692892694b5ebf`（建立時 `271c6f7d…`，差在 `DECAP_CELLS`、`FILL_CELLS`） |
+| 本檔 sha256 | `6d75c98cadad25b1545e36e14b9a5b9439a67c7a7d781a7ffd832bf360292c34`（建立時 `b951552f…`） |
 
 ## 主要數字（與 `soc_top_hazard3` golden 比較；兩者是不同的設計，不逐項比對）
 
@@ -24,7 +25,8 @@
 - clock：hold skew metric nom_ss_n40C −3.598 ns（soc_top −1.540）；wb_clk_i 從 wrapper 邊緣經約 2 ns 的長線 buffer 到 block，兩個葉端 latency 差約 2 ns，成因沒有查（`criteria_review.md`）。
 - cell：`design__instance__count__stdcell` 165,577，stdcell 面積 419,611 µm²，utilization 0.070（die 2920 × 3520 µm）；timing repair buffer 12,085，clock buffer 473，antenna diode 157；網表的 hold buffer 3,291（soc_top 2,783）。
 - 繞線總長 837,043 µm；繞線 DRC 0。
-- 功耗 18.20 mW（最後寫入的 corner max_ff_100C；soc_top 20.41）。
+- fill：543,617 個 `sky130_ef_sc_hd__decap_12` 與 fill_1／2／4／8 共 428,280 個（`design__instance__count__class:fill_cell` 974,801），row 兩端的 endcap 2,904 個 `decap_3`；li1 密度 39.9%（precheck `li1.pd.1d` 上限 60%，ADR-0019 決定 24）。建立時是 2,458,784 個 `decap_3`，li1 75.1%。
+- 功耗 18.19 mW（最後寫入的 corner max_ff_100C；soc_top 20.41）；leakage 0.740 mW 不含 `ef_decap_12`（沒有 .lib）。建立時 18.20 mW。
 - IR：wrapper 內部（從 ring 上的 bridge 位置算）nom_tt 4.09 mV；`ir_worst.py` 判上限的 max_ss_100C 4.94 mV，ff 參考值 max_ff_100C 6.99 mV。
 - max slew 違規 385 個／corner：全在 input port 驅動的 net（Caravel SDC 的外部 transition，ADR-0019 決定 16），內部 net 最差 0.576 ns（上限 0.75）。
 - disconnected 327、unannotated 667（組成見上限檔）。
@@ -36,6 +38,7 @@
 |---|---|
 | 正式 harden（commit `f721cff`） | 本檔來源 |
 | 確認 harden（commit `f4ea9de`，只改了 golden 與 EQY 腳本，flow 的輸入相同；`runs/p7_harden_confirm.log`，signoff 目錄另存 `runs/p7_confirm_signoff`） | 455 個全部逐值相同，`harden-soc: PASS` |
+| decap 改 `ef_decap_12` 的 harden（commit `7eff65a`） | 本檔現在的來源；與建立時的版本 440 個逐值相同、10 個在誤差內、5 個不同，全部是 decap／fill 改變的結果 |
 | `p7_exp_pl_dens`（`p7_harden5` 的設定 + density 50，從 global placement 重跑到 `STAPostPNR`；ADR-0019 決定 21） | 共有的 429 個逐值相同；本檔多 26 個是它沒跑的 IR、DRC、LVS、XOR 步驟 |
 
 ## 何時更新
