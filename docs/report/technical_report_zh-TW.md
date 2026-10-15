@@ -8,6 +8,7 @@
 | 專案期間 | 2026-10-03 – 2026-10-15（132 個 commit） |
 | 最終證據 | commit `2b04451`（三條乾淨 worktree regression）；exit review commit `0d47a3d` |
 | 狀態 | Phase 0–7 與 Phase 3.5 完成。Phase 7 只做到 precheck，**沒有下線**。 |
+| 佐證檔案 | 文中的 `runs/…` 路徑在專案結束時已刪除，被引用的報告收在 `docs/evidence/`（路徑換算見附錄 B） |
 | 語言 | 繁體中文（本檔）。英文版：[`technical_report_en.md`](technical_report_en.md) |
 
 ---
@@ -43,7 +44,7 @@ test vehicle 是一顆帶 SRAM macro 的小型 RISC-V SoC。
 
 2026-10-15 的總檢討發現，247 個問題中仍有 39 個只在經驗紀錄或沒有寫進任何 skill（第 7 章）；使用者之後選定的寫回見 §8.5–§8.6。
 
-本報告完整記錄：一路做了什麼、遇到哪些問題與怎麼解決、skill 與流程因此怎麼修正，以及還有哪些問題沒解決。
+本報告完整記錄：一路做了什麼、遇到哪些問題與怎麼解決、skill 與流程因此怎麼修正，以及還有哪些問題沒解決。英文術語與縮寫的意思見附錄 C。
 
 ---
 
@@ -68,7 +69,7 @@ test vehicle 是一顆帶 SRAM macro 的小型 RISC-V SoC。
 ## 1. 目標與範圍
 
 目標出自 `project-plan.md`：
-1. **一個指令就能重現的流程**：任何人在乾淨的 checkout 上一個指令重跑都 PASS。signoff metrics 和 golden 比對，除了誤差表列出的項目（ADR-0015）都要逐值相同。每個 PASS／FAIL 都由 checker 判定，而 checker 本身會 FAIL 這件事，已經用植入錯誤證明過。
+1. **一個指令就能重現的流程**：任何人在乾淨的 checkout 上一個指令重跑都 PASS。signoff metrics 和 golden 比對，除了容許誤差（tolerance）表列出的項目（ADR-0015）都要逐值相同。每個 PASS／FAIL 都由 checker 判定，而 checker 本身會 FAIL 這件事，已經用植入錯誤證明過。
 2. **貼近實際的 test vehicle**：帶 SRAM macro 的 RISC-V SoC，一路做到 signoff（DRC／LVS／STA PASS）。
 3. **和 PDK、設計無關的流程**，之後的專案可以沿用。這個 repo 現在是使用者其他 IC 專案的流程來源（`CLAUDE.md` 規則 8、`arvinsa-rtl-gds-flow.md`）。
 
@@ -222,7 +223,7 @@ ChipFoundry 的 Caravel 提供管理用 SoC、pad，以及固定 2920 × 3520 µ
 *圖 5：一次 harden 怎麼判定，以及 checker 本身怎麼驗證。*
 
 一次 harden 要以下全部 PASS 才算 PASS：
-- **`check_signoff.py`**：`final/metrics.json` 對上限檔、對 golden。除了誤差表列出的 metric 族群（ADR-0015），其餘必須逐值相同。
+- **`check_signoff.py`**：`final/metrics.json` 對上限檔、對 golden。除了容許誤差表列出的 metric 族群（ADR-0015），其餘必須逐值相同。
 - **`check_soc.py`**：檢查 metrics 表達不了的項目：
   - 每個 corner 的 max slew（含 Caravel 邊界的例外，ADR-0019 決定 16）；
   - SRAM 外框內的 Magic DRC，逐一比對 SRAM 單獨檢查時的違規位置；
@@ -251,9 +252,9 @@ checker 本身**用 negative test 驗證**：植入錯誤，每一個都必須�
 **golden 比對**讓不可重現的地方現形：
 - 多執行緒 detailed routing 偶爾會差幾 µm 的繞線。
 - `GRT-0229` 會隨機讓增量 global routing 中止。處理方式是有上限的重試：只對已知的訊息接續（`GRT-0229`；Phase 5 起也包括總溢位 ≤ 10 的 `GRT-0116`），最多重試兩次，每次重試都記錄。
-- ADR-0015：版圖誤差在 Hazard3 上量；PicoRV32 在 Phase 5 另取四個樣本重訂；wrapper 沿用 Hazard3 的誤差。
+- ADR-0015：版圖的容許誤差在 Hazard3 上量；PicoRV32 在 Phase 5 另取四個樣本重訂；wrapper 沿用 Hazard3 的容許誤差。
 
-Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_core` 在三次 run 中有一次 29 個 metrics 落在誤差內，另兩次逐值相同，所以誤差表保留。
+Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_core` 在三次 run 中有一次 29 個 metrics 落在容許誤差內，另兩次逐值相同，所以容許誤差表保留。
 
 ---
 
@@ -290,6 +291,7 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
 - **testbench qualification**：兩輪獨立審查在 `bugs.toml` 以外植入錯誤。
   - 第一輪植入 20 個，regression 漏掉 10 個。
   - 第二輪植入 23 個（F01–F24，F16 作廢改 F16b），又漏掉 10 個，例如：UART stall 路徑從沒被走到、firmware 被改成先寫 DONE 再寫 SIG、一筆匯流排交易存取 SRAM 兩次。
+    - 個數註記：照編號算是 24 個。當時的 commit `b1c818d` 記 23 個，`docs/phase_exit/phase1.md` 第 23、25 行分別寫 23 與 24；原始審查輸出已不在 repo，無法再核對。
   - 新增 4 個 checker（`sram_port`、`irq_line`、`uart_div`、`coverage`）與新測試補上缺口；`neg-rtl` 從 8 → 20 → 33。
 - **教訓**：沒被證明會 FAIL 的 self-checking 測試不算證據。這成為 skill `signoff-checker-qualification` 與 `dv-directed-tests` 的基礎。
 
@@ -334,7 +336,7 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
   - 15 個 corner，含溫度反轉（ss −40 °C）；
   - SRAM derate 1.575；
   - duty cycle 預算；
-  - static IR 改判 VDD 降壓加 VSS（ground）抬升，上限 20 mV；
+  - static IR 改判 VDD 端壓降加 VSS（ground）端抬升，上限 20 mV；
   - EQY 加比 flip-flop 種類與 clock 接線；
   - 含電源接腳的 gate-level 模擬。
 - **收斂**：
@@ -342,10 +344,10 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
   - hold 用 0.3 ns 餘量修掉。
   - CTS 為了和 flip-flop 對齊，在 SRAM 的 clock 前插了 delay buffer，LibreLane 沒有變數可以關掉（解法 `-no_insertion_delay` 到 Phase 5 才做）。
   - 第 5 次 harden 15 個 corner 全過。
-- **regression**：乾淨 worktree 的 `make regress` 25/25，123 分鐘，163 個 negative test 案例（含 positive control）全部符合預期。前三次乾淨 run 不算數，原因分別是：
+- **regression**：乾淨 worktree 的 `make regress` 25/25，123 分鐘，163 個 negative test 案例（含 positive test：在正確的 run 上確認 checker 判 PASS）全部符合預期。前三次乾淨 run 不算數，原因分別是：
   - 審查後改了 checker；
   - 繞線器的中間數字不同；
-  - gate-level 模擬超過牆鐘時限。
+  - gate-level 模擬超過執行時間上限（wall-clock timeout）。
 
 ### Phase 3.5：SRAM 時序改用 SPICE 實測（2026-10-05）
 
@@ -371,12 +373,12 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
   - riscv-tests 65/65，ISS trace 比對 48/48。
   - **44 ns**、15 個 corner 的 signoff：Hazard3 +1.114／+0.109 ns，PicoRV32 +0.789／+0.080 ns。
   - 乾淨 worktree 的 `make regress` 21/21、`make regress-picorv32` 26/26，三次 harden 都與 golden 逐值相同。
-- **收斂**（Hazard3 共 12 次 harden；PicoRV32 另外 5 次，加上誤差樣本）：
+- **收斂**（Hazard3 共 12 次 harden；PicoRV32 另外 5 次，加上容許誤差的樣本）：
   1. **resizer 失控**：`RepairDesignPostGPL` 跑了 108 分鐘、記憶體到 92.9 GB，原因是 resizer 換上推不動一顆 buffer 的弱 cell `a2111oi_1`。ADR-0012 排除弱 cell，harden 前用 `pnr/check_weak_cells.py` 檢查。
   2. **ss_n40C setup −4.158 ns**：resizer 沒看溫度反轉 corner。處理：ADR-0013。
   3. **剩 −0.381 ns**：使用者選 44 ns。
   4. **signoff −1.131 ns**，其中約 0.97 ns 在繞線後才出現：加一次繞線後的 resizer 修復（ADR-0014）。
-  5. **上限與 golden**：從 PicoRV32 抄來的上限不適用 Hazard3，golden 比對也因小的版圖差異 FAIL。改成每個設計自己推導上限，並加版圖誤差（ADR-0015）。
+  5. **上限與 golden**：從 PicoRV32 抄來的上限不適用 Hazard3，golden 比對也因小的版圖差異 FAIL。改成每個設計自己推導上限，並加版圖的容許誤差（ADR-0015）。
   6. **PicoRV32 的半週期路徑被吃掉**：CTS 為了對齊 latency，在 `sram0/clk0` 前插了 10 顆 `delaybuf`。LibreLane 沒有開關可以關掉，所以用 repo 的 plugin 換掉 CTS step，加 `-no_insertion_delay`（ADR-0016）。
   7. **最壞組合 IR 超標**：獨立審查推估 ff 電流加 ss 電阻的最壞組合約 25.6 mV，exit review 實測 25.75 mV，超過 20 mV。met5 strap 加寬到 4.8 µm 後降到 14.13 mV（ADR-0017）。
 - **沒達成**：exit criterion 7b「只改 design 層」。改了 4 項 flow 設定（ADR-0012、0013、0014、0016，兩個 CPU 一起改），另外還有週期、CTS plugin、checker 與上限；使用者接受為與計畫不同。
@@ -390,12 +392,12 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
   - 預設設定的 macro 和預建的一樣會讀錯。
   - 用網表 what-if 比較 transmission gate 與 sense amp 輸入端預充電，選擇預充電（patch 0001）。
   - 接著 2 KB macro 在 tt 25 °C 讀錯，原因是閒置 port 的 chip-select flip-flop 從沒被時脈鎖存。`clk1` 接系統時脈後，7 個條件都讀對。
-- **特性化**：5 個 PVT 的時序與 internal power 都用 SPICE 量。過程中要處理三件事：port 1 浮接的穿透電流、半穩態的 bitcell、gmin。
+- **特性化**：5 個 PVT 的時序與 internal power 都用 SPICE 量。過程中要處理三件事：port 1 浮接的穿透電流、亞穩態（metastable）的 bitcell、gmin。
 - **整合時的問題**：
   - LEF 的資料庫單位 2000 讓 OpenROAD 丟掉整份 LEF（`ODB-0205`），改成 1000。
   - **最終 GDS 裡的 SRAM 是空的**：OpenRAM 的 LEF 沒有 `FOREIGN`，stream-out 沒有合併 macro 的 GDS，log 卻寫「All LEF cells have matching GDS cells」。處理：補 `FOREIGN`，並新增 checker `check_macro_gds.py`。
   - **flow 的 KLayout DRC 在 SRAM 裡報 27 個違規**：預建 macro 會是 0，只因為 deck 依名稱排除 `*sky130_sram_*kbyte_*`。用 OpenRAM patch 0002–0004 修正。
-  - **EQY 略過自產 SRAM**：EQY 的網表解析只認 `sky130_*` 開頭的 cell，自產 SRAM 被靜默略過。修正後出現 EQY 失敗：兩份網表其實等價，是 OpenROAD 對調等價輸入（`RSZ-0043`）讓名稱對應矛盾，屬工具限制，改成排除被對調的腳位（決定 18）。
+  - **EQY 略過自產 SRAM**：EQY 的網表解析只認 `sky130_*` 開頭的 cell，自產 SRAM 被靜默略過。修正後出現 EQY 失敗：兩份網表其實等價，是 OpenROAD 對調等價輸入（`RSZ-0043`）讓名稱對應矛盾，屬工具限制，改成排除被對調的腳位（ADR-0018 決定 18）。
 - **結果**：
   - Hazard3 setup／hold +0.656／+0.126 ns，PicoRV32 +0.769／+0.082 ns。
   - `85bfa75` 的乾淨 worktree regression 23/23、28/28。
@@ -425,7 +427,7 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
    - Caravel 輸入的 transition（0.84–0.97 ns）超過 slew 上限。內部 net 照舊判，邊界 net 另訂上限（決定 16）。
    - Caravel 輸入路徑 hold −0.071 ns：global routing 後的 hold 餘量從 0.05 改成 0.2 ns（決定 17）。
 5. **IR**（決定 18–20），一天內改了三次：
-   1. 從 Caravel 真實的 `vccd1` pad 與跨接線起算，最壞組合到 104 mV，met4 strap 從 1.6 改成 4.8 µm。
+   1. 從 Caravel 真實的 `vccd1` pad 起算（電流經 Caravel 的電源環與 met3 電源連接線進入 wrapper，`manual_power_connections.lef`），最壞組合到 104 mV，met4 strap 從 1.6 改成 4.8 µm。
    2. 改用預算所保護的慢 corner 判。
    3. 電流改用 **CPU max power pattern** 的切換活動（`fw/tests/maxpower`，在 gate-level 模擬錄波）。使用者原話：「一般IR都會用CPU max power pattern去做不是嗎」。
 
@@ -494,7 +496,7 @@ Phase 7 的 wrapper 在四組比較中都和 golden 逐值相同。`picorv32_cor
 
 ![IR drop 分布](figures/ir_drop_map.png)
 
-*圖 13：wrapper 在 max power pattern 下的 VDD 降壓（vccd1，11.92 mV）與 VSS 抬升（vssd1，7.65 mV）分布，max_ss_100C_1v60、window 5c，合計 19.56 mV。*
+*圖 13：wrapper 在 max power pattern 下的 VDD 端壓降（vccd1，11.92 mV）與 VSS 端抬升（vssd1，7.65 mV）分布，max_ss_100C_1v60、window 5c，合計 19.56 mV（完整位數是 11.916＋7.649 mV，三個數字各自四捨五入；`figures/SOURCES.md` §9）。*
 
 ### 6.4 precheck
 
@@ -506,9 +508,9 @@ repo 的 `check_precheck.py` 依 ADR-0019 決定 5 判為 **PASS**。ChipFoundry
 
 ### 6.5 密度與 fill 試跑
 
-precheck 只查密度上限。一般認為 Caravel 的下線腳本會先對整顆晶片補 metal fill，再查下限（證據中等，沒有文件明講；`runs/p7_review/chipfoundry_fill.md`）：`check_density.py`，li1 與 met1–4 ≥ 35%、met5 ≥ 45%、FOM ≥ 33%，以 700 µm 視窗計。
+precheck 只查密度上限。下限一般認為由 Caravel 的下線腳本檢查：先對整顆晶片補 metal fill，再用 `check_density.py` 以 700 µm 視窗查 li1 與 met1–4 ≥ 35%、met5 ≥ 45%、FOM ≥ 33%。這是推論，沒有文件明講（證據中等，`runs/p7_review/chipfoundry_fill.md`）。
 
-wrapper 單獨、還沒補 fill 時遠低於下限（met2 1.6%、met3 0.8%）。fill 試跑照 Caravel 的 `generate_fill.py`（`wafflefill(tiled)`）與 `check_density.py` 重寫一份來補 wrapper、再量一次。fill 區塊分開量再逐格相加，最多高估 0.33 個百分點：
+wrapper 單獨、還沒補 fill 時遠低於下限（met2 1.6%、met3 0.8%）。fill 試跑照 Caravel 的 `generate_fill.py`（`wafflefill(tiled)`）與 `check_density.py` 各重寫一份：先用前者補 wrapper，再用後者量。fill 區塊是分開量、再逐格相加的，最多高估 0.33 個百分點：
 
 | 層 | 補 fill 前（die 內） | 補 fill 後最低視窗 | 低於下限的視窗 |
 |---|---|---|---|
@@ -528,7 +530,7 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 
 這次試跑能說明與不能說明的：
 - 補不起來的視窗都在左下角 SoC 與 SRAM 一帶。
-- die 右緣與上緣的視窗，沒有外殼一起看就判斷不了。
+- die 右緣與上緣的視窗，沒有 Caravel 外框（harness）一起看就判斷不了。
 - ChipFoundry 實際用的 fill 參數不知道。
 
 ---
@@ -557,15 +559,15 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 
 | 類別（依關鍵字歸類，見圖 15） | 數量 | 代表例子（Phase） | 怎麼解決 |
 |---|---|---|---|
-| 工具缺陷或意外行為 | 93 | `GRT-0229` 隨機中止（3）；resizer 在弱 cell 上失控，記憶體到 92.9 GB（5）；CTS 在 SRAM clock 前插 latency 對齊 buffer（4–5）；LEF 沒有 `FOREIGN` 時 stream-out 不合併 macro GDS，log 卻說成功（6）；沒接的 inout 造成 `RSZ-0074`（7）；設了 driving cell 時 OpenSTA 忽略 `set_input_transition`（7）；PSM 在某些供電點 Signal 11（7）；KLayout Signal 11，推測是記憶體壓力（7） | 只對確切訊息做有上限的重試；用工具設定或 repo plugin 繞過，不改釘版的工具；寫 checker 偵測症狀；用 negative test 重現它（`CLAUDE.md` 規則 10） |
-| checker 或測試漏洞 | 54 | Phase 1 testbench 兩輪各漏掉 10 個植入錯誤；`check_soc.py` 的迴圈變數蓋掉 SRAM 原點（7）；EQY 略過所有非 `sky130_` cell（6）；舊的 precheck 報表配新 GDS 被判 PASS（7）；`judged_by` 接受任何字串（7）；NaN 被 `max()` 略過（7） | 修正、加 negative test、把漏洞類型寫進 `signoff-checker-qualification` 的表；開 regression 前先在真的 run 上跑 positive control |
+| 工具缺陷或意外行為 | 93 | 當掉或失控：`GRT-0229` 隨機中止（3）；resizer 在弱 cell 上失控，記憶體到 92.9 GB（5）；PSM 在某些供電點 Signal 11（7）；KLayout Signal 11，推測是記憶體壓力（7）。意外行為：CTS 在 SRAM clock 前插 latency 對齊 buffer（4–5）；LEF 沒有 `FOREIGN` 時 stream-out 不合併 macro GDS，log 卻說成功（6）；沒接的 inout 造成 `RSZ-0074`（7）；設了 driving cell 時 OpenSTA 忽略 `set_input_transition`（7） | 只對確切訊息做有上限的重試；用工具設定或 repo plugin 繞過，不改釘版的工具；寫 checker 偵測症狀；用 negative test 重現它（`CLAUDE.md` 規則 10） |
+| checker 或測試漏洞 | 54 | Phase 1 testbench 兩輪各漏掉 10 個植入錯誤；`check_soc.py` 的迴圈變數蓋掉 SRAM 原點（7）；EQY 略過所有非 `sky130_` cell（6）；舊的 precheck 報表配新 GDS 被判 PASS（7）；`judged_by` 接受任何字串（7）；NaN 被 `max()` 略過（7） | 修正、加 negative test、把漏洞類型寫進 `signoff-checker-qualification` 的表；開 regression 前先在真的 run 上跑 positive test |
 | 流程順序或做法 | 32 | 先選 GPIO 才定 block 位置（7）；第一次 harden 後才定 signoff 條件（2–3）；IR 判法一天改三次（7）；證據留在 session 暫存目錄（3、4、5、6、7） | 規劃核准的檢查（pin-plan checker 與編輯 hook，`CLAUDE.md` 規則 14）、ADR-0020 的 19 條提早檢查、放寬登記表 |
 | 規格或假設 | 22 | SRAM 在 ss 低溫讀錯（3.5）；padded `.lib` 沒有走線寄生（3–7）；Caravel 時脈的 duty cycle 與 jitter（5、7） | 選定 macro 前做 SPICE go／no-go、寫明假設、列入下線風險清單 |
 | 平台規定 | 14 | 整個使用者區只有一顆 `vccd1` pad；邊界 transition 超過 slew 上限；`decap_3` 造成 li1 密度超標；新 deck 對預建 SRAM 的規則；metal fill 由誰補（都在 Phase 7） | 平台試算表（ADR-0020 A2）、skill `tapeout-precheck-caravel` |
 | 主機環境與資源 | 8 | 另一個程式佔掉記憶體（5）；兩個 `neg-pnr` 同時被系統中止（6）；磁碟滿讓 regression FAIL、STA 卡住（7） | precheck VM 的記憶體已有自動檢查；ADR-0021 之後，`scripts/regress.py` 在磁碟剩餘不到 100 GiB 時拒絕開跑，每個 target 超過參考時間的 3 倍就砍掉並判 FAIL（`neg-regress` 的 `low_disk`、`timeout`）；同時跑幾條仍靠人判斷 |
 | 文件與決定不同步 | 7 | 後面的決定改了，前面的段落沒標註；把不同條件的數字放在一起比（5、6、7） | 每個 Phase 收尾的獨立文件核對 |
-| 其他 | 11 | 混合或無法歸類的列 | — |
 | macro 或 IP | 6 | SRAM `.lib` 的負載表斜率為負（3.5）；LEF 資料庫單位 2000（`ODB-0205`）（6） | view QA（`scripts/check_macro_views.py`、`make neg-macro-views`） |
+| 其他 | 11 | 混合或無法歸類的列 | — |
 
 ### 7.3 代價最高的問題
 
@@ -573,16 +575,18 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 
 | 問題 | 代價 | 什麼能更早抓到 |
 |---|---|---|
-| 預建 SRAM 在 ss 低溫讀錯 | 對一顆後來被換掉的 macro 做完整特性化（約 19 小時）；Phase 3.5–5 都用佔位 `.lib` | 選定 macro **之前**，在操作範圍內做 SPICE 讀寫（B1） |
-| 週期 40 → 42 → 43 → 44 ns | 三輪收斂 | 操作範圍由使用者決定，第一份網表就做 corner 代價的 what-if（A1、A3） |
-| Phase 7 的平台問題（單顆 `vccd1` pad、邊界 slew 與 hold、li1 密度、預建 SRAM 的規則、fill） | 約兩天重做、三項放寬 | 平台試算表：每項收件檢查都算到本設計的數字（A2） |
-| 修復步驟失控（4 次，每次 26–108 分鐘，一次到 92.9 GB） | 耗掉數小時；三次由人停下，一次工具自己異常結束 | 在所有 signoff corner 做弱 cell QA（C2）；自動停止尚未實作 |
-| 每個 Phase 收尾都找到 checker 漏洞（Phase 3、4、3.5、5、6、7 分別 5、10、12、8、7、8＋1 個） | Phase 4 起每個 Phase 多一輪完整 regression（Phase 3、3.5 的漏洞留到下一個 Phase 修） | checker 寫完就審查漏洞，不等收尾（E3） |
-| 本機資源：磁碟滿、記憶體壓力 | Phase 7 三條結案 regression 中有兩條重跑 | regression 的資源檢查與逾時（2026-10-15 已實作，ADR-0021；§8.5 B1） |
+| 預建 SRAM 在 ss 低溫讀錯 | 對一顆後來被換掉的 macro 做完整特性化（約 19 小時）；Phase 3.5–5 都用佔位 `.lib` | 選定 macro **之前**，在操作範圍內做 SPICE 讀寫（ADR-0020 B1） |
+| 週期 40 → 42 → 43 → 44 ns | 三輪收斂 | 操作範圍由使用者決定，第一份網表就做 corner 代價的 what-if（ADR-0020 A1、A3） |
+| Phase 7 的平台問題（單顆 `vccd1` pad、邊界 slew 與 hold、li1 密度、預建 SRAM 的規則、fill） | 約兩天重做、三項放寬 | 平台試算表：每項收件檢查都算到本設計的數字（ADR-0020 A2） |
+| 修復步驟失控（4 次，每次 26–108 分鐘，一次到 92.9 GB） | 耗掉數小時；三次由人停下，一次工具自己異常結束 | 在所有 signoff corner 做弱 cell QA（ADR-0020 C2）；自動停止尚未實作 |
+| 每個 Phase 收尾都找到 checker 漏洞（Phase 3、4、3.5、5、6、7 分別 5、10、12、8、7、8＋1 個） | Phase 4 起每個 Phase 多一輪完整 regression（Phase 3、3.5 的漏洞留到下一個 Phase 修） | checker 寫完就審查漏洞，不等收尾（ADR-0020 E3） |
+| 本機資源：磁碟滿、記憶體壓力 | Phase 7 三條結案 regression 中有兩條重跑 | regression 的資源檢查與逾時（2026-10-15 已實作，ADR-0021；§8.5 審查 B1） |
 
 ### 7.4 可以帶到任何專案的教訓
 
-1. **checker 要親眼看過它 FAIL，才算證據。** 每個 Phase 的獨立漏洞審查都找到 5–12 個漏洞；有些修正本身又帶進新的 bug：新加的變數和既有名稱重複，讓某一項檢查每次 run 都 FAIL（Phase 6 的 `files`、Phase 7 的 `defines`）。Phase 6 那次到結案 regression 才抓到；Phase 7 那次在開 regression 前、用真的 run 跑 positive control 抓到。
+1. **checker 要親眼看過它 FAIL，才算證據。** 每個 Phase 的獨立漏洞審查都找到 5–12 個漏洞。有些修正本身又帶進新的 bug：新加的變數和既有名稱重複，讓某一項檢查每次 run 都 FAIL（Phase 6 的 `files`、Phase 7 的 `defines`）。
+   - Phase 6 那次到結案 regression 才抓到。
+   - Phase 7 那次在開 regression 前就抓到，靠的是在真的 run 上跑 positive test。
 2. **工具會靜默失敗。** 實例：
    - EQY 略過 cell 而不警告；
    - stream-out 的 log 說成功，SRAM 卻是空的；
@@ -590,7 +594,7 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
    - 磁碟滿時 STA 直接卡住。
 
    對策是 checker 要看**產出**（GDS 裡有沒有 macro、報表裡有沒有那些腳位），不能看 log。
-3. **放寬之前，先寫清楚它在保護什麼。** 在一個設計上量出來的放寬（IR 的 corner、resizer 的餘量、golden 的誤差），換 CPU 之後就靜默失效。這是放寬登記表的由來。
+3. **放寬之前，先寫清楚它在保護什麼。** 在一個設計上量出來的放寬（IR 的 corner、resizer 的餘量、golden 的容許誤差），換 CPU 之後就靜默失效。這是放寬登記表的由來。
 4. **平台規定要算成數字，不能只看項目名稱。** 在平台文件上看到「IR drop」或「density」不夠，必須在第一次 harden 前算出本設計的數字。
 5. **實體相關的決定要照順序。** pad 與電源進入點 → block 位置 → pin → RTL → harden。Phase 7 因為順序錯了重做一次。
 6. **證據要放在下一個讀者打得開的地方。** 出處只在 session 暫存目錄或已被覆蓋的 run，就只能當推測引用。
@@ -604,7 +608,7 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 *圖 16：一個問題怎麼變成 skill 規則、防護與流程步驟（`CLAUDE.md` 規則 2、3、5、8、10、13）。*
 
 - 每個問題先寫成對應 skill **經驗紀錄**的一列：日期、run、原文訊息、根因（標明已驗證或推測）、處理、證據（`CLAUDE.md` 規則 2）。
-- 同一現象出現兩次以上，或根因已用實驗確認，才從經驗紀錄搬進**規則本文**（規則 3）。推測的根因不能寫進規則（2026-10-15 的審查發現有違反的，§8.5 C1）。
+- 同一現象出現兩次以上，或根因已用實驗確認，才從經驗紀錄搬進**規則本文**（規則 3）。推測的根因不能寫進規則（2026-10-15 的審查發現有違反的，§8.5 審查 C1）。
 - 工具缺陷要有四項防護（規則 10）：
   - 症狀，也要寫進 skill 的 `description`，因為 Claude 只靠這段決定要不要讀這個 skill；
   - 怎麼發現；
@@ -639,7 +643,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 | EQY 略過非 `sky130_` 的 cell（Phase 6） | `hard-macro-integration` 規則 10（每支 checker 在 positive run 印出讀到的 macro instance）；`formal-equivalence-eqy` 規則 5 | `neg-eqy` 的案例 |
 | block 位置還沒定就選 GPIO（Phase 7） | `CLAUDE.md` 規則 14、`chip-floorplan-pin-planning` | `make pin-plan`、`neg-pin-plan`（26 個）、PreToolUse hook |
 | `amend` 後 EQY 變成空洞證明（Phase 7） | `formal-equivalence-eqy` 規則 7：只 amend 組合邏輯的 driver | `nand2_comb_to_nor2`、`nand2_flop_to_nor2` 與 `amended_sequential()` 檢查 |
-| checker 新加的變數蓋掉預期值（Phase 6、7） | `signoff-checker-qualification` 規則 13 | 每次 regression 前在真的 run 上跑 positive control（P00／C00） |
+| checker 新加的變數蓋掉預期值（Phase 6、7） | `signoff-checker-qualification` 規則 13 | 每次 regression 前在真的 run 上跑 positive test（P00／C00） |
 
 ### 8.4 流程回顧（ADR-0020）
 
@@ -653,7 +657,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 - resizer 的 corner 等於 signoff corner；
 - floorplan 試跑就做 IR；
 - 放寬登記表；
-- golden 誤差至少用四個樣本定；
+- golden 的容許誤差至少用四個樣本定；
 - checker 寫完就審查漏洞。
 
 使用者決定這次先寫進流程，自動 checker 留到下一個專案開始時做（ADR-0020 決定 2）。
@@ -664,15 +668,17 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 - **要使用者決定**：新 checker、signoff 範圍、全域設定，以及可能構成下線風險的事（`CLAUDE.md` 規則 13）。使用者 2026-10-15 已決定（ADR-0021），結果整理在表格之後。
 - **照規則做的維護**：把已驗證的經驗升為規則、修正過時的文字。
 
+下面的 A1–A7、B1–B12、C1–C8 是這次審查建議的編號，本報告其他地方寫成「審查 A1」等。它們和 ADR-0020 提早檢查的編號（A1–E3，§8.4）無關。
+
 **A 群：會讓下一個專案直接出錯，或選不到 skill**
 
 | # | 寫回 | 位置 | 要使用者決定 |
 |---|---|---|---|
-| A1 | **skill 的 description 太長，在 Claude 的 skill 清單裡消失。** 單份 description 超過 1,536 字元會被截斷；所有 description 合計受 context window 1% 的預算限制，超過時最少被使用的 skill 先失去 description。目前有 3 份超過單份上限；驗證 agent 自己收到的清單裡，有 5 個 skill 完全沒有 description，等於選不到。 | 縮短 23 份 description；`check_skills.py` 加長度上限與一個超長的植入錯誤 | 縮短：不用。新檢查與 `CLAUDE.md` 規則 5 的修改：要 |
+| A1 | **skill 的 description 太長，在 Claude 的 skill 清單裡消失。** 單份超過 1,536 字元會被截斷。所有 description 共用 context window 1% 的預算，超過時最少被使用的 skill 先失去 description。目前有 3 份超過單份上限。驗證 agent 自己收到的清單裡，有 5 個 skill 完全沒有 description，等於選不到。 | 縮短 23 份 description；`check_skills.py` 加長度上限與一個超長的植入錯誤 | 縮短：不用。新檢查與 `CLAUDE.md` 規則 5 的修改：要 |
 | A2 | **交付的 GDS 沒有 latch-up 標記（`areaid.lowTapDensity`，GDS 81/14），而且沒有任何檢查查預設的 6 µm tap 到 diffusion 規則。** 三個原因：Magic 只查 15 µm；PDK 與 precheck 的 KLayout deck 只宣告這一層，沒有任何規則用到；Magic 自己產生的標記只蓋 top cell 內縮 250 µm 的範圍。 | ADR-0019、放寬登記表、Phase 7 已知限制、`drc-signoff` 規則 7 | **已決定**：已量測（§9.1 第 7 項）；記錄並問 ChipFoundry，不改設計 |
 | A3 | `floorplan-congestion` 沒指向 pad／block／pin 的核准流程，可能繞過 `CLAUDE.md` 規則 14 | `floorplan-congestion` 規則 2、3 與 description | 不用 |
 | A4 | 和後來決定矛盾的規則，例如舊的 `sram0/clk1` 例外、讓人以為有判 EM 的 IR 規則 | `timing-constraints-sdc` 規則 5、`signoff-criteria`、`lvs-signoff` 規則 2、`pdn-ir-drop`、`drv-timing-closure`、`multicorner-sta` | 不用 |
-| A5 | 新專案的入口（流程文件）缺必要步驟：`*_VIOLATION_CORNERS`（LibreLane 預設 setup 只判 tt）、結案 regression 前先跑 positive control、EQY 的三種靜默略過、flow FAIL 時 checker 照跑 | `arvinsa-rtl-gds-flow.md` 4.5–4.9 | 不用 |
+| A5 | 新專案的入口（流程文件）缺必要步驟：`*_VIOLATION_CORNERS`（LibreLane 預設 setup 只判 tt）、結案 regression 前先跑 positive test、EQY 的三種靜默略過、flow FAIL 時 checker 照跑 | `arvinsa-rtl-gds-flow.md` 4.5–4.9 | 不用 |
 | A6 | LibreLane 設定靜默無效（`SIGNOFF_SDC_FILE` 沒設、`DRT_ANTENNA_REPAIR_MARGIN`、`RT_CLOCK_MIN_LAYER` 等），缺「怎麼發現」與防護 | 五個 skill；`check_inputs.py` 新增列 | 文字：不用。checker：要 |
 | A7 | EM 從沒判過（Phase 5 met5 加寬前，單一 cut 的 via4 用到上限的 78%，加寬後 18%） | 流程文件 4.6；之後的 checker | **要** |
 
@@ -707,9 +713,17 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 - **已完成**：所有維護類寫回（A3–A5、A6 文字、B3、B4 文字、B5 文字、B8、B10、B12、C1–C6）。由五個 agent 改了 20 個 skill，流程文件與 README 都已同步，`make skill-check` PASS。
 - **已實作的 checker**：
   - **A1** `scripts/check_skills.py`：單份 description ≤ 1,024 字元、清單上保留描述的合計 ≤ 8,000，並有超長的植入錯誤。
-  - **B1** `scripts/regress.py`：磁碟剩餘不到 `REGRESS_MIN_FREE_GB`（100 GiB）就拒絕開跑；每個 target 超過參考時間 3 倍（至少 30 分鐘）就逾時，整個程序群組都砍掉。`make neg-regress` 加 `low_disk`、`timeout` 兩案，現在 10/10。已在 `f02a1a0` 的乾淨 worktree 用真實 regression 確認：Hazard3 30/30、PicoRV32 31/31、wrapper 18/18（含 ChipFoundry precheck）；每次 harden 都和 golden 逐值相同，沒有任何一項超過逾時上限的 35%，三條都通過磁碟檢查。
+  - **B1** `scripts/regress.py`：
+    - 磁碟剩餘不到 `REGRESS_MIN_FREE_GB`（100 GiB）就拒絕開跑；
+    - 每個 target 超過參考時間 3 倍（至少 30 分鐘）就逾時，整個程序群組都砍掉；
+    - `make neg-regress` 加 `low_disk`、`timeout` 兩案，現在 10/10。
+    - 已在 `f02a1a0` 的乾淨 worktree 用真實 regression 確認：Hazard3 30/30、PicoRV32 31/31、wrapper 18/18（含 ChipFoundry precheck）。每次 harden 都和 golden 逐值相同，沒有任何一項超過逾時上限的 35%，三條都通過磁碟檢查。
 - **A2（latch-up）**：已量測（§9.1 第 7 項）、記錄，並併進 ChipFoundry 問題草稿；不改設計。
-- **佐證收錄、run 刪除**（ADR-0021 決定 7；使用者：這些 run 是為了這份報告與流程，「主要是重要的佐證報告才收」）：`make collect-evidence`（`scripts/collect_evidence.py`）把文件引用的報告、每次 harden 的判定與 criteria review、regression 摘要、precheck 結果收進 `docs/evidence/`，保留原路徑（677 個檔、6.8 MB；`docs/evidence/references.md` 列出每個被引用路徑的收錄狀態）。GDS、DEF、網表、整個 run 目錄不收，由乾淨 checkout 重跑產生。之後刪掉所有 worktree 與 `runs/`。這個做法已寫進流程（`flow-regression-reproducibility` 規則 16）。
+- **佐證收錄、run 刪除**（ADR-0021 決定 7；使用者：這些 run 是為了這份報告與流程，「主要是重要的佐證報告才收」）：
+  - `make collect-evidence`（`scripts/collect_evidence.py`）把文件引用的報告、每次 harden 的判定與 criteria review、regression 摘要、precheck 結果收進 `docs/evidence/`，保留原路徑（677 個檔、6.8 MB）。`docs/evidence/references.md` 列出每個被引用路徑的收錄狀態。
+  - GDS、DEF、網表、整個 run 目錄不收，由乾淨 checkout 重跑產生。
+  - 之後刪掉所有 worktree 與 `runs/`。
+  - 這個做法已寫進流程（`flow-regression-reproducibility` 規則 16）。
 - **延到下一個專案**（照 ADR-0020 決定 2 的做法，skill 裡寫明「目前沒有自動防護」）：A6 的 checker 列、A7 EM、B2 失控自動停、B6、B7、B9、B11；C7、C8 不做。
 
 ### 8.6 總檢討後的 skill 結構
@@ -752,36 +766,38 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
    - 韌體一定要把 `host_en` 寫 0；
    - `gpio_out` 只能從 logic analyzer 看；
    - PLL 的 jitter 與 duty cycle 是假設。
-7. **latch-up 標記**（2026-10-15 審查新發現；Phase 7 已知限制 21）：交付的 GDS 沒有 `areaid.lowTapDensity`（81/14），flow 與 precheck 也都沒有檢查預設的 6 µm tap 規則。量測（`docs/notes/latchup/`）：離同型 tap 超過 15 µm 的 diffusion 為 0；超過 6 µm 的約佔 SRAM 外 diffusion 面積的 7%（標準元件照 15 µm 規則放 tap，`FP_TAPCELL_DIST` 13 µm）。使用者決定記錄並問 ChipFoundry 標記由誰加、用哪個距離判，不改設計（ADR-0021 決定 2）。
+7. **latch-up 標記**（2026-10-15 審查新發現；Phase 7 已知限制 21）：交付的 GDS 沒有 `areaid.lowTapDensity`（81/14），flow 與 precheck 也都沒有檢查預設的 6 µm tap 規則。
+   - 量測（`docs/notes/latchup/`）：離同型 tap 超過 15 µm 的 diffusion 為 0；超過 6 µm 的約佔 SRAM 外 diffusion 面積的 7%。原因是標準元件照 15 µm 規則放 tap（`FP_TAPCELL_DIST` 13 µm）。
+   - 使用者決定：記錄下來，並問 ChipFoundry 標記由誰加、用哪個距離判；不改設計（ADR-0021 決定 2）。
 
 ### 9.2 方法上的已知限制（Phase 7 已知限制 7–20）
 
 這些不影響這次的結果，但要知道：
-- clock skew metric 含報表算法的悲觀量（約 2.7 ns，推測）；
+- clock skew metric 含報表計算方式造成的悲觀量（約 2.7 ns，推測）；
 - 邊界 slew 的例外判法；
 - resizer 沒看 ff_100C；
 - placement 密度 50% 是繞過的做法；
 - EQY 只證合成網表對最終網表，RTL 到網表靠 gate-level 模擬；
-- golden 誤差沿用 Hazard3 的值；
+- golden 的容許誤差沿用 Hazard3 的值；
 - `ef_decap_12` 沒有 `.lib`；
 - 工具版本與官方 image 不同；
 - 扁平放法沒有官方範例；
 - 部分放寬的依據不是在 wrapper 上量的；
 - 提早檢查的自動化延到下一個專案；
 - wrapper 的 negative test 只涵蓋它特有的檢查，CVC 的 HI-Z 警告沒有自動判定；
-- 供電點放在 Caravel 跨接線上時 PSM 會當掉（Signal 11）；
-- regression 對本機資源不足沒有防護。
+- 供電點放在 Caravel 的 met3 電源連接線上時 PSM 會當掉（Signal 11）；
+- regression 對本機資源不足沒有防護（Phase 7 結案時的狀態；ADR-0021 已加上磁碟檢查與逾時，見 §8.5，同時跑幾條仍靠人判斷）。
 
 ### 9.3 待探討
 
-- **latch-up 標記**（A2，已量測，見 §9.1 第 7 項）：等 ChipFoundry 回覆使用者區的標記由誰加、用 6 µm 還是 15 µm 判。
-- **skill 清單的實際狀況**（A1）：`make skill-check` 已強制長度，但清單上是否真的看得到入口的描述，取決於模型的 context window 與使用者的其他 skill；Claude Code 升版時用 `/context` 或 `/doctor` 確認。
-- **step 失控自動停止**（B2），以及 ADR-0021 決定 3 延到下一個專案的其他 checker（A6 的 `check_inputs.py` 列、A7 EM、B6、B7、B9、B11）。
-- **EM**（A7）：用和 IR 相同的 max power pattern 電流做 EM checker，via 電流也要和 tech LEF 的上限比。範圍已由使用者決定為電源網路（strap 與 via，ff 與 ss corner），訊號線不在範圍（ADR-0021 決定 8）。
-- **clock 的繞線層**（A6）：新專案的 config 第一版就明確設 `RT_CLOCK_MIN_LAYER`（sky130 用 `met3`），並做 checker 確認 `resolved.json` 不是 null；本專案不設（ADR-0021 決定 8）。
+- **latch-up 標記**（審查 A2，已量測，見 §9.1 第 7 項）：等 ChipFoundry 回覆使用者區的標記由誰加、用 6 µm 還是 15 µm 判。
+- **skill 清單的實際狀況**（審查 A1）：`make skill-check` 已強制長度，但清單上是否真的看得到入口的描述，取決於模型的 context window 與使用者的其他 skill；Claude Code 升版時用 `/context` 或 `/doctor` 確認。
+- **step 失控自動停止**（審查 B2），以及 ADR-0021 決定 3 延到下一個專案的其他 checker（審查 A6 的 `check_inputs.py` 列、A7 EM、B6、B7、B9、B11）。
+- **EM**（審查 A7）：用和 IR 相同的 max power pattern 電流做 EM checker，via 電流也要和 tech LEF 的上限比。範圍已由使用者決定為電源網路（strap 與 via，ff 與 ss corner），訊號線不在範圍（ADR-0021 決定 8）。
+- **clock 的繞線層**（審查 A6）：新專案的 config 第一版就明確設 `RT_CLOCK_MIN_LAYER`（sky130 用 `met3`），並做 checker 確認 `resolved.json` 不是 null；本專案不設（ADR-0021 決定 8）。
 - **各 Phase 留下的量測問題**：
   - SRAM macro 內部的 IR（PSM 的 CSV 裡 SRAM 只有一個供電節點；是不是 PSM 的建模方式沒有查）；
-  - clock skew 的 2.7 ns 報表算法（沒有讀 OpenSTA 原始碼確認）；
+  - clock skew 中來自報表計算方式的 2.7 ns（沒有讀 OpenSTA 原始碼確認）；
   - 加了 ff_100C 之後，resizer 為什麼不放大 `a221oi_1`；
   - PSM 為什麼在某些供電點當掉。
 
@@ -809,7 +825,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
   ```
   結果在 `runs/regress*/summary.md` 與 `junit.xml`。每次 harden 都和 `signoff/golden/<design>/metrics.json` 比對。
 - **新專案沿用這套流程**：見 `arvinsa-rtl-gds-flow.md` §1：起手清單、可以直接沿用的、要依新設計重做的。
-- **主機磁碟**：專案結束時，其他 13 個 worktree 的 `runs/` 約 386 GB（其中三個 `p7close2_*` 是結案證據），主目錄的 `runs/` 另有 176 GB。要不要清由使用者決定。
+- **佐證與 run**：專案結束時用 `make collect-evidence` 把文件引用的報告收進 `docs/evidence/`，之後刪掉所有 worktree 與 `runs/`（ADR-0021 決定 7，`ec3dca9`）。重跑上面的 regression 會重新產生 `runs/`。
 
 ---
 
@@ -831,7 +847,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 | 0012 | resizer 不准用推不動一顆 buffer 的弱 cell；harden 前檢查 |
 | 0013 | resizer 也看溫度反轉的 ss_n40C corner |
 | 0014 | global routing 後再修一次 setup |
-| 0015 | golden 比對允許小的版圖數量與面積誤差 |
+| 0015 | golden 比對對版圖數量與面積設小的容許誤差 |
 | 0016 | CTS 不做 macro 的 latency 對齊（`-no_insertion_delay`） |
 | 0017 | met5 strap 加寬到 4.8 µm；每次 harden 檢查最壞組合 IR |
 | 0018 | Phase 6 用 OpenRAM 自產 SRAM macro |
@@ -845,6 +861,8 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 
 版圖截圖與數據圖的來源包括：結案 run、SRAM macro 的 GDS、核准時的 floorplan run（`p7_floorplan4`）、fill 試跑、README 與 exit review。每張圖的來源檔、產生指令與圖上數字的出處，見 [`figures/SOURCES.md`](figures/SOURCES.md)。重畫架構圖需要 `Arvinsa-skill-develop-template` repo（`diagrams.py` 指向它的 `engine.py`）。
 
+**佐證路徑換算**：本文與 `figures/SOURCES.md` 引用的 `runs/…` 路徑，在專案結束時已刪除（ADR-0021 決定 7）。被引用的檔案原樣收在 `docs/evidence/` 底下：主目錄的 `runs/x` 在 `docs/evidence/arvinsa-rtl-gds/runs/x`，worktree `<名稱>` 的 `runs/x`（例如 `p7close2_caravel/runs/…`）在 `docs/evidence/arvinsa-rtl-gds-<名稱>/runs/x`。規則見 `docs/evidence/README.md`；每個路徑有沒有收錄，見 `docs/evidence/references.md`。
+
 ## 附錄 C：名詞
 
 | 名詞 | 意思 |
@@ -852,11 +870,12 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 | harden | 對一個區塊跑 RTL-to-GDS：合成、擺放與繞線、signoff |
 | signoff | 版圖被接受前必須 PASS 的檢查：STA、DRC、LVS、antenna、IR 等 |
 | corner | 時序分析用的製程／電壓／溫度組合，加上 RC 萃取 corner（min／nom／max），例如 `max_ss_100C_1v60`；15 個 corner＝5 個 PVT × 3 個 RC |
-| golden | 一次經過檢視、被接受的 run 的完整 metrics；之後的 run 必須在 ADR-0015 列出的誤差內和它相符 |
+| golden | 一次經過檢視、被接受的 run 的完整 metrics；之後的 run 必須在 ADR-0015 列出的容許誤差內和它相符 |
 | checker | 把結果判成 PASS 或 FAIL 的腳本 |
 | negative test／植入錯誤 | 故意植入錯誤，要求 checker 必須 FAIL 的測試 |
 | testbench／checker qualification | 證明測試與 checker 抓得到植入的錯誤 |
-| 乾淨 worktree | 新建、沒有本機修改的 `git worktree`；正式結果只認這裡跑出來的 |
+| 乾淨 worktree | 用 `git worktree add` 另外新建、沒有本機修改的工作目錄；Phase 的正式結果只認這裡跑出來的 |
+| 乾淨工作樹 | 沒有未提交修改的工作目錄（`git status` 是乾淨的）；run guard 檢查的是這件事 |
 | run guard | 只在 harden 是目前 commit、乾淨工作樹做出來時，才允許下游步驟 |
 | criteria review | 每次 harden 後檢視每個 signoff 條件有沒有被執行、是否仍合理 |
 | EQY | Yosys 的 formal equivalence，證明兩份網表等價 |
@@ -864,3 +883,21 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 | max power pattern | 刻意讓電路切換最多的韌體測試，用來決定 IR drop 的電流 |
 | skill | 流程文件（`SKILL.md`），含規則、已知陷阱與經驗紀錄 |
 | ADR | 決定紀錄，含選項、理由與使用者原話 |
+| 容許誤差（tolerance） | golden 比對時，ADR-0015 列出的 metric 族群可以和 golden 差多少；沒列出的必須逐值相同 |
+| positive test | 用正確的設計或 run 跑 checker，確認它判 PASS；防止 checker 對什麼都判 FAIL |
+| test vehicle | 用來驗證流程的示範設計，不是要量產的產品 |
+| PVT | 製程（process）、電壓（voltage）、溫度（temperature）的組合，例如 ss、1.60 V、−40 °C |
+| halo | macro 周圍不放標準元件的保留區 |
+| strap | 電源網路（PDN）裡的金屬電源條 |
+| tap cell | 把 n-well 接到 VDD、p-substrate 接到 VSS 的 cell，用來防 latch-up |
+| decap | 接在電源與地之間的去耦電容 cell，穩定局部電壓 |
+| fill | 為了符合密度規則而補的圖形：metal fill 是不接電的金屬塊，fill cell 是填滿 row 空隙的 cell |
+| derate | 時序分析時乘在延遲上的係數，用來涵蓋模型沒算到的變異（例如 SRAM derate 1.575） |
+| FEOL／BEOL | 前段製程（電晶體、diffusion、poly 等層）／後段製程（金屬繞線與 via）；precheck 的 `klayout_feol`、`klayout_beol` 分別查這兩段的 DRC |
+| FOM | sky130 的 diffusion 相關光罩層（field oxide mask）；Caravel 的密度檢查用它算 diffusion 的密度，fill 也會補這一層 |
+| OEB | Caravel GPIO 的 output enable 訊號（低電位有效，`io_oeb`）；precheck 有一項檢查它的接法 |
+| ISS | 指令集模擬器（instruction set simulator）：逐指令算出 CPU 該有的結果，拿來和 RTL 比對 |
+| EM | electromigration（電遷移）：電流長期流過金屬，讓導線變細甚至斷開；要比對每條線與 via 的電流上限 |
+| PSM | OpenROAD 的電源網路分析模組（PDNSim，訊息代號 PSM），用來算 IR drop |
+| resizer | OpenROAD 修時序與 slew／capacitance 違規的步驟：換 cell 大小、插 buffer |
+| logic analyzer | Caravel 的 logic analyzer 腳位（`la_data_in`、`la_data_out`、`la_oenb`），管理用 SoC 透過它讀寫使用者區的訊號 |

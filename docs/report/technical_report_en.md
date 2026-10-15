@@ -8,6 +8,7 @@
 | Project period | 2026-10-03 – 2026-10-15 (132 commits) |
 | Final evidence | commit `2b04451` (three clean-worktree regressions); exit review commit `0d47a3d` |
 | Status | Phase 0–7 and Phase 3.5 complete. Phase 7 stops at the precheck; the chip is **not** taped out. |
+| Evidence files | The `runs/…` paths cited in the text were deleted at the end of the project; the cited reports are kept in `docs/evidence/` (path mapping in Appendix B) |
 | Language | English (this file). Traditional Chinese version: [`technical_report_zh-TW.md`](technical_report_zh-TW.md) |
 
 ---
@@ -31,7 +32,7 @@ The final design, a Hazard3 SoC with a 2 KB self-generated SRAM placed flat in t
 - It passes ChipFoundry's precheck: 11 of the 13 official checks pass, and the remaining two report only the OpenRAM bitcell rules at the same positions as the PDK's own prebuilt SRAM.
 - It passes the same signoff as the SoC alone: 15-corner STA, DRC, LVS, antenna, formal equivalence (EQY), gate-level simulation, and IR drop measured from Caravel's real pads with a CPU max-power pattern.
 
-From Phase 3 on, every phase closed with a full regression in a clean worktree, independent agent reviews and an exit review. Problems that came up — tool defects, checker holes, ordering mistakes in the flow — were written back into the process skills (23 during the project, 30 after the final review, grouped into Middle-end, Backend and Package with one entry skill each), the flow document, or an automatic checker with a negative test (an injected bug that the checker must catch). A final review on 2026-10-15 found that 39 of the 247 problems were still only in an experience record or in no skill at all (§7); the write-backs the user then chose are in §8.5–§8.6. This report records the whole journey: what was done, which problems appeared and how they were solved, how the skills and the flow changed as a result, and what is still open.
+From Phase 3 on, every phase closed with a full regression in a clean worktree, independent agent reviews and an exit review. Problems that came up — tool defects, checker holes, ordering mistakes in the flow — were written back into the process skills (23 during the project, 30 after the final review, grouped into Middle-end, Backend and Package with one entry skill each), the flow document, or an automatic checker with a negative test (an injected bug that the checker must catch). A final review on 2026-10-15 found that 39 of the 247 problems were still only in an experience record or in no skill at all (§7); the write-backs the user then chose are in §8.5–§8.6. This report records the whole journey: what was done, which problems appeared and how they were solved, how the skills and the flow changed as a result, and what is still open. Terms and abbreviations are explained in Appendix C.
 
 ---
 
@@ -256,7 +257,7 @@ In Phase 7 the wrapper was bit-identical with its golden in four comparisons. Th
 ### Phase 1 — SoC RTL, firmware and RTL regression (2026-10-03)
 
 - **Result**: lint (23 variants, 0 warnings), synthesis check, firmware, upstream PicoRV32 tests; `make regress-rtl` 26/26 (13 tests × Icarus and Verilator, identical cycle counts and UART text); `make neg-rtl` 33/33 injected bugs caught.
-- **Testbench qualification**: two independent rounds injected bugs outside `bugs.toml`. Round 1 injected 20 bugs and the regression missed 10. Round 2 injected 23 bugs (F01–F24, F16 replaced by F16b) and missed 10 (for example a UART stall path never exercised, firmware altered to write DONE before SIG, a single bus transaction that accessed SRAM twice). Four new checkers (`sram_port`, `irq_line`, `uart_div`, `coverage`) and new tests closed the gaps; `neg-rtl` grew 8 → 20 → 33.
+- **Testbench qualification**: two independent rounds injected bugs outside `bugs.toml`. Round 1 injected 20 bugs and the regression missed 10. Round 2 injected 23 bugs (F01–F24, F16 replaced by F16b) and missed 10 (for example a UART stall path never exercised, firmware altered to write DONE before SIG, a single bus transaction that accessed SRAM twice). (Count note: the IDs give 24. The commit at the time, `b1c818d`, says 23, and `docs/phase_exit/phase1.md` says 23 on line 23 and 24 on line 25; the original review output is no longer in the repository, so this cannot be checked further.) Four new checkers (`sram_port`, `irq_line`, `uart_div`, `coverage`) and new tests closed the gaps; `neg-rtl` grew 8 → 20 → 33.
 - **Lesson**: a self-checking test that has never been shown to fail is not evidence. This led to the skills `signoff-checker-qualification` and `dv-directed-tests`.
 
 ### Phase 2 — PicoRV32 hardened alone (2026-10-03)
@@ -291,7 +292,7 @@ In Phase 7 the wrapper was bit-identical with its golden in four comparisons. Th
   - EQY extended to flip-flop types and clock wiring;
   - gate-level simulation with power pins.
 - **Convergence**: resizer with 15 corners did not finish (35+ min), so `RSZ_CORNERS` was kept at 9. Hold was fixed with a 0.3 ns margin. CTS inserted delay buffers before the SRAM clock to balance it with the flip-flops, and no LibreLane variable turned this off (the fix, `-no_insertion_delay`, came in Phase 5). The fifth harden passed all 15 corners.
-- **Regression**: `make regress` 25/25 in a clean worktree, 123 minutes, all 163 negative-test cases (including positive controls) as expected. Three earlier clean runs did not count:
+- **Regression**: `make regress` 25/25 in a clean worktree, 123 minutes, all 163 negative-test cases (including positive tests, which confirm that a checker passes a correct run) as expected. Three earlier clean runs did not count:
   - checkers changed after a review;
   - an intermediate router number differed;
   - a gate-level simulation hit its wall-clock limit.
@@ -326,7 +327,7 @@ In Phase 7 the wrapper was bit-identical with its golden in four comparisons. Th
   - LEF database units 2000 made OpenROAD drop the whole LEF (`ODB-0205`); converted to 1000.
   - **The final GDS contained an empty SRAM**: the OpenRAM LEF had no `FOREIGN`, so the stream-out did not merge the macro GDS, yet the log said "All LEF cells have matching GDS cells". Fix: add `FOREIGN` plus a new checker, `check_macro_gds.py`.
   - The flow's KLayout DRC found 27 violations inside the SRAM. The prebuilt macro showed 0 only because the deck excludes `*sky130_sram_*kbyte_*` by name. Fixed with OpenRAM patches 0002–0004.
-  - EQY's netlist parser only knew `sky130_*` cells, so the self-generated SRAM was silently skipped. After the fix, an EQY failure appeared: OpenROAD pin swaps (`RSZ-0043`) made the name matching contradictory although the netlists are equivalent, a tool limitation handled by excluding the swapped pins (decision 18).
+  - EQY's netlist parser only knew `sky130_*` cells, so the self-generated SRAM was silently skipped. After the fix, an EQY failure appeared: OpenROAD pin swaps (`RSZ-0043`) made the name matching contradictory although the netlists are equivalent, a tool limitation handled by excluding the swapped pins (ADR-0018 decision 18).
 - **Result**: Hazard3 setup / hold +0.656 / +0.126 ns, PicoRV32 +0.769 / +0.082 ns. Clean-worktree regressions 23/23 and 28/28 at `85bfa75`.
 - **Layout extraction trial**: the extracted netlist reads and writes correctly but is **2.0× slower** than the schematic. This is the origin of Phase 7 known limitation 2.
 
@@ -351,7 +352,7 @@ The steps and the decisions behind each are recorded in ADR-0019, decisions 1–
    - Caravel's input transitions (0.84–0.97 ns) exceed the slew limit. Internal nets are judged as before; boundary nets get their own limit (decision 16).
    - A Caravel input-path hold of −0.071 ns: the hold margin after global routing went from 0.05 to 0.2 ns (decision 17).
 5. **IR** (decisions 18–20), changed three times in one day:
-   1. Measured from Caravel's real `vccd1` pads and bridges, the wrapper reached 104 mV in the worst combination, so the met4 strap went 1.6 → 4.8 µm.
+   1. Measured from Caravel's real `vccd1` pads (the current enters the wrapper through Caravel's power ring and its met3 power connections, `manual_power_connections.lef`), the wrapper reached 104 mV in the worst combination, so the met4 strap went 1.6 → 4.8 µm.
    2. The corner used for judgement became the slow corner the budget protects.
    3. The current became the switching activity of a **CPU max-power pattern** (`fw/tests/maxpower`, recorded in gate-level simulation). The user's words: "一般IR都會用CPU max power pattern去做不是嗎" ("isn't IR normally done with a CPU max-power pattern?").
 
@@ -416,7 +417,7 @@ Four hardens, no retries, all bit-identical with golden: wrapper 455 metrics, Ha
 
 ![IR drop](figures/ir_drop_map.png)
 
-*Figure 13. VDD drop (vccd1, 11.92 mV) and VSS rise (vssd1, 7.65 mV) of the wrapper with the max-power pattern, max_ss_100C_1v60, window 5c; the sum is 19.56 mV.*
+*Figure 13. VDD drop (vccd1, 11.92 mV) and VSS rise (vssd1, 7.65 mV) of the wrapper with the max-power pattern, max_ss_100C_1v60, window 5c; the sum is 19.56 mV (full precision 11.916 + 7.649 mV, each number rounded separately; `figures/SOURCES.md` §9).*
 
 ### 6.4 Precheck
 
@@ -428,7 +429,9 @@ The repo checker `check_precheck.py` judges this as **PASS** under ADR-0019 deci
 
 ### 6.5 Density and the fill trial
 
-The precheck only checks density upper limits. Caravel's tapeout scripts are believed to add metal fill to the whole chip and then check the lower limits (medium evidence, not stated in a document; `runs/p7_review/chipfoundry_fill.md`) (`check_density.py`: li1 and met1–4 ≥ 35%, met5 ≥ 45%, FOM ≥ 33%, in 700 µm windows). The wrapper alone, before fill, is far below those limits (met2 1.6%, met3 0.8%). The fill trial re-implemented Caravel's `generate_fill.py` (`wafflefill(tiled)`) and `check_density.py` on the wrapper. The fill tiles were measured separately and added per 70 µm box, which overestimates by at most 0.33 points:
+The precheck only checks density upper limits. The lower limits are believed to be checked by Caravel's tapeout scripts: they add metal fill to the whole chip, then `check_density.py` checks li1 and met1–4 ≥ 35%, met5 ≥ 45% and FOM ≥ 33% in 700 µm windows. This is an inference, not stated in a document (medium evidence; `runs/p7_review/chipfoundry_fill.md`).
+
+The wrapper alone, before fill, is far below those limits (met2 1.6%, met3 0.8%). The fill trial re-implemented Caravel's `generate_fill.py` (`wafflefill(tiled)`) and `check_density.py`: the first fills the wrapper, the second measures it. The fill tiles were measured separately and added per 70 µm box, which overestimates by at most 0.33 points:
 
 | Layer | Before fill (inside the die) | After fill: lowest window | Windows below the lower limit |
 |---|---|---|---|
@@ -477,15 +480,15 @@ For each problem they checked with `git grep` where it is captured **today**: a 
 
 | Category (grouped by keyword, see Figure 15) | Count | Typical examples (phase) | How they were solved |
 |---|---|---|---|
-| Tool defect or unexpected behaviour | 93 | `GRT-0229` random abort (3); resizer loops on a weak cell, 92.9 GB (5); CTS inserts latency-balancing buffers before the SRAM clock (4–5); stream-out does not merge a macro GDS when the LEF lacks `FOREIGN` but logs success (6); `RSZ-0074` on an unconnected inout (7); OpenSTA ignores `set_input_transition` when a driving cell is set (7); PSM Signal 11 at certain supply points (7); KLayout Signal 11, memory pressure suspected (7) | Bounded retry only on the exact message; tool settings or a repo plugin, never a patched tool; a checker that detects the symptom; a negative test that recreates it (`CLAUDE.md` rule 10) |
-| Checker or test hole | 54 | Phase 1 testbench missed 10 of 20 and 10 of 23 injected bugs; `check_soc.py` loop variable overwrote the SRAM origin (7); EQY skipped every non-`sky130_` cell (6); stale precheck report accepted for a new GDS (7); `judged_by` accepted any string (7); NaN dropped by `max()` (7) | Fix, add a negative test, add the hole type to the `signoff-checker-qualification` table; positive controls on a real run before opening a regression |
+| Tool defect or unexpected behaviour | 93 | Crashes and runaways: `GRT-0229` random abort (3); resizer loops on a weak cell, 92.9 GB (5); PSM Signal 11 at certain supply points (7); KLayout Signal 11, memory pressure suspected (7). Unexpected behaviour: CTS inserts latency-balancing buffers before the SRAM clock (4–5); stream-out does not merge a macro GDS when the LEF lacks `FOREIGN` but logs success (6); `RSZ-0074` on an unconnected inout (7); OpenSTA ignores `set_input_transition` when a driving cell is set (7) | Bounded retry only on the exact message; tool settings or a repo plugin, never a patched tool; a checker that detects the symptom; a negative test that recreates it (`CLAUDE.md` rule 10) |
+| Checker or test hole | 54 | Phase 1 testbench missed 10 of 20 and 10 of 23 injected bugs; `check_soc.py` loop variable overwrote the SRAM origin (7); EQY skipped every non-`sky130_` cell (6); stale precheck report accepted for a new GDS (7); `judged_by` accepted any string (7); NaN dropped by `max()` (7) | Fix, add a negative test, add the hole type to the `signoff-checker-qualification` table; positive tests on a real run before opening a regression |
 | Flow order or process | 32 | GPIO chosen before the block position (7); signoff criteria defined after the first hardens (2–3); IR method changed three times in a day (7); evidence left in a session scratchpad (3, 4, 5, 6, 7) | Planning approval checks (pin-plan checker and edit hook, `CLAUDE.md` rule 14), ADR-0020's 19 earlier checks, the relaxation register |
 | Specification or assumption | 22 | SRAM read failure at ss low temperature (3.5); padded `.lib` without wire parasitics (3–7); duty cycle and jitter of Caravel's clock (5, 7) | SPICE go/no-go before choosing a macro, documented assumptions, tapeout-risk list |
 | Platform rule | 14 | One `vccd1` pad for the whole user area; boundary transitions above the slew limit; li1 density with `decap_3`; prebuilt SRAM rules in the new deck; who adds metal fill (all 7) | Platform worksheet (ADR-0020 A2), skill `tapeout-precheck-caravel` |
 | Host environment and resources | 8 | Memory exhausted by another program (5); two `neg-pnr` runs killed together (6); disk full stops a regression and hangs an STA (7) | The precheck VM memory is checked automatically; since ADR-0021, `scripts/regress.py` also refuses to start below 100 GiB free disk and kills a target over 3 × its reference time (`neg-regress` cases `low_disk`, `timeout`); the number of parallel runs is still a manual decision |
 | Documentation drift | 7 | A later decision changed but an earlier paragraph was not marked; numbers compared under different conditions (5, 6, 7) | Independent document review at each phase end |
-| Other | 11 | Mixed or uncategorised rows | — |
 | Macro or IP | 6 | Negative-slope load table in the SRAM `.lib` (3.5); LEF database units 2000 (`ODB-0205`) (6) | View QA (`scripts/check_macro_views.py`, `make neg-macro-views`) |
+| Other | 11 | Mixed or uncategorised rows | — |
 
 ### 7.3 The most expensive problems
 
@@ -493,16 +496,18 @@ Mostly from the flow retrospective (`docs/notes/flow_retro/README.md`, ADR-0020)
 
 | Problem | Cost | What would have caught it earlier |
 |---|---|---|
-| The prebuilt SRAM misreads at ss low temperature | A whole characterisation of a macro that was later replaced (about 19 h); placeholder `.lib` for Phase 3.5–5 | SPICE read/write over the operating range **before** choosing the macro (B1) |
-| Clock period moved 40 → 42 → 43 → 44 ns | Three rounds of closure | User-decided operating range and a corner cost what-if at the first netlist (A1, A3) |
-| Phase 7 platform surprises (single `vccd1` pad, boundary slew and hold, li1 density, prebuilt SRAM rules, fill) | About two days of rework and three relaxations | A platform worksheet with every intake check computed for this design (A2) |
-| Runaway repair steps (4 times, 26–108 min each, once 92.9 GB) | Hours; three stopped by a person, one ended abnormally by itself | Weak-cell QA over all signoff corners (C2) and, still open, an automatic stop |
-| Checker holes found at every phase end (5, 10, 12, 8, 7 and 8 + 1 in Phase 3, 4, 3.5, 5, 6, 7) | One extra full regression per phase from Phase 4 on (Phase 3 and 3.5 holes were carried into the next phase) | Hole review when a checker is written, not at the phase end (E3) |
-| Host resources: disk full, memory pressure | Two of three closing regressions restarted in Phase 7 | Resource checks and timeouts in the regression (implemented 2026-10-15, ADR-0021; §8.5 B1) |
+| The prebuilt SRAM misreads at ss low temperature | A whole characterisation of a macro that was later replaced (about 19 h); placeholder `.lib` for Phase 3.5–5 | SPICE read/write over the operating range **before** choosing the macro (ADR-0020 B1) |
+| Clock period moved 40 → 42 → 43 → 44 ns | Three rounds of closure | User-decided operating range and a corner cost what-if at the first netlist (ADR-0020 A1, A3) |
+| Phase 7 platform surprises (single `vccd1` pad, boundary slew and hold, li1 density, prebuilt SRAM rules, fill) | About two days of rework and three relaxations | A platform worksheet with every intake check computed for this design (ADR-0020 A2) |
+| Runaway repair steps (4 times, 26–108 min each, once 92.9 GB) | Hours; three stopped by a person, one ended abnormally by itself | Weak-cell QA over all signoff corners (ADR-0020 C2) and, still open, an automatic stop |
+| Checker holes found at every phase end (5, 10, 12, 8, 7 and 8 + 1 in Phase 3, 4, 3.5, 5, 6, 7) | One extra full regression per phase from Phase 4 on (Phase 3 and 3.5 holes were carried into the next phase) | Hole review when a checker is written, not at the phase end (ADR-0020 E3) |
+| Host resources: disk full, memory pressure | Two of three closing regressions restarted in Phase 7 | Resource checks and timeouts in the regression (implemented 2026-10-15, ADR-0021; §8.5 review B1) |
 
 ### 7.4 Lessons that apply to any project
 
-1. **A checker is only evidence after it has been seen to fail.** Every phase's independent hole review found 5–12 holes, and some fixes introduced new bugs: a new variable that reused an existing name made one check FAIL on every run (Phase 6 `files`, Phase 7 `defines`). Phase 6's was caught by the closing regression; Phase 7's by positive controls on a real run before the regression.
+1. **A checker is only evidence after it has been seen to fail.** Every phase's independent hole review found 5–12 holes, and some fixes introduced new bugs: a new variable that reused an existing name made one check FAIL on every run (Phase 6 `files`, Phase 7 `defines`).
+   - Phase 6's was caught only by the closing regression.
+   - Phase 7's was caught before the regression, by positive tests on a real run.
 2. **Tools fail silently.** EQY skipped cells without a warning; the stream-out logged success with an empty SRAM; the run log looked normal while settings were not applied; an STA hung on a full disk. The answer is a checker that looks at the **output** (the GDS contains the macro, the report contains the pins), not at the log.
 3. **Decide what protects what before relaxing it.** A relaxation measured on one design (an IR corner, a resizer margin, a golden tolerance) silently stopped being valid after the CPU swap. Hence the relaxation register.
 4. **Platform rules are numbers, not names.** Reading "IR drop" or "density" in the platform documentation is not enough. The rule has to be computed for this design before the first harden.
@@ -518,7 +523,7 @@ Mostly from the flow retrospective (`docs/notes/flow_retro/README.md`, ADR-0020)
 *Figure 16. How a problem becomes a skill rule, a guard and a flow step (`CLAUDE.md` rules 2, 3, 5, 8, 10, 13).*
 
 - Every problem is first written as a row in the relevant skill's **experience record**: date, run, the original message, root cause marked verified or speculative, fix, evidence (`CLAUDE.md` rule 2).
-- A row moves into the **rule body** only after the same phenomenon appears twice or the root cause is confirmed by an experiment (rule 3). Speculative causes must not enter rules (the 2026-10-15 review found some that did, §8.5 C1).
+- A row moves into the **rule body** only after the same phenomenon appears twice or the root cause is confirmed by an experiment (rule 3). Speculative causes must not enter rules (the 2026-10-15 review found some that did, §8.5 review C1).
 - Tool defects need four parts (rule 10): the symptom (also in the skill's `description`, which is all Claude reads when deciding whether to open the skill), how to detect it, how to work around it, and a guard against recurrence (a checker and negative test, or an explicit "no automatic guard, because …").
 - Every rule change updates the README skill index in the same commit (rule 5). `make skill-check` checks format and index; whether the content agrees is reviewed by hand. Flow changes update `arvinsa-rtl-gds-flow.md` (rule 8).
 - Every choice that affects the specification or schedule goes to the user as options, and the user's words are recorded in an ADR (rule 13).
@@ -549,7 +554,7 @@ At the end of Phase 7 the 23 skills hold 260 experience rows. The skills whose `
 | EQY skipped non-`sky130_` cells (Phase 6) | `hard-macro-integration` rule 10 (each checker prints the macro instances it read in the positive run); `formal-equivalence-eqy` rule 5 | `neg-eqy` cases |
 | GPIO picked before block placement (Phase 7) | `CLAUDE.md` rule 14, `chip-floorplan-pin-planning` | `make pin-plan`, `neg-pin-plan` (26), PreToolUse hook |
 | Vacuous EQY proof after `amend` (Phase 7) | `formal-equivalence-eqy` rule 7: amend only combinational drivers | `nand2_comb_to_nor2`, `nand2_flop_to_nor2` and the `amended_sequential()` check |
-| A new variable overwrote an expected value in a checker (Phase 6, 7) | `signoff-checker-qualification` rule 13 | Positive controls P00 / C00 on a real run before every regression |
+| A new variable overwrote an expected value in a checker (Phase 6, 7) | `signoff-checker-qualification` rule 13 | Positive tests P00 / C00 on a real run before every regression |
 
 ### 8.4 The flow retrospective (ADR-0020)
 
@@ -574,6 +579,8 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 - **Decision needed**: new checkers, signoff-scope changes, global settings, or anything that may be a tapeout risk are the user's decision (`CLAUDE.md` rule 13). The user decided on 2026-10-15 (ADR-0021); the outcome is summarised after the tables.
 - **Maintenance**: promoting verified experience to rules and fixing outdated text are maintenance under the existing rules.
 
+The labels A1–A7, B1–B12 and C1–C8 below are this review's numbering; elsewhere in this report they are written "review A1" and so on. They are unrelated to ADR-0020's earlier-check labels (A1–E3, §8.4).
+
 **Group A: would make the next project go wrong directly, or make a skill impossible to select.**
 
 | # | Write-back | Where | Decision needed |
@@ -582,7 +589,7 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 | A2 | **No latch-up marker (`areaid.lowTapDensity`, GDS 81/14) in the delivered GDS, and no check of the default 6 µm tap-to-diffusion rule anywhere.** Magic only checks 15 µm; the PDK and precheck KLayout decks declare the layer but use it in no rule; Magic's own marker covers only the top cell shrunk by 250 µm. | ADR-0019, relaxation register, Phase 7 known limitations, `drc-signoff` rule 7 | **Decided**: measured (§9.1 item 7); record and ask ChipFoundry, no design change |
 | A3 | `floorplan-congestion` does not point to the pad / block / pin approval, so it can bypass `CLAUDE.md` rule 14 | `floorplan-congestion` rules 2, 3 and description | No |
 | A4 | Rules that contradict later decisions (for example an old `sram0/clk1` exception, an IR rule that implies EM is judged) | `timing-constraints-sdc` rule 5, `signoff-criteria`, `lvs-signoff` rule 2, `pdn-ir-drop`, `drv-timing-closure`, `multicorner-sta` | No |
-| A5 | Missing steps in the flow document, the entry point for new projects: `*_VIOLATION_CORNERS` (LibreLane judges setup only at tt by default), positive controls before a closing regression, EQY's three silent skips, run checkers even when the flow FAILs | `arvinsa-rtl-gds-flow.md` 4.5–4.9 | No |
+| A5 | Missing steps in the flow document, the entry point for new projects: `*_VIOLATION_CORNERS` (LibreLane judges setup only at tt by default), positive tests before a closing regression, EQY's three silent skips, run checkers even when the flow FAILs | `arvinsa-rtl-gds-flow.md` 4.5–4.9 | No |
 | A6 | LibreLane settings that are silently ignored (`SIGNOFF_SDC_FILE` unset, `DRT_ANTENNA_REPAIR_MARGIN`, `RT_CLOCK_MIN_LAYER`, …) lack detection and guards | Five skills; new `check_inputs.py` rows | Text: no. Checkers: yes |
 | A7 | EM is never judged (single-cut via4 at 78% of its limit before the Phase 5 met5 widening, 18% after) | Flow document 4.6; future checker | **Yes** |
 
@@ -618,9 +625,17 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 - **Done**: every maintenance write-back (A3–A5, A6 text, B3, B4 text, B5 text, B8, B10, B12, C1–C6). Five agents edited 20 skills; the flow document and README were synchronised; `make skill-check` PASS.
 - **Implemented checkers**:
   - **A1** `scripts/check_skills.py`: each description ≤ 1,024 characters, the listed descriptions together ≤ 8,000, with an injected over-long case.
-  - **B1** `scripts/regress.py`: refuses to start below `REGRESS_MIN_FREE_GB` (100 GiB); every target times out at 3 × its reference time (at least 30 min) and its whole process group is killed. `make neg-regress` adds `low_disk` and `timeout`, now 10/10. Confirmed on real regressions at `f02a1a0` in clean worktrees: Hazard3 30/30, PicoRV32 31/31, the wrapper 18/18 including the ChipFoundry precheck; every harden matched its golden value for value, no target took more than 35 % of its time limit, and all three passed the disk check.
+  - **B1** `scripts/regress.py`:
+    - refuses to start below `REGRESS_MIN_FREE_GB` (100 GiB);
+    - every target times out at 3 × its reference time (at least 30 min), and its whole process group is killed;
+    - `make neg-regress` adds `low_disk` and `timeout`, now 10/10.
+    - Confirmed on real regressions at `f02a1a0` in clean worktrees: Hazard3 30/30, PicoRV32 31/31, the wrapper 18/18 including the ChipFoundry precheck. Every harden matched its golden value for value, no target took more than 35 % of its time limit, and all three passed the disk check.
 - **A2 (latch-up)**: measured (§9.1 item 7), recorded, and added to the ChipFoundry question draft; the design is unchanged.
-- **Evidence kept, runs removed** (ADR-0021 decision 7; user: the runs were for this report and the flow, keep "mainly the important supporting reports"): `make collect-evidence` (`scripts/collect_evidence.py`) copied the reports the documents cite, every harden's verdicts and criteria review, the regression summaries and the precheck results into `docs/evidence/` with their original paths (677 files, 6.8 MB; `docs/evidence/references.md` lists the status of each of the cited paths). GDS, DEF, netlists and whole run directories were not kept; a clean checkout regenerates them. Then all worktrees and `runs/` were removed. The rule is now part of the flow (`flow-regression-reproducibility` rule 16).
+- **Evidence kept, runs removed** (ADR-0021 decision 7; user: the runs were for this report and the flow, keep "mainly the important supporting reports"):
+  - `make collect-evidence` (`scripts/collect_evidence.py`) copied the reports the documents cite, every harden's verdicts and criteria review, the regression summaries and the precheck results into `docs/evidence/` with their original paths (677 files, 6.8 MB). `docs/evidence/references.md` lists the status of each cited path.
+  - GDS, DEF, netlists and whole run directories were not kept; a clean checkout regenerates them.
+  - Then all worktrees and `runs/` were removed.
+  - The rule is now part of the flow (`flow-regression-reproducibility` rule 16).
 - **Deferred to the next project** (ADR-0020 decision 2 style, "no automatic guard yet" written in the skills): A6 checker rows, A7 EM, B2 runaway stop, B6, B7, B9, B11; C7 and C8 not taken up.
 
 ### 8.6 Skill structure after the review
@@ -656,7 +671,9 @@ The review found that five skills had no description in Claude's skill listing a
 5. **IR margin 0.44 mV** (19.56 of 20 mV). The pattern does not include Wishbone host accesses, zero-delay simulation contains no glitches, "maximum power" is the maximum of three windows rather than a proof, and the 1.62 V at the pad is an assumption.
 6. **Usage constraints**: management clock ≤ 22.7 MHz; firmware must write `host_en = 0`; `gpio_out` only via the logic analyser; PLL jitter and duty cycle assumed.
 
-7. **Latch-up marker** (found by the 2026-10-15 review; Phase 7 known limitation 21): the delivered GDS has no `areaid.lowTapDensity` (81/14) marker, and no check in the flow or the precheck verifies the default 6 µm tap rule. Measured (`docs/notes/latchup/`): no diffusion is farther than 15 µm from a same-type tap, but about 7% of the diffusion area outside the SRAM is farther than 6 µm (the standard cells are tapped for the 15 µm rule, `FP_TAPCELL_DIST` 13 µm). The user decided to record it and ask ChipFoundry who adds the marker and which distance applies, without changing the design (ADR-0021 decision 2).
+7. **Latch-up marker** (found by the 2026-10-15 review; Phase 7 known limitation 21): the delivered GDS has no `areaid.lowTapDensity` (81/14) marker, and no check in the flow or the precheck verifies the default 6 µm tap rule.
+   - Measured (`docs/notes/latchup/`): no diffusion is farther than 15 µm from a same-type tap, but about 7% of the diffusion area outside the SRAM is farther than 6 µm. The reason is that the standard cells are tapped for the 15 µm rule (`FP_TAPCELL_DIST` 13 µm).
+   - The user's decision: record it and ask ChipFoundry who adds the marker and which distance applies; no design change (ADR-0021 decision 2).
 
 ### 9.2 Known limitations of the method (Phase 7 limitations 7–20)
 
@@ -673,16 +690,16 @@ These do not change this result but have to be known:
 - relaxations whose basis was not measured on the wrapper;
 - earlier-check automation postponed to the next project;
 - the wrapper's negative tests cover only its specific checks, and CVC's HI-Z warnings are not judged automatically;
-- PSM crashes (Signal 11) with supply points on Caravel's bridges;
-- the regression has no protection against host resource exhaustion.
+- PSM crashes (Signal 11) with supply points on Caravel's met3 power connections;
+- the regression has no protection against host resource exhaustion (the state at Phase 7 closure; ADR-0021 added a disk check and timeouts, see §8.5; the number of parallel runs is still a manual decision).
 
 ### 9.3 To be investigated
 
-- **Latch-up marker** (A2, measured; see §9.1 item 7): the answer from ChipFoundry on who adds the marker in the user area and whether 6 µm or 15 µm applies.
-- **Skill listing in practice** (A1): `make skill-check` enforces the lengths, but whether the listing really shows the entry descriptions depends on the model's context window and the user's other skills; check with `/context` or `/doctor` when a new Claude Code version arrives.
-- **Automatic stop of a runaway step** (B2) and the other checkers deferred by ADR-0021 decision 3 (A6 `check_inputs.py` rows, A7 EM, B6, B7, B9, B11).
-- **EM** (A7): add an EM checker with the same max-power pattern current, and compare via currents with the tech LEF limits. The user set the scope to the power grid (straps and vias, ff and ss corners); signal-net EM is out of scope (ADR-0021 decision 8).
-- **Clock routing layer** (A6): a new project sets `RT_CLOCK_MIN_LAYER` explicitly in its first config (`met3` on sky130), with a checker that `resolved.json` does not hold null; this project leaves it unset (ADR-0021 decision 8).
+- **Latch-up marker** (review A2, measured; see §9.1 item 7): the answer from ChipFoundry on who adds the marker in the user area and whether 6 µm or 15 µm applies.
+- **Skill listing in practice** (review A1): `make skill-check` enforces the lengths, but whether the listing really shows the entry descriptions depends on the model's context window and the user's other skills; check with `/context` or `/doctor` when a new Claude Code version arrives.
+- **Automatic stop of a runaway step** (review B2) and the other checkers deferred by ADR-0021 decision 3 (review A6 `check_inputs.py` rows, A7 EM, B6, B7, B9, B11).
+- **EM** (review A7): add an EM checker with the same max-power pattern current, and compare via currents with the tech LEF limits. The user set the scope to the power grid (straps and vias, ff and ss corners); signal-net EM is out of scope (ADR-0021 decision 8).
+- **Clock routing layer** (review A6): a new project sets `RT_CLOCK_MIN_LAYER` explicitly in its first config (`met3` on sky130), with a checker that `resolved.json` does not hold null; this project leaves it unset (ADR-0021 decision 8).
 - **Measurement questions left open by the phases**:
   - the SRAM macro's internal IR (the PSM CSV has one supply node for the SRAM; whether this is PSM's model was not checked);
   - the 2.7 ns clock-skew reporting artefact (not confirmed in OpenSTA source);
@@ -707,7 +724,7 @@ These do not change this result but have to be known:
   ```
   Results are in `runs/regress*/summary.md` and `junit.xml`. Each harden is compared with `signoff/golden/<design>/metrics.json`.
 - **Start a new project with this flow**: `arvinsa-rtl-gds-flow.md` §1 (start checklist, what can be reused as is, what must be redone per design).
-- **Host disk**: at the end of the project, the other 13 worktrees hold about 386 GB in their `runs/` (the three `p7close2_*` worktrees hold the closing evidence), and the main checkout's `runs/` another 176 GB. Cleaning up is the user's decision.
+- **Evidence and runs**: at the end of the project, `make collect-evidence` copied the reports the documents cite into `docs/evidence/`, and then all worktrees and `runs/` were removed (ADR-0021 decision 7, `ec3dca9`). Re-running the regressions above regenerates `runs/`.
 
 ---
 
@@ -741,6 +758,8 @@ These do not change this result but have to be known:
 
 Architecture and flow diagrams were drawn with the `arvinsa-draw-diagram` skill (hand-written node/link JSON rendered by its `engine.py`). The generator is `figures/scripts/diagrams.py`, and every diagram's JSON in `figures/diagrams/` carries its sources in `_note`. Layout screenshots and data plots come from the closing runs, the SRAM macro GDS, the approved floorplan run (`p7_floorplan4`), the fill trial and the README / exit reviews; see [`figures/SOURCES.md`](figures/SOURCES.md) for the source file, the command, and the origin of every number. Re-drawing the diagrams needs the `Arvinsa-skill-develop-template` repository (`diagrams.py` points to its `engine.py`).
 
+**Evidence path mapping**: the `runs/…` paths cited in this report and in `figures/SOURCES.md` were deleted at the end of the project (ADR-0021 decision 7). The cited files are kept under `docs/evidence/` with their original paths: `runs/x` of the main checkout is at `docs/evidence/arvinsa-rtl-gds/runs/x`, and `runs/x` of worktree `<name>` (for example `p7close2_caravel/runs/…`) is at `docs/evidence/arvinsa-rtl-gds-<name>/runs/x`. The rules are in `docs/evidence/README.md`; whether each path was kept is listed in `docs/evidence/references.md`.
+
 ## Appendix C: glossary
 
 | Term | Meaning |
@@ -752,7 +771,8 @@ Architecture and flow diagrams were drawn with the `arvinsa-draw-diagram` skill 
 | Checker | A script that turns a result into PASS or FAIL |
 | Negative test / bug injection | A test that deliberately introduces an error and requires the checker to FAIL |
 | Testbench / checker qualification | Showing that tests and checkers catch injected errors |
-| Clean worktree | A fresh `git worktree` with no local edits; the only place official results are accepted |
+| Clean worktree | A working directory newly created with `git worktree add`, with no local edits; the only place a phase's official results are accepted |
+| Clean tree | A working directory with no uncommitted changes (`git status` is clean); this is what the run guard checks |
 | Run guard | Refuses downstream steps unless the harden was made at the current commit in a clean tree |
 | Criteria review | A per-harden review of whether each signoff criterion was applied and still reasonable |
 | EQY | Yosys formal equivalence checking between two netlists |
@@ -760,3 +780,21 @@ Architecture and flow diagrams were drawn with the `arvinsa-draw-diagram` skill 
 | Max-power pattern | A firmware test written to maximise switching, used for the IR-drop current |
 | Skill | A process document (`SKILL.md`) with rules, known traps and an experience record |
 | ADR | Architecture decision record, with options, reasons and the user's own words |
+| Tolerance | How far the metric families listed in ADR-0015 may differ from the golden; every other metric must be identical |
+| Positive test | Running a checker on a correct design or run to confirm that it passes, so that a checker that fails on everything is caught |
+| Test vehicle | A demonstration design used to prove the flow, not a product |
+| PVT | A process / voltage / temperature combination, for example ss, 1.60 V, −40 °C |
+| Halo | A keep-out ring around a macro where no standard cells are placed |
+| Strap | A metal power stripe in the power distribution network (PDN) |
+| Tap cell | A cell that ties the n-well to VDD and the p-substrate to VSS, to prevent latch-up |
+| Decap | A decoupling-capacitor cell between power and ground that steadies the local supply |
+| Fill | Shapes added to meet density rules: metal fill is unconnected metal; fill cells fill the gaps in the rows |
+| Derate | A factor applied to delays in timing analysis to cover variation the models do not include (for example SRAM derate 1.575) |
+| FEOL / BEOL | Front end of line (transistors, diffusion, poly and similar layers) / back end of line (metal routing and vias); the precheck's `klayout_feol` and `klayout_beol` check DRC for each |
+| FOM | sky130's diffusion-related mask layer (field oxide mask); Caravel's density check uses it for diffusion density, and fill is added on it too |
+| OEB | The output enable of a Caravel GPIO (active low, `io_oeb`); one precheck check verifies how it is connected |
+| ISS | Instruction set simulator: computes the expected result of each instruction, for comparison with the RTL |
+| EM | Electromigration: long-term current through metal thins and eventually breaks a wire; each wire and via current is compared with its limit |
+| PSM | OpenROAD's power-grid analysis module (PDNSim, message prefix PSM), used for IR drop |
+| Resizer | The OpenROAD step that repairs timing and slew / capacitance violations by resizing cells and inserting buffers |
+| Logic analyser | Caravel's logic analyser pins (`la_data_in`, `la_data_out`, `la_oenb`), through which the management SoC reads and drives user-area signals |
