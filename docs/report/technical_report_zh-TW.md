@@ -37,11 +37,11 @@ test vehicle 是一顆帶 SRAM macro 的小型 RISC-V SoC。
 - **完成和單獨 SoC 同一套 signoff**：15 個 corner 的 STA、DRC、LVS、antenna、formal equivalence（EQY）、gate-level 模擬；IR drop 從 Caravel 真實的 pad 起算，電流用 CPU max power pattern。
 
 從 Phase 3 起，每個 Phase 都以三件事收尾：乾淨 worktree 的完整 regression、獨立 agent 審查、exit review。過程中遇到的問題（工具缺陷、checker 漏洞、流程順序錯誤），寫回三個地方：
-- 23 個流程 skill；
+- 流程 skill（專案期間 23 個；總檢討後 30 個，分成 Middle-end、Backend、Package 三段，各有一個入口）；
 - 流程文件；
 - 自動 checker 加上 negative test（植入錯誤，checker 必須抓到）。
 
-2026-10-15 的總檢討發現，247 個問題中仍有 39 個只在經驗紀錄或沒有寫進任何 skill（第 7 章）。
+2026-10-15 的總檢討發現，247 個問題中仍有 39 個只在經驗紀錄或沒有寫進任何 skill（第 7 章）；使用者之後選定的寫回見 §8.5–§8.6。
 
 本報告完整記錄：一路做了什麼、遇到哪些問題與怎麼解決、skill 與流程因此怎麼修正，以及還有哪些問題沒解決。
 
@@ -87,7 +87,7 @@ sky130A 是同一家晶圓廠的製程。PDK 相依的部分集中在設定與 `
 **工作方式**：工程由 Claude Code 在使用者指導下進行，原則如下：
 - 凡是影響規格、量測方法、signoff 標準、時程或範圍的選擇，先查證、列出選項與建議，由使用者決定（`CLAUDE.md` 規則 13）。
 - 由沒有參與實作的獨立 agent 審查：Phase 1 審 testbench；Phase 3 起，每個 Phase 收尾時審文件與 checker。
-- 反覆用到的做法寫成 23 個專案 skill（`.claude/skills/*/SKILL.md`）。
+- 反覆用到的做法寫成專案 skill（`.claude/skills/*/SKILL.md`）：最後共 30 個，分成 Middle-end、Backend、Package 三段，各有一個入口 skill（§8.6）。
 
 ---
 
@@ -562,7 +562,7 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 | 流程順序或做法 | 32 | 先選 GPIO 才定 block 位置（7）；第一次 harden 後才定 signoff 條件（2–3）；IR 判法一天改三次（7）；證據留在 session 暫存目錄（3、4、5、6、7） | 規劃核准的檢查（pin-plan checker 與編輯 hook，`CLAUDE.md` 規則 14）、ADR-0020 的 19 條提早檢查、放寬登記表 |
 | 規格或假設 | 22 | SRAM 在 ss 低溫讀錯（3.5）；padded `.lib` 沒有走線寄生（3–7）；Caravel 時脈的 duty cycle 與 jitter（5、7） | 選定 macro 前做 SPICE go／no-go、寫明假設、列入下線風險清單 |
 | 平台規定 | 14 | 整個使用者區只有一顆 `vccd1` pad；邊界 transition 超過 slew 上限；`decap_3` 造成 li1 密度超標；新 deck 對預建 SRAM 的規則；metal fill 由誰補（都在 Phase 7） | 平台試算表（ADR-0020 A2）、skill `tapeout-precheck-caravel` |
-| 主機環境與資源 | 8 | 另一個程式佔掉記憶體（5）；兩個 `neg-pnr` 同時被系統中止（6）；磁碟滿讓 regression FAIL、STA 卡住（7） | precheck VM 的記憶體已有自動檢查；本機磁碟與每一步的逾時沒有（待處理，§8.5） |
+| 主機環境與資源 | 8 | 另一個程式佔掉記憶體（5）；兩個 `neg-pnr` 同時被系統中止（6）；磁碟滿讓 regression FAIL、STA 卡住（7） | precheck VM 的記憶體已有自動檢查；ADR-0021 之後，`scripts/regress.py` 在磁碟剩餘不到 100 GiB 時拒絕開跑，每個 target 超過參考時間的 3 倍就砍掉並判 FAIL（`neg-regress` 的 `low_disk`、`timeout`）；同時跑幾條仍靠人判斷 |
 | 文件與決定不同步 | 7 | 後面的決定改了，前面的段落沒標註；把不同條件的數字放在一起比（5、6、7） | 每個 Phase 收尾的獨立文件核對 |
 | 其他 | 11 | 混合或無法歸類的列 | — |
 | macro 或 IP | 6 | SRAM `.lib` 的負載表斜率為負（3.5）；LEF 資料庫單位 2000（`ODB-0205`）（6） | view QA（`scripts/check_macro_views.py`、`make neg-macro-views`） |
@@ -578,7 +578,7 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 | Phase 7 的平台問題（單顆 `vccd1` pad、邊界 slew 與 hold、li1 密度、預建 SRAM 的規則、fill） | 約兩天重做、三項放寬 | 平台試算表：每項收件檢查都算到本設計的數字（A2） |
 | 修復步驟失控（4 次，每次 26–108 分鐘，一次到 92.9 GB） | 耗掉數小時；三次由人停下，一次工具自己異常結束 | 在所有 signoff corner 做弱 cell QA（C2）；自動停止尚未實作 |
 | 每個 Phase 收尾都找到 checker 漏洞（Phase 3、4、3.5、5、6、7 分別 5、10、12、8、7、8＋1 個） | Phase 4 起每個 Phase 多一輪完整 regression（Phase 3、3.5 的漏洞留到下一個 Phase 修） | checker 寫完就審查漏洞，不等收尾（E3） |
-| 本機資源：磁碟滿、記憶體壓力 | Phase 7 三條結案 regression 中有兩條重跑 | regression 的資源檢查與逾時（待處理，§8.5） |
+| 本機資源：磁碟滿、記憶體壓力 | Phase 7 三條結案 regression 中有兩條重跑 | regression 的資源檢查與逾時（2026-10-15 已實作，ADR-0021；§8.5 B1） |
 
 ### 7.4 可以帶到任何專案的教訓
 
@@ -625,6 +625,7 @@ precheck 報的補 fill 前 met4 26.7%、met5 27.3%，比上表高，推測是�
 | 10-12 | `tapeout-precheck-caravel`、`chip-floorplan-pin-planning`；規則 14：pad／block／pin 規劃在 RTL 前核准，由 checker、hook、skill、流程文件強制 | Phase 7；使用者：「要想個辦法確保之後一定會先探討pad & pin location」 |
 | 10-14 | ADR-0020：19 條提早檢查（A1–E3）寫進流程文件與 12 個 skill；放寬與補償登記表（`docs/relaxation_register.md`，90 列）；checker 漏洞類型表新增 7 類 | 使用者要求的流程回顧；Phase 7 的 checker 漏洞審查 |
 | 10-15 | 磁碟滿、KLayout 當掉、fill 試跑的經驗紀錄 | Phase 7 結案 regression |
+| 10-15 | ADR-0021：審查的維護寫回（20 個 skill、流程文件、README）；三個太長的 skill 依功能拆分（23 → 27）；新增 Middle-end、Backend、Package 三個入口 skill（30）；`check_skills.py` 的長度與分段檢查；`regress.py` 的磁碟檢查與逾時 | 2026-10-15 的問題總檢討；使用者：「整個流程可以分成Middle-end，backend，package 三大部分，每一部分各自搜尋相關的skill」 |
 
 Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動最多的 skill：`drv-timing-closure`（27 個 commit）、`signoff-checker-qualification`（26）、`librelane-run-debug`（22）、`signoff-criteria`（20；含 knowledge 檔為 30）、`flow-regression-reproducibility`（20）。
 
@@ -660,7 +661,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 ### 8.5 2026-10-15 審查建議的寫回
 
 第五個 agent 驗證四份報告的 58 條建議：45 條屬實、13 條部分屬實（多半是次數多算，或漏看已有的防護），沒有不屬實的。合併後共 27 項，分三群（`docs/notes/problem_review/verify_and_merge.md` §3）。
-- **要使用者決定**：新 checker、signoff 範圍、全域設定，以及可能構成下線風險的事（`CLAUDE.md` 規則 13）。本報告完成時，**這些都還是建議，等使用者決定**。
+- **要使用者決定**：新 checker、signoff 範圍、全域設定，以及可能構成下線風險的事（`CLAUDE.md` 規則 13）。使用者 2026-10-15 已決定（ADR-0021），結果整理在表格之後。
 - **照規則做的維護**：把已驗證的經驗升為規則、修正過時的文字。
 
 **A 群：會讓下一個專案直接出錯，或選不到 skill**
@@ -668,7 +669,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 | # | 寫回 | 位置 | 要使用者決定 |
 |---|---|---|---|
 | A1 | **skill 的 description 太長，在 Claude 的 skill 清單裡消失。** 單份 description 超過 1,536 字元會被截斷；所有 description 合計受 context window 1% 的預算限制，超過時最少被使用的 skill 先失去 description。目前有 3 份超過單份上限；驗證 agent 自己收到的清單裡，有 5 個 skill 完全沒有 description，等於選不到。 | 縮短 23 份 description；`check_skills.py` 加長度上限與一個超長的植入錯誤 | 縮短：不用。新檢查與 `CLAUDE.md` 規則 5 的修改：要 |
-| A2 | **交付的 GDS 沒有 latch-up 標記（`areaid.lowTapDensity`，GDS 81/14），而且沒有任何檢查查預設的 6 µm tap 到 diffusion 規則。** 三個原因：Magic 只查 15 µm；PDK 與 precheck 的 KLayout deck 只宣告這一層，沒有任何規則用到；Magic 自己產生的標記只蓋 top cell 內縮 250 µm 的範圍。 | ADR-0019、放寬登記表、Phase 7 已知限制、`drc-signoff` 規則 7 | **要**（可能是下線風險） |
+| A2 | **交付的 GDS 沒有 latch-up 標記（`areaid.lowTapDensity`，GDS 81/14），而且沒有任何檢查查預設的 6 µm tap 到 diffusion 規則。** 三個原因：Magic 只查 15 µm；PDK 與 precheck 的 KLayout deck 只宣告這一層，沒有任何規則用到；Magic 自己產生的標記只蓋 top cell 內縮 250 µm 的範圍。 | ADR-0019、放寬登記表、Phase 7 已知限制、`drc-signoff` 規則 7 | **已決定**：已量測（§9.1 第 7 項）；記錄並問 ChipFoundry，不改設計 |
 | A3 | `floorplan-congestion` 沒指向 pad／block／pin 的核准流程，可能繞過 `CLAUDE.md` 規則 14 | `floorplan-congestion` 規則 2、3 與 description | 不用 |
 | A4 | 和後來決定矛盾的規則，例如舊的 `sram0/clk1` 例外、讓人以為有判 EM 的 IR 規則 | `timing-constraints-sdc` 規則 5、`signoff-criteria`、`lvs-signoff` 規則 2、`pdn-ir-drop`、`drv-timing-closure`、`multicorner-sta` | 不用 |
 | A5 | 新專案的入口（流程文件）缺必要步驟：`*_VIOLATION_CORNERS`（LibreLane 預設 setup 只判 tt）、結案 regression 前先跑 positive control、EQY 的三種靜默略過、flow FAIL 時 checker 照跑 | `arvinsa-rtl-gds-flow.md` 4.5–4.9 | 不用 |
@@ -702,6 +703,36 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 - C7：RTL code coverage（要決定）；
 - C8：長段工作前一次取得授權（要決定）。
 
+**使用者決定之後的結果（ADR-0021）**：
+- **已完成**：所有維護類寫回（A3–A5、A6 文字、B3、B4 文字、B5 文字、B8、B10、B12、C1–C6）。由五個 agent 改了 20 個 skill，流程文件與 README 都已同步，`make skill-check` PASS。
+- **已實作的 checker**：
+  - **A1** `scripts/check_skills.py`：單份 description ≤ 1,024 字元、清單上保留描述的合計 ≤ 8,000，並有超長的植入錯誤。
+  - **B1** `scripts/regress.py`：磁碟剩餘不到 `REGRESS_MIN_FREE_GB`（100 GiB）就拒絕開跑；每個 target 超過參考時間 3 倍（至少 30 分鐘）就逾時，整個程序群組都砍掉。`make neg-regress` 加 `low_disk`、`timeout` 兩案，現在 10/10。
+- **A2（latch-up）**：已量測（§9.1 第 7 項）、記錄，並併進 ChipFoundry 問題草稿；不改設計。
+- **延到下一個專案**（照 ADR-0020 決定 2 的做法，skill 裡寫明「目前沒有自動防護」）：A6 的 checker 列、A7 EM、B2 失控自動停、B6、B7、B9、B11；C7、C8 不做。
+
+### 8.6 總檢討後的 skill 結構
+
+![skill 分成三段](figures/skill_map_zh.png)
+
+*圖 17：30 個 skill：三個入口（Middle-end、Backend、Package）與各自的細部 skill，加上三個跨段共用 skill。出處：ADR-0021 決定 5、6；`.claude/skills/*-flow/SKILL.md`；`.claude/settings.json`。*
+
+審查發現有 5 個 skill 在 Claude 的 skill 清單裡沒有描述，另有 2 個被截斷。
+- **原因**：單份 description 超過 1,536 字元會被截斷；全部 description 共用 context window 1% 的預算，最少被使用的 skill 先失去描述。
+- **使用者的決定**：分兩步。
+  1. 三個太長的 skill 依功能拆分（決定 5）：
+     - `tapeout-precheck-caravel` → 原名加 `caravel-user-project-integration`；
+     - `openram-macro-characterization` → 原名加 `openram-macro-generation`、`sram-layout-extraction`；
+     - `hard-macro-integration` → 原名加 `macro-qualification`。
+  2. 整個流程分成 **Middle-end、Backend、Package** 三段，各一個入口 skill（決定 6）：
+     - 入口的 description 寫該段最常見的情況與確切錯誤訊息；
+     - 本文是「情況或訊息 → 細部 skill 檔案」的對照表；
+     - 24 個細部 skill 在清單只列名稱（`.claude/settings.json` 的 `skillOverrides: name-only`）；
+     - 三個跨段共用的（`signoff-checker-qualification`、`flow-regression-reproducibility`、`phase-exit-review`）保留描述。
+- **清單現況**：description 從 20,475 字元降到約 4,500 字元。
+- **防護**：`make skill-check` 檢查每個細部 skill 剛好在一個入口的表裡、而且設成只列名稱，也檢查長度。
+- **規則同步**：`CLAUDE.md` 規則 1、5 改成先讀該段的入口；新增細部 skill 時，要同時改入口表與 `skillOverrides`。
+
 ## 9. 待解問題與後續工作
 
 ### 9.1 下線前一定要處理的（Phase 7 已知限制 1–6，`docs/phase_exit/phase7.md`）
@@ -720,7 +751,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
    - 韌體一定要把 `host_en` 寫 0；
    - `gpio_out` 只能從 logic analyzer 看；
    - PLL 的 jitter 與 duty cycle 是假設。
-7. **latch-up 標記**（2026-10-15 審查新發現，還沒寫進 Phase 7 exit review）：交付的 GDS 沒有 `areaid.lowTapDensity`（81/14），flow 與 precheck 也都沒有檢查預設的 6 µm tap 規則。是否構成下線風險，要看平台怎麼組全晶片，由使用者決定（§8.5 A2）。
+7. **latch-up 標記**（2026-10-15 審查新發現；Phase 7 已知限制 21）：交付的 GDS 沒有 `areaid.lowTapDensity`（81/14），flow 與 precheck 也都沒有檢查預設的 6 µm tap 規則。量測（`docs/notes/latchup/`）：離同型 tap 超過 15 µm 的 diffusion 為 0；超過 6 µm 的約佔 SRAM 外 diffusion 面積的 7%（標準元件照 15 µm 規則放 tap，`FP_TAPCELL_DIST` 13 µm）。使用者決定記錄並問 ChipFoundry 標記由誰加、用哪個距離判，不改設計（ADR-0021 決定 2）。
 
 ### 9.2 方法上的已知限制（Phase 7 已知限制 7–20）
 
@@ -742,9 +773,9 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 
 ### 9.3 待探討
 
-- **latch-up 標記**（A2）：問 ChipFoundry，使用者區的低 tap 密度標記由誰加、SkyWater 在那裡用 6 µm 還是 15 µm 判；或先寫一支 6 µm 的 KLayout 檢查量 `soc_top`，再決定。
-- **skill 的選取**（A1）：確認目前使用的 Claude Code 版本，單份與總長度的 description 上限各是多少，再縮短。
-- **長時間 regression 的資源防護**（B1、B2）：哪些要自動化（磁碟檢查、每項逾時、step 監看），哪些保留為人工清單。
+- **latch-up 標記**（A2，已量測，見 §9.1 第 7 項）：等 ChipFoundry 回覆使用者區的標記由誰加、用 6 µm 還是 15 µm 判。
+- **skill 清單的實際狀況**（A1）：`make skill-check` 已強制長度，但清單上是否真的看得到入口的描述，取決於模型的 context window 與使用者的其他 skill；Claude Code 升版時用 `/context` 或 `/doctor` 確認。
+- **step 失控自動停止**（B2），以及 ADR-0021 決定 3 延到下一個專案的其他 checker（A6 的 `check_inputs.py` 列、A7 EM、B6、B7、B9、B11）。
 - **EM**（A7）：用和 IR 相同的 max power pattern 電流做 EM checker，via 電流也要和 tech LEF 的上限比。
 - **各 Phase 留下的量測問題**：
   - SRAM macro 內部的 IR（PSM 的 CSV 裡 SRAM 只有一個供電節點；是不是 PSM 的建模方式沒有查）；
@@ -804,6 +835,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 | 0018 | Phase 6 用 OpenRAM 自產 SRAM macro |
 | 0019 | Phase 7 把 Hazard3 SoC 扁平放進 Caravel wrapper，目標是 ChipFoundry precheck PASS（26 個決定） |
 | 0020 | 流程回顧的 19 條提早檢查寫進流程與 skill；放寬登記表 |
+| 0021 | 問題總檢討的寫回；latch-up 已量測並記錄；skill 長度與 regression 資源的檢查；拆分三個 skill；skill 分成 Middle-end、Backend、Package 三段 |
 
 ## 附錄 B：圖的出處
 

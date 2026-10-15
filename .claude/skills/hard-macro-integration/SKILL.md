@@ -1,33 +1,15 @@
 ---
 name: hard-macro-integration
-description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進 LibreLane 設計，或換一顆 macro（例如 OpenRAM 自產 SRAM）時使用，也包括選定 macro 之前的 go／no-go（在晶片的整個操作範圍，含 corner 之間的溫度與最低供電，做 SPICE 讀寫，並用下線平台的 DRC deck 單獨檢查；macro 的矽量測或特性化範圍比 signoff corner 窄時）、換 macro 時把舊 macro 做過的檢查逐條重跑並確認每支 checker 的比對對象不是空的、macro .lib 輸出的等效驅動電阻要落在標準元件的範圍內；自建或收到 macro 後先做 view QA（LEF、.lib、Verilog、SPICE、GDS 的名稱、腳位與方向一致，.lib 數值範圍與面積，LEF SIZE 對 GDS 外框，LEF 的 DATABASE MICRONS 不能比 tech LEF 細；check_macro_views 報 internal_power outside、LEF SIZE != GDS box、signal pins differ from the LEF、LEF DATABASE MICRONS 2000 > the tech LEF's 1000、GDS pin text(s) outside the pin's LEF RECTs（LEF 腳位位置與 GDS 不符，LVS 看不到）、metal outside the LEF OBS and pins（LEF 少了 OBS）、lib_template 不符）、LEF has no FOREIGN；最終 GDS 的 macro 是空的、XOR 差異幾百萬（design__xor_difference__count）而 KLayout 印 All LEF cells have matching GDS cells、check_macro_gds 報 cell(s) of the macro missing（OpenRAM 的 LEF 沒有 FOREIGN）、OpenROAD Floorplan 報 ODB-0292 LEF data from ... is discarded due to errors（前面有 ODB-0205 LEF UNITS DATABASE MICRON convert factor (2000) is greater than the database units per micron (1000)；OpenRAM 的 LEF）；MACROS 宣告、各種 view 的來源與產生（例如 macro 的 .lib 只有 TT 或只是解析模型時，用 SPICE 實測產生每個 PVT 的 .lib（openram-macro-characterization），或暫時用保守的 padded .lib；LEF 缺 antenna 資料）、macro 在某個 corner（或 corner 之間的溫度）不能動時的佔位 .lib 與下線風險、確認 STA 每個 corner 只讀到一份 macro .lib（LIB／EXTRA_LIBS 不能重複帶進）、擺放是否與 floorplan 一致（擺放規則在 floorplan-congestion）、未用 port 的 tie-off（OpenRAM SRAM 未用 port 的時脈不能接常數）、macro 的 clock（CTS 在 macro clock pin 前插 `delaybuf_*` 對齊 latency，SRAM 半週期讀出的 setup 與 hold 變差，看 cts-clock-tree）、整合檢查清單。Use when integrating or replacing a hard macro (SRAM/IP) in a LibreLane design, including macros with a single-corner or analytical .lib.
+description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）接進 LibreLane 設計時使用。涵蓋 `MACROS` 宣告與各種 view 的來源（GDS、補 antenna 資料與 `FOREIGN` 的 LEF、每個 PVT 一份 .lib、合成用的 blackbox、模擬模型）；STA 每個 corner 只能讀到一份 macro .lib（`LIB`／`EXTRA_LIBS` 不能重複帶進，少一個 corner 會被當 black box 且不報錯）；擺放和 floorplan 一致；未用 port 的 tie-off（OpenRAM SRAM 未用 port 的時脈不能接常數）；電源連接；macro 在每個 STA corner 能不能動與佔位 .lib；macro 的 clock（CTS 在 macro clock pin 前插 `delaybuf_*` 對齊 latency，半週期讀出的 setup 與 hold 變差）；detailed routing 報 `DRT-0418 Term sram0/<pin> has no pins on routing grid`；macro 旁的窄 row 報 `PDN-0179`；接進之後的 signoff 順序。選定 macro 前的 go／no-go、view QA（`check_macro_views` FAIL、`ODB-0292`、LEF 沒有 `FOREIGN`、最終 GDS 的 macro 是空的）、.lib 驅動能力與換 macro 檢查單看 macro-qualification；.lib 的 SPICE 特性化看 openram-macro-characterization。Use when integrating a hard macro (SRAM/IP) into a LibreLane design (MACROS, view sources, per-corner .lib, tie-offs, power, macro clock).
 ---
 
 # Hard macro 整合
 
-整合流程與清單；每一項 signoff 的細節連到對應 skill，這裡不重複。本 repo 實例：`pnr/soc_top/config.json`、`ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（Phase 6 起，OpenRAM 自產，ADR-0018）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/`（Phase 3–5，PDK 預建）、ADR-0006／0007／0008。
+整合流程與清單；每一項 signoff 的細節連到對應 skill，這裡不重複。2026-10-15 拆分（ADR-0021 決定 5）：交給 flow 之前的檢查（view QA、選定前的 go／no-go、.lib 驅動能力、換 macro 檢查單）移到 `macro-qualification`，這裡留接進 flow 的做法。本 repo 實例：`pnr/soc_top/config.json`、`ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（Phase 6 起，OpenRAM 自產，ADR-0018）、`ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/`（Phase 3–5，PDK 預建）、ADR-0006／0007／0008。
 
 ## 整合清單（已驗證）
 
-0. **macro 的 view QA：自建或收到 macro，先檢查每個交付檔的內容，不只是檔案在不在**（使用者 2026-10-09：不限 OpenRAM，任何產生或取得 macro 的方式都要做；本 repo `scripts/check_macro_views.py`）。
-   - 為什麼：產生工具自己的檢查（DRC、LVS、檔案齊全）不看 LEF、.lib、Verilog 模型的內容；LVS 只把 GDS 和 SPICE 網表綁在一起。2026-10-08 OpenRAM dev 產生的 2 KB SRAM，DRC／LVS 都過，.lib 的 internal_power 全部是 1.036316e+11（預建 macro 13.8），IR drop 分析會直接讀進去（ADR-0018）。
-   - 查什麼：LEF `MACRO`／.lib `cell`／Verilog `module`／SPICE `.SUBCKT` 同名；四者的訊號腳位（bus 展開）與方向相同，電源腳位集合相同；.lib 每個數字是有限值，internal_power（power 表的**每一個**數字）、腳位電容在合理範圍，延遲不為負，`area` = LEF 長 × 寬；LEF `SIZE` = GDS 頂層 cell 的外框且在原點。
-   - **LEF 與 GDS 的幾何**（Phase 6 獨立審查 H1、H2 後加，`pinpos`、`obs`）：每支 LEF 腳位在 GDS 頂層 cell 有同名文字，而且文字落在該腳位同一層的 LEF RECT 裡；每一層繞線金屬（met1–met5）攤平後，在 LEF 的 OBS 與腳位 RECT 之外的部分，只能是連著某支腳位 RECT 的延伸（OpenRAM 的腳位金屬會從 0.38 µm 的 RECT 往內再走 0.6 µm 才接到 OBS）。為什麼：LVS 只透過 LEF 看 macro（black box），LEF 兩支腳位的 RECT 對調時，名稱、方向、外框全都對，flow 的 DRC、LVS、EQY 也都看不到，矽上兩個 bit 就接反了；LEF 少了 OBS，router 可能從 macro 上方穿過它自己的金屬。KLayout 讀 GDS（`scripts/gds_view.py`，2 KB SRAM 約 7 秒）。
-   - 症狀：`check_macro_views: FAIL - <name>: <原因>`（例如 `internal_power 1.036316e+11 outside (0, 1000]`、`LEF SIZE ... != GDS box`、`Verilog signal pins differ from the LEF`）。
-   - 怎麼發現：產生 macro 的 target 一定要接這一步（本 repo `make openram-macro` 的第二步，結果在 `runs/openram/<name>/views.json`）；整合中的 macro 用 `make macro-views`。
-   - 繞過：QA FAIL 的 view 不能直接交給 flow；修正或替換該 view（例如 .lib 的 power 用 `ip/sram/openram/lib_template.py`），列為已知問題並記錄做法，再用替換後的 view 重跑 QA 到 PASS。
-   - 防復發：`make neg-macro-views` Q1–Q20（在 `make regress` 裡）；正常對照用一顆一致的小 macro，另外預建 sky130 2 KB SRAM 的 PDK 原檔與 repo 實際使用的 view 都 PASS。harden 前的 `check_inputs.py` 每次都跑這一步（`macro_views` 列，Phase 6 步驟 4a 接上），並核對 macro 產生器輸出的 sha256（`macro_source`，包括產生器的 TT .lib）與 .lib 範本確實是 `lib_template.py` 的產物（`lib_template`），negative test P63、P66、P71（真 SRAM 的 LEF 腳位 RECT 對調）、P72（LEF 沒有 OBS）、P73、P74。
-   - LEF 的資料庫單位（OpenROAD 的行為，Phase 6 已驗證）：
-     - 症狀：OpenROAD.Floorplan 失敗，`[ODB-0292] LEF data from <macro>.lef is discarded due to errors`，前面一條 `[ODB-0205] The LEF UNITS DATABASE MICRON convert factor (2000) is greater than the database units per micron (1000) of the current technology`。OpenRAM dev 的 LEF 寫 `DATABASE MICRONS 2000`，sky130 tech LEF 是 1000；PDK 預建 macro 的 LEF 是 1000，所以 Phase 3–5 沒遇到。
-     - 怎麼發現：view QA 的 `units` 檢查（`LEF DATABASE MICRONS 2000 > the tech LEF's 1000`，`--dbu` 給 tech 的值）；harden 時看 Floorplan step 的 log。
-     - 繞過：產生 flow 用的 LEF 時改成 tech 的值（本 repo `gen_antenna_lef.py` 的 `tech_units()`）；改之前確認每個座標都在 1/tech 單位的格點上，不在就 FAIL（改了會移動圖形）。OpenRAM 的 sky130 LEF 全部在 0.005 µm 製造格點上，轉換無損。macro 產生後對原始 LEF 做 view QA 時用 `--dbu 2000` 並註明原因。
-     - 防復發：`neg-macro-views` Q12（2000 必須 FAIL、1000 必須 PASS）；`check_inputs.py macro_views` 每次 harden 前檢查 flow 用的 LEF。
-   - LEF 的 `FOREIGN`（LibreLane KLayout stream-out 的行為，Phase 6 已驗證）：
-     - 症狀：harden 只在 signoff 報 `design__xor_difference__count` 幾百萬（Phase 6：5,690,757–5,691,003）；最終 GDS（KLayout 輸出）裡 macro cell 是空的，Magic 的 GDS 是完整的；KLayout 的 log 仍印 `All LEF cells have matching GDS cells`，flow 不報錯。同一份 GDS 上的 Magic DRC 在 macro 框內是 0 個違規、KLayout DRC 也空過。
-     - 根因（已驗證：只重跑 `KLayout.StreamOut`，LEF 加 `FOREIGN` 後 169 個 cell 全部進去）：`stream_out.py` 先用 LEF 和 DEF 建出 macro cell、清空，再合併 macro 的 GDS；LEF 有 `FOREIGN` 時這個 cell 是 ghost cell，會被同名 GDS cell 取代；沒有時是普通 cell，GDS cell 照 `KLAYOUT_CONFLICT_RESOLUTION=RenameCell` 改名後沒被引用。缺 GDS 的檢查只看 ghost cell。OpenRAM dev 的 LEF 沒有 `FOREIGN`，PDK 預建 macro 的 LEF 有。
-     - 怎麼發現：view QA 的 `foreign` 檢查（`LEF has no FOREIGN <top>`）；harden 後 `check_soc.py macro_gds`（最終 GDS 裡 macro 底下的 cell 與內容等於 macro 的 GDS，`scripts/check_macro_gds.py`）；XOR 只在 Magic 與 KLayout 結果不同時才抓得到。
-     - 繞過：產生 flow 用的 LEF 時補 `FOREIGN <macro> ;`（`gen_antenna_lef.py add_foreign()`）；原始 LEF 的 view QA 用 `--no-foreign` 並註明。
-     - 防復發：`neg-macro-views` Q13；`check_inputs.py macro_views`；`check_soc.py macro_gds` 與 negative test P67（最終 GDS 的 macro 被清空）、P68（macro 的一個 cell 內容不同）；`magic_drc` 要求框內違規至少是 macro 單獨的一半，P69。
+0. 第 0 項移到 `macro-qualification` 規則 1（macro 的 view QA，`CLAUDE.md` 規則 12）。
 1. **view 來源**（每一個產生檔都要有 `--check` 模式，harden 前檢查是否過期：`pnr/soc_top/check_inputs.py`）
 
    | view | 做法 | 出處 |
@@ -41,34 +23,19 @@ description: 把 SRAM、IP 這類 hard macro（已完成版圖的區塊）放進
 2. **擺放**：macro 位置、halo、IO pin 與壅塞的規則在 `floorplan-congestion`；這裡只檢查 `MACROS.instances` 的座標與方向和 floorplan 決定一致（`check_soc.py placement`）。
 3. **未用的 port**：輸入接 tie cell（RTL 直接寫常數，合成會產生 `conb_1`）；輸出接 RTL 具名 wire，就不算斷線。checker 要檢查實際的 tie 值（`check_soc.py port1_tieoff`）。例外：OpenRAM SRAM 的時脈腳位不能接常數；它的 chip-select 由該 port 的時脈鎖存、沒有 reset，`clk1` 固定為 0 時上電狀態可能讓一列 wordline 一直開著（已用 SPICE 實驗確認，ADR-0018 決定 9；未用 port 的時脈要接系統時脈、`csb` 接 1）。checker：`check_soc.py port1_tieoff` 從 `clk1` 沿 buffer／反相器往回追，必須到頂層時脈 port、反相器數為偶數、不是 tie 的 net；negative test P65（`clk1` 接 `conb_1` LO）。接上時脈後 STA 的 `check_setup` 不再有「`clk1` 沒有時脈」的警告，允許清單要清空。
 4. **電源**：`VDD_NETS`／`GND_NETS` 與 macro 電源 pin 同名；`PDN_MACRO_CONNECTIONS`；實體連接靠 LVS 驗證（`lvs-signoff`、`pdn-ir-drop`）。
-5. **macro 在每個 STA corner 都要先證明功能正確**（這一項應該在選定 macro 之前就做，見第 8 項；這裡是在實際交付的網表上重跑）：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫、以及 ss 1.60 V 室溫時讀出前一次的值；STA corner 之間的溫度（例如 25°C）STA 看不到，要另外模擬（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
+5. **macro 在每個 STA corner 都要先證明功能正確**（這一項應該在選定 macro 之前就做，見 `macro-qualification` 規則 2；這裡是在實際交付的網表上重跑）：時序是在「macro 能動」的前提下才有意義。廠商 macro 不一定在所有 corner 都能動；PDK 的 sky130 2 KB SRAM 在低溫、以及 ss 1.60 V 室溫時讀出前一次的值；STA corner 之間的溫度（例如 25°C）STA 看不到，要另外模擬（ADR-0010「ss −40°C 讀取失敗」）。不能動的 corner 仍要給 .lib（否則被當 black box），用標明 PLACEHOLDER 的佔位 .lib，並列為下線風險；做法看 `openram-macro-characterization` 規則 13。
 6. **macro 的 clock**：OpenROAD 的 CTS 預設把 macro 的 clock pin 分到另一棵 tree，插 delay buffer 對齊 flip-flop 的 latency。對 SRAM 這種半週期讀出（下降緣送出）的 macro，這串 buffer 的上升緣、下降緣延遲不同，會讓讀出的 setup 與 hold 同時變差；`soc_top` 用 `clock_tree_synthesis -no_insertion_delay` 關掉（ADR-0016，`cts-clock-tree` 規則 10、12）。整合新 macro 時，harden 後先看 macro clock pin 前有沒有 `delaybuf_*`，再拆 macro 讀出路徑 launch／capture 的 clock latency。
 7. **後續各項**：時序（`drv-timing-closure`）→ antenna（`antenna-signoff`）→ DRC baseline（`drc-signoff`）→ LVS black box 範圍（`lvs-signoff`）→ GL 模擬模型（`gate-level-simulation`）→ EQY blackbox（`formal-equivalence-eqy`）。
 
-## 提早檢查（流程回顧，ADR-0020）
+## 提早檢查（流程回顧，ADR-0020，使用者決定）
 
-2026-10-14 回顧 Phase 0–7（`docs/notes/flow_retro/`）後使用者決定加的三條。依據是本專案已發生的事件；時間與省下多少是從 commit 時間推算。
-
-8. **選定 macro 之前先做 go／no-go：在晶片的整個操作範圍做 SPICE 讀寫，並用下線平台的 DRC deck 單獨檢查**（提早檢查 B1；時間點在第 0 項之前、macro 寫進計畫之前；流程文件 4.3 第 0 項）。
-   - 為什麼：本 repo 用的 PDK 預建 2 KB SRAM 在 ss −40°C、tt −40°C 與 ss 25°C 1.60 V 都讀成前一次的值（ADR-0010），網表從 Phase 0 就在 PDK 裡，計畫第一版也寫了它的矽量測只到 ≥1.7 V（`project-plan.md` §5.4），比 ss corner 的 1.60 V 高；卻到 Phase 3.5 特性化才發現，Phase 3.5–5 帶著佔位 .lib，Phase 6 改自產並修讀取電路，特性化與整合做了兩次。拿掉 ss −40°C corner 救不了它，因為室溫 ss 25°C 1.60 V 也錯（回顧 README「使用者的例子」）。
-   - 做什麼：先拿到 macro 已驗證的範圍（矽量測條件、特性化 corner、.lib 是實測還是解析模型），和晶片的操作範圍比（`signoff-criteria`「提早檢查」A1）。沒涵蓋的部分用廠商或 PDK 附的電晶體級網表模擬：格點包含每個 STA PVT、corner 之間的溫度（例如 25°C）、最低供電（平台規格的下限與 ss corner 的電壓）；序列要有連續兩次讀到相反的值、寫入後馬上讀，未用的 port 照 SoC 的接法；記下輸出在 clock 兩個邊緣之後的波形（決定 .lib 要哪些時序弧）。量法與陷阱看 `openram-macro-characterization` 規則 4、13。另外用下線平台的 DRC deck 單獨跑 macro（`tapeout-precheck-caravel` 規則 2）：precheck 的 deck 對任何 OpenRAM bitcell 報 `MR_licon.SP.6`、`MR_mcon.CON.10`，deck 在 2026-05 就改了，本 repo 到 Phase 7 才看到（ADR-0019 決定 5）。
-   - 通過條件：每個格點都讀寫正確；平台 deck 的違規都有根因與比對基準。失敗時先列選項（換 macro、自產並修電路、縮規格）由使用者決定並記 ADR，再整合；選了接受風險才用第 5 項的佔位 .lib。
-   - 成本：回顧推算第一次約半天到一天（修剪網表每個 PVT 幾分鐘到幾十分鐘），之後同類 macro 1–2 小時。
-   - 自動防護：沒有（是選擇前的模擬，結果寫進 ADR）。
-9. **macro .lib 輸出的驅動能力要落在標準元件的範圍內**（提早檢查 B3，view QA 的一部分）。
-   - 為什麼：OpenROAD 把 .lib 延遲表對負載的斜率當成 driver 的強度。Phase 3.5 的 SRAM .lib 斜率等於 60–140 kΩ 的 driver，`repair_design` 跑 75 分鐘後 `failed with an unexpected error`，單步重跑 4 種 .lib 才找到原因（ADR-0010；`openram-macro-characterization` 規則 14）。
-   - 做什麼：從每條輸出弧的延遲表算等效驅動電阻（延遲變化 ÷ 負載變化），和同一份 library 標準元件的範圍比；延遲表隨負載要單調不減。
-   - 通過條件：落在範圍內；植入一份斜率過大的 .lib 必須 FAIL。
-   - 自動防護：目前沒有（`check_macro_views.py` 沒有這項），下一個專案開始時加進 view QA，並加一個植入錯誤的 Q 案例。換上任何新 macro .lib 時，照舊先單步重跑 `RepairDesignPostGPL` 確認時間（`drv-timing-closure` 規則 10）。
-10. **換 macro 時，舊 macro 做過的檢查逐條重跑，每支 checker 證明比對對象不是空的**（提早檢查 B4）。
-    - 為什麼：Phase 0 就確認過預建 SRAM 的 LEF 有 `FOREIGN`（`docs/phase_exit/phase0.md`），Phase 6 換自產 macro 時沒重查，最終 GDS 的 SRAM 是空的，第一輪 harden 白跑（第 0 項「LEF 的 FOREIGN」）；EQY 的網表解析只認 `sky130_` 開頭的 cell，SRAM 的 clock 檢查在 Phase 6 步驟 4a–4c 被略過照樣 PASS（經驗紀錄 2026-10-10）。
-    - 做什麼：把之前對舊 macro 做過的每一項檢查（不論在哪個 Phase、是不是 checker）列成清單，對新 macro 逐條重跑並附結果；每支會碰到 macro 的 checker（EQY、DRC 位置比對、最終 GDS 比對、STA 讀的 .lib）在第一次 positive run 印出讀到的 macro instance 與內容摘要；macro 換名稱時，搜尋用舊名稱或名稱前綴認東西的腳本。
-    - 通過條件：清單逐條 PASS；每支 checker 的 positive run 都印出 macro instance。
-    - 自動防護：部分已有（`formal-equivalence-eqy` 規則 5、`check_soc.py macro_gds`、`magic_drc` 的框內違規下限）；「舊檢查逐條重跑」本身沒有自動防護，下一個專案開始時做成 checker。
+8. 第 8 項移到 `macro-qualification` 規則 2（選定 macro 之前的 go／no-go）。
+9. 第 9 項移到 `macro-qualification` 規則 3（macro .lib 輸出的驅動能力）。
+10. 第 10 項移到 `macro-qualification` 規則 4（換 macro 時舊檢查逐條重跑）。
 
 ## negative test
 
-Q1–Q13 view 內容錯誤（power 數量級、電容單位、nan、負延遲、面積、GDS 外框、腳位缺漏、方向、電源腳位、名稱、沒有 power、LEF 資料庫單位、LEF 沒有 FOREIGN）→ `scripts/check_macro_views.py`（`make neg-macro-views`）；P63 產生器輸出被改 → `check_inputs.py macro_source`；P64 模擬模型過期 → `sim_model`；P66 LEF SIZE → `macro_views`；P08 tie-off 斷開、P65 未用 port 的時脈接常數 → `check_soc.py port1_tieoff`；P67、P68 最終 GDS 的 macro 被清空或內容不同 → `check_soc.py macro_gds`；P69 框內 DRC 違規太少（macro 不在被檢查的 GDS）→ `magic_drc`；P09 擺放漂移 → `check_soc.py placement`；P14 `sram0` 改名 → `check_soc.py macro`；P16–P20 產生檔與來源不一致（少一個 RTL 檔、特性化 .lib 的 hold 弧被改、antenna LEF 少一行、MACROS 的 lib 指回 PDK 的 TT .lib，config 與 `resolved.json` 各一次）→ `check_inputs.py` 對應的列；P30 某個 corner 讀到別的 PVT 的 .lib → `check_soc.py sram_lib`；P32 hold 弧設 0 → `Checker.HoldViolations`；P04／P05／P06 見對應 skill。
+P08 tie-off 斷開、P65 未用 port 的時脈接常數 → `check_soc.py port1_tieoff`；P09 擺放漂移 → `check_soc.py placement`；P14 `sram0` 改名 → `check_soc.py macro`；P64 模擬模型過期 → `check_inputs.py sim_model`；P16–P20 產生檔與來源不一致（少一個 RTL 檔、特性化 .lib 的 hold 弧被改、antenna LEF 少一行、MACROS 的 lib 指回 PDK 的 TT .lib，config 與 `resolved.json` 各一次）→ `check_inputs.py` 對應的列；P30 某個 corner 讀到別的 PVT 的 .lib → `check_soc.py sram_lib`；P32 hold 弧設 0 → `Checker.HoldViolations`；P04／P05／P06 見對應 skill。view QA 與最終 GDS 比對的 negative test（`neg-macro-views`、P63、P66–P69、P71–P76）在 `macro-qualification`。案例表在 `pnr/soc_top/neg_pnr.py`。
 
 ## 用完後
 
@@ -76,12 +43,10 @@ Q1–Q13 view 內容錯誤（power 數量級、電容單位、nan、負延遲、
 
 ## 經驗紀錄
 
+這張表 2026-10-15 拆分（ADR-0021 決定 5）：view QA 與換 macro 的列（2026-10-10 的 `ODB-0205`、`FOREIGN`、`KeyError: 'sram0'`，2026-10-11 的獨立審查）搬到 `macro-qualification`；這裡留接進 flow 的列。
+
 | 日期 | 專案／run | 現象 | 根因（已驗證／推測） | 處理 | 證據 |
 |---|---|---|---|---|---|
 | 2026-10-03 | soc_explore1 | `PDN-0179 Unable to repair all channels` | 已驗證：SRAM 上方只剩約 6 µm row | SRAM 移到 halo 蓋過 core 邊界 | ADR-0006 補充 |
-| 2026-10-10 | Phase 6 步驟 4a，只跑到 PDN 的試跑 `runs/p6_fp_pico` | `[ODB-0205] The LEF UNITS DATABASE MICRON convert factor (2000) is greater than the database units per micron (1000)`、`[ODB-0292] LEF data from .../arv_sram_2kbyte_1rw1r_32x512_8.lef is discarded due to errors`，Floorplan 失敗 | 已驗證（OpenRAM LEF `DATABASE MICRONS 2000`，1178 個座標都在 0.005 µm 格點；改成 1000 後同一個試跑 rc=0） | 清單第 0 項「LEF 的資料庫單位」；`gen_antenna_lef.py tech_units()`、`check_macro_views.py` 單位檢查、Q12 | `runs/p6_fp_pico.console`、`ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.lef` |
 | 2026-10-10 | Phase 6 步驟 4a，換 macro | OpenRAM dev 的網表沒有 `*.PININFO`，`gen_antenna_lef` 取不到輸入腳位；新版 Verilog 模型已把 `mem` 宣告放在使用前，`gen_sim_model` 的「恰好一次」搬移會誤刪 | 已驗證（讀檔確認） | 輸入腳位改取 LEF 的 `DIRECTION INPUT` 並核對是網表頂層的 port；`gen_sim_model` 只在宣告晚於使用時搬移 | `ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/gen_antenna_lef.py`、`ip/sram/gen_sim_model.py` |
-| 2026-10-10 | Phase 6 步驟 4b 第一輪 harden（`221822a`，兩個 CPU） | `design__xor_difference__count` 5,691,003／5,690,757（上限 0），其他 signoff 上限都 PASS；`soc_top.gds` 的 SRAM cell 沒有子 cell，Magic 的 GDS 有 168 個；`magic_drc` 框內 0 個違規仍 PASS | 已驗證（單步重跑 `KLayout.StreamOut`，LEF 加 `FOREIGN` 後完整；讀 `stream_out.py`） | 清單第 0 項「LEF 的 FOREIGN」；`add_foreign()`、view QA、`check_macro_gds.py`（步驟 3d）、`magic_drc` 下限；Q13、P67–P69；兩個 CPU 重新 harden | `runs/p6_4b_harden_*.log`，commit `3ceca55`（run 目錄 `runs/soc_top.prev` 已被之後的 harden 覆蓋；同一情況由 P67、P69 重現） |
 | 2026-10-10 | Phase 6 步驟 4b 第二、三輪 harden（`3ceca55`、`ad184f5`，兩個 CPU） | detailed routing 報 25 行 `[WARNING DRT-0418] Term sram0/<pin> has no pins on routing grid`（`addr0` 3、`addr1` 2、`clk0`、`web0`、沒繞線的 `dout1` 18），兩輪、兩個 CPU 相同；預建 SRAM 沒有這個警告；最終 DRC、LVS、antenna 都是 0 | 推測：OpenRAM 自產 LEF 的腳位座標沒有對齊 sky130 的繞線格點（沒有量腳位對 track 的偏移） | 只記錄；golden 有 `flow__warnings__count:DRT-0418`，數量改變就會被 golden 比對抓到 | `runs/soc_top/46-openroad-detailedrouting/openroad-detailedrouting.log`、`runs/p6_3m_pico_signoff/criteria_review.md` |
-| 2026-10-10 | Phase 6 step 4c（`940e395`） | 換成自產 macro `arv_sram_2kbyte_1rw1r_32x512_8` 後，`neg-eqy-soc`／`neg-gl-soc` 以 `KeyError: 'sram0'` 中止；`eqy-soc` 的 SRAM clock 檢查從 step 4a 起被略過 | 已驗證：`signoff/eqy/run_eqy.py` 的網表解析只認 `sky130_` 開頭的 cell | 解析改成任何 cell 名稱，並要求 config `MACROS` 的 instance 被解析到（`formal-equivalence-eqy` 規則 5）。換 macro（尤其換名稱）時，搜尋 repo 中用 cell 名稱前綴或舊 macro 名稱認東西的腳本（例如 `grep -rn "sky130_" signoff dv pnr scripts`，再看每一處是不是在認 cell 種類） | `runs/p6_4c_neg-eqy-soc_*.log` |
-| 2026-10-11 | Phase 6 獨立審查（找 checker 漏洞的 agent，12 個植入實驗） | view QA 對「LEF 兩支腳位 RECT 對調」「LEF 沒有 OBS」「.lib 範本電容 / 10 並重新產生 char .lib」「power 表第二個數字 1e11」都 PASS；`check_macro_gds.py` 對標籤互換、同外框的多邊形、兩個框反向各移 10 nm 都 PASS | 已驗證（植入實驗；我重跑 H1 確認）。LVS 把 macro 當 black box，LEF 與 GDS 的幾何沒有別處在比；指紋只算圖形數與座標加權和 | `check_macro_views` 加 `pinpos`、`obs`，power 表讀全部數字；`check_inputs` 加 `lib_template`、`macro_source` 含 TT .lib；`gds_cells.py` 改成每個圖形完整描述的雜湊；Q14–Q20、P71–P76。交付的 SRAM 125 支腳位逐支比對一致，結果不是假 PASS | `docs/phase_exit/phase6.md`「獨立審查」、ADR-0018 決定 19 |

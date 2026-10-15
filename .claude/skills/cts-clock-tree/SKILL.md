@@ -1,6 +1,6 @@
 ---
 name: cts-clock-tree
-description: Clock tree（CTS）問題，或 setup／hold 違規可能是 clock 造成時使用：clock buffer 的 fanout／cap 違規、skew（metric 含 uncertainty 與 derate，彙總的 worst_hold 是各 corner 最不負的值）、clock 輸入 pin 到第一級 clock buffer 的長線 slew（`CTS_CLK_MAX_WIRE_LENGTH`）、clock pin 擺放、CTS 把 macro 的 clock 延到與 flip-flop 對齊（`delaybuf_*`，關掉用 `-no_insertion_delay` 與 LibreLane plugin）造成 macro 輸入 hold、SRAM 半週期 setup 與讀出 hold 變差、hold delay cell 在慢 corner 吃掉 setup、先拆 launch／capture clock latency 再決定在 clock 端或 data 端修，以及第一次帶 macro 的 harden 就檢查 macro clock 的結構（有沒有對齊 latency 的 buffer 鏈、上升緣與下降緣的 latency），flow 的變數關不掉某個工具行為時要查到底層工具的指令選項再判斷是不是真的沒辦法。資料路徑的 DRV 看 drv-timing-closure。Use for CTS problems and clock-caused setup/hold violations (skew, macro clock latency balancing, rise/fall latency asymmetry on half-cycle paths) in OpenROAD/LibreLane.
+description: Clock tree（CTS）問題，或 setup／hold 違規可能是 clock 造成時使用：clock buffer 的 fanout／cap 違規、skew（metric 含 uncertainty 與 derate，彙總的 worst_hold 是各 corner 最不負的值）、clock 輸入 pin 到第一級 clock buffer 的長線 slew（`CTS_CLK_MAX_WIRE_LENGTH`）、CTS 把 macro 的 clock 延到與 flip-flop 對齊（`delaybuf_*`；`CTS_DELAY_BUFFER_DERATE_PCT` 關不掉，要 `-no_insertion_delay` 與 LibreLane plugin）造成 macro 輸入 hold、SRAM 半週期 setup 與讀出 hold 變差、hold delay cell 在慢 corner 吃掉 setup、先拆 launch／capture clock latency 再決定在 clock 端或 data 端修、第一次帶 macro 的 harden 就檢查 macro clock 的結構，以及設了沒作用的設定（`CTS_MAX_CAP`；PDK 的 `RT_CLOCK_MIN_LAYER` 沒生效，clock 走 met1／met2）。flow 的變數關不掉某個工具行為時，查到底層工具的指令選項再判斷。資料路徑的 DRV 看 drv-timing-closure。Use for CTS problems and clock-caused setup/hold violations (skew, macro clock latency balancing, rise/fall latency asymmetry on half-cycle paths) in OpenROAD/LibreLane.
 ---
 
 # Clock tree（CTS）
@@ -11,19 +11,24 @@ description: Clock tree（CTS）問題，或 setup／hold 違規可能是 clock 
 
 1. `CTS_SINK_CLUSTERING_SIZE 8`：預設每顆末端 buffer 帶 10 顆 flop，之後加 dummy load（`clkload*`），fanout 變 11–12。
 2. `CTS_DISTANCE_BETWEEN_BUFFERS 50`：H-tree 中段沒放 buffer 時，第 2 層一顆 buffer 帶 16 顆下游 buffer（fanout 16、cap 0.206 pF）；設 50 µm 後最大 fanout 9。
-3. 沒有作用：`CTS_MAX_CAP`（CTS 後 DEF 逐 byte 相同）；`CTS_SINK_CLUSTERING_SIZE 9`（反而分成更多群）。
+3. 沒有作用：`CTS_MAX_CAP`（CTS 後 DEF 逐 byte 相同）；`CTS_SINK_CLUSTERING_SIZE 9`（反而分成更多群）。怎麼發現：改設定後比較 CTS step 輸出的 DEF；**沒有自動防護**（設了沒作用不影響正確性，只是浪費試跑），LibreLane 升版時再比一次。
 4. **clock 輸入 port**：pin 到第一級 clock buffer 的線不在 resizer 修復範圍內（clock net）。pin 在左邊最下方時，660 µm 的線在 ss slew 0.92 ns；移到 flip-flop 重心附近的下邊中段後消失（soc_explore2 → 4）。
 5. `clkload*` 的輸出不接東西，會出現在 STA 的 unannotated 清單，屬正常（見 `signoff-checker-qualification` 規則 4）。
 6. **skew 的 metric 不是 skew 本身**：`clock__skew__worst_*` 與 `report_clock_skew` 都含 clock uncertainty（0.25 ns），也含 ±5% derate（launch 用 late、capture 用 early）。soc_top nom_tt 的 metric 是 0.93 ns：扣掉 uncertainty 後 0.68 ns，再扣掉 derate 的名目值約 0.51 ns（推算）。彙總值：`clock__skew__worst_hold` 取各 corner 的最大值（最不負），`clock__skew__worst_setup` 取最小值（LibreLane `common/metrics/library.py` 第 166–173 行）；要看最差的 corner，讀 `__corner:<name>` 的值（Phase 7 wrapper：彙總 −2.589，最差 max_ss_n40C −3.649 ns）。
 7. **`CTS_APPLY_NDR` 的 `half`**：只在 clock tree 的前半層套用 non-default rule（OpenROAD `src/cts/README.md`），不是「leaf 以外全部」。sky130 的 CTS NDR 是 2 倍間距，線寬沒有加大。
-8. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**：`resolved.json` 為 None。soc_top 的 clock 繞線段：met1 9750、met2 2901、met3 90、met4 7。要讓 clock 走粗金屬，必須在專案 config 明確設定。
+8. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（LibreLane 設定靜默無效，CLAUDE.md 規則 10）
+   - **症狀**：沒有錯誤或警告；clock net 幾乎都繞在 met1／met2（Phase 3 soc_top 的 clock 繞線段：met1 9750、met2 2901、met3 90、met4 7；這份統計沒有存進 repo，結論記在 `docs/notes/signoff_criteria_soc_top.md` 的 signal EM 列）。
+   - **已知的事實**：PDK 的 `libs.tech/openlane/config.tcl` 第 158 行設了 `met3`，`runs/<tag>/resolved.json` 卻是 null；LibreLane 的 `scripts/openroad/common/set_routing_layers.tcl` 第 20–21 行只在這個環境變數存在時才限制 clock 的最低層。推測（讀原始碼，沒有實驗）：LibreLane `steps/common_variables.py` 宣告這個變數時沒有標 `pdk=True`，所以 PDK 的值沒有讀進來。
+   - **怎麼發現**：看 `resolved.json` 的 `RT_CLOCK_MIN_LAYER`；或統計最終 DEF 裡 clock net 每一層的繞線。
+   - **怎麼繞過**：要讓 clock 走 met3 以上，只能在專案 config 明確設定。**現況**：本 repo 的 config 都沒設，clock 走 met1／met2；clock net 的 EM 只有估算（同上筆記：上界約 0.39 mA，met1 最小線寬上限 0.85 mA rms）。要不要設定交使用者決定（ADR-0021 A6），尚未決定。
+   - **防復發：沒有自動防護**。原因：沒有 checker 比對 PDK 設定與 `resolved.json`，要新寫，依 ADR-0021 決定 3 留到下一個專案開始時做。LibreLane 升版時重看 `resolved.json` 的這個值。
 9. **duty cycle**：clock tree 本身造成的 rise／fall 延遲差（nom_ss 下 SRAM `clk0` 約 0.30 ns），STA 已經算到；clock 來源本身的 duty 偏差 STA 不知道，要靠約束（`signoff-criteria`）。
-10. **CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚**（latency 對齊）：soc_top 的 `sram0/clk0` 前面被插了 10 顆 delay buffer（`delaybuf_*`）。
-    - 後果一，SRAM 輸入腳的 hold 變差：SRAM .lib 要求 0.5 ns（ADR-0007 的值，ADR-0010 沿用為下限；實測 TT 為 0.20–0.24 ns）。post-CTS 的 hold 修到 +0.100 ns，繞線後在 min_ff_n40C 變成 −0.088 ns（Phase 4 第 2、3 次 harden-soc）。後來用 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 補過去（`drv-timing-closure`）。
-    - 後果二，SRAM 下降緣送出的半週期路徑變差：這串 `clkbuf_16` 的下降緣比上升緣慢（min_ss_n40C 每顆約 0.31 對 0.21 ns，10 顆加上 tree 共差 1.08 ns），半週期 setup 用的正是下降緣。
-    - 後果三，SRAM 讀出的 hold 變差：hold 用上升緣，SRAM 比讀出 flop 早（min_ff 0.40 ns），每條 `dout` 要插 hold delay cell，在 ss_n40C 每顆再吃掉 1.1–1.4 ns 的 setup（規則 12）。PicoRV32 44 ns：setup −0.113 ns。
+10. **CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚**（latency 對齊）：soc_top 的 `sram0/clk0` 前面被插了一串 delay buffer（`delaybuf_*`，Phase 4 是 10 顆）。各項數字在 ADR-0016 與 `pnr/soc_top/README.md` 設定表，這裡只寫機制。
+    - 後果一，SRAM 輸入腳的 hold 變差：SRAM .lib 的 hold 要求是保守的下限（ADR-0007、ADR-0010），post-CTS 修到正值，繞線後在 min_ff_n40C 變負（Phase 4 第 2、3 次 harden-soc）。當時用 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 補（`drv-timing-closure` 規則 7，放寬與補償登記表 T16）。
+    - 後果二，SRAM 下降緣送出的半週期路徑變差：這串 `clkbuf_16` 的下降緣比上升緣慢，累積起來 SRAM clock 的下降緣 latency 比上升緣晚約 1 ns（min_ss_n40C，ADR-0016），半週期 setup 用的正是下降緣。
+    - 後果三，SRAM 讀出的 hold 變差：hold 用上升緣，SRAM 的 clock 比讀出 flop 早，每條 `dout` 要插 hold delay cell，這些 cell 在 ss_n40C 再吃掉 setup（規則 12；Phase 5 PicoRV32 因此 setup FAIL，ADR-0016）。
     - **`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步**：設 0 或 1，結果與預設完全相同，仍是 10 顆。
-    - **關掉的方法**：`clock_tree_synthesis -no_insertion_delay`（OpenROAD `dcf36133`：`balanceMacroRegisterLatencies()` 只在 insertion delay 開啟時執行，而 `clock_tree_synthesis` 每次呼叫都把它重新打開，只有這個旗標能關）。LibreLane 3.0.14 的 `cts.tcl` 沒有對應的設定，本 repo 用 LibreLane plugin 換掉 CTS step（`pnr/librelane_plugin_arvinsa`，config `meta.substituting_steps`；ADR-0016）；不要為此改 LibreLane 本身，也不要把改工具行為的 Tcl 放進 SDC。PicoRV32 接續實驗：0 顆 delay buffer，setup −0.113 → +0.765 ns，hold 不變，SRAM 輸入腳 hold +0.197 → +0.093 ns（要確認仍為正）。
+    - **關掉的方法**：`clock_tree_synthesis -no_insertion_delay`（OpenROAD `dcf36133`：`balanceMacroRegisterLatencies()` 只在 insertion delay 開啟時執行，而 `clock_tree_synthesis` 每次呼叫都把它重新打開，只有這個旗標能關）。LibreLane 3.0.14 的 `cts.tcl` 沒有對應的設定，本 repo 用 LibreLane plugin 換掉 CTS step（`pnr/librelane_plugin_arvinsa`，config `meta.substituting_steps`；ADR-0016）；不要為此改 LibreLane 本身，也不要把改工具行為的 Tcl 放進 SDC。關掉之後半週期 setup 改善、SRAM 輸入腳的 hold 變小，要確認仍為正（ADR-0016 的前後比較）。
     - **防護**：`check_soc.py cts_macro_latency` 每次 harden 確認 config 有替換、log 有 plugin 印的那一行、網表沒有 `delaybuf_*`（negative test P52–P54）。
       **主要判斷是結構，不是名稱**（Phase 5 獨立審查後改）：從 `sram0/clk0` 往上數「只驅動下一級的 clock buffer」連續幾級，上限 2。有做 latency 對齊的兩個 run 是 11、12 級，沒做的是 0 級。
       - 名稱判斷的漏洞：把 `delaybuf_` 改名成別的名字就 PASS（P58）。
@@ -31,8 +36,8 @@ description: Clock tree（CTS）問題，或 setup／hold 違規可能是 clock 
       - step 目錄要容許 `-<n>` 字尾（重複的 step），P59、P60。
       **升版時**，LibreLane 或 OpenROAD 都要重看：`cts.tcl` 是否仍只呼叫一次 `clock_tree_synthesis`、這個旗標與 `balanceMacroRegisterLatencies()` 的條件是否還在、LibreLane 是否已經提供對應的設定（有的話改用設定，拿掉 plugin）。旗標沒傳到時，P53 的那一行會不見，`delaybuf_*` 也會回來。
 11. **clock 輸入 pin 到 clock tree 根部的線**（接規則 4）：`CTS_CLK_MAX_WIRE_LENGTH` 預設 0，表示依 slew 算出來的長度，約 3.5 mm，所以 360 µm 的線不會被切段。pin 的 driver 是 LibreLane 假設的 `inv_2`（`SYNTH_CLK_DRIVING_CELL` 預設），max_ss_n40C 的 slew 0.767 ns，超過 0.75 ns（Phase 4 第 4 次 harden-soc）。
-    - 設 150 µm 後，CTS（LibreLane `cts.tcl` 的 `repair_clock_nets`）會把這段線切開加 buffer。
-    - 第 5 次 harden 同時改了週期與 max transition，15 個 corner 全部通過；這一項的效果沒有單獨實驗。
+    - 設定方式：`CTS_CLK_MAX_WIRE_LENGTH` 設一個長度（本 repo 150 µm），LibreLane `cts.tcl` 的 `repair_clock_nets` 依它切段加 buffer（讀原始碼得知）。
+    - 效果沒有單獨實驗：第 5 次 harden 同時改了週期與 max transition，15 個 corner 全部通過，分不出是哪一項的作用。
 12. **setup／hold 先從 clock 端找原因，再在 data 端補 delay**（後段常見的作法；ADR-0016 是一個實例）：
     - 先把違規路徑的 launch 與 capture clock latency 拆開看（`report_checks -format full_clock_expanded`），而且 setup 與 hold 各看一次、每個相關 corner 都看：兩端的 clock 差是否隨 corner 變號、上升緣與下降緣的 latency 是否差很多（半週期路徑 setup 用一個邊緣，hold 用另一個）。
     - 在 data 端補 hold 很貴：sky130 的 delay cell 與 buffer，ss_n40C 延遲是 ff_n40C 的 2.5–3.3 倍。ff 缺 0.3 ns，ss 的 setup 就付約 1 ns；OpenROAD 整顆晶片只用一種 hold buffer（hold 延遲 ÷ 面積最高的，sky130 是 `dlygate4sd3_1`），換成小 cell 會插好幾倍的數量（`drv-timing-closure` 經驗紀錄，`RSZ-0060`）。
@@ -64,3 +69,4 @@ useful skew（刻意讓個別 flop 的 clock 提早或延後來借時間；OpenR
 | 2026-10-08 | Phase 5 exit 的獨立審查；4 個網表（有對齊 `p5_h3_h8`、`p5_pico_h1`，沒對齊兩個乾淨 regress） | `cts_macro_latency` 只認 `delaybuf_*`，改名後 PASS。比總級數：SRAM 12 級，flip-flop 最多 12 或 14 級，分不出來；比「只驅動下一級的 buffer 連續幾級」：11、12 對 0 | 已驗證：4 個網表實測 | 規則 10 防護改成結構判斷（上限 2），P58–P60 | `pnr/soc_top/check_soc.py sram_clock_chain` |
 | 2026-10-10 | Phase 6 步驟 4b 第三輪（`ad184f5`，自產 SRAM，`clk1` 改接系統時脈） | ss −40°C 的 skew metric 大了 0.2–0.4 ns（PicoRV32 nom_ss_n40C hold −1.292 → −1.679、setup 0.936 → 1.168 ns），clock inverter 49 → 87（PicoRV32）、56 → 101（Hazard3）；最差 setup／hold 仍 PASS | 推測：`clk1` 成為新的 clock sink；沒有分開做實驗 | 記入 golden README 與 Phase 6 已知限制 5，沒有改設定 | `signoff/golden/soc_top/README.md`、`soc_top_hazard3/README.md`「與 Phase 5 golden 的差異」 |
 | 2026-10-14 | Phase 7 Caravel wrapper（`f721cff` 起的正式 harden，唯讀分析） | hold skew metric nom_ss_n40C −3.598 ns（soc_top −1.540），葉端 latency 9.4–11.4 ns | 推測（沒讀 OpenSTA 原始碼）：約 2.7 ns 是 `report_clock_skew -hold` 把 clock source latency 的上下限差（Caravel SDC 的 5.57／4.65 ns，0.92 ns）與共同路徑的 derate（0.44 ns）算成扣分；真正影響 hold 的 skew −0.632 ns（soc_top −0.678）。已量到的：`wb_clk_i` 從 wrapper 邊緣到 clock root 約 1.9 ns、6 顆 buffer（max_ss_n40C 5.57 → 7.67 ns），Caravel 輸入路徑因此多了至少 312 顆 hold buffer | 沒改 checker；`review_criteria` 不要把 skew metric 當品質指標；下一顆設計讓 CTS root 靠近 clock 腳位（沒試）；列入 Phase 7 已知限制 | `runs/p7_skew_analysis/README.md`；`docs/phase_exit/phase7.md` |
+| 2026-10-15 | ADR-0021 寫回（A6），讀原始碼 | 規則 8 的 `RT_CLOCK_MIN_LAYER`：PDK 的 `~/.ciel/sky130A/libs.tech/openlane/config.tcl` 第 158 行設 `met3`，LibreLane 的 `set_routing_layers.tcl` 第 20–21 行只在環境變數存在時使用 | 推測（只讀原始碼，沒有實驗）：LibreLane `librelane/steps/common_variables.py` 第 331 行宣告它時沒有 `pdk=True`（同檔其他 PDK 變數有），所以 PDK 的值沒讀進來 | 規則 8 補「怎麼發現」與「沒有自動防護」；要不要在 config 設定交使用者決定 | `.tools/librelane/librelane/steps/common_variables.py`、`.../scripts/openroad/common/set_routing_layers.tcl` |

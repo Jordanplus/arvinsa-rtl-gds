@@ -1,6 +1,6 @@
 ---
 name: signoff-criteria
-description: 三種情況使用。一、每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）：檢查自己訂的 signoff criteria 有沒有被執行（`review_criteria.py` 的 criteria_review.txt）、合不合理（寫 criteria_review.md；Stop hook 沒看到就擋下回報），再把實測數字寫進依製程分類的 knowledge 檔（knowledge/sky130A_sky130_fd_sc_hd.md）。二、決定或檢討 signoff 條件的數值與依據：clock uncertainty 要算哪些成分（jitter、duty cycle、skew、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、power signoff（IR、EM、功耗）一律用 CPU max power pattern 的切換活動，vectorless 只當參考、IR drop 預算（IR 用多大的電流要先量測再決定：哪個 corner 的電流、電壓、電阻要對應預算保護的對象，功耗按類別拆解，.lib 沒有的電流按 PVT 加，切換活動用 CPU max power pattern 在最終網表的模擬，不用預設切換率，供電點從真實 pad 起算）、EM、SI（crosstalk）、macro SPICE 特性化值的餘量、max transition／cap／fanout、antenna、density、latch-up，以及開源工具沒分析的項目要怎麼用 margin 補。三、開新設計寫計畫時與任何 harden 之前（包括子區塊單獨 harden 與探索 run）：操作範圍對照表（VDD 與 Tj 由使用者決定，corner 清單由它推出，對照 macro 與 library 已驗證的範圍；macro 在某個 corner 不能動時不要拿掉 corner）、第一份網表後的 corner 代價 what-if（哪個 corner 決定週期）、limits 每一列要有出處、IR 判法一次定清楚，以及加長週期、加餘量、佔位 .lib、只判某個 corner 這類放寬或補償要登記在放寬與補償登記表（docs/relaxation_register.md），換設計時依據要重量。Use after every harden run (were the signoff criteria applied, are they still reasonable, per-PDK knowledge base) and when deriving or reviewing signoff limits and margins for sky130 + LibreLane/OpenROAD.
+description: 每次 harden 跑完、回報結果之前（PASS 或 FAIL 都要）使用：Stop hook 擋下回報（「harden 跑完後要先做 signoff criteria 檢查，才能回報結果」、criteria_review.md 還沒寫、沒有 criteria-review 結果行）、`review_criteria.py` 判 FAIL，要寫 `criteria_review.md` 並把實測數字與不會被覆蓋的證據路徑寫進製程 knowledge 檔。也用在決定或檢討 signoff 條件的數值與依據：clock uncertainty 的成分（jitter、DCD、margin）、OCV derate、PVT corner 與溫度反轉、resizer 餘量、IO delay、IR 預算與用哪個 corner 的電流（power signoff 用 CPU max power pattern，vectorless 只當參考）、EM、SI、max transition／cap、antenna、density、latch-up，以及開源工具沒分析的項目怎麼補；LibreLane 內建 checker 沒設門檻就略過（`Threshold for Threshold-surpassing long wires is not set. The checker will be skipped.`）。開新設計寫計畫與任何 harden 之前也讀：操作範圍對照表、corner 代價 what-if、limits 每列有出處、放寬與補償登記表。Use after every harden run and when deriving or reviewing signoff limits and margins (sky130 + LibreLane/OpenROAD).
 ---
 
 # Signoff 條件怎麼推導
@@ -52,7 +52,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 
 - **A1 操作範圍對照表（寫計畫時）**：
   - 做什麼：晶片的 VDD 範圍與 Tj 範圍從平台規格取得（上表第二列），由使用者決定並記 ADR。corner 清單由它推出：先照「PVT corner」一列掃描溫度反轉，再決定清單。然後逐一對照每個 macro／IP 與 standard cell library 已驗證的範圍（矽量測條件、特性化 corner、.lib 是實測或解析模型）。
-  - 通過條件：每個 corner 都對應到規格的某個角落；規格裡沒被驗證涵蓋的範圍列成「選定前要確認」，交給 `hard-macro-integration` 第 8 項的 go／no-go。macro 在某個 corner 不能動時，不要因此拿掉 corner；要縮規格由使用者決定，寫進 ADR 與使用限制。
+  - 通過條件：每個 corner 都對應到規格的某個角落；規格裡沒被驗證涵蓋的範圍列成「選定前要確認」，交給 `macro-qualification` 規則 2 的 go／no-go。macro 在某個 corner 不能動時，不要因此拿掉 corner；要縮規格由使用者決定，寫進 ADR 與使用限制。
   - 為什麼：計畫第一版就寫了 OpenRAM 1 KB macro 的矽量測只到 ≥1.7 V（`project-plan.md` §5.4），比 ss corner 的 1.60 V 高；SRAM 讀取失敗到 Phase 3.5 才發現（ADR-0010），而且室溫 ss 25°C 1.60 V 也錯，拿掉 ss −40°C 救不了它。ss −40°C 是為了標準元件的溫度反轉與 Caravel Tj −40°C 加的（ADR-0004、`docs/notes/signoff_criteria_soc_top.md`），本身是對的。
 - **A3 corner 代價 what-if（第一份網表之後）**：
   - 做什麼：同一份版圖只重跑 STA（`multicorner-sta` 規則 5），列出每個「決定週期」的 corner 的代價（有它和沒它時最小週期差多少），交給使用者確認操作規格。
@@ -83,7 +83,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
    - 不加 `-source` 的 `set_clock_latency` 會把 clock 變回 ideal，不要用。
 7. **`set_max_transition -clock_path` 在 propagated clock 下不會作用**：OpenSTA `search/CheckSlews.cc` 第 272 行用 `isIdealClock` 判斷 clock pin。實測：`-clock_path 0.05` 時 0 筆違規；`-data_path 0.05` 時連 clock buffer 的 pin 都被列進來。所以要另外限制 clock slew，得寫 checker 逐一看 clock net 的 pin。
 8. **`report_clock_min_period`（fmax）不能當 signoff 依據**：它只看 rise→rise 與 fall→fall 的路徑（OpenSTA `search/Sta.cc` 第 3604 行），會排除半週期路徑，也不看 .lib 的 `minimum_period`。實測：週期 32 ns 時 setup 已經 −0.42 ns，報告仍說 `period_min = 25.41`。最小週期要從半週期路徑反推。
-9. **`set_max_transition` 的有效上限**：取 SDC、pin 的 `max_transition`、輸出 pin 的 `default_max_transition` 三者中最嚴的（`CheckSlews.cc`）。`max_capacitance` 也一樣取 SDC 與 pin 中較小的（`CheckCapacitances.cc`），而 pin 的上限每個 corner 不同：sky130 的 ss 比 tt 小約 37%。
+9. **`set_max_transition` 的有效上限**：取 SDC、pin 的 `max_transition`、輸出 pin 的 `default_max_transition` 三者中最嚴的（`CheckSlews.cc`）。`max_capacitance` 也一樣取 SDC 與 pin 中較小的（`CheckCapacitances.cc`），而 pin 的上限每個 corner 不同（sky130 的差距在 knowledge 檔 S10）。
 10. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S10：sky130_fd_sc_hd .lib 的量測與特性化範圍）
 11. **OpenSTA 沒有 SI 分析**：
     - read_spef 把 coupling cap 乘上 factor（預設 1.0）後接地，也就是當作鄰線不動（`parasitics/Parasitics.tcl` 50、72–73）。
@@ -96,12 +96,21 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
     - 金屬電阻取 `set_layer_rc`（也就是 nom_tt 的 `LAYERS_RC`），不是最大電阻的 corner（`ir_solver.cpp` 415–463）。
     - 沒給 `-vsrc` 檔時，PDN 的所有 pin 形狀都當成理想電壓源（`ir_solver.cpp` 507–527）。
     - `set_pdnsim_inst_power` 是**疊加**在 STA 功耗之上（844–878 行兩段都是 `+=`）：要模擬功耗變成 k 倍，給 (k−1)×P。
-14. **EM**：tech LEF 有每層的 DC／AC 電流密度上限（例如 met1 2.8／6.1 mA/µm）。PSM 用 `analyze_power_grid -enable_em -em_outfile` 可以輸出每段電源線的電流，但 LibreLane 沒有開，也沒有任何工具比對。signal net 的 EM 沒有任何開源工具分析。
+14. **EM**：tech LEF 有每層的 DC／AC 電流密度上限（sky130 的數字在 knowledge 檔 S23）。PSM 用 `analyze_power_grid -enable_em -em_outfile` 可以輸出每段電源線的電流，但 LibreLane 沒有開，也沒有任何工具比對。signal net 的 EM 沒有任何開源工具分析。
 15. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S15：KLayout 的 sky130 DRC deck）
 16. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S16：latch-up）
 17. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S17：metal density）
 18. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S18：antenna）
 19. （sky130 專屬，已移到 [knowledge/sky130A_sky130_fd_sc_hd.md](knowledge/sky130A_sky130_fd_sc_hd.md) 的 S19：PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效）
+
+（編號 20–29 已由 knowledge 檔的 S20–S29 使用，新的工具行為從 30 接下去，避免同一個編號指到兩條。）
+
+30. **LibreLane 的內建 checker 沒設門檻就略過，flow 照樣 PASS**（2026-10-15 確認；Phase 3 收尾已發現，`docs/phase_exit/phase3.md` 第 150 行）：
+    - 症狀：flow log 只有一行警告 `Threshold for Threshold-surpassing long wires is not set. The checker will be skipped.`（`Checker.WireLength`），沒有 FAIL 也沒有 metric 的判定。原文在 `runs/user_project_wrapper.prev/flow.log` 第 7919 行（不進版控，下一次 wrapper harden 會覆蓋；長期出處是下面的原始碼與 phase3.md）。
+    - 原因：`MetricChecker.run()` 在門檻是 None 時只印這行就結束（LibreLane 3.0.14，`.tools/librelane/librelane/steps/checker.py` 第 104–110 行）；`Checker.WireLength` 的門檻 `WIRE_LENGTH_THRESHOLD` 是 PDK 變數、程式裡沒有預設值（同檔第 254–282 行），本版 sky130 沒有給值（上面的 log）。同一段程式在 metric 不存在時也只印 `The ... metric was not found. Are you sure the relevant step was run?` 就放行（第 132–135 行）。所以「flow PASS」不代表每個 `Checker.*` 都判過。
+    - 怎麼發現：harden 後 grep flow log 的 `The checker will be skipped` 與 `metric was not found`，逐條決定要不要補門檻。
+    - 怎麼繞過：要判的就在 config 設門檻（例如 `WIRE_LENGTH_THRESHOLD`）；不判的寫明由什麼取代。本 repo 最長線由 golden 鎖住（`signoff/limits/*.toml` 的 `route__wirelength__max`，相對誤差），沒有絕對門檻（phase3.md 第 150 行）。
+    - 防復發：沒有自動防護。`review_criteria.py` 不列被略過的 `Checker.*` step；照 ADR-0020 決定 2、ADR-0021 決定 3，下一個專案開始時做成 checker（criteria review 第一部分列出 log 裡被略過的 checker，不在允許清單就 FAIL，加植入錯誤：拿掉一個門檻）。訊息措辭綁在 LibreLane 版本上，升版時重看。
 
 ## 各條件的推導方法
 
@@ -119,7 +128,7 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 | max transition／cap | 有效上限是 SDC 與 .lib 取較小者，而且每個 corner 不同（規則 9）；目的是讓延遲查表落在特性化範圍內 | 0.75 ns 是設計上的保守值，放寬要寫 ADR |
 | max fanout | sky130 .lib 沒有 max_fanout，所以這不是物理限制，是實作輔助 | signoff 以 slew 與 cap 為主 |
 | resizer 的 slack margin | margin =（最後一次修復的估計 − signoff 結果）的實測差距 × 安全係數。最後一次修復是 post-CTS；差距大部分在繞線後時，改開 post-GRT 修復，不要加大 post-CTS 餘量（`drv-timing-closure` 規則 12） | 這是實作手段，不能拿來代替 signoff 的餘量 |
-| macro 的 SPICE 特性化值 | 實測值加上模型沒涵蓋的部分：走線寄生（用萃取的局部電路試驗量比例）、步長／修剪／初始條件的誤差（方向要對 .lib 用的那個量判斷）、mismatch。延遲類乘比例，setup/hold 加固定值，「輸出最早開始變化」乘小於 1 的係數；再和既有的保守值比，取較嚴者當下限。soc_top：× 1.6（萃取 bitcell 試驗讀出穩定 +45–48%）、+0.1 ns、padded.lib 當下限、hold 弧 × 0.9（ADR-0010） | 沒有 Monte Carlo 與周邊走線寄生時，寫明這兩項只靠係數與下限涵蓋；係數只在一個 PVT 驗證過也要寫明（`openram-macro-characterization` 規則 11） |
+| macro 的 SPICE 特性化值 | 實測值加上模型沒涵蓋的部分：走線寄生（用萃取的局部電路試驗量比例）、步長／修剪／初始條件的誤差（方向要對 .lib 用的那個量判斷）、mismatch。延遲類乘比例，setup/hold 加固定值，「輸出最早開始變化」乘小於 1 的係數；再和既有的保守值比，取較嚴者當下限。本 repo 用的係數、固定值與下限見 ADR-0010 | 沒有 Monte Carlo 與周邊走線寄生時，寫明這兩項只靠係數與下限涵蓋；係數只在一個 PVT 驗證過也要寫明（`openram-macro-characterization` 規則 11） |
 | 「典型 corner 的 slack ≥ 週期 X%」這類規則 | 只有在 slow corner 對 typical 的延遲比 r < T_avail / (T_avail − X) 時，才會比「slow corner ≥ 0」更嚴；std cell 的 r 約 1.9，所以通常沒有作用 | 餘量放在最慢的 corner，並逐項列出它涵蓋什麼 |
 
 ### 電源與可靠度
@@ -135,24 +144,24 @@ LibreLane 對 sky130 的預設值多半是沿用 OpenLane 1 的常數，沒有�
 
 ### IR 用多大的電流：先量測，再決定（使用者 2026-10-13：「這個建立量測以決定max power的方法也要加到signoff的skill」）
 
-**power signoff 一律用 pattern 的切換活動**（使用者 2026-10-13：「所以之後我們的signoff skill 會要求用patrern 做power signoff」）：IR、EM、功耗預算這些和電流有關的 signoff，判定值都要來自 CPU max power pattern 在最終網表的 gate-level 模擬（下面第 4 項）。OpenSTA 的預設切換率（vectorless）只能當參考或 harden 內的早期檢查，不能當 signoff 依據。沒有 pattern 時不要退回固定切換率了事：先寫一支（同一顆 CPU 的 firmware 通常可以共用；本 repo 的 `fw/tests/maxpower` 在 soc_top 與 wrapper 的 RTL 都 PASS），使用者 2026-10-13 看過固定切換率與 pattern 的比較後決定「那我們還是採用pattern 評估做法」。還沒改完的設計（本 repo：soc_top 排在 Phase 7 步驟 8），報告與 exit review 要寫明「功耗與 IR 用 vectorless，未經 pattern 驗證」。
+**power signoff 一律用 pattern 的切換活動**（使用者 2026-10-13：「所以之後我們的signoff skill 會要求用patrern 做power signoff」）：IR、EM、功耗預算這些和電流有關的 signoff，判定值都要來自 CPU max power pattern 在最終網表的 gate-level 模擬（下面第 4 項）。OpenSTA 的預設切換率（vectorless）只能當參考或 harden 內的早期檢查，不能當 signoff 依據。沒有 pattern 時不要退回固定切換率了事：先寫一支（同一顆 CPU 的 firmware 通常可以共用；本 repo 的 `fw/tests/maxpower` 在 soc_top 與 wrapper 的 RTL 都 PASS），使用者 2026-10-13 看過固定切換率與 pattern 的比較後決定「那我們還是採用pattern 評估做法」。還沒有 pattern 判定的設計，報告與 exit review 要寫明「功耗與 IR 用 vectorless，未經 pattern 驗證」。本 repo 現況（ADR-0019 決定 20、25）：wrapper 用 `make ir-caravel`（`pnr/user_project_wrapper/ir_caravel.py`）、soc_top（Hazard3）用 `make ir-soc`（`pnr/soc_top/ir_pattern.py`）以 pattern 判，兩者都在 regression 裡；harden 內的 `ir_worst.py` 仍用預設切換率在兩個慢 corner 判，當作比較悲觀的早期檢查；PicoRV32 SoC 只有 `ir_worst.py`，沒有 pattern 判定。
 
 IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據，不能沿用一個方便的假設。Phase 7 的教訓：最壞組合（ff 電流＋ss 電阻）、預設切換率、SRAM 浮接電流、把外殼的電源 pin 當理想電源，四個假設各自都說得通，疊起來就讓同一個版圖從 0.3 mV 變成 104 mV，而且判的是一個 ff corner 根本用不到的預算（ADR-0019 決定 18、19）。
 
 1. **先問這個預算保護的是什麼**：IR 預算 =「最低供電 − 慢 corner 的特性化電壓」，保護的是慢 corner 的 setup（cell 在低電壓變慢）。所以判這個預算時，電流、電壓、金屬電阻要取**同一個**慢 corner（例如 `max_ss_n40C_1v60`、`max_ss_100C_1v60`，取大的）。ff corner 的 setup 餘量大、電壓低反而讓 hold 更寬鬆；「ff 電流＋ss 電阻」沒有真實 corner 對應（`pdn-ir-drop` 規則 11），只當上限參考與 EM 用。若另有保護對象（例如 SRAM 在某個 corner 的讀寫餘裕），就為它另訂預算與對應的 corner，不要拿同一個數字去套。
 2. **每個 corner 量功耗，並拆解**：
    - 先重現 flow 的數字（OpenSTA `report_power`，與 STA step 的 `power.rpt` 相同），確認讀的是同一份網表、SPEF、.lib。
-   - 逐 instance 取功耗（`sta::instance_power`），按類別加總：邏輯 cell、修 slew／cap／長線的 buffer（`wire`、`load_slew`、`fanout`、`max_cap`）、clock tree、hold delay cell、macro。找出不合理的大項再往下查。Phase 7 nom_tt 13.7 mW：邏輯 45%、修復 buffer 32%、clock tree 14%、hold 5%、SRAM 4%。
-   - 列出各 corner 的總功耗，算成電流（I = P／V，電壓用該 corner 的）。同樣的功耗在低電壓 corner 是較大的電流，只按功耗比例縮放會低估（Phase 7 的粗估就錯在這裡：估 35 mV，實測 45 mV）。
-3. **.lib 沒有的電流另外加，而且依 PVT 分開**：macro 特性化沒有包含的電流（本 repo：SRAM port 1 浮接電流，ff 100°C 5.34 mW、ss 0.03–0.15 mW，`power.json` 的 `static_max_mw`），加在該 macro 的位置、用對應 PVT 的值。
+   - 逐 instance 取功耗（`sta::instance_power`），按類別加總：邏輯 cell、修 slew／cap／長線的 buffer（`wire`、`load_slew`、`fanout`、`max_cap`）、clock tree、hold delay cell、macro。找出不合理的大項再往下查（本 repo 的拆解：knowledge 檔「實測校準資料」2026-10-13 的 IR 方法列）。
+   - 列出各 corner 的總功耗，算成電流（I = P／V，電壓用該 corner 的）。同樣的功耗在低電壓 corner 是較大的電流，只按功耗比例縮放會低估（Phase 7 的粗估就錯在這裡，數字見 knowledge 檔「實測校準資料」2026-10-13 的 IR 方法列）。
+3. **.lib 沒有的電流另外加，而且依 PVT 分開**：macro 特性化沒有包含的電流（本 repo：SRAM port 1 浮接電流，各 PVT 的值在 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/power.json` 的 `static_max_mw`，ADR-0018 已知限制），加在該 macro 的位置、用對應 PVT 的值。
 4. **切換活動用 CPU 的 max power pattern，不用預設切換率**（使用者 2026-10-13：「一般IR都會用CPU max power pattern去做不是嗎」「這才是正確的評估IR 的方式」，ADR-0019 決定 20）：
    - pattern：寫一支讓 CPU 滿負載的 firmware，做幾種不同的滿負載迴圈（本 repo `fw/tests/maxpower`：ALU＋SRAM 讀寫且資料每次全翻轉、再加乘法器、只有暫存器運算），各段用 GPIO 標記，取最大的。三種都差不多時，表示最耗電的空間窄（本 repo 從 SRAM 取指令，每道指令約 3 個週期），差很多時要再找更耗電的。
    - 活動：在**最終網表**的 gate-level 模擬錄每一段（RTL 的名稱在扁平化網表裡對不上），時脈用 signoff 的週期，只錄那一段（`gate-level-simulation` 規則 9）；網表在這支 firmware 下要與 RTL 逐週期一致。
    - 計算：IR 步驟讀 VCD（`read_vcd`，本 repo `irdrop_vcd.tcl`），要標到全部的 pin（`report_activity_annotation` 的 unannotated 是 0），在規則 1 的慢 corner 判，取各段與各 corner 的最大值。
-   - 預設切換率（vectorless）只列為參考：Phase 7 它是 max power pattern 的約 2.2 倍（ss 100°C：11.4 對 5.1 mW），用它判會讓預算看起來做不到。沒有 pattern 時常用的固定切換率，Phase 7 wrapper（nom_tt）實測：pattern 5.88 mW；每個 net 10%／20%／50%（`set_power_activity -global`）6.66／8.62／14.50 mW；OpenSTA 預設（輸入 0.1 往下推算）13.70 mW，已接近 50% 的水準。50% 是刻意悲觀的上限，不是業界統一的數字；用固定切換率時要寫明定義（每週期翻轉的機率）與套用範圍（全部 net，或只有輸入）。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分（約 2 mW）兩者相同。
+   - 預設切換率（vectorless）只列為參考：Phase 7 它是 max power pattern 的約 2.2 倍，用它判會讓預算看起來做不到。沒有 pattern 時常用的固定切換率（每個 net 10%／20%／50%，`set_power_activity -global`）與 OpenSTA 預設（輸入 0.1 往下推算）都比 pattern 高，OpenSTA 預設已接近 50% 的水準（Phase 7 wrapper 的數字：ADR-0019 決定 20、knowledge 檔「實測校準資料」2026-10-13 的 IR 方法列）。50% 是刻意悲觀的上限，不是業界統一的數字；用固定切換率時要寫明定義（每週期翻轉的機率）與套用範圍（全部 net，或只有輸入）。clock tree 與 flip-flop 的時脈腳不論切換率都一直翻轉，這部分兩者相同。
    - 已知限制要寫出來：零延遲模擬不含 glitch 的切換；pattern 沒涵蓋的活動（本 repo：Wishbone 主機端的存取）；「最耗電」是幾種 pattern 取最大，不是證明。
-5. **手算交叉檢查**：等效電阻 R = 壓降 ÷ 電流，和幾何估算比量級（片電阻 × 方塊數，例如 5 µm 寬 met4 每 mm 約 9.4 Ω；sky130 met4 0.047、met5 0.0285 Ω／sq）。對不上時，先查電流與電阻的來源（功耗拆解、`LAYERS_RC`、供電點），不要先改設計。Phase 7：7.6 mA、35.8 mV → 4.7 Ω，與 Caravel ring（約 26 Ω）並聯 wrapper grid 的量級相符。
-6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV，同一個版圖、同一個最壞組合）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本相同（DEF 轉 ODB 的來回本身會差約 0.01%，容許值要比它大、比可能的錯誤小，本 repo 用 0.1%）。
+5. **手算交叉檢查**：等效電阻 R = 壓降 ÷ 電流，和幾何估算比量級（片電阻 × 方塊數；sky130 的片電阻在 knowledge 檔 S23）。對不上時，先查電流與電阻的來源（功耗拆解、`LAYERS_RC`、供電點），不要先改設計（Phase 7 的一次核對：knowledge 檔「實測校準資料」2026-10-13 的 IR 方法列）。
+6. **供電點從真實的 pad 起算**：外殼或封裝的電源網路要放進模型（`pdn-ir-drop`、`chip-floorplan-pin-planning` 規則 2）。只把設計自己的電源 pin 當理想電源，會低估一到兩個數量級（Phase 7 同一個版圖、同一個最壞組合的三種供電模型：knowledge 檔「實測校準資料」2026-10-13 的 IR 方法列、ADR-0019 決定 18）。模型加了外部形狀之後，要做對照組：同一份 ODB、供電點放回原處，結果要和原本相同；容許值要比 DEF 轉 ODB 來回本身的差異大、比可能的錯誤小（本 repo 的兩個數字在同一列）。
 7. **決定與上限寫進 ADR**：哪個 corner 判、上限多少、對應的使用限制（例如 pad 端最低電壓），以及被否決的判法與它們的數字。
 
 ### 實體與 PDK 規則
@@ -176,7 +185,7 @@ IR 的結果直接由「電流 × 電阻」決定，兩邊都要有量測依據�
 | macro 的 PVT 差異 | Phase 4：`sta_extra_corner.tcl` 的 instance derate 乘進 OCV；Phase 3.5 起：每個 PVT 一份 SRAM .lib，不加 instance derate，OCV 由 `base.sdc` 套用（ADR-0010） | STA 本身、`check_soc.py sram_lib` | P04、P30 |
 | max slew（外殼的邊界 net） | 外殼給的 input transition 超過上限、內部修不掉時：只有輸入腳位本身與直接接在它 net 上的 cell 輸入可以例外，上限是「外殼的 transition + PnR 到 signoff 的餘量」（0.05 ns），其他 net 照舊（ADR-0019 決定 16）；這時 LibreLane 的 `MAX_SLEW_VIOLATION_CORNERS` 改回預設，不讓 flow 因 slew 失敗 | `check_soc.py max_slew`（每個 corner 的違規清單，數量要等於報表計數） | P80（soc_top 的內部違規）；wrapper：`neg_pnr.py --cpu caravel` C80a（內部 pin）、C80b（邊界超過 transition + 0.05 ns）、C80c（違規數與報表計數不同） |
 | 溫度反轉 corner | `config.json` 的 `STA_CORNERS`、`LIB`（resizer 用 `RSZ_CORNERS` 另外控制，`multicorner-sta`） | `[corners]` | — |
-| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES`；harden 內用預設切換率、慢 corner 當早期檢查；Caravel wrapper 從 pad 起算、用 max power pattern 的那一列加 `judged_by = "make ir-caravel"`，`check_signoff.py` 只印成 INFO，由 `ir_caravel.py` 判（ADR-0019 決定 20） | `check_signoff.py`、`check_soc.py ir_sources`、`ir_worst.py`、`ir_caravel.py` | P07、P26–P29、P61、P62、P81（`judged_by` 那一列不會蓋掉其他列，留空就 FAIL） |
+| IR 預算（VDD 降壓 + GND 抬升） | `[max_sum]`；供電模型 `VSRC_LOC_FILES`；harden 內 `ir_worst.py` 用預設切換率、兩個慢 corner 當早期檢查（ADR-0019 決定 19）；harden 之後用 max power pattern 判：soc_top（Hazard3）`make ir-soc`（`ir_pattern.py`，run 自己的供電點）、Caravel wrapper `make ir-caravel`（`ir_caravel.py`，從 pad 起算；上限檔那一列加 `judged_by = "make ir-caravel"`，`check_signoff.py` 只印成 INFO）（ADR-0019 決定 20、25） | `check_signoff.py`、`check_soc.py ir_sources`、`ir_worst.py`、`ir_pattern.py`、`ir_caravel.py` | P07、P26–P29、P61、P62、P77、P78、P81（`judged_by` 那一列不會蓋掉其他列，留空就 FAIL）；pattern IR：`make neg-ir-soc`、`make neg-ir-caravel` |
 | 「typical corner slack ≥ 週期 X%」 | 降為只報告（`[info]`） | — | — |
 
 假設值（jitter、duty cycle 範圍、供電位置）集中寫在檔案開頭並標「假設」，確定來源後只改那幾個值。
@@ -212,7 +221,7 @@ harden 跑完、回報結果之前，一定要做這個檢查，PASS 或 FAIL �
 | `uncertainty` | `clock_uncertainty.sdc` 印出的那一行（用 `tclsh` 執行 SDC 算出預期值）出現在每個時序步驟（開了 `RUN_POST_GRT_RESIZER_TIMING` 時包含 `ResizerTimingPostGRT`）與每個 signoff corner |
 | `uncertainty_applied` | 每個 signoff corner 的 STA 報表（`max.rpt`、`min.rpt`）裡**每一條路徑實際套用的** uncertainty：同緣 setup、半週期 setup、hold 各等於 SDC 算出的值。core 沒有自己的 SDC，三者都等於 `CLOCK_UNCERTAINTY_CONSTRAINT`。Phase 5 獨立審查：上一列只證明 SDC 印了那一行，報表裡的 uncertainty 全刪掉仍 PASS（P56） |
 | `signoff_corners` | signoff STA 的 corner 目錄等於 `STA_CORNERS` |
-| `checkers_ran` | soc_top：`check_signoff.py`、`check_soc.py`、`check_inputs.py --resolved`、`ir_worst.py`（最壞組合 IR，`pdn-ir-drop` 規則 12）、`provenance.py --verify` 都留下結果行；picorv32_core：`check_signoff.py`、`check_disconnected.py`、`cpu_params.py --resolved`、`provenance.py --verify` |
+| `checkers_ran` | soc_top：`check_signoff.py`、`check_soc.py`、`check_inputs.py --resolved`、`ir_worst.py`（兩個慢 corner 的 IR，預設切換率；ADR-0019 決定 19，`pdn-ir-drop` 規則 12）、`provenance.py --verify` 都留下結果行；picorv32_core：`check_signoff.py`、`check_disconnected.py`、`cpu_params.py --resolved`、`provenance.py --verify` |
 
 FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只重跑。
 
@@ -235,7 +244,12 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
   - resizer 看的 corner：最差 setup 與最差 hold 的 corner 在不在 resizer 的清單（`RSZ_CORNERS`）裡；不在的話，有沒有 ADR 說明為什麼拿掉（`drv-timing-closure` 規則 15，提早檢查 C3）。
   - 放寬與補償登記表（上面的 E1）：這次 run 有沒有新的放寬沒登記；登記表裡依據是別的設計量的、或原因已經不在的項目。
 - `## 學習`：
-  - 新量到的數字追加到 `knowledge/<製程>.md` 的「實測校準資料」；
+  - 新量到的數字追加到 `knowledge/<製程>.md` 的「實測校準資料」。**出處欄的證據要在下一次 harden 之後還找得到**（2026-10-15 問題總檢討，`docs/notes/problem_review/review_p6_7.md` 建議 5、`review_p4_5.md` R3；ADR-0021 決定 1）：
+    - 不能引用下一次 harden 會覆蓋的目錄：`runs/<tag>/`、`runs/<tag>_signoff/`（包括這份 `criteria_review.md` 本身）、只留一層的 `runs/<tag>.prev/`（`librelane-run-debug` 規則 6）。`<tag>` 是 `make harden-*` 固定用的名字（本 repo `soc_top`、`soc_top_hazard3`、`user_project_wrapper`，`pnr/soc_top/run.sh` 第 49–55 行）。也不能引用 session scratchpad、之後會刪的 worktree、只在終端機看過的輸出。
+    - 寫進 knowledge 之前，先把要引用的檔案複製到不會被 harden 用到的名字，引用複製後的路徑：本 repo 用 `runs/<實驗名>_signoff/`（例如 `runs/p7_formal_signoff/`、`runs/p7_decap_signoff/`，不進版控）；小檔或摘要放 `docs/notes/<主題>/`（進版控）。
+    - 算出來的比例或門檻，連同算式與輸入一起存。
+    - 為什麼：Phase 6、7 的審查各有幾列因為證據被覆蓋或消失而無法核對，例如 knowledge 檔引用的 `runs/user_project_wrapper_signoff/` 被下一次 harden 覆蓋（`review_p6_7.md` P7-39）。knowledge 檔早期幾列引用 p5h3 worktree 裡的路徑，那個 worktree 清掉之後也會找不到。
+    - 自動防護：沒有。Stop hook（`require_criteria_review.py`）只查 `criteria_review.md` 的章節與結果行，不查 knowledge 的出處路徑。照 ADR-0020 決定 2、ADR-0021 決定 3，下一個專案開始時做成 checker：knowledge 出處欄出現 harden 固定的 run 目錄或 scratchpad 路徑就 FAIL，並加植入錯誤。
   - 新的工具行為寫進本檔的經驗紀錄；
   - 依據不成立的 criterion，寫成提案給使用者決定（決定後寫 ADR），不要自己改。
 
@@ -249,7 +263,7 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 1. 本次的推導結果寫進該設計的 repo 文件（本 repo：`docs/notes/signoff_criteria_<design>.md`），不寫進本 skill。
    製程的事實與校準資料寫進 `knowledge/<製程>.md`。
 2. 新發現的工具行為寫進「經驗紀錄」；用實驗確認過的，搬進「已驗證的工具行為」。
-3. LibreLane、OpenROAD、OpenSTA 或 PDK 升版時，逐條重新確認規則 1–19 與 knowledge 檔 S 開頭各條的行號與行為。
+3. LibreLane、OpenROAD、OpenSTA 或 PDK 升版時，逐條重新確認「已驗證的工具行為」各條（目前 1–19、30）與 knowledge 檔 S 開頭各條的行號與行為；規則 30 綁著 LibreLane 的 log 措辭。
 
 ## 經驗紀錄
 
@@ -263,3 +277,4 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 | 2026-10-07 | Phase 5 Hazard3 第 4 次 harden（`1292ca4`，44 ns）的第一次 criteria 檢查 | ① LibreLane FAIL 時 `run.sh` 直接結束，第 2–4 次 harden 的 `check_signoff.py`、`check_soc.py` 都沒跑；② `soc_top_hazard3.toml` 的 `timing__unannotated_net__count` 133 是 PicoRV32 的組成，Hazard3 是 125（81 clkload + 32 `sram0/dout1` + 12 tie）；③ `PL_RESIZER_SETUP_SLACK_MARGIN` 0.1 ns，實測 post-CTS 到 signoff 差距 1.243 ns | 已驗證（①讀 `run.sh` 79–81 行；②數 `checks.rpt` 的 unannotated driver；③`review_criteria.py` 的數字） | ①`run.sh` 改成照跑 checker，加 `review_criteria.py`（P43–P48）與 Stop hook；②③提給使用者 | `runs/p5_h3_h4_signoff/criteria_review.md`（p5h3 worktree） |
 | 2026-10-07 | Phase 5 Hazard3 第 5 次 harden（`3a28d54`）的 criteria 檢查 | `review_criteria.py` 的兩個缺口：① setup 差距只拿 `ResizerTimingPostCTS` 的修完值比 signoff，開了 `RUN_POST_GRT_RESIZER_TIMING` 後印出「差距 −0.418」，沒有意義；② 最差路徑的 INFO 印「arrival 21.81 ns」，是從下降緣算起，看不出是半週期路徑，也沒印扣掉的 2.45 ns | 已驗證（對照 `ResizerTimingPostGRT` 的 log 與 signoff STA 報告） | 已修（使用者 2026-10-07 決定）：INFO 列印出每次修復的修完值、用最後一次算差距；最差路徑標出送出與接收的 clock 邊緣與 uncertainty；另印最差的半週期路徑；`uncertainty` 檢查涵蓋 `ResizerTimingPostGRT`（negative test P49）。用新腳本看三個 run，兩個 CPU 的最差 setup 都在 SRAM 半週期路徑上（knowledge 檔） | p5h3 worktree `runs/p5_h3_h5_signoff/criteria_review.md` |
 | 2026-10-08 | Phase 5 exit 的獨立審查 | ① `uncertainty` 列只證明 SDC 印了那一行；② `harden-core` 沒跑 `review_criteria.py`，hook 也不擋；③ 「IR 只判 nom_tt」的依據是 PicoRV32 量的，Hazard3 最壞組合 25.75 mV | 已驗證（①刪掉報表的 uncertainty 仍 PASS；②`harden-core` 的 signoff 目錄沒有 txt；③用 Phase 4 方法重測） | ①加 `uncertainty_applied`（P56）；②`--design picorv32_core` 與 hook 的觸發條件改成 `result.txt`；③加 `ir_worst.py`、`PDN_HWIDTH` 4.8，並在判斷原則加「依據要在這個設計上重新量」 | `docs/phase_exit/phase5.md`；knowledge 檔 2026-10-08 列 |
+| 2026-10-15 | Phase 0–7 問題總檢討（`docs/notes/problem_review/`，ADR-0021） | ① `Checker.WireLength` 沒設門檻，flow 只印一行警告就略過，Phase 3 收尾就知道，但只寫在 phase3.md；② knowledge 檔引用的 `runs/user_project_wrapper_signoff/` 被下一次 harden 覆蓋，審查無法核對；③ 規則本文混著 sky130 數字與 Phase 7 的 mW／mV | ① 已驗證：`runs/user_project_wrapper.prev/flow.log` 第 7919 行原文，LibreLane `checker.py` 第 104–110 行；② 已驗證（`review_p6_7.md` P7-39）；③ `review_skills.md` 3.2 | ① 「已驗證的工具行為」規則 30；② 「學習」加證據路徑的要求；③ sky130 數字移到 knowledge S10、S23，Phase 7 數字移到 knowledge 校準表 2026-10-13 的 IR 方法列，規則只留方法與連結 | `docs/notes/problem_review/verify_and_merge.md` §3 A6、B3、C2 |

@@ -1,0 +1,34 @@
+# Diffusion farther than d um from a same-type tap (sky130 latch-up rule: 6 um by default,
+# 15 um only under areaid.lowTapDensity 81/14). Neither Magic (15 um only) nor the PDK /
+# precheck KLayout decks check the 6 um rule, so this measures it (ADR-0021 decision 2).
+# usage: klayout -b -rd input=<gds> -rd report=<lyrdb> -rd sram=x1,y1,x2,y2 -r tap_distance.drc
+source($input)
+report("tap distance", $report)
+deep
+threads(6)
+diff  = input(65, 20)
+tap   = input(65, 44)
+nwell = input(64, 20)
+nsdm  = input(93, 44)
+psdm  = input(94, 20)
+ld    = input(81, 14)
+ptap  = (tap & psdm) - nwell          # substrate (p+) tap, outside nwell
+ntap  = (tap & nsdm) & nwell          # nwell (n+) tap
+ndiff = (diff & nsdm) - nwell         # NMOS source / drain
+pdiff = (diff & psdm) & nwell         # PMOS source / drain
+x1, y1, x2, y2 = $sram.split(",").map(&:to_f)
+sram = polygon_layer
+sram.insert(box(x1, y1, x2, y2))
+puts "INFO ld_area #{ld.area} ptap #{ptap.area} ntap #{ntap.area} ndiff #{ndiff.area} pdiff #{pdiff.area}"
+[6.0, 7.5, 10.0, 15.0].each do |d|
+  vn = ndiff - ptap.sized(d.um)
+  vp = pdiff - ntap.sized(d.um)
+  vn_in = vn & sram
+  vp_in = vp & sram
+  puts "D #{d} ndiff_far_area #{vn.area} (in_sram #{vn_in.area}) pdiff_far_area #{vp.area} (in_sram #{vp_in.area})"
+  if d == 6.0
+    (vn - sram).output("ndiff farther than 6 um from a p-tap, outside SRAM")
+    (vp - sram).output("pdiff farther than 6 um from an n-tap, outside SRAM")
+  end
+end
+puts "DONE"

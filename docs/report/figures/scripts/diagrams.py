@@ -186,7 +186,56 @@ LOOP = {
     # rows are read left to right; numbering in the labels gives the order across rows
 }
 
-GRAPHS = [ROADMAP, FLOW, SOC, CHECK, LOOP]
+
+# ---------------------------------------------------------------------------
+# 6. Skill map: three stages, each with an entry skill (ADR-0021 decision 6)
+M_SUBS = ["rtl-synthesis-lint", "dv-directed-tests", "core-migration-hazard3", "timing-constraints-sdc",
+          "formal-equivalence-eqy", "macro-qualification", "openram-macro-generation",
+          "openram-macro-characterization", "sram-layout-extraction"]
+B_SUBS = ["floorplan-congestion", "hard-macro-integration", "pdn-ir-drop", "cts-clock-tree", "drv-timing-closure",
+          "multicorner-sta", "antenna-signoff", "drc-signoff", "lvs-signoff", "gate-level-simulation",
+          "signoff-criteria", "librelane-run-debug"]
+P_SUBS = ["chip-floorplan-pin-planning", "caravel-user-project-integration", "tapeout-precheck-caravel"]
+C_SUBS = ["signoff-checker-qualification", "flow-regression-reproducibility", "phase-exit-review"]
+
+
+def _skill_nodes():
+    out = []
+    for i, n in enumerate(M_SUBS):
+        out.append((f"m{i}", BLUE, L(n, n), "mid"))
+    for i, n in enumerate(B_SUBS):
+        out.append((f"b{i}", GREEN, L(n, n), "back"))
+    for i, n in enumerate(P_SUBS):
+        out.append((f"p{i}", RED, L(n, n), "pkg"))
+    for i, n in enumerate(C_SUBS):
+        out.append((f"c{i}", PURPLE, L(n, n), "common"))
+    return out
+
+
+SKILLMAP = {
+    "name": "skill_map",
+    "title": L("Skills in three stages (entry skill -> sub-skills; listed by name only)",
+               "skill 分成三段（入口 skill → 子 skill；子 skill 在清單只列名稱）"),
+    "_note": "ADR-0021 決定 6；.claude/skills/{middle-end-flow,backend-flow,package-flow}/SKILL.md；"
+             ".claude/settings.json skillOverrides",
+    "rows": "mid,back,pkg,common",
+    "ranksep": "0.4",
+    "extra": ["--no-concentrate"],
+    "clusters": [
+        ("mid", BLUE, L("middle-end-flow (entry): RTL to netlist, SDC, macro prep, EQY",
+                        "middle-end-flow（入口）：RTL 到網表、SDC、macro 準備、EQY")),
+        ("back", GREEN, L("backend-flow (entry): LibreLane harden, PnR, physical signoff",
+                          "backend-flow（入口）：LibreLane harden、PnR、實體 signoff")),
+        ("pkg", RED, L("package-flow (entry): chip level, Caravel, precheck",
+                       "package-flow（入口）：晶片層級、Caravel、precheck")),
+        ("common", PURPLE, L("cross-stage (always listed with description)",
+                             "跨段共用（清單上保留描述）")),
+    ],
+    "nodes": _skill_nodes(),
+    "links": [],
+}
+
+GRAPHS = [ROADMAP, FLOW, SOC, CHECK, LOOP, SKILLMAP]
 
 
 def build(g, lang):

@@ -232,6 +232,7 @@ Exit criteria 出處：`project-plan.md` §8 Phase 7。
 18. **依據不是 wrapper 的放寬**（登記表第一類）：PnR max transition 0.70 ns（T15）與 post-CTS hold 餘量 0.3 ns（T16）的原因已經不在、沒有重新評估；週期 44 ns 沒有在 wrapper 上反推最小週期（T03）；PnR 修復參數（T17）、Magic DRC 位置容許 100 nm（D03）、讀出 flip-flop 自迴路的 hold cell（O01）。
 19. **提早檢查的自動防護**（ADR-0020）：19 條中能自動化的部分（harden 前檢查 limits 出處與 corner 清單、平台密度上下限等）到下一個專案開始前只靠流程文件與 skill。
 20. **regress 對本機資源不足沒有防護**（2026-10-15，第二輪）：磁碟滿時 `neg-pnr` 的 STA 會停住不報錯，`scripts/regress.py` 各項沒有逾時，只能人看 console；KLayout 在記憶體壓力下當掉時 `neg-precheck` FAIL 的訊息是「報表沒有項目」，看不出是工具當掉。現在的做法是開 regress 前確認磁碟空間、清掉舊 worktree 的 negative test 中間產物（每個 worktree 40–70 GB）、三條平行時留意 swap（`flow-regression-reproducibility`、`tapeout-precheck-caravel` 經驗紀錄）。
+21. **latch-up 標記與 6 µm tap 規則**（2026-10-15 結案後的問題總檢討才發現，屬於下線前要處理的，ADR-0021 決定 2）：交付的 GDS 由 KLayout 寫出，沒有 `areaid.lowTapDensity`（81/14）。Magic 只查 15 µm，PDK 與 precheck 的 KLayout deck 不用這一層，所以 6 µm 規則沒有任何檢查。量測（`docs/notes/latchup/`）：15 µm 為 0；6 µm 時 wrapper 有 113,280 µm² NMOS、178,820 µm² PMOS diffusion 離同型 tap 太遠（SRAM 外約 7%）。使用者選擇記錄並問 ChipFoundry（標記由誰加、用哪個距離判），不改設計（登記表 D10）。
 
 **照舊帶到後續**：Phase 6 已知限制 3（.lib 漏電不是穩態值）、4（macro DRC 面積容許 0.05%）、6（`DRT-0418`）、7（`neg-char` 不在 regress 裡）、8（OpenRAM 的已知問題）；Phase 5 已知限制 4（不可重現的步驟）、5（GRT 只用重試繞過）、8（只用一種 hold buffer）、11（沒有分析的項目）；Phase 3.5 已知限制 5–7、13（Monte Carlo、修剪、只在 tt 驗誤差、hold 弧與週期）；LVS 中 SRAM 是 black box；Phase 4 已知限制 7、9、10（計數器高半部、下游不檢查工作目錄、`py-check` 範圍）；IR 只做 static（沒有 dynamic IR）。
 

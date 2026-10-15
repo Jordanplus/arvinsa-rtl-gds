@@ -1,6 +1,6 @@
 ---
 name: signoff-checker-qualification
-description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、EQY、自寫腳本）、建立或更新 golden（確認過正確的一次 run 的完整 metrics）、決定 golden 比對哪些 metric 可以有誤差（每個設計至少 4 個同設定的樣本，含一次乾淨 checkout，不能暫用別的設計的誤差）、新 checker 寫完就請沒寫它的 agent 做漏洞審查（不要等 Phase 收尾）、處理同樣設定重跑結果不同（包括 cell 數、diode 數、面積也跟著變，或 key 只出現在一邊：`[golden_layout_tolerance]`、`[golden_optional]`），或要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用，包括檢查「由程式產生的檔案」（例如由量測 JSON 產生的 .lib）時產生器公式本身要獨立驗證；附已知的 checker 漏洞類型表（包括 checker 或重試規則綁死 step 名稱，flow 換掉或多開 step 時靜默失效；重試留下的中止 step 目錄頂替完成的那次；只證明設定被讀到、沒證明生效（SDC 印了 uncertainty 但 STA 沒套用）；靠 instance 名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制（Stop hook）的觸發條件比規則小；抓到錯誤的機制和案例宣稱的不同；守門條件本身沒有測試；只檢查版本字串；暫用另一個設計的誤差；比對的對象是空的時 checker 空過（最終 GDS 的 macro 是空的，框內 0 個 DRC 違規也 PASS）；black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯；`abs(x - y) > tol` 對 NaN 永遠不成立；checker 的某個模式只有植入錯誤的案例在跑，checker 改壞成永遠 FAIL 也看不出來；核准紀錄只存在被檢查的檔案裡、自己算得出來；判定只看結果、不核對輸入的產生條件與來源；例外欄位接受任何字串；時間比較丟掉時區；查證用的結果被當成正式結果；向量只檢查一個 bit；例外只放寬、不要求被例外的東西存在），新 checker 要逐條對照；改 checker 時新變數蓋掉同一個函式裡既有的名稱，判定列對每個 run 都 FAIL（已發生兩次，靠在真 run 上的 positive control 抓）。Use when writing or changing a checker, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
+description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、RTL testbench、EQY、自寫腳本）、建立或更新 golden 與它的誤差、要用植入錯誤（negative test／bug injection）證明 checker 抓得到時使用。也用在這些情況：同樣設定重跑結果不同（cell 數、diode 數、面積也變，或 key 只出現在一邊；`[golden_layout_tolerance]`、`[golden_optional]`）；改完 checker 後某一列對每個 run 都 FAIL（新變數或迴圈變數蓋掉同一作用域既有的名稱）；上限檔寫死的計數（unannotated、disconnected）每次改 CTS 或換設計就 FAIL；植入錯誤卻 PASS，或 FAIL 的原因和植入無關；checker 的 FAIL 訊息像結果不對、其實是工具當掉；新 checker 寫完要請沒寫它的 agent 做漏洞審查。附已知的 checker 漏洞類型表（工具靜默略過、只證明設定被讀到沒證明生效、綁死 step 名稱、比對的對象是空的、NaN 被比較吞掉、測試被縮水或跳過仍 PASS、只比最終結果讓中間的介面錯誤互相掩蓋、產生器的公式沒有獨立驗證（例如由量測 JSON 產生的 .lib）、暫用別的設計的 golden 誤差（每個設計至少 4 個樣本）等），新 checker 要逐條對照。Use when writing or changing a checker or testbench, maintaining golden results and their tolerances, or qualifying a checker with bug injection.
 ---
 
 # Checker 設計、golden 與 testbench qualification
@@ -11,16 +11,24 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 
 ## 規則（已驗證）
 
+規則 11、12 例外：它們是流程回顧後使用者決定的提早檢查（ADR-0020），成本與省下的時間是從 commit 時間推算，不是實驗結果（`docs/notes/problem_review/review_skills.md` 1.3 的說明）。
+
 1. **只認明確 PASS**：少一個 metric、少一張表、表被截斷、工具沒跑完，都是 FAIL（Phase 2 獨立審查：截斷的斷線 pin 表原本判 PASS）。
 2. **型別要嚴格**：`false` 不能冒充 0；slack 是 inf 或極大值（例如 1e30，代表沒有受約束的路徑）要 FAIL → `[corners] slack_max`。
 3. **來源追溯**（`project-plan.md` §7.2）：
    - harden 的開始與結束都跑 `signoff/scripts/provenance.py`：工作目錄必須已全部 commit（含未追蹤檔）、submodule 在記錄的 commit、LibreLane 與 PDK 是 `env/versions.mk` 釘的版本；結束時 HEAD 不變，且 `resolved.json` 實際用的 LibreLane 版本與 PDK 也對。工作目錄不乾淨時 flow 照跑，但整體判 FAIL。
-   - harden 把**整體**判定寫進 `<run>_signoff/result.txt`；後續步驟（`run_guard.py` 管的 14 個下游步驟：soc_top、PicoRV32 與 Caravel wrapper 的 EQY、gate-level 模擬、它們的 negative test、`neg_pnr.py`）只認這個檔案是 `harden-<x>: PASS`。只查其中一份 checker 輸出（例如 `signoff.txt`）不夠：soc 專用檢查或輸入一致性 FAIL 的 run 仍會被拿去用。
+   - harden 把**整體**判定寫進 `<run>_signoff/result.txt`；後續步驟（`run_guard.py` 管的下游步驟：soc_top、PicoRV32 與 Caravel wrapper 的 EQY、gate-level 模擬、它們的 negative test、`neg_pnr.py`、max power pattern 的 IR；目前的清單以 `signoff/scripts/neg_run_guard.py` 的 `STEPS` 為準）只認這個檔案是 `harden-<x>: PASS`。只查其中一份 checker 輸出（例如 `signoff.txt`）不夠：soc 專用檢查或輸入一致性 FAIL 的 run 仍會被拿去用。
    - 比對 run 實際用的設定（`resolved.json`：`cpu_params.py --resolved`、`check_inputs.py --resolved`）。
    - **追溯範圍要涵蓋實際執行的程式與資料**：LibreLane 在 nix-shell 裡跑的是 clone 的原始碼，signoff SDC 也 `source` clone 裡的 `base.sdc`；只比 clone 的 commit 時，clone 裡改過的檔案不會被發現（Phase 3 獨立審查實測）。Phase 4 已加：clone 的 `git status --porcelain` 為空、PDK 6 個目錄的內容摘要、`resolved.json` 的 PDK 路徑都在檢查範圍內。做法與陷阱在 `flow-regression-reproducibility`。
    - **下游也要確認 run 是這個 commit 產生的**：`provenance.json` 的 `repo_head` 必須等於目前的 `HEAD`。只看 `result.txt` 時，改了 RTL 後單獨跑 `make eqy-soc` 仍會用舊網表而 PASS。Phase 4 已加 `signoff/scripts/run_guard.py` 與 `neg_run_guard.py`。
 4. **「不是 0」的計數要寫出組成**並固定下來：Phase 2 unannotated 114 = 35 PCPI port + 41 tie HI + 38 clkload；soc_top = clkload + 32 個 `sram0/dout1` + 未用的 tie 輸出（soc_explore4：92 + 32 + 11）。
-5. **golden**：逐項比對全部 metrics（key 集合也要相同）。不可重現的那一步（多執行緒 detailed routing）之後算出來的數字，依下一點分類後才給誤差：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差，約實測差異的 30–200 倍；count／area 一律不給誤差（`check_signoff.py` 會拒絕這種設定）。至少重跑一次確認可重現性，但一次相同不代表可重現。
+   - **逐項分類，會隨版圖變的類別不寫死總數**（已驗證 4 次，每次都讓 harden FAIL、要人工重數：Phase 4 第 5 次 harden 上限寫「剛好 134」、實際 133，`docs/phase_exit/phase4.md` 第 100 行；Phase 5 Hazard3 的上限抄 PicoRV32 的 133、實際 125，本檔經驗紀錄 2026-10-07；ADR-0016 改 CTS 後兩個 CPU 變成 118／126，`docs/decisions/0016-cts-no-macro-latency-balancing.md` 第 52 行。`review_p4_5.md` R5）：
+     - checker 把每一個列出來、依組成分類（CTS dummy load、macro 沒用的輸出、tie cell 沒用的另一個輸出、沒用的 port），不屬於任何已知類別的就 FAIL。
+     - 由 RTL 與 DEF 範本決定的類別（沒用的 port、`sram0/dout1`）可以寫死數量；會隨版圖變的類別（CTS dummy load）不寫死，改和同一個 run 的網表裡實際的數量比（例如數 `clkload*` instance）。
+     - 換設計或換 core 後，組成用新 run 重數，不能抄別的設計的數字（`core-migration-hazard3` 規則 22；`review_skills.md` R18）。
+     - 為什麼：寫死總數時，每次改 CTS 或換設計都假 FAIL；真正多出來的一個未知 driver，反而被「重數一次」的手續蓋過去。
+     - 自動防護：沒有。`check_signoff.py` 目前仍比上限檔的總數（`timing__unannotated_net__count`、`design__disconnected_pin__count`；放寬與補償登記表 V07），組成只寫在上限檔的註解裡；斷線 pin 在 wrapper 另由 `check_soc.py` 逐支核對是外殼頂層沒用到的 port，unannotated 沒有逐項核對。照 ADR-0020 決定 2、ADR-0021 決定 3，下一個專案開始時改成逐項分類的 checker，並加植入錯誤（多一個未知類別的 driver；dummy load 數改變但總數湊成一樣）。
+5. **golden**：逐項比對全部 metrics（key 集合也要相同）。不可重現的那一步（多執行緒 detailed routing）之後算出來的數字，依下一點分類後才給誤差：隨繞線微小變動的連續量（slack、skew、線長、via、功耗、IR）給很小的誤差，約實測差異的 30–200 倍；count／area 一律不給誤差（`check_signoff.py` 會拒絕這種設定）。至少重跑一次確認可重現性，但一次相同不代表可重現；新設計照規則 11，至少 4 個樣本。
    - **不可重現的步驟也會改變數量時**（Phase 5 Hazard3，ADR-0015）：第 41 步的 global routing 偶發不同（同一份輸入 27 次裡 5 次），detailed routing 也會讓繞線後的 antenna 修補多一輪、多插 diode，cell 數、diode 數、面積跟著變，「count／area 不給誤差」幾乎每次 FAIL。做法：
      - 先逐步比對 DEF 與 log 找到分歧的那一步，再單步重跑量頻率，確認是隨機而不是設定造成的；
      - 收集足夠的樣本：除了完整 harden，也可以拿分歧步驟重跑出來的不同結果，接著跑完後面的步驟；
@@ -49,7 +57,7 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - **新的測試（firmware、directed test）也要被植入錯誤證明有效**：在網表植入它要補的錯誤，只跑新測試（`dv-directed-tests` 規則 6）。
    - **自寫 checker 取代了工具原本的判定時**（例如 `ERROR_ON_MAGIC_DRC=false` 改由 `check_soc.py magic_drc` 判），這支自寫 checker 必須有自己的植入錯誤。
    - **借用另一個工具的植入方式時，先確認新工具讀得進植入後的檔案**：同一份植入錯誤的網表，Yosys（EQY）接受、Icarus（GL 模擬）因為 wire 先使用後宣告而編譯失敗（`neg_gl_soc.py csb0_inverted` 第一版）。編譯失敗不算抓到，所以 checker 正確判 FAIL，但這個案例等於沒測。
-   - checker 自己也包括「來源追溯」這類流程檢查：`neg_provenance.py` 在本機 clone 上植入未提交檔案、版本或內容不符、經 symlink 讀範圍外的檔等 16 種狀況（另有 3 個 positive test）。
+   - checker 自己也包括「來源追溯」這類流程檢查：`neg_provenance.py` 在本機 clone 上植入未提交檔案、版本或內容不符、經 symlink 讀範圍外的檔等狀況，另有 positive test（案例清單在該腳本開頭的說明）。
 8. **獨立審查**：讓沒寫 checker 的 agent 另外想植入錯誤；修正後把舊案例全部重跑（Phase 1 兩輪、Phase 2 一輪）。
 9. **上一階段留下的項目要列入本階段的檢查清單**：exit review 的「留到下一階段」與「已知限制」逐條帶進下一階段的 exit 表（Phase 2 延到 Phase 3 的來源追溯，到 Phase 3 收尾才發現還沒做）。
 10. **端到端 target（`make phase<N>`）要在乾淨 checkout 從頭跑到底才算驗證過**：
@@ -57,22 +65,23 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
    - 每個 target 都要在 Makefile 宣告它需要的建置步驟。例如 `gl-soc` 需要 `fw`：第一次 `make phase3` 停在 harden-soc，沒有發現這個缺漏；第二次在乾淨 checkout 跑到 gl-soc，12/13 支測試報找不到 firmware。
    - 檢查方式：`cat .gitignore`，對每個被忽略的目錄 grep 有哪些腳本讀它，確認對應的 target 有宣告建置步驟。
    - 新寫的 negative test 腳本要先單獨跑完一次，再加進 phase target（`neg_gl_soc.py` 沒跑過就加進 `make phase3`，第三次 `make phase3` 才發現上面那個編譯錯誤）。
-11. **golden 的誤差至少用 4 個樣本定，並記下樣本數**（提早檢查 E2，流程回顧 ADR-0020；流程文件 4.6。比規則 5 的「至少重跑一次」嚴格，新設計照這條）。
+11. **golden 的誤差至少用 4 個樣本定，並記下樣本數**（使用者決定的提早檢查 E2，效益為推算；流程回顧 ADR-0020；流程文件 4.6。比規則 5 的「至少重跑一次」嚴格，新設計照這條）。
    - 為什麼：Phase 2 用 3 次 run 定的誤差，Phase 4 regress 第 2 次就 FAIL（繞線器中間各輪的 DRC 數，規則 5 第二點）；Phase 5 Hazard3 的 golden 比對又 FAIL（ADR-0015）；PicoRV32 暫用 Hazard3 的誤差被獨立審查抓到，又補樣本、多跑兩輪 regress（`docs/phase_exit/phase4.md`、`phase5.md`）。新的不可重現來源（Phase 5 的 global routing）要等設計變大才出現，所以每個設計都要各自量。
    - 做什麼：每個設計第一次建 golden 時，同一個設定至少 4 個樣本，其中一次在乾淨 checkout；樣本可以是完整 harden，或從不可重現的步驟單步重跑後接著跑完（規則 5 第一點）。依每一類 metric 的實際差異定誤差；golden 的 README 寫明每一類用了幾個樣本、哪幾個 run。不能暫用別的設計的誤差；量不出大小時（本 repo wrapper 三組比較都逐值相同）寫明理由並登記在放寬與補償登記表（ADR-0019 決定 26）。
    - 通過條件：樣本彼此都在誤差內。
    - 成本：每個設計多 2–3 次 harden（本 repo 每次約 15–40 分鐘）。
    - 自動防護：沒有（「README 寫了樣本數、樣本 ≥ 4」可以做成 `check_signoff.py` 的檢查，下一個專案開始時做）。
-12. **新 checker 寫完就做獨立漏洞審查，不要等 Phase 收尾**（提早檢查 E3，流程回顧 ADR-0020；流程文件 4.8；規則 8 的時間點）。
+12. **新 checker 寫完就做獨立漏洞審查，不要等 Phase 收尾**（使用者決定的提早檢查 E3，效益為推算；流程回顧 ADR-0020；流程文件 4.8；規則 8 的時間點）。
    - 為什麼：每個 Phase 收尾的審查都找到一批漏洞，修完要整套 regression 重跑：Phase 4 有 10 個、Phase 3.5 有 12 個、Phase 5 有 8 個、Phase 6 有 7 個、Phase 7 有 8 個加 1 個缺口（各 Phase exit review 的「獨立審查」；ADR-0019 決定 26）。Phase 7 那次三條 regression 要重跑，wrapper 一條約 6 小時；回顧推算每批審查約 1–2 小時 agent 時間。
    - 做什麼：每支新的或大改的 checker，寫完、第一次正式 harden 或放進 regression 之前，請一個沒寫它的 agent 找「該 FAIL 卻 PASS」的漏洞：做植入錯誤的實驗加對照組，不能只讀程式；逐條對照下面的漏洞類型表。審查紀錄（日期、找到什麼、怎麼修、對應的 negative test）寫在該 checker 的 README 或 ADR。Phase 收尾時只審最後改過的 checker（`phase-exit-review` 規則 10）。
    - 通過條件：每支新 checker 有審查紀錄與 negative test；收尾審查沒有新的高、中嚴重度漏洞。
    - 自動防護：沒有（審查要 agent 做實驗）；「每支 checker 都有審查紀錄」可以做成 checker，下一個專案開始時做。
-13. **改 checker 時，新變數不能和同一個函式裡既有的名稱重複**（已驗證，第二次出現）：長的判定函式裡，後面的列常用前面算好的變數。
+13. **改 checker 時，新變數（包括迴圈變數）不能和同一個作用域裡既有的名稱重複；作用域指函式內或模組層，兩者都一樣**（已驗證，出現三次）：長的判定函式或腳本裡，後面的列常用前面算好的變數。Python 的 `for` 迴圈變數在迴圈結束後仍留在同一個作用域，`if` 區塊也不會隔開名稱，所以巢狀區塊裡的迴圈一樣會蓋掉外面的值。
    - Phase 6：修審查漏洞時把 `files`（RTL 檔案清單）改成 view 檔名的字典，`check_inputs.py` 的 `resolved` 列對每個 run 都 FAIL（Phase 6 exit review「本階段找到並修正的 checker 問題」6）。
    - Phase 7：修 H8 時新加 `defines`（`` `define `` 巨集的值），蓋掉同一個函式後面 `resolved` 列要比的 `VERILOG_DEFINES`，同樣每個 run 都 FAIL（Phase 7 exit review）。
-   - 怎麼做：加變數前在該函式 grep 名稱；改完在真的 run 上跑 positive control（`neg_pnr.py` P00、C00 會跑 `check_inputs.py --resolved`），再開 regression（`phase-exit-review` 規則 2）。
-   - 自動防護：`make py-check` 只抓未定義的名稱，看不出重新賦值；防線是 P00／C00 這類「在真 run 上必須 PASS」的 positive control，Phase 7 這次就是它抓到的。
+   - Phase 7（`cbf2c5e`，2026-10-13）：`check_soc.py` 的 wrapper `ir_sources` 檢查用 `for x, y, size, _ in pts` 走過供電點，蓋掉前面從 DEF 讀到的 `sram0` 原點 `x, y`；`magic_drc` 拿最後一個供電點當 SRAM 外框，`p7_harden5` 的 5,572,955 個 SRAM 內違規全被判成框外（FAIL，沒有誤判 PASS）。commit 訊息寫「module level」，實際兩處都在 `main()` 裡（`git show cbf2c5e^:pnr/soc_top/check_soc.py` 第 494 行 `def main`、第 530 行讀原點、第 552 行迴圈），是同一個函式裡的巢狀迴圈；改名 `px, py` 後 0 個框外。
+   - 怎麼做：加變數或迴圈前，在同一個函式（在模組層就整個檔案的模組層）grep 名稱；改完在真的 run 上跑 positive control（`neg_pnr.py` P00、C00 會跑 `check_inputs.py --resolved`），再開 regression（`phase-exit-review` 規則 2）。
+   - 自動防護：沒有。`make py-check`（`scripts/check_py_names.py`）只抓未定義的名稱，看不出重新賦值；目前的防線是 P00／C00 這類「在真 run 上必須 PASS」的 positive control（Phase 7 `defines` 是它抓到的），以及判定 FAIL 後人去查（`cbf2c5e`）。照 ADR-0020 決定 2、ADR-0021 決定 3，下一個專案開始時在 `py-check` 加 lint（例如 pylint 的 `redefined-outer-name`，先試誤報率），並用 `cbf2c5e` 之前的寫法當植入錯誤（`review_p6_7.md` 建議 3）。
 
 ## 已知的 checker 漏洞類型（新 checker 要逐條對照）
 
@@ -111,9 +120,9 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 只證明「設定被讀到」，沒證明「生效」 | `review_criteria.py` 的 uncertainty 檢查只找 SDC 印出的那一行：把 15 個 corner 報表裡的 uncertainty 全刪掉仍 PASS；setup／hold 的 0.25 又剛好等於 LibreLane 預設，單看數字分不出來。要從工具的結果核對實際套用的值 | Phase 5 獨立審查；`review_criteria.py uncertainty_applied`（50,670 條路徑逐條比對），P56 |
 | 靠名稱辨識工具產生的結構 | `cts_macro_latency` 只認 `delaybuf_*` 這個 instance 名稱，改名 `clkdly_` 就 PASS；目錄只認沒有 `-1` 字尾的名稱，重複的 step 漏掉。改成結構判斷：`sram0/clk0` 上方只驅動下一級的 clock buffer 連續幾級（有做 latency 對齊 11、12 級，沒做 0 級）。注意 latency 對齊**不會**讓級數變多（對齊就是讓延遲相同），比級數分不出來 | Phase 5 獨立審查；`check_soc.py sram_clock_chain`，P58–P60 |
 | 誤差表的保護不完整 | `[golden_layout_tolerance]` 的受保護字沒有 `floating`、`warning`：floating net 2 → 40 可以被放進誤差表；`[golden_optional]` 接受 `flow__warnings__count:*`，任何新種類的 warning 都會被略過 | Phase 5 獨立審查；`check_signoff.py VIOLATION_WORDS`，P50、P51 的變體 |
-| 強制機制的觸發條件比規則的範圍小 | Stop hook 只在看到 `criteria_review.txt` 時才要求 review：沒跑 `review_criteria.py` 的 `harden-core`，以及它當掉、沒有結果行時，都放行。觸發條件要用「每次 harden 一定會寫的檔案」（`result.txt`），並把「當掉」也當成要擋的情況 | Phase 5 獨立審查；`require_criteria_review.py`，`test-review-hook` 12/12 |
+| 強制機制的觸發條件比規則的範圍小 | Stop hook 只在看到 `criteria_review.txt` 時才要求 review：沒跑 `review_criteria.py` 的 `harden-core`，以及它當掉、沒有結果行時，都放行。觸發條件要用「每次 harden 一定會寫的檔案」（`result.txt`），並把「當掉」也當成要擋的情況 | Phase 5 獨立審查；`require_criteria_review.py`，`make test-review-hook` |
 | 抓到的機制和案例宣稱的不同 | `reset_b_tied1` 寫「只有證明抓得到」，實際上 EQY 在分區步驟就因名稱衝突拒絕（0 個分區），根本沒有證明。要斷言抓到它的原因；改用 tie cell 或繞過同步器，結果也一樣 | Phase 5 獨立審查；`neg_eqy.py REQUIRE`，`signoff/eqy/README.md` |
-| 測試沒有測到守門條件本身 | `test-flow-retry` 11/11：把「只在 usage=65534 時重試」或「已完成的 step 不重試」任一條件拿掉，測試仍 11/11。每一道條件都要有一個「條件拿掉就 FAIL」的情境 | Phase 5 獨立審查；`grtreal`、`grtdone`（13/13），拿掉條件後實測 FAIL |
+| 測試沒有測到守門條件本身 | `test-flow-retry` 11/11：把「只在 usage=65534 時重試」或「已完成的 step 不重試」任一條件拿掉，測試仍 11/11。每一道條件都要有一個「條件拿掉就 FAIL」的情境 | Phase 5 獨立審查；`make test-flow-retry` 的 `grtreal`、`grtdone`，拿掉條件後實測 FAIL |
 | 比對的對象是空的，checker 空過 | `check_soc.py magic_drc` 只檢查「SRAM 框內每個違規都在 SRAM 單獨的報告裡找得到」：最終 GDS 的 SRAM 是空的（LEF 沒有 `FOREIGN`），框內 0 個違規，PASS。LVS 把 SRAM 當 black box、KLayout DRC 也看不到。比對型的 checker 要同時要求被比對的集合夠大（這裡：框內至少是 SRAM 單獨的 50%），並直接檢查前提（`macro_gds`：最終 GDS 的 SRAM 等於 macro 的 GDS） | Phase 6；`check_soc.py DRC_IN_MIN_FRAC`、`macro_gds`，P67–P69 |
 | 黑盒子看不到的一致性，沒有別處在比 | LVS 透過 LEF 看 macro（black box），view QA 只比 LEF、.lib、Verilog、SPICE 的名稱與方向：LEF 兩支腳位的 RECT 對調、LEF 沒有 OBS，所有 checker 都 PASS，矽上接錯 bit。一個工具用抽象圖代替實體時，要另外比抽象圖與實體（腳位文字落在 RECT 內、金屬在 OBS 內） | Phase 6 獨立審查 H1、H2；`check_macro_views.py pinpos`／`obs`，Q14–Q17、P71、P72 |
 | 指紋不精確，卻自稱「內容相同」 | `check_macro_gds.py` 的指紋只算每層圖形數與外框座標的加權和：兩個文字互換、同外框的多邊形、兩個框反向各移 10 nm 都 PASS。比對內容要雜湊完整描述（每個頂點、文字字串） | Phase 6 獨立審查 H6；`gds_cells.py`，P75、P76 |
@@ -125,12 +134,15 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 比對到資料，不是指令；只看第一個指令 | 全域守門 hook 用 regex 找 `make harden`，把 heredoc 裡「README 提到 `make harden-soc`」也當成要開 harden 而擋下。比對前先拿掉 heredoc 內容與引號內字串。同一個 hook 在 `git push origin main && git push gitlab main` 只看第一個 push，誤報「gitlab 還沒推」：一行裡的每一個指令都要看 | 2026-10-08；`~/.claude/hooks/guard-bash.py shell_text()`，`test_guard_bash.py` |
 | checker 的某個模式只有植入錯誤的案例在跑 | `check_inputs.py --resolved` 只被 P20、P36、P39、P42 呼叫，四個都是「植入後必須 FAIL」。`37c99b4` 修審查漏洞時重複使用了變數名稱 `files`（RTL 檔案清單被 view 檔名的字典蓋掉），`resolved` 列對每個 run 都 FAIL，四個案例照樣「抓到」。直到乾淨 worktree regress 的 harden 才露出來，兩輪各浪費一次 harden。checker 的每個模式（每組參數）都要有一個沒植入時必須 PASS 的對照；改 checker 之後先跑對照，不要只跑植入案例 | Phase 6 結案；P00 加上 `check_inputs.py --resolved` 必須 PASS，用修正前的 checker 實測 P00 FAIL |
 | 核准紀錄只存在被檢查的檔案裡，自己算得出來 | `check_pin_plan.py` 的核准：規劃改了以後，用 `--digest` 重算 `plan_sha256` 填回 `[approval]` 就 PASS，不需要使用者；ADR 只要找得到引文，引文「可以」兩個字在 ADR 裡出現 4 次。核准的版本（digest）要記在另一份會進 diff 的文件（ADR 的同一行有原話、日期與 digest），改核准一定會留下痕跡 | Phase 7 審查 H1；`check_pin_plan.py approval`，`neg-pin-plan` A4 |
-| 判定只看結果，不看輸入是怎麼產生的 | IR 用 max power pattern 判：VCD 用別的週期錄（時間 × 1.1）、已被 run guard 拒絕的 run、只給三個 window 中 IR 最小的一個，全部 PASS（正式結果離上限只剩 0.44 mV）。判定前先核對輸入：產生條件（從 VCD 量 clock 週期 = `CLOCK_PERIOD`）、來源（run guard）、完整性（window 齊全） | Phase 7 審查 H2、H3；`ir_pattern.check_inputs()`，`neg-ir` `period`、`one_window`，`neg-run-guard` 的 IR 兩支 |
+| 判定只看結果，不看輸入是怎麼產生的 | IR 用 max power pattern 判：VCD 用別的週期錄（時間 × 1.1）、已被 run guard 拒絕的 run、只給三個 window 中 IR 最小的一個，全部 PASS（正式結果離上限只剩 0.44 mV）。判定前先核對輸入：產生條件（從 VCD 量 clock 週期 = `CLOCK_PERIOD`）、來源（run guard）、完整性（window 齊全） | Phase 7 審查 H2、H3；`ir_pattern.check_inputs()`，`make neg-ir-soc`／`neg-ir-caravel` 的 `period`、`one_window`，`neg-run-guard` 的 IR 兩支 |
 | 例外欄位接受任何字串 | `[max_sum]` 的 `judged_by = "make no-such-target"` 讓一個上限變成 INFO，不檢查那個 target 存不存在、有沒有在 regression 裡跑。把上限交給別的 checker 時，要確認那個 checker 確實存在、會被執行 | Phase 7 審查 H5；`check_signoff.py judged_by_error()`，P81 |
 | 時間比較丟掉時區 | `check_precheck.py` 把 `project.json` 的時間戳 `replace(tzinfo=None)` 後比，+08:00 的時間戳在結果目錄開始前寫入也 PASS。先換成同一個時區（UTC）再比，沒有時區就 FAIL | Phase 7 審查 H6；`neg-precheck` `results_after_tz`、`no_tz` |
 | 查證用的結果被當成正式結果 | `check_precheck.py` 遇到 `verification: true`（沒過 run guard）或根本沒有來源檔的專案，仍印 `precheck: PASS`。預設模式要求正式來源；查證用要另給旗標，結論也印成「只供查證」 | Phase 7 審查 H7；`--verification`，`neg-precheck` `verification_source`、`no_source`、`source_gds`、`verification_flag` |
 | 向量只檢查一個 bit | `check_inputs.py inout_dont_touch` 只看 `analog_io[0]`：`RSZ_DONT_TOUCH_RX = ^analog_io\[0\]$` 也 PASS，harden 卻會在 `analog_io[9]` 中止（RSZ-0074）。範圍要展開到每個 bit（巨集從 `` `define `` 取值，算不出來就 FAIL） | Phase 7 審查 H8；P79 `bit0` |
 | 例外只放寬、不要求 | `check_soc.py max_slew` 允許 Caravel 輸入腳位超過上限到「外部 transition + 0.05 ns」，但不要求它出現：driving cell 蓋掉 `set_input_transition` 時腳位 slew 變成約 0.02 ns，報表裡消失，照樣 PASS。放寬的例外要反過來確認被例外的東西確實存在、數值符合依據 | Phase 7 文件核對（`timing-constraints-sdc` 規則 14 的防護沒做）；`max_slew` 的反向檢查，C80d |
+| 測試被縮水或跳過，仍判 PASS | RTL testbench 的 self-checking 測試只看 firmware 最後寫的 PASS：Phase 1 第 1 輪獨立審查植入的錯誤裡，firmware 測試主體被跳過仍印 PASS；第 2 輪 memtest 刪掉 March C− 階段、Boot ROM march 少測最後一個 word，`make regress-rtl` 兩個模擬器都 PASS。每支測試宣告它要做的動作，由 checker 計數比對（每個 SRAM word 的讀寫次數、UART stall 次數、PASS 不能早於 cycle 下限）。cycle 下限抓不到「刪掉一段」：image 變小、測試區變大，總時間反而變長，要靠存取次數。精確計數跟 CPU 綁在一起，換 core 要重量（`core-migration-hazard3` 規則 10） | `docs/phase_exit/phase1.md` 第 18–23 行；`dv/README.md` 第 68–78 行（`coverage`、`min_cycles`）、第 145–147 行（M01、B01、B02）；`review_p0_35.md` 建議 3 |
+| 只比最終結果，中間的介面錯誤互相掩蓋 | Phase 1 第 2 輪：SRAM 一筆交易存取兩次、IRQ 線晚放、UART 除數 reset 值錯（Boot ROM 之後又寫一次，輸出照樣正確）、先寫 DONE 再寫 SIG，最終的 UART 與 GPIO 輸出都對，regress 都 PASS。macro 與周邊的介面要有腳位層的協定 monitor（每筆交易只存取一次、handshake 時序、reset 值）；兩個錯誤可能互相蓋掉時，在中間狀態就比（`uart_div` 在 reset 釋放時就比除數，不等 UART 輸出） | `docs/phase_exit/phase1.md` 第 23 行；`dv/README.md` 第 15–17 行（`sram_port`、`irq_line`、`uart_div`）、第 148 行（B03）；`review_p0_35.md` 建議 3 |
+| checker 的訊息分不出工具當掉與結果不對 | Phase 7 結案：本機 KLayout 0.30.7 跑 precheck deck 當掉（log 有 `ERROR: Signal number: 11`），`neg-precheck` 印的卻是 `the reference's klayout_feol report has no item`，讀起來像比對結果不對，人會先去查設計；那次 Hazard3 的第二次執行作廢。包外部工具的 checker，報表沒有項目或缺檔時，先掃同一步的 log 有沒有當掉的訊號（`Signal number`、`Segmentation fault`、`Killed`），有就印「工具當掉（見 <log>）」並 FAIL；negative test 植入一份含 `Signal number: 11` 的 log 與空報表，斷言訊息指出當掉。KLayout 為什麼當掉是推測（記憶體壓力，只出現一次），留在 `tapeout-precheck-caravel` 經驗紀錄。自動防護：沒有（`neg_precheck.py` 第 104 行與 `check_precheck.py` 都沒有當掉偵測；照 ADR-0020 決定 2、ADR-0021 決定 3，下一個專案做成 checker） | `docs/phase_exit/phase7.md` 第 34 行；`runs/p7close2_h3_neg_precheck_ref_klayout_sig11.log` 第 1193 行（不進版控）；`review_p6_7.md` 建議 8 |
 
 ## 用完後
 
@@ -170,3 +182,4 @@ description: 新寫或修改任何 PASS／FAIL checker（signoff metrics、DV、
 | 2026-10-11 | Phase 6 獨立審查（12 個植入實驗，確認 7 個漏洞 H1–H7） | 見上表新增的五類，以及 `macro_drc.py` 只比總數（H4，`比對粒度太粗`） | 已驗證（每個都有植入實驗與對照組；我重跑 H1、H3、H6、H7） | 全部修正並各加 negative test（使用者 2026-10-11：「全部修，再跑兩輪」，ADR-0018 決定 19）。修 H7 時第一版仍 PASS：NaN 被 `abs(..) > tol` 放行，實驗才發現 | `docs/phase_exit/phase6.md`「獨立審查」 |
 | 2026-10-11 | Phase 6 結案 regress（乾淨 worktree，`904e18e`） | 兩輪都在 harden-soc FAIL：`soc-inputs: FAIL`，只有 `[FAIL] resolved` 一列，訊息沒說哪一項不符；版圖與 golden 441 個 metric 逐項相同 | 已驗證：`37c99b4` 在 `macro_source` 區塊把 `files` 改成 view 檔名的字典，後面 `resolved` 拿它比 RTL 清單；修正版在兩個 worktree 的 run 上 PASS，舊版讓新 P00 FAIL | 字典改名 `views`；`resolved` FAIL 時列出不符的欄位；P00 加 `--resolved` 對照；漏洞類型表加一類 | `runs/p6close_regress_*.console`、`pnr/soc_top/check_inputs.py` |
 | 2026-10-14 | Phase 7 獨立審查（`84fe505`，第一輪結案 regress 期間）與修正 | 8 個漏洞與 1 個缺口（H1–H8、邊界 slew），每個都有植入實驗與對照組；修 H8 時自己又把 `check_inputs.py` 的 `resolved` 列改壞（新變數 `defines` 蓋掉預期值） | 已驗證：修正前的程式重現漏洞、修正後新的 negative test 抓到；`defines` 由 `p7close_h3` worktree 的 positive control 與 `neg-pnr` P00 抓到 | 漏洞類型表加 7 類；規則 13（第二次出現的變數重名）；ADR-0019 決定 26 | `runs/p7_review/checker_holes.md`；`docs/phase_exit/phase7.md` |
+| 2026-10-15 | Phase 0–7 問題總檢討（`docs/notes/problem_review/`，ADR-0021） | ① 變數重名第三例 `cbf2c5e` 沒記，規則 13 只講「同一個函式」；② 上限檔寫死 unannotated 總數，4 次讓 harden 假 FAIL；③ RTL testbench 的兩種漏洞與「工具當掉被說成結果不對」不在漏洞類型表；④ 規則 3、7 寫死的案例數已和腳本不符（run guard 寫 14 個，`neg_run_guard.py` 的 `STEPS` 已是 16 項） | 已驗證：① `git show cbf2c5e`；複查時發現 commit 訊息與審查報告說的「模組層」不對，兩處都在 `main()` 裡；② `phase4.md` 第 100 行、ADR-0016 第 52 行、本表 2026-10-07；③ `phase1.md` 第 18–23 行、`phase7.md` 第 34 行；④ `verify_and_merge.md` 1.4 第 11 項 | 規則 4 加逐項分類、規則 13 改範圍並加第三例、漏洞類型表加三列，四項都寫明「沒有自動防護」；規則 3、7 改成指向腳本；規則 11、12 標明是使用者決定 | `docs/notes/problem_review/verify_and_merge.md` §3 B5、B7、B9、B10、B11、C1 |

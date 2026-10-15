@@ -31,7 +31,7 @@ The final design, a Hazard3 SoC with a 2 KB self-generated SRAM placed flat in t
 - It passes ChipFoundry's precheck: 11 of the 13 official checks pass, and the remaining two report only the OpenRAM bitcell rules at the same positions as the PDK's own prebuilt SRAM.
 - It passes the same signoff as the SoC alone: 15-corner STA, DRC, LVS, antenna, formal equivalence (EQY), gate-level simulation, and IR drop measured from Caravel's real pads with a CPU max-power pattern.
 
-From Phase 3 on, every phase closed with a full regression in a clean worktree, independent agent reviews and an exit review. Problems that came up — tool defects, checker holes, ordering mistakes in the flow — were written back into 23 process skills, the flow document, or an automatic checker with a negative test (an injected bug that the checker must catch). A final review on 2026-10-15 found that 39 of the 247 problems are still only in an experience record or in no skill at all (§7). This report records the whole journey: what was done, which problems appeared and how they were solved, how the skills and the flow changed as a result, and what is still open.
+From Phase 3 on, every phase closed with a full regression in a clean worktree, independent agent reviews and an exit review. Problems that came up — tool defects, checker holes, ordering mistakes in the flow — were written back into the process skills (23 during the project, 30 after the final review, grouped into Middle-end, Backend and Package with one entry skill each), the flow document, or an automatic checker with a negative test (an injected bug that the checker must catch). A final review on 2026-10-15 found that 39 of the 247 problems were still only in an experience record or in no skill at all (§7); the write-backs the user then chose are in §8.5–§8.6. This report records the whole journey: what was done, which problems appeared and how they were solved, how the skills and the flow changed as a result, and what is still open.
 
 ---
 
@@ -70,7 +70,7 @@ The goals come from `project-plan.md`:
 **How the work was done.** The engineering was carried out by Claude Code working under the user's direction, with these rules:
 - Every choice that affects the specification, the measurement method, signoff limits, schedule or scope is first investigated, then presented as options with a recommendation, and decided by the user (`CLAUDE.md` rule 13).
 - Independent agents that did not write the code review the testbench (Phase 1) and, from Phase 3 on, the documents and checkers at the end of each phase.
-- Recurring know-how lives in 23 project skills (`.claude/skills/*/SKILL.md`).
+- Recurring know-how lives in project skills (`.claude/skills/*/SKILL.md`): 30 at the end, grouped into Middle-end, Backend and Package, each stage with an entry skill (§8.6).
 
 ---
 
@@ -482,7 +482,7 @@ For each problem they checked with `git grep` where it is captured **today**: a 
 | Flow order or process | 32 | GPIO chosen before the block position (7); signoff criteria defined after the first hardens (2–3); IR method changed three times in a day (7); evidence left in a session scratchpad (3, 4, 5, 6, 7) | Planning approval checks (pin-plan checker and edit hook, `CLAUDE.md` rule 14), ADR-0020's 19 earlier checks, the relaxation register |
 | Specification or assumption | 22 | SRAM read failure at ss low temperature (3.5); padded `.lib` without wire parasitics (3–7); duty cycle and jitter of Caravel's clock (5, 7) | SPICE go/no-go before choosing a macro, documented assumptions, tapeout-risk list |
 | Platform rule | 14 | One `vccd1` pad for the whole user area; boundary transitions above the slew limit; li1 density with `decap_3`; prebuilt SRAM rules in the new deck; who adds metal fill (all 7) | Platform worksheet (ADR-0020 A2), skill `tapeout-precheck-caravel` |
-| Host environment and resources | 8 | Memory exhausted by another program (5); two `neg-pnr` runs killed together (6); disk full stops a regression and hangs an STA (7) | The precheck VM memory is checked automatically; host disk and per-step timeouts are not (open, §8.5) |
+| Host environment and resources | 8 | Memory exhausted by another program (5); two `neg-pnr` runs killed together (6); disk full stops a regression and hangs an STA (7) | The precheck VM memory is checked automatically; since ADR-0021, `scripts/regress.py` also refuses to start below 100 GiB free disk and kills a target over 3 × its reference time (`neg-regress` cases `low_disk`, `timeout`); the number of parallel runs is still a manual decision |
 | Documentation drift | 7 | A later decision changed but an earlier paragraph was not marked; numbers compared under different conditions (5, 6, 7) | Independent document review at each phase end |
 | Other | 11 | Mixed or uncategorised rows | — |
 | Macro or IP | 6 | Negative-slope load table in the SRAM `.lib` (3.5); LEF database units 2000 (`ODB-0205`) (6) | View QA (`scripts/check_macro_views.py`, `make neg-macro-views`) |
@@ -498,7 +498,7 @@ Mostly from the flow retrospective (`docs/notes/flow_retro/README.md`, ADR-0020)
 | Phase 7 platform surprises (single `vccd1` pad, boundary slew and hold, li1 density, prebuilt SRAM rules, fill) | About two days of rework and three relaxations | A platform worksheet with every intake check computed for this design (A2) |
 | Runaway repair steps (4 times, 26–108 min each, once 92.9 GB) | Hours; three stopped by a person, one ended abnormally by itself | Weak-cell QA over all signoff corners (C2) and, still open, an automatic stop |
 | Checker holes found at every phase end (5, 10, 12, 8, 7 and 8 + 1 in Phase 3, 4, 3.5, 5, 6, 7) | One extra full regression per phase from Phase 4 on (Phase 3 and 3.5 holes were carried into the next phase) | Hole review when a checker is written, not at the phase end (E3) |
-| Host resources: disk full, memory pressure | Two of three closing regressions restarted in Phase 7 | Resource checks and timeouts in the regression (open, §8.5) |
+| Host resources: disk full, memory pressure | Two of three closing regressions restarted in Phase 7 | Resource checks and timeouts in the regression (implemented 2026-10-15, ADR-0021; §8.5 B1) |
 
 ### 7.4 Lessons that apply to any project
 
@@ -535,6 +535,7 @@ Mostly from the flow retrospective (`docs/notes/flow_retro/README.md`, ADR-0020)
 | 10-12 | `tapeout-precheck-caravel`, `chip-floorplan-pin-planning`; rule 14: pad / block / pin plan approved before RTL, enforced by a checker, a hook, a skill and the flow document | Phase 7; the user: "要想個辦法確保之後一定會先探討pad & pin location" ("find a way to make sure pad and pin locations are always discussed first") |
 | 10-14 | ADR-0020: 19 earlier checks (A1–E3) written into the flow and 12 skills; relaxation register (`docs/relaxation_register.md`, 90 rows); checker hole-type table extended with 7 new types | Flow retrospective requested by the user; the Phase 7 checker-hole review |
 | 10-15 | Experience rows for the disk-full and KLayout incidents and the fill trial | Phase 7 closing regression |
+| 10-15 | ADR-0021: the review's maintenance write-backs into 20 skills, the flow document and README; three over-long skills split by function (23 → 27); three entry skills for Middle-end, Backend and Package (30); `check_skills.py` length and stage checks; `regress.py` disk check and per-target timeout | The 2026-10-15 problem review; the user: "整個流程可以分成Middle-end，backend，package 三大部分，每一部分各自搜尋相關的skill" ("split the whole flow into Middle-end, backend and package, each searching its own skills") |
 
 At the end of Phase 7 the 23 skills hold 260 experience rows. The skills whose `SKILL.md` changed most often: `drv-timing-closure` (27 commits), `signoff-checker-qualification` (26), `librelane-run-debug` (22), `signoff-criteria` (20; 30 including its knowledge files), `flow-regression-reproducibility` (20).
 
@@ -570,7 +571,7 @@ The user decided to write them into the process now and to build the automatic c
 ### 8.5 Write-backs proposed by the 2026-10-15 review
 
 A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 partly confirmed (mostly over-counted occurrences or an existing guard that was overlooked), none refuted. It then merged them into 27 write-backs in three groups (`docs/notes/problem_review/verify_and_merge.md` §3).
-- **Decision needed**: new checkers, signoff-scope changes, global settings, or anything that may be a tapeout risk are the user's decision (`CLAUDE.md` rule 13). As of this report, **these are proposals awaiting the user's decision**.
+- **Decision needed**: new checkers, signoff-scope changes, global settings, or anything that may be a tapeout risk are the user's decision (`CLAUDE.md` rule 13). The user decided on 2026-10-15 (ADR-0021); the outcome is summarised after the tables.
 - **Maintenance**: promoting verified experience to rules and fixing outdated text are maintenance under the existing rules.
 
 **Group A: would make the next project go wrong directly, or make a skill impossible to select.**
@@ -578,7 +579,7 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 | # | Write-back | Where | Decision needed |
 |---|---|---|---|
 | A1 | **Skill descriptions are too long and disappear from Claude's skill list.** A description is cut at 1,536 characters, and all descriptions together share a budget of 1% of the context window; the least-used skills lose their description first. Three descriptions are over the per-skill limit, and in the verifier's own list five skills had no description at all, so Claude cannot select them. | Shorten all 23 descriptions; `check_skills.py` length limit with an injected over-long case | Shortening: no. New check and `CLAUDE.md` rule 5 change: yes |
-| A2 | **No latch-up marker (`areaid.lowTapDensity`, GDS 81/14) in the delivered GDS, and no check of the default 6 µm tap-to-diffusion rule anywhere.** Magic only checks 15 µm; the PDK and precheck KLayout decks declare the layer but use it in no rule; Magic's own marker covers only the top cell shrunk by 250 µm. | ADR-0019, relaxation register, Phase 7 known limitations, `drc-signoff` rule 7 | **Yes** (possible tapeout risk) |
+| A2 | **No latch-up marker (`areaid.lowTapDensity`, GDS 81/14) in the delivered GDS, and no check of the default 6 µm tap-to-diffusion rule anywhere.** Magic only checks 15 µm; the PDK and precheck KLayout decks declare the layer but use it in no rule; Magic's own marker covers only the top cell shrunk by 250 µm. | ADR-0019, relaxation register, Phase 7 known limitations, `drc-signoff` rule 7 | **Decided**: measured (§9.1 item 7); record and ask ChipFoundry, no design change |
 | A3 | `floorplan-congestion` does not point to the pad / block / pin approval, so it can bypass `CLAUDE.md` rule 14 | `floorplan-congestion` rules 2, 3 and description | No |
 | A4 | Rules that contradict later decisions (for example an old `sram0/clk1` exception, an IR rule that implies EM is judged) | `timing-constraints-sdc` rule 5, `signoff-criteria`, `lvs-signoff` rule 2, `pdn-ir-drop`, `drv-timing-closure`, `multicorner-sta` | No |
 | A5 | Missing steps in the flow document, the entry point for new projects: `*_VIOLATION_CORNERS` (LibreLane judges setup only at tt by default), positive controls before a closing regression, EQY's three silent skips, run checkers even when the flow FAILs | `arvinsa-rtl-gds-flow.md` 4.5–4.9 | No |
@@ -613,6 +614,36 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 - C8: authorisation before long tasks (decision).
 
 
+**Outcome of the user's decisions (ADR-0021)**:
+- **Done**: every maintenance write-back (A3–A5, A6 text, B3, B4 text, B5 text, B8, B10, B12, C1–C6). Five agents edited 20 skills; the flow document and README were synchronised; `make skill-check` PASS.
+- **Implemented checkers**:
+  - **A1** `scripts/check_skills.py`: each description ≤ 1,024 characters, the listed descriptions together ≤ 8,000, with an injected over-long case.
+  - **B1** `scripts/regress.py`: refuses to start below `REGRESS_MIN_FREE_GB` (100 GiB); every target times out at 3 × its reference time (at least 30 min) and its whole process group is killed. `make neg-regress` adds `low_disk` and `timeout`, now 10/10.
+- **A2 (latch-up)**: measured (§9.1 item 7), recorded, and added to the ChipFoundry question draft; the design is unchanged.
+- **Deferred to the next project** (ADR-0020 decision 2 style, "no automatic guard yet" written in the skills): A6 checker rows, A7 EM, B2 runaway stop, B6, B7, B9, B11; C7 and C8 not taken up.
+
+### 8.6 Skill structure after the review
+
+![Skills in three stages](figures/skill_map_en.png)
+
+*Figure 17. The 30 skills: three entry skills (Middle-end, Backend, Package) with their sub-skills, and three cross-stage skills. Source: ADR-0021 decisions 5, 6; `.claude/skills/*-flow/SKILL.md`; `.claude/settings.json`.*
+
+The review found that five skills had no description in Claude's skill listing and two were cut.
+- **Cause**: a description is cut at 1,536 characters, and all descriptions share a budget of 1% of the context window; the least-used skills lose theirs first.
+- **The user's decisions**: two steps.
+  1. Split the three over-long skills by function (decision 5):
+     - `tapeout-precheck-caravel` → itself plus `caravel-user-project-integration`;
+     - `openram-macro-characterization` → itself plus `openram-macro-generation` and `sram-layout-extraction`;
+     - `hard-macro-integration` → itself plus `macro-qualification`.
+  2. Group the whole flow into **Middle-end, Backend and Package**, each with an entry skill (decision 6):
+     - each entry's description carries the stage's most common situations and exact error messages;
+     - its body maps situation or message to the sub-skill's file;
+     - the 24 sub-skills are listed by name only (`skillOverrides: name-only` in `.claude/settings.json`);
+     - the three cross-stage skills (`signoff-checker-qualification`, `flow-regression-reproducibility`, `phase-exit-review`) keep their descriptions.
+- **The listing now**: about 4,500 characters of descriptions instead of 20,475.
+- **Guard**: `make skill-check` verifies that each sub-skill is in exactly one entry table and is name-only, and checks the lengths.
+- **Rules updated**: `CLAUDE.md` rules 1 and 5 now say to read the stage's entry first, and to update the entry table and `skillOverrides` with any new sub-skill.
+
 ## 9. Open issues and future work
 
 ### 9.1 Before any tapeout (Phase 7 known limitations 1–6, `docs/phase_exit/phase7.md`)
@@ -624,7 +655,7 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 5. **IR margin 0.44 mV** (19.56 of 20 mV). The pattern does not include Wishbone host accesses, zero-delay simulation contains no glitches, "maximum power" is the maximum of three windows rather than a proof, and the 1.62 V at the pad is an assumption.
 6. **Usage constraints**: management clock ≤ 22.7 MHz; firmware must write `host_en = 0`; `gpio_out` only via the logic analyser; PLL jitter and duty cycle assumed.
 
-7. **Latch-up marker** (found by the 2026-10-15 review, not yet in the Phase 7 exit review): the delivered GDS has no `areaid.lowTapDensity` (81/14) marker, and no check in the flow or the precheck verifies the default 6 µm tap rule. Whether this is a tapeout risk depends on how the platform assembles the full chip; it is the user's decision (§8.5 A2).
+7. **Latch-up marker** (found by the 2026-10-15 review; Phase 7 known limitation 21): the delivered GDS has no `areaid.lowTapDensity` (81/14) marker, and no check in the flow or the precheck verifies the default 6 µm tap rule. Measured (`docs/notes/latchup/`): no diffusion is farther than 15 µm from a same-type tap, but about 7% of the diffusion area outside the SRAM is farther than 6 µm (the standard cells are tapped for the 15 µm rule, `FP_TAPCELL_DIST` 13 µm). The user decided to record it and ask ChipFoundry who adds the marker and which distance applies, without changing the design (ADR-0021 decision 2).
 
 ### 9.2 Known limitations of the method (Phase 7 limitations 7–20)
 
@@ -646,9 +677,9 @@ These do not change this result but have to be known:
 
 ### 9.3 To be investigated
 
-- **Latch-up marker** (new, from the 2026-10-15 review, A2): find out from ChipFoundry who adds the low-tap-density marker in the user area and whether SkyWater checks 6 µm or 15 µm there; alternatively measure the 6 µm rule with a KLayout check on `soc_top` before deciding.
-- **Skill selection** (A1): confirm the per-skill and total description limits of the Claude Code version in use, then shorten.
-- **Resource protection for long regressions** (B1, B2): how much to automate (disk check, per-target timeout, step watchdog) versus keep as a manual checklist.
+- **Latch-up marker** (A2, measured; see §9.1 item 7): the answer from ChipFoundry on who adds the marker in the user area and whether 6 µm or 15 µm applies.
+- **Skill listing in practice** (A1): `make skill-check` enforces the lengths, but whether the listing really shows the entry descriptions depends on the model's context window and the user's other skills; check with `/context` or `/doctor` when a new Claude Code version arrives.
+- **Automatic stop of a runaway step** (B2) and the other checkers deferred by ADR-0021 decision 3 (A6 `check_inputs.py` rows, A7 EM, B6, B7, B9, B11).
 - **EM** (A7): add an EM checker with the same max-power pattern current, and compare via currents with the tech LEF limits.
 - **Measurement questions left open by the phases**:
   - the SRAM macro's internal IR (the PSM CSV has one supply node for the SRAM; whether this is PSM's model was not checked);
@@ -702,6 +733,7 @@ These do not change this result but have to be known:
 | 0018 | Phase 6: self-generated OpenRAM SRAM macro |
 | 0019 | Phase 7: Hazard3 SoC flat in the Caravel wrapper, target ChipFoundry precheck PASS (26 decisions) |
 | 0020 | Flow retrospective: 19 earlier checks written into the flow and skills; relaxation register |
+| 0021 | Problem review write-backs; latch-up measured and recorded; skill-length and regression resource checks; three skills split; skills grouped into Middle-end, Backend and Package |
 
 ## Appendix B: figure sources
 

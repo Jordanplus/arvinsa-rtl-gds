@@ -1,6 +1,6 @@
 ---
 name: librelane-run-debug
-description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續、只重跑單一 step（驗證設定、做 negative test）、某一步跑很久不知道是不是卡住（CPU 使用率低、記憶體一直漲、swap 用滿、最後只報 failed with an unexpected error）、要在單一 step 的工具指令裡加除錯輸出（`librelane.steps eject`）、重跑時保留上一次的 run（`run.sh` 的 `keep_prev_run` 只留一層 `.prev`），或錯誤時有時無（例如 `GRT-0229`，也會出現在新開的 step 如 `ResizerTimingPostGRT`；`GRT-0116 Global routing finished with congestion` 而溢位只有個位數）、`RepairDesignPostGRT` 中止於 `[ERROR RSZ-0074] failed to build tree from gloubal routes found route to 1 pins, expected 0`（頂層有 inout 訊號腳位，例如 Caravel 的 `analog_io`）、已跑完的 run 想改設定從中間某一步重來（同一個 run tag 加 `--from` 會讀到最後一步的成品，例如報 `EST-0026 Missing route to pin` 後 `RSZ-0074 ... found route to 3 pins, expected 4`，要改用新 tag 加 `--with-initial-state`）、`Could not replace ... no replacement step with ID`（repo plugin 不在 `PYTHONPATH`）、要只改某一步的工具指令而不改 LibreLane 本身（plugin step 加 `substituting_steps`）、接續後同一個 step 有兩個目錄（中止的沒有 `state_out.json`）時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（flow 中途 `state_out.json` 的 metrics 可能是前面步驟留下的舊值；`RSZ-0032` 的 hold buffer 數不是總數）、常見錯誤訊息與陷阱、隨機錯誤要先證明是隨機的才能加重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs and intermittent errors.
+description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中間 step 接續（`--from`、`--with-initial-state`）、只重跑單一 step 或匯出成 script 加除錯輸出（`librelane.steps run`、`eject`）、某一步跑很久不知道是不是卡住或失控（時間遠超過上次、CPU 使用率低、physical footprint 一直漲、swap 用滿、最後只報 `failed with an unexpected error`）、錯誤時有時無（`GRT-0229 Vertical edge usage exceeds the maximum allowed`、總溢位只有個位數的 `GRT-0116 Global routing finished with congestion`）、`RSZ-0074 failed to build tree from gloubal routes`（三種原因的對照表）、`Could not replace ... no replacement step with ID`（repo plugin 不在 `PYTHONPATH`）、接續後同一個 step 有兩個目錄、重跑時保留上一次的 run（`keep_prev_run`），或 LibreLane／OpenROAD 升版時要重看哪些綁在 step 名稱與 log 措辭的防護時使用。涵蓋 step 目錄結構、log 與 metrics 讀法（state 的 metrics 可能是前面步驟的舊值）、隨機錯誤要先證明是隨機的才能加有上限的重試；設定值該設多少看各主題 skill。Use when running, resuming, re-running a single step of, or debugging a LibreLane flow run, including hangs, runaway steps, intermittent errors and tool upgrades.
 ---
 
 # LibreLane 執行、接續、單步重跑與除錯
@@ -26,15 +26,24 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
    - 用 `script -q /dev/null ./run.sh` 執行，輸出才不會被緩衝；可能失控的實驗（修復停不下來）一定要另外監看記憶體，超過上限自動停（下方已知陷阱）。
 4. **metrics**：`python3 -m librelane.state latest <run dir> --extract-metrics-to <json>`。DRV 計數是各 corner 的最大值；`power__total` 是最後寫入的 corner（max_ff），不是 nom_tt（Phase 2 exit review）。
    - state 的 metrics 會一路沿用：每一步只更新自己寫出的 key，沒寫的 key 保留前面步驟的值。所以 flow 中途某一步 `state_out.json` 裡的數字，不一定是那一步量的（Phase 5：第 38 步 `STAMidPNR` 只量 nom_tt，state 裡的 nom_ss_n40C −15.5 ns 是第 12 步 `STAPrePNR` 留下的，`multicorner-sta` 規則 7）。要知道某一步自己量到什麼，看該步目錄的 `or_metrics_out.json`；最終結果看 `final/metrics.json`。
-5. **隨機失敗要先證明是隨機的**：
+5. **隨機失敗要先證明是隨機的，才能加有上限的重試**：
    - 某一步失敗、但同樣設定之前跑過沒事時，拿失敗那次的 `state_in.json` 單步重跑至少 3–4 次。
    - 有的過、有的不過，才算隨機；再比較通過的幾次輸出是否完全相同。
-   - 確定後，才可以加**有上限**的重試，而且只針對那一個訊息，每次重試都要記錄（`pnr/librelane_flow.sh`：`RepairDesignPostGRT` 與 `ResizerTimingPostGRT` 修復後的 global routing 報 GRT-0229，同一份輸入分別 2/4、1/4 中止）。其他失敗一律不重試。重試的判斷本身也要測：`make test-flow-retry` 用模擬的 nix-shell 跑 10 種情境（只有 GRT-0229 才重試、從中止的那一步接續、最多 2 次、其他錯誤不重試）。
-   - flow 多開一個會呼叫同一個工具指令的 step（例如 `RUN_POST_GRT_RESIZER_TIMING` 也會做 `global_route`），已知的隨機錯誤也可能出現在那一步：重試規則是綁 step 名稱寫的，要一起檢查（Phase 5：PicoRV32 與 Hazard3 正式 harden 都在 `ResizerTimingPostGRT` 中止）。
+   - 確定後，才可以加**有上限**的重試，只針對已證明隨機的訊息，每次重試都要記錄（`$OUT/retries.txt`）。本 repo 的 `pnr/librelane_flow.sh` 現在認兩種，都只在 `RepairDesignPostGRT`、`ResizerTimingPostGRT` 中止、而且中止的 step 目錄沒有 `state_out.json` 時，從那一步接續（`--from`），最多重試 2 次（共 3 次），其他失敗一律不重試：
+     - `GRT-0229`（`Vertical edge usage exceeds the maximum allowed ... usage=65534`）：兩個 step 修復後的 global routing，同一份輸入分別 2/4、1/4 中止（已知陷阱）。
+     - `GRT-0116`（`Global routing finished with congestion`），而且該 step log 最後一個 `Total` 壅塞列的總溢位 ≤ 10：`ResizerTimingPostGRT` 的增量 global routing，同一份輸入單步重跑 4 次都通過（已知陷阱）。溢位大是真的壅塞，不重試。
+   - 重試的判斷本身也要測：`make test-flow-retry`（`pnr/test_librelane_flow.sh`，用模擬的 nix-shell；情境清單與數目以腳本為準，不在這裡寫數字）。
+   - 接續後的 run 不保證和 golden 逐項相同，要用 golden 的誤差判（ADR-0015）：Phase 5 三次有接續的 regress，兩次逐項相同、一次有 14 個連續量（IR、功耗、線長）落在誤差內（經驗紀錄 2026-10-07／08、10-08）。
+   - flow 多開一個會呼叫同一個工具指令的 step（例如 `RUN_POST_GRT_RESIZER_TIMING` 也會做 `global_route`），已知的隨機錯誤也可能出現在那一步：重試規則是綁 step 名稱寫的，要一起檢查（Phase 5：PicoRV32 與 Hazard3 正式 harden 都在 `ResizerTimingPostGRT` 中止；「升版時要重看的綁定」一節）。
    - 反過來說，**只跑一次就把錯誤歸因到某個設定，是不可靠的**：GRT-0229 原本被歸因到 `GRT_DESIGN_REPAIR_MAX_WIRE_LENGTH`（soc_explore3 只跑了一次），後來發現不設也有一半機率出現。結論是「某設定造成某錯誤」之前，同一設定至少跑兩次，或單步重跑確認。
 6. **重跑會覆蓋上一次的 run，失敗的證據要保留**：同一個 run tag 重跑時，舊做法 `rm -rf` 整個 run 目錄與 `_signoff` 輸出目錄。Phase 3.5 第 1 次 harden-soc（`RepairDesignPostGPL` 75 分鐘後異常結束）的 run 就在第 2 次開跑時被刪，只剩 ADR-0010 的摘要。
    - Phase 5 起 `pnr/*/run.sh` 用 `keep_prev_run`（`pnr/librelane_flow.sh`）把上一次的 run 搬成 `<dir>.prev`，更舊的 `.prev` 刪掉（只留一層：一次 soc_top run 約 4 GB）；`make test-flow-retry` 有這個情境。
    - 連跑兩次以上才會遇到的事（例如要比較三次 run），自己先把 `.prev` 改名保存；要引用的數字先寫進 ADR 或 phase_exit 文件。改名後，那個 run 每一步的 `state_in.json` 仍是舊目錄的絕對路徑（Phase 5 第 6 次：第 41 步有 12 處），要單步重跑就先把路徑換成新目錄、寫進複本，原檔不改。
+7. **某一步失控（跑很久、記憶體一直漲）時：和同設計上次的同一步比時間，看 physical footprint，停掉、保留 run，再單步重跑**（出現 4 次：Phase 3 soc_explore6／8、Phase 3.5 第 1 次 harden、Phase 4 第 1 次 harden、Phase 5 第 1 次 harden；經驗紀錄與 ADR-0010、`docs/phase_exit/phase4.md`、`docs/phase_exit/phase5.md`。Phase 3.5 那次是工具 75 分鐘後自己異常結束，其他是人看到後停掉：Phase 3 13–26 分鐘、Phase 4 35 分鐘以上、Phase 5 約 108 分鐘。根因各次不同，只有 Phase 3.5（macro .lib 的負載斜率）與 Phase 5（弱 cell 迴圈）已驗證，所以本規則只寫現象與處理，不寫根因）
+   - **症狀**：某一步的時間遠超過同設計上次的同一步；CPU 使用率低（三四成）、physical footprint 一直漲、swap 增加；log 有緩衝，看不到進度；最後只報 `failed with an unexpected error`，或一直不結束。
+   - **怎麼發現**：上次的時間看同設計上一次 run（`runs/<tag>.prev`、golden 對應的 run）該步目錄的 `runtime.txt` 或 `*.process_stats.json`；這次看 `ps -o cputime` 的 CPU 時間、`vmmap --summary <pid>` 或 `top -l 1 -pid <pid> -stats mem` 的 physical footprint（`ps` 的 RSS 會嚴重低估）、`sysctl vm.swapusage`，再用 macOS `sample <pid> 2` 看卡在哪個函式（已知陷阱）。時間超過上次同一步好幾倍、或 footprint 逼近實體記憶體，就停，不要等它自己結束（Phase 5 那次在 24 GB 的機器上漲到 92.9 GB，整台機器的其他工作一起變慢）。
+   - **怎麼處理**：用 process group 只停這個 run（已知陷阱），先把 run 目錄留下來（規則 6），把時間與記憶體數字寫進筆記；拿同一份 `state_in.json` 單步重跑（規則 3），加時間與記憶體上限，一次只換一個輸入（`RSZ_CORNERS`、macro 的 .lib、slew 餘量）比較；resizer 的情況照 `drv-timing-closure` 規則 10 找出是哪條 net。
+   - **防復發：沒有自動停止**。正式 harden（`pnr/librelane_flow.sh`）沒有時間或記憶體上限，只能靠人監看。「step 失控時自動停並保留證據」要新寫程式，依 ADR-0021 決定 3 留到下一個專案開始時做。`check_weak_cells.py` 只擋得住已知的一種根因，而且是必要條件、不是充分條件（`drv-timing-closure` 規則 10）。
 
 ## 已知陷阱
 
@@ -56,13 +65,40 @@ description: 跑 LibreLane（nix-shell 呼叫）、run 失敗找原因、從中�
 | `OpenROAD.RepairDesignPostGRT` 中止：`[ERROR RSZ-0074] failed to build tree from gloubal routes: found route to 1 pins, expected 0`（`repair_design_postgrt.tcl`）。不是隨機的，同一份輸入每次都在同一條 net 中止 | **原因（已驗證）**：用 global route 寄生參數建樹時（OpenROAD `BufferedNet.cc` `makeBufferedNetGroute`），inout 腳位同時算 driver 和 load，load 數比 net 的腳位數多 1。只有頂層 inout 訊號腳位會遇到（Caravel wrapper 沒接東西的 `analog_io`）；input 腳位不算 load，沒事；placement 階段用 Steiner 樹建，也沒事。**怎麼發現**：step log 只有這行，看不出是哪條 net；用 `librelane.steps eject` 匯出該步，在 `read_current_odb` 後加 `set_debug_level RSZ repair_net 2`，中止前最後一行 `repair net <名稱>` 就是。**怎麼繞過**：config 設 `RSZ_DONT_TOUCH_RX` 涵蓋這些腳位（`RepairDesign.cc` 跳過 dont_touch 的 net），例如 `^analog_io\\[`。**防復發**：`check_inputs.py` 的 `inout_dont_touch` 在 harden 前檢查頂層每支 inout 訊號腳位（電源除外）都被它涵蓋；negative test `neg_pnr.py` P79 | Phase 7 `p7_harden2` 第 41 步停在 `analog_io[9]`；加設定後同一份輸入單步重跑通過，修復數相同（809 顆 resize、866 顆 buffer） |
 | run 已經跑完（或跑過某一步之後），想改設定從中間某一步重來，用同一個 run tag 加 `--from <Step id>`：那一步讀到的是最後一步的成品，不是前一步的。症狀依步驟而定，例如 `RepairDesignPostGRT` 拿到已繞線、已填 fill 的版圖，報 `[WARNING EST-0026] Missing route to pin _21744_/RESET_B` 後中止於 `[ERROR RSZ-0074] failed to build tree from gloubal routes: found route to 3 pins, expected 4` | **原因（已驗證）**：規則 2，LibreLane 接續時取修改時間最新的 `state_out.json`。**怎麼發現**：EST-0026 不能當依據（正常的 `RepairDesignPostGRT` 也會印上千則，`p7_harden2` 第 42 步 1001 則）；要看接續後第一步目錄的 `state_in.json`，其中 `odb`／`nl` 的路徑應該是 flow 順序上前一步（或更早）的目錄，不能是較晚步驟的目錄。**怎麼繞過**：新的 run tag，加 `--with-initial-state <舊 run>/<前一步>/state_out.json --from <Step id>`；舊 run 留著當對照。**防復發**：沒有自動防護。正式流程（`make harden`）只在失敗後立刻接續（`pnr/librelane_flow.sh` 的有上限重試），不會遇到；會遇到的只有手動的探索 run，所以接續前先照「怎麼發現」看一次 `state_in.json` | Phase 7 `p7_harden2`：第 79 步 `RepairDesignPostGRT` 的 `state_in.json` 指向第 55／56 步；改成 `p7_harden3`（從第 40 步的 state）後第一步讀的是第 39 步的 odb |
 | 診斷「是不是卡住」：log 有緩衝，看不到進度 | `ps -o cputime` 看 CPU 時間是否持續增加；記憶體看 physical footprint（下一列）；macOS `sample <pid> 2` 看 call stack 卡在哪個函式 | Phase 4（看到每加一顆 buffer 就做一次增量 global routing） |
-| 某一步跑很久、CPU 使用率只有三四成：可能不是在算，而是記憶體失控、大部分時間在等 swap。`ps` 的 RSS 只算還留在實體記憶體的部分，會嚴重低估（Phase 5：RSS 418 MB，physical footprint 92.9 GB） | 看 `vmmap --summary <pid>` 的 Physical footprint 或 `top -l 1 -pid <pid> -stats mem`，再看 `sysctl vm.swapusage`。footprint 遠超過實體記憶體、swap 接近用滿就立刻停掉（整台機器的其他工作也會被拖慢）。重現時用單步重跑加記憶體上限與時間上限。Phase 5 的原因是 resizer 的無窮迴圈（`drv-timing-closure` 規則 10），其他幾次「修復不結束」推測同類（經驗紀錄） | Phase 5 第 1 次 harden-soc，`docs/notes/repair_design_loop.md` |
-| `[INFO RSZ-0032] Inserted N hold buffers.` 的 N 不是這一步插的總數：hold 修復進度表的 Buffers 欄中途會從 2624 掉回 2，最後只剩幾顆 | 數輸出網表裡 `hold<N>` 開頭的 instance，和上一步的網表比較 | Phase 5 第 2 次 harden：log 寫 11，`ResizerTimingPostCTS` 前後網表 0 → 2700。根因（Phase 7 已驗證）：插入後用 journal 復原時，`RepairHold.cc` 把累計數設成 0（`drv-timing-closure` 經驗紀錄 2026-10-12） |
+| 某一步跑很久、CPU 使用率只有三四成：可能不是在算，而是記憶體失控、大部分時間在等 swap。`ps` 的 RSS 只算還留在實體記憶體的部分，會嚴重低估（Phase 5：RSS 418 MB，physical footprint 92.9 GB） | 看 `vmmap --summary <pid>` 的 Physical footprint 或 `top -l 1 -pid <pid> -stats mem`，再看 `sysctl vm.swapusage`。footprint 遠超過實體記憶體、swap 接近用滿就立刻停掉（整台機器的其他工作也會被拖慢）。重現時用單步重跑加記憶體上限與時間上限。Phase 5 的原因是 resizer 的無窮迴圈（`drv-timing-closure` 規則 10）；處理流程見規則 7 | Phase 5 第 1 次 harden-soc，`docs/notes/repair_design_loop.md` |
+| `[INFO RSZ-0032] Inserted N hold buffers.` 的 N 不是這一步插的總數：hold 修復進度表的 Buffers 欄中途會從 2624 掉回 2，最後只剩幾顆 | 數輸出網表裡 `hold<N>` 開頭的 instance，和上一步的網表比較 | Phase 5 第 2 次 harden：log 寫 11，`ResizerTimingPostCTS` 前後網表 0 → 2700。根因（Phase 7 已驗證）：插入後用 journal 復原時，`RepairHold.cc` 把累計數設成 0（`drv-timing-closure` 規則 16） |
 | 停掉一個 run 時誤殺別的程序 | 用 `ps -eo pid,pgid,command` 找這個 run 的 process group，`kill -TERM -<pgid>` 只停那一組 | Phase 4（同時有 agent 在跑 openroad） |
 
-## 時間預估（Apple Silicon，10 核）
+### `RSZ-0074 failed to build tree from gloubal routes` 的三種原因
 
-soc_top 全 flow 約 20–30 分鐘（正式 run 實測 18 與 28 分；Magic 完整 GDS DRC 約 3–4.5 分）；PicoRV32 單獨約 15 分；單一 STA step 約 1–2 分；SpiceExtraction＋LVS 約 1 分。
+同一個錯誤代號有三種不同的原因（都已驗證），先看訊息尾巴的數字與發生的情境，再到對應的地方找處理方式。
+
+| 訊息尾巴與情境 | 原因 | 處理 | 詳細 |
+|---|---|---|---|
+| `found route to 1 pins, expected 0`；正式 flow 的 `RepairDesignPostGRT`，同一份輸入每次都停在同一條 net；頂層有 inout 訊號腳位（Caravel 的 `analog_io`） | 用 global route 寄生建樹時，inout 腳位同時算 driver 與 load | `RSZ_DONT_TOUCH_RX` 涵蓋這些腳位；`check_inputs.py inout_dont_touch` 在 harden 前檢查（negative test P79） | 上表「`RSZ-0074` ... expected 0」那列；`caravel-user-project-integration` 經驗紀錄 |
+| `found route to 3 pins, expected 4` 之類（數字依 net 而定），前面有 `EST-0026 Missing route to pin`；已跑完的 run 用同一個 tag 加 `--from` 從中間重來 | 接續讀到修改時間最新的 `state_out.json`，也就是已繞線、已填 fill 的版圖 | 新 run tag 加 `--with-initial-state <前一步>/state_out.json` | 規則 2；上表「run 已經跑完」那列 |
+| `found route to 1 pins, expected 3` 之類；自己寫的繞線後修復（ECO）script，在 detailed routing 之後用 global routing 寄生做 `repair_design` | 已繞線的設計 `global_route` 繞 0 條 net；`detailed_routing` 寄生來源在釘版 OpenROAD 是預留功能 | 這版 OpenROAD 做不到繞線後 ECO，改用 placement 密度等前段做法 | `drv-timing-closure`「已知限制」與規則 13 |
+
+## 升版時要重看的綁定
+
+`CLAUDE.md` 規則 10 要求防護不能綁在 flow 會變的東西上（step 名稱、step 編號、log 措辭），工具升版時要逐條重看。下面是目前綁在這些東西上的防護（來源：`docs/notes/problem_review/review_skills.md` 2.3，2026-10-15 核對行號）。LibreLane、OpenROAD、EQY、OpenRAM 任一個升版時，逐列確認還成立。
+
+| 位置 | 綁什麼 | 綁定失效時會怎樣 | 升版時怎麼確認 |
+|---|---|---|---|
+| `pnr/librelane_flow.sh` 第 47–48、55–57 行（隨機錯誤的重試，規則 5） | step 目錄名稱 `*-openroad-repairdesignpostgrt`、`*-openroad-resizertimingpostgrt`；log 原文 `^[ERROR GRT-0229] ... usage=65534`、`^[ERROR GRT-0116] Global routing finished with congestion` 與 `Total` 壅塞列 | 不重試，harden FAIL（安全方向）；但 `make test-flow-retry` 用的是模擬的 log，措辭改了它抓不到 | 用新版真的 step log 核對這幾個比對式，再跑 `make test-flow-retry` |
+| `signoff/scripts/review_criteria.py` 第 72 行起的 `TIMING_STEPS` | 寫死的 LibreLane step ID | step 改名時報「(no step)」；**新增的時序 step 會被靜默略過**，沒有自動防護（「run 裡有清單外的時序 step 就 FAIL」要新寫，ADR-0021 決定 3 留到下一個專案） | 比對新版 flow 的 step 清單，名稱含 resizer、timing、STA 的 step 都要在清單裡 |
+| `pnr/soc_top/check_soc.py` 第 623、629、669、691、800 行附近 | step 目錄 `*-odb-reportdisconnectedpins`、`\d+-openroad-cts(-\d+)?`、`*-openroad-stapostpnr`、`*-magic-drc`；log 原文 `Found (\d+) disconnected pin(s)` | 找不到就 FAIL，不會靜默 PASS | 跑一次 harden，確認這些列都 PASS |
+| `pnr/soc_top/neg_pnr.py` P55（`def p55`，約 1570 行） | 中止的 step 目錄編號比較小、沒有 `-N` 字尾（已知陷阱「同一個 step 有兩個目錄」） | 新版接續時目錄命名改了，P55 植入的目錄可能不是 checker 讀的那個 | 看新版接續後的 step 目錄命名，重跑 P55 |
+| `signoff/eqy/run_eqy.py` | EQY partition log 的 `found constant ... bit` | 植入錯誤 `wdata3_stuck0` 只靠這一行被抓到，措辭一改 negative test 就 FAIL（有防護） | 跑 `make neg-eqy-soc` 等 |
+| `ip/sram/openram/gen_macro.py` 第 72–78 行 | OpenRAM 產生的 Magic DRC、Netgen LVS log 措辭（`Total DRC errors found`、`Final result`） | 少了任何一行就 FAIL | 重產一次 macro |
+| `chip-floorplan-pin-planning` 規則 4 | 試跑停在 `--to Odb.ApplyDEFTemplate`、`OpenROAD.GlobalPlacement` 這兩個 step ID | 改名時試跑停不在預期的地方 | 該 skill 已寫升版時重看 |
+| `pdn-ir-drop` 規則 5 的「怎麼發現」 | IR step log 的原文 `Generate source nodes from bterms` | 只影響人工判讀；negative test P26–P28 不綁這行 | 看新版 IR step 的 log |
+
+各 skill 規則裡另有「升版時」的提醒（例如 `cts-clock-tree` 規則 10 的 CTS plugin、`drv-timing-closure` 規則 10、13、16 依 OpenROAD 原始碼推得的機制），升版時一起看。
+
+## 時間預估
+
+本設計的實測時間在 `pnr/soc_top/README.md` 開頭（全 flow、Magic DRC）與 `pnr/picorv32_core/README.md`；同設計上一次每一步的時間在該 run 每個 step 目錄的 `runtime.txt`。判斷「這一步是不是跑太久」時以同設計上一次的同一步為準（規則 7），不要用別的設計或別台機器的數字。
 
 ## 用完後
 

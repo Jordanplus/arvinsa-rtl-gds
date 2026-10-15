@@ -5,7 +5,7 @@ usage: extract_sram.py [<out_dir>]      (default runs/sram_extract/)
 
 Runs Magic from LibreLane's nix-shell (LIBRELANE_DIR, default .tools/librelane) with PDK_ROOT set:
 without PDK_ROOT the magicrc cannot find the tech file and Magic still exits 0 with no output
-(skill openram-macro-characterization rule 8), so the result is checked, not the exit code.
+(skill sram-layout-extraction rule 1), so the result is checked, not the exit code.
 Capacitance and coupling capacitance are extracted, resistance is not (ADR-0010). Takes about
 26 minutes and 1.4 GB for the 2 KB macro.
 Writes <out_dir>/<macro>.spice and <out_dir>/extract.log; prints `extract_sram: PASS ...` when the

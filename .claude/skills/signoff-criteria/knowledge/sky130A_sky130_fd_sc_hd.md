@@ -20,7 +20,7 @@ S2. **LibreLane 對 sky130 的預設**（`librelane/config/pdk_compat.py`、`lib
    | max transition／cap／fanout | 0.75 ns／0.2 pF／10 | PDK config 62–64 |
    | 哪些 corner 判 FAIL | setup 只判 `*tt*`；hold 判全部 corner（`checker.py` 第 683 行）；max slew、max cap 預設都不判 | 要全部判 FAIL 就把四個 `*_VIOLATION_CORNERS` 都設 `["*"]` |
 
-S10. **sky130_fd_sc_hd .lib 的量測與特性化範圍**：slew 的量測門檻是 20%–80%（tt.lib 157–160）。多數延遲表的輸入 slew 只到 1.5 ns，整份 tt.lib 只有 18 張表到 5 ns（buf_8／12／16）。`default_max_transition` 為 1.5 ns。PDK 的 0.75 ns 是 1.5 的一半，這個關係是推論，沒有出處。
+S10. **sky130_fd_sc_hd .lib 的量測與特性化範圍**：slew 的量測門檻是 20%–80%（tt.lib 157–160）。多數延遲表的輸入 slew 只到 1.5 ns，整份 tt.lib 只有 18 張表到 5 ns（buf_8／12／16）。`default_max_transition` 為 1.5 ns（PDK 的 0.75 ns 和它的關係見「待確認」）。pin 的 `max_capacitance` 每個 corner 不同：ss 比 tt 小約 37%（原在 `../SKILL.md` 規則 9；`docs/notes/signoff_criteria_soc_top.md` 第 33 行）。
 
 S12. **sky130 只能用 flat derate**：三份 .lib 都沒有 ocv／sigma／LVF 表。本版 OpenSTA 也沒有 LVF（3.0.1 之後才有）。AOCV、POCV 都不適用。
 
@@ -91,10 +91,11 @@ S19. **PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效**（`resol
 | 2026-10-07 | soc_top 兩個 CPU，ADR-0016 正式 harden（`2caad0e`，p5h3 worktree `runs/p5_pico_h3`、`runs/p5_h3_h10`） | 44 ns | 最差 setup／hold；post-CTS → GRT 後 → signoff 的 hold | PicoRV32 +0.765／+0.079（hold +0.300 → +0.069 → +0.079）；Hazard3 +1.116／+0.106（+0.293 → 無 → +0.106）；與接續實驗 D 相同 | 半週期路徑 DCD 預算 2.2 ns 下 44 ns 的餘量；hold 餘量 0.3 ns 足夠 | 兩個 run 的 `criteria_review.md` |
 | 2026-10-07 | 同上 | 44 ns | `timing__unannotated_net__count` | PicoRV32 118 = 75 dummy load + 32 `dout1` + 11 tie；Hazard3 126 = 82 + 32 + 12（15 個 corner 相同） | 上限隨 CTS 改變；結構不變 | 同上 |
 | 2026-10-13 | Caravel user_project_wrapper（Hazard3 SoC 平放，die 2920 × 3520 µm，density 50；`f721cff`，`runs/user_project_wrapper`） | 44 ns | `ResizerTimingPostGRT` 修完 → signoff 最差 setup；hold（post-CTS → post-GRT → signoff） | setup +0.047 → +0.548 ns（min_ss_n40C，差 0.50）；hold +0.292 → +0.207 → +0.187 ns（max_ff_100C） | global routing 估計比 signoff 保守約 0.5 ns，wrapper 也成立（第 4 次觀察）；`GRT_RESIZER_HOLD_SLACK_MARGIN` 0.2 足夠 | `runs/p7_formal_signoff/criteria_review.md` |
-| 2026-10-13 | 同上 | 44 ns | hold buffer；clock latency 與 hold skew（nom_ss_n40C） | 3,291 顆（soc_top Hazard3 2,783）；wb_clk_i 外部 latency 5.57 ns（Caravel SDC）＋pin 到 block 長線 buffer 約 2 ns，葉端 latency 9.4–11.4 ns；skew metric −3.598 ns（soc_top −1.540），扣 hold uncertainty −3.348 | block 放在大 die 角落、clock 從 wrapper 邊緣進來時，葉端 latency 差變大、hold buffer 變多；不平衡的成因：唯讀分析（`runs/p7_skew_analysis/README.md`）推測約 2.7 ns 是 `report_clock_skew -hold` 把 Caravel 的 source latency 上下限差與共同路徑 derate 算成扣分，真正影響 hold 的 skew −0.632 ns（soc_top −0.678）；沒讀 OpenSTA 原始碼確認。彙總的 `clock__skew__worst_hold` 是各 corner 取最大（最不負）的值，不是最差值 | 同上；`*-openroad-stapostpnr/nom_ss_n40C_1v60/skew.min.rpt` |
+| 2026-10-13 | 同上 | 44 ns | hold buffer；clock latency 與 hold skew（nom_ss_n40C） | 3,291 顆（soc_top Hazard3 2,783）；wb_clk_i 外部 latency 5.57 ns（Caravel SDC）＋pin 到 block 長線 buffer 約 2 ns，葉端 latency 9.4–11.4 ns；skew metric −3.598 ns（soc_top −1.540），扣 hold uncertainty −3.348 | block 放在大 die 角落、clock 從 wrapper 邊緣進來時，葉端 latency 差變大、hold buffer 變多；skew metric 裡不平衡的成因是推測，見「待確認」。彙總的 `clock__skew__worst_hold` 是各 corner 取最大（最不負）的值，不是最差值 | 同上；`*-openroad-stapostpnr/nom_ss_n40C_1v60/skew.min.rpt` |
 | 2026-10-13 | 同上，與 density 55 的 `p7_harden5` 比較 | 44 ns | density 55 → 50：內部 net 最差 slew；setup | 0.779 → 0.576 ns（上限 0.75，max_ss_n40C）；setup +0.630 → +0.548 ns；繞線總長 +0.2% | 局部 met2 熱點的繞路用降低 placement 密度解決（`drv-timing-closure` 規則 13、ADR-0019 決定 21） | ADR-0019 決定 21 |
 | 2026-10-13 | 同上 | 44 ns | `timing__unannotated_net__count`；`design__disconnected_pin__count` | 667（組成見 `signoff/limits/user_project_wrapper.toml`；density 55 時 661）；327 = 321 個沒用到的訊號 port + 6 個電源 port | 上限隨 CTS 改變，wrapper 要自己推導，不能抄 soc_top | 上限檔 |
 | 2026-10-13 | 同上 | 44 ns | 從 Caravel pad 算的 IR（max-power pattern 對 vectorless，slow corner，met4 strap 4.8 µm） | pattern 最差 19.58 mV（max_ss_100C，VDD 11.93 + GND 7.65），vectorless 45.57 mV，比值 0.43；density 55 時 19.71／45.87 mV | vectorless 會高估約 2.3 倍；20 mV 上限要用 pattern 判（ADR-0019 決定 20）。density 55 → 50 對 IR 影響 0.13 mV | `runs/p7_formal_signoff/criteria_review.md`；ADR-0019 決定 22 |
+| 2026-10-13 | Caravel user_project_wrapper，Phase 7 IR 研究（`p7_harden2` 網表；pattern 與 vectorless 的比較用 met4 4.8 µm 的 what-if 版圖） | 40／44 ns | IR 判法各步驟的量測（原在 `../SKILL.md`「IR 用多大的電流」第 2、4、5、6 項，2026-10-15 移入） | 功耗拆解（nom_tt 13.7 mW）：邏輯 45%、修復 buffer 32%、clock tree 14%、hold 5%、SRAM 4%；只按功耗比例縮放的粗估 35 mV，實測 45 mV；vectorless 約是 pattern 的 2.2 倍（max_ss_100C 11.4 對 5.1 mW）；固定切換率（nom_tt）：pattern 5.88 mW，每個 net 10%／20%／50% 為 6.66／8.62／14.50 mW，OpenSTA 預設 13.70 mW，clock tree 與 flip-flop 時脈腳約 2 mW 各種切換率都相同；手算核對：7.6 mA、35.8 mV → 4.7 Ω，與 Caravel ring（約 26 Ω）並聯 wrapper grid 的量級相符；供電模型（同一版圖、同一最壞組合）：wrapper pin 理想 0.3 mV、wrapper ring 左右兩側 8.4 mV、加上 Caravel 網路 104 mV；供電點放回原處的對照組，DEF 轉 ODB 來回本身差約 0.01%，容許值用 0.1% | `../SKILL.md`「IR 用多大的電流」：先拆解功耗、電流用該 corner 的電壓換算、用 pattern、供電點從 pad 起算 | ADR-0019 決定 19（第 101 行：104.2、45.2 mV）、決定 20（第 109、111 行：11.4／5.1 mW、固定切換率）；拆解比例、35 mV 粗估、4.7／26 Ω、約 2 mW、0.3／8.4 mV、0.01% 在 repo 裡沒有找到另外的出處（只有 SKILL.md 原文） |
 | 2026-10-14 | user_project_wrapper（`7eff65a`，signoff 目錄另存 `runs/p7_decap_signoff/`，`DECAP_CELLS` 改 `ef_decap_12`） | 44 ns | 空白區 2,458,784 個 `decap_3`（網表共 2,461,688 個，含 row 兩端的 2,904 個 endcap，endcap 沒換） → 543,617 個 `ef_decap_12` + fill；fill 類 instance、leakage、IR | fill 類 2,608,464 → 974,801；leakage 0.7506 → 0.7396 mW（−0.0110，= 少掉的 decap_3 × ff_100C 4.379 pW 的 98%）；li1 密度 75.1% → 39.9%（`li1.pd.1d` 上限 60%）；IR 最差 0.00205633 → 0.00205617 V；timing、DRC、LVS 逐值相同；harden 240 → 約 182 分鐘 | 沒有 .lib 的 decap 不進功耗報告（S29）；decap 換種類不影響 timing 與靜態 IR | `runs/p7_decap_signoff/criteria_review.md`、ADR-0019 決定 24 |
 
 S20. **sky130_fd_sc_hd 有推不動負載的弱 cell**（Phase 5，單步重跑確認；ADR-0012、0013）：
@@ -117,6 +118,7 @@ S23. **LibreLane 對 sky130 的預設 PDN 與 IR**（Phase 5，what-if 與兩次
     - **最壞組合**（ff 電流＋ss 金屬電阻，met5 每平方 0.037 Ω）的 IR 約是 nom_tt 的 1.4 倍：兩個設計、一側供電、strap 寬 1.6 與 4.8 µm 都量過，1.40–1.42。所以 20 mV 的預算下，nom_tt 要低於約 14 mV。
     - **壓降主要在 met5 strap 本身**。用掉同樣的 met5 金屬量時，加寬比加密有效：4.8 µm 寬時 via4 有 3 個 cut。
     - **只改 met4 幫助很小**。
+    - **電流密度上限與片電阻**（原在 `../SKILL.md` 規則 14 與「IR 用多大的電流」第 5 項，2026-10-15 移入）：tech LEF 的 EM 上限例如 met1 DC／AC 2.8／6.1 mA/µm（`docs/notes/ir_study/results_raw.txt` 用 2.8 mA/µm 比對）；met5 每平方電阻 tt 0.0285、ss 0.0370、ff 0.0199 Ω（`docs/notes/ir_worst_case_soc_top.md` 第 28 行）；met4 0.047 Ω／sq（原文沒附出處，也沒寫是哪個 corner），5 µm 寬的 met4 每 mm 約 9.4 Ω（200 個方塊 × 0.047）。
 
 S24. **Magic 對 SRAM macro 內部的 DRC 計數，會隨 macro 上方的金屬改變**（Phase 5）：met5 strap 從 1.6 加寬到 4.8 µm 後，SRAM 框內的 Magic DRC 從 4,665,810 變成 4,746,079。每一個違規仍對得上 SRAM 單獨檢查時的位置。macro 內部的 DRC 要用位置比對判斷，不能看總數（`drc-signoff`）。
 
@@ -144,6 +146,9 @@ S29. **sky130_fd_sc_hd 的 decap／fill 與 li1 密度**（PDK `8afc8346` 的 GD
     - `ef_decap_12` 有 LEF（`sky130_ef_sc_hd.lef`）與 SPICE，沒有 .lib：STA 不報錯，但它的漏電不進功耗報告（Phase 7 wrapper：報告的 leakage 少了 0.011 mW，正好是被換掉的 `decap_3` 的 .lib 漏電）。實際的閘極漏電沒有數字，下線的功耗要另外估。
 
 ## 待確認（推測，不能當規則用）
+
+- PDK 的 max transition 0.75 ns（S2）剛好是 sky130_fd_sc_hd `default_max_transition` 1.5 ns 的一半；推論 0.75 是由它減半而來，沒有出處（原在 S10，2026-10-15 依 `docs/notes/problem_review/review_skills.md` 1.3 移來）。
+- Caravel wrapper 的 hold skew metric（nom_ss_n40C −3.598 ns，扣 hold uncertainty 後 −3.348）裡約 2.7 ns，推測是 `report_clock_skew -hold` 把 Caravel 的 source latency 上下限差與共同路徑 derate 算成扣分，真正影響 hold 的 skew 約 −0.632 ns（soc_top −0.678）。唯讀分析，沒讀 OpenSTA 原始碼確認（2026-10-13，`runs/p7_skew_analysis/README.md`；原在校準表 2026-10-13 的 hold buffer 列，2026-10-15 移來）。
 
 - 2 KB 1rw1r 改成 `words_per_row = 1`（沒有 column mux）後，tt −40°C 1.60 V 仍有 2 筆讀錯：只有最後一列（位址 511）的 bit 31，該讀 0 讀成 1；週期 20、30、44 ns 結果相同，所以不是讀取時序的競爭。推測是離寫入電路最遠的 cell 寫不進去或被干擾，沒有量 storage node（Phase 6，`docs/notes/openram_phase6_bringup.md`）。
 

@@ -1,0 +1,260 @@
+{
+ "_note": "ADR-0021 決定 6；.claude/skills/{middle-end-flow,backend-flow,package-flow}/SKILL.md；.claude/settings.json skillOverrides",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "Skills in three stages (entry skill -> sub-skills; listed by name only)",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "mid",
+   "label": "middle-end-flow (entry): RTL to netlist, SDC, macro prep, EQY",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "back",
+   "label": "backend-flow (entry): LibreLane harden, PnR, physical signoff",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "pkg",
+   "label": "package-flow (entry): chip level, Caravel, precheck",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "common",
+   "label": "cross-stage (always listed with description)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "m0",
+   "label": "rtl-synthesis-lint",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m1",
+   "label": "dv-directed-tests",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m2",
+   "label": "core-migration-hazard3",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m3",
+   "label": "timing-constraints-sdc",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m4",
+   "label": "formal-equivalence-eqy",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m5",
+   "label": "macro-qualification",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m6",
+   "label": "openram-macro-generation",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m7",
+   "label": "openram-macro-characterization",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "m8",
+   "label": "sram-layout-extraction",
+   "layer": 2,
+   "parent": "mid",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "b0",
+   "label": "floorplan-congestion",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b1",
+   "label": "hard-macro-integration",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b2",
+   "label": "pdn-ir-drop",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b3",
+   "label": "cts-clock-tree",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b4",
+   "label": "drv-timing-closure",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b5",
+   "label": "multicorner-sta",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b6",
+   "label": "antenna-signoff",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b7",
+   "label": "drc-signoff",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b8",
+   "label": "lvs-signoff",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b9",
+   "label": "gate-level-simulation",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b10",
+   "label": "signoff-criteria",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "b11",
+   "label": "librelane-run-debug",
+   "layer": 2,
+   "parent": "back",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "p0",
+   "label": "chip-floorplan-pin-planning",
+   "layer": 2,
+   "parent": "pkg",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "p1",
+   "label": "caravel-user-project-integration",
+   "layer": 2,
+   "parent": "pkg",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "p2",
+   "label": "tapeout-precheck-caravel",
+   "layer": 2,
+   "parent": "pkg",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "c0",
+   "label": "signoff-checker-qualification",
+   "layer": 2,
+   "parent": "common",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "c1",
+   "label": "flow-regression-reproducibility",
+   "layer": 2,
+   "parent": "common",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "c2",
+   "label": "phase-exit-review",
+   "layer": 2,
+   "parent": "common",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  }
+ ],
+ "links": []
+}

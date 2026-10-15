@@ -34,7 +34,7 @@ make sram-char     # 重新特性化：先 tt，再以 tt 為中心跑其他 4 �
 同一套程式，用環境變數換 macro：`SRAM_CHAR_MACRO`（macro 名稱）與 `SRAM_CHAR_NETLIST`（電晶體級網表，預設是 PDK 的）。Makefile 已包好：
 
 ```bash
-make openram-lib-template   # OpenRAM 的 TT .lib，internal_power 換成預建 macro 的值（skill 規則 24）
+make openram-lib-template   # OpenRAM 的 TT .lib，internal_power 換成預建 macro 的值（skill `openram-macro-generation` 規則 8）
 make openram-char           # 5 個 PVT 的特性化，接著 openram-lib、openram-confirm（數小時）
 make openram-lib            # 由 char.json 重新產生 5 份 .lib
 make openram-check-lib      # 獨立重算、來源（ip/sram/<macro>/openram/<macro>.sp 與 summary.json）、confirm.json

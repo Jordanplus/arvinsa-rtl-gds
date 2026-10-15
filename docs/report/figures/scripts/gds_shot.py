@@ -10,6 +10,9 @@
 import json
 import pya
 
+# klayout -rd name=value defines each parameter as a global variable; read them explicitly
+gds, out = globals()["gds"], globals()["out"]
+lyp, box = globals().get("lyp", ""), globals().get("box", "")
 w = int(globals().get("w", "2400")); h = int(globals().get("h", "2400"))
 DEFAULT = ("64/20,65/20,65/44,66/20,66/44,67/20,67/44,68/20,68/44,69/20,69/44,"
            "70/20,70/44,71/20,71/44,72/20")
@@ -19,7 +22,7 @@ show = set(want) - drop
 
 view = pya.LayoutView()
 view.load_layout(gds, True)
-if globals().get("lyp"):
+if lyp:
     view.load_layer_props(lyp)
 view.set_config("background-color", "#ffffff")
 view.set_config("grid-visible", "false")
@@ -40,14 +43,14 @@ while not it.at_end():
         view.set_layer_properties(it, lp)
     it.next()
 
-if globals().get("box"):
+if box:
     x1, y1, x2, y2 = [float(v) for v in box.split(",")]
     view.zoom_box(pya.DBox(x1, y1, x2, y2))
 else:
     view.zoom_fit()
 view.save_image(out, w, h)
 top = view.cellview(0).cell
-bx = [float(v) for v in box.split(",")] if globals().get("box") else None
+bx = [float(v) for v in box.split(",")] if box else None
 json.dump({"gds": gds, "top": top.name, "box_um": bx,
            "cell_bbox_um": [top.dbbox().left, top.dbbox().bottom, top.dbbox().right, top.dbbox().top],
            "w": w, "h": h, "layers_shown": sorted(set(shown))}, open(out + ".json", "w"), indent=1)

@@ -1,6 +1,6 @@
 ---
 name: gate-level-simulation
-description: 在網表上跑 regression 時使用：sky130 cell 模型的 define、錄 IR 用的切換活動（max power pattern 的 VCD，`run_gl_soc.py --record-window`、`vcd_window.v`，時脈用 signoff 週期；錄波的 VCD 是 0 bytes 而多出 `wave.vcd` 是 plusarg 前綴撞到 `$test$plusargs("vcd")`）、RTL 與網表 lockstep 或 bus trace 比對、X 的處理、帶電源的網表（`USE_POWER_PINS`）、Icarus 的宣告順序、模擬的牆鐘時限與機器負載（逾時誤判）、firmware 沒用到的功能看不到。Use for gate-level simulation of synthesized/PnR netlists (incl. powered netlists), RTL-vs-GL lockstep comparison, X handling and simulation time limits.
+description: 在網表上跑 regression 時使用。常見症狀：Icarus `Unable to bind wire/reg/memory`（宣告順序，含用腳本改網表時）、帶電源網表的 `dangling input port ... floating`（tap cell 的 VPB／VNB）、`wall-clock timeout`（模擬被停掉，時限沒照 gate-level 的速度算或機器負載）、`firmware image ... not found`（`fw` 依賴）、錄 IR 用的 VCD 是 0 bytes 而 run 目錄多出 `wave.vcd`（plusarg 前綴撞到 `$test$plusargs("vcd")`）。涵蓋 sky130 cell 模型的 define、RTL 與網表 lockstep 或 bus trace 比對、X 的處理、帶電源的網表（`USE_POWER_PINS`）、錄 max power pattern 的切換活動（`run_gl_soc.py --record-window`、`vcd_window.v`，時脈用 run 的 `CLOCK_PERIOD`）、firmware 沒用到的功能看不到。Use for gate-level simulation of synthesized/PnR netlists (incl. powered netlists), RTL-vs-GL lockstep comparison, X handling, switching-activity recording and simulation time limits.
 ---
 
 # Gate-level 模擬
@@ -14,12 +14,12 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
    - 上游 testbench 加 bus trace 逐筆比對（`run_gl_core.py`）。
    - RTL 與網表放同一個 testbench lockstep（網表 module 改名），每個下降緣比輸出與 macro pin；X 規則：RTL 是 0／1 才比，網表必須完全相同（網表 X 也算不同）；RTL 是 X 不比（合成可合法替它選值）（`dv/gl_soc/README.md`）。
 3. **lockstep 要證明比對真的有跑**：`gl_compares` > 0；並用植入錯誤確認會 FAIL（網表輸出 buffer 換成反相器 → 每個 cycle 都報不一致）。
-4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。用腳本修改網表時也一樣：新加的 `wire` 要放在第一次使用之前，Yosys 不檢查這點（`neg_eqy.edit()`）。
+4. **宣告順序**：Icarus 要求被引用的訊號先宣告（lockstep 區塊要放在 `cycle` 宣告之後）。用腳本修改網表時也一樣：新加的 `wire` 要放在第一次使用之前，Yosys 不檢查這點（`neg_eqy.edit()`）。同類的網表編輯陷阱：跳脫名稱（`\sram_din0[31] ` 這種以 `\` 開頭、以空白結束的名稱）結尾的空白不能去掉，否則後面的逗號會併進名稱，讀檔報 `syntax error, unexpected TOK_ID`（Phase 6，已驗證，`formal-equivalence-eqy` 經驗紀錄 2026-10-10）。
 5. **coverage 缺口**：firmware 沒用到的功能 GL 模擬看不到（Phase 2：`rdcycleh`、bus-error IRQ）。formal 只證明合成網表 → 最終網表，合成這一步仍靠模擬，所以要補 directed 測試（`dv-directed-tests`；Phase 4 的 `counters`、`buserr` 在網表植入對應錯誤後都被 lockstep 抓到）。
-6. **時間與機器負載**：soc_top 15 支測試約 7 分鐘、帶電源約 9.5 分鐘（Phase 4 regress 4；memtest 87 萬 cycle 是最長的一支，約 430–550 秒）。
+6. **時間與機器負載**：各支測試的實測時間與時限在 `dv/gl_soc/README.md`（判定第 4 點）；最長的是 cycle 數最多的那幾支（本 repo 是 memtest、boot_uart_max）。
    - 每支模擬有牆鐘時限，用途是擋住不再前進的模擬器，不是速度規格；firmware 卡住由 cycle 上限與 `timeout` checker 判定。
    - **gate-level 的時限要用 gate-level 的速度算**：RTL 的 `dvlib.default_timeout`（120 秒＋cycle 上限／4000）套到 gate-level（每秒約 1200–1600 cycle）只剩約 2 倍餘裕。`run_gl_soc.py` 改用 `gl_timeout`（120 秒＋cycle 上限／400），比實測時間多 10–50 倍。
-   - 機器忙時每支慢 2–6 倍：Phase 4 預跑與 neg-pnr、EQY 同時跑（hello 4→12 秒、unmapped 12→82 秒，3 支逾時）；**依序執行的 `make regress` 也會遇到**——第 3 次 regress 時 Spotlight 在索引 `runs/`（約 10 個 `mdworker`），memtest 548→952 秒，boot_uart_max 在舊時限 620 秒被停掉，整個 regress FAIL。
+   - 機器忙時每支會一致變慢好幾倍：和 neg-pnr、EQY 同時跑會，**依序執行的 `make regress` 也會**（Spotlight 在索引 `runs/` 時）。兩次的實測在經驗紀錄 2026-10-04 的三列。
    - 手動預跑時 GL 要單獨跑；同時跑了而逾時，先單獨重跑逾時的那幾支，再判斷是不是設計問題（看全部測試是否一致變慢）。
 7. **firmware 是建置產物**：`make gl-soc`、`make neg-gl-soc` 讀 `fw/build/`（不在版控），Makefile 要宣告依賴 `fw`。gl-core 不需要，因為它在 export 出來的上游樹裡自己編 firmware（`run_gl_core.py`）。
 
@@ -27,11 +27,11 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
    - 用 `final/pnl/`，加 `-DUSE_POWER_PINS`；testbench 給 `vccd1` = 1、`vssd1` = 0，RTL 與網表兩份都接。
    - `-DFUNCTIONAL` 的 cell model 在 `USE_POWER_PINS` 下每個輸出都經過 `udp_pwrgood_pp$PG`：電源腳沒接 vccd1／vssd1 的 cell 輸出 X，lockstep 就 FAIL（植入：一顆 buffer 的 VPWR 改接 vssd1，`hello` 就抓到）。
    - tap cell（`tapvpwrvgnd_1`）的 LEF 只有 VPWR／VGND 兩個 pin，所以 powered netlist 只接這兩個；它的 Verilog model 卻多宣告 VPB／VNB，Icarus 對每顆 tap 報兩行 `dangling input port ... floating`（soc_top 6635 顆）。只對這個 cell 的這兩個 port 加白名單（`dv/log_whitelist.txt`），其他 cell 不放行。
-   - 速度：3 支短測試約 11 秒，與不帶電源差不多；15 支約 17 分鐘（memtest 1004 秒，當時另有 EQY 在跑）。
+   - 速度與不帶電源的差不多（Phase 4 的實測見經驗紀錄 2026-10-04「執行時間」那列）。
 
 9. **錄 IR 用的切換活動（max power pattern，`run_gl_soc.py --record-window`，ADR-0019 決定 20）**：
    - 做法：firmware 把每段滿負載迴圈標在 GPIO_OUT（`fw/tests/maxpower`：0x5A／0x5B／0x5C），`dv/gl_soc/vcd_window.v` 只在 GPIO 等於 `+irwin_gpio` 時錄 `tb_soc.dut_gl`，那段一結束就 `$finish`；每段各跑一次模擬，輸出 `win_<hex>.vcd`。GPIO 讀 `tb_soc.gpio_out`（RTL 那份的 soc_top 埠），soc_top 與 Caravel 兩種 build 都有；原本讀 Caravel 才有的 `la_data_out[9:2]`，Phase 7 步驟 8 為了 soc_top 的 `make ir-soc` 改掉（Caravel build 裡 `caravel_pins` 每週期比對兩者相同）。
-   - 時脈用 signoff 的週期（testbench 預設 40 ns），讓模擬與 signoff 的條件一致：`--record-window` 從 harden run 的 `resolved.json` 取 `CLOCK_PERIOD`（奇數 ns 或與 `--clk-half-ns` 不同就 FAIL），IR 的判定再從 VCD 量 clock 週期核對（`ir_pattern.check_inputs()`；Phase 7 審查 H2：原本 Makefile 寫死 22，VCD 用別的週期錄也 PASS）。實測影響很小：同一段 pattern 40 ns 錄 5.99 mW、44 ns 錄 5.87 mW（nom_tt，約 2%）；原本以為 VCD 是每秒切換次數、會差約 10%，實測不是，看起來 OpenSTA 依 SDC 的時脈週期換算（推測，沒讀原始碼）。clock net 的功耗 OpenSTA 照 SDC 算，不受 VCD 影響。
+   - 時脈用 signoff 的週期（run 的 `CLOCK_PERIOD`，本 repo 44 ns；testbench 不帶參數時的預設是 40 ns，不是 signoff 週期），讓模擬與 signoff 的條件一致：`--record-window` 從 harden run 的 `resolved.json` 取 `CLOCK_PERIOD`（奇數 ns 或與 `--clk-half-ns` 不同就 FAIL），IR 的判定再從 VCD 量 clock 週期核對（`ir_pattern.check_inputs()`；Phase 7 審查 H2：原本 Makefile 寫死 22，VCD 用別的週期錄也 PASS）。實測影響很小：同一段 pattern 40 ns 錄 5.99 mW、44 ns 錄 5.87 mW（nom_tt，約 2%，不是原本以為的 10%；為什麼只差這麼少沒有讀原始碼確認，推測見經驗紀錄 2026-10-13 第二列）。clock net 的功耗 OpenSTA 照 SDC 算，不受 VCD 影響。
    - 只錄 `dut_gl`、只錄那一段：從時間 0 錄整個 testbench，開機與印 UART 的時間會把平均切換率拉低。三段各約 5000 個週期，每段約 300–350 MB。
    - 每段的檢查：錄到至少 1000 個週期、VCD 非空、錄完前沒有 lockstep 不一致、run 目錄沒有 testbench 自己的 `wave.vcd`（下一條）。完整跑一次 maxpower 的 `gl-caravel` 要 PASS（網表在這個 pattern 下與 RTL 逐週期一致，錄到的活動才可信）。
    - **plusarg 名稱不能是現有 plusarg 的延伸**（工具行為的防護，CLAUDE.md 規則 10）：
@@ -54,4 +54,7 @@ RTL 層級的 DV 規則以 `dv/README.md` 為準；formal 看 `formal-equivalenc
 | 2026-10-04 | 第三次 `make phase3`，neg-gl-soc | `csb0_inverted` 編譯失敗：`Unable to bind wire ... neg_eqy_inv ... Check for declaration after use` | 已驗證：植入腳本把 `wire` 宣告加在 module 最後 | 宣告移到 `sram0` 前；修正後 11/11 支測試報 `sram0.csb0` 不一致。另外 `mux_swap` 只在 1/11 支測試被抓到，lockstep 能抓到的範圍受 firmware 用到的功能限制（規則 5） | `runs/p3_phase3_clean3.log` |
 | 2026-10-04 | Phase 4 預跑（dev fixture，與 neg-pnr、EQY 同時跑） | `gl-soc: FAIL 12/15`：memtest、boot_uart_max、uart_burst `wall-clock timeout: simulation killed after 1370/620/170 s` | 已驗證：機器負載；全部 15 支一致慢 3–6 倍，單獨重跑 3 支 PASS（429、209、23 秒） | 規則 6；不改時限 | `runs/dev5_gl.log`、`runs/gl_dev5_rerun/` |
 | 2026-10-04 | Phase 4 `make regress` 第 3 次（乾淨 checkout，`59c6748`） | `gl-soc-powered: FAIL 14/15`：boot_uart_max `wall-clock timeout: simulation killed after 620 s`（regress 1 同一支 304 秒） | 已驗證：Spotlight 索引造成負載（load 17–21，約 10 個 `mdworker`）；時限是照 RTL 速度算的，gate-level 只剩約 2 倍餘裕 | `gl_timeout`（規則 6）；第二次發生，從「不改時限」改成規則 | `runs/p4_regress_clean3.log` |
+| 2026-10-04 | Phase 4 預跑與 regress 的執行時間（原本寫在規則 6、8，2026-10-15 移到這裡） | soc_top 15 支約 7 分鐘、帶電源約 9.5 分鐘（regress 4；memtest 87 萬 cycle 最長，約 430–550 秒）。帶電源：3 支短測試約 11 秒，15 支約 17 分鐘（memtest 1004 秒，當時另有 EQY 在跑）。與 neg-pnr、EQY 同時跑：hello 4 → 12 秒、unmapped 12 → 82 秒。regress 第 3 次 Spotlight 索引時：memtest 548 → 952 秒 | 已驗證（實測） | 規則 6 的時限與「機器忙時先單獨重跑」 | `runs/dev5_gl.log`、`runs/p4_regress_clean3.log` |
 | 2026-10-13 | Phase 7 IR max power pattern（`p7_harden2` 網表，`--record-window 5a,5b,5c`） | 三段都錄到正確的週期數（5328／5048／4904），指定的 VCD 卻是 0 bytes，run 目錄各多一個 400–780 MB 的 `wave.vcd` | 已驗證：`$test$plusargs("vcd")` 比對前綴，`+vcd_win=` 觸發整個 testbench 從時間 0 錄波；改名後三段 VCD 各 300–350 MB、沒有 `wave.vcd` | plusarg 改名 `irwin_*`；`record_windows()` 檢查 VCD 非空、沒有 `wave.vcd`；規則 9 | `dv/gl_soc/run_gl_soc.py`、`dv/gl_soc/vcd_window.v` |
+| 2026-10-13 | Phase 7 IR，maxpower 以 40 ns 與 44 ns 各錄一次（`9100d07`） | nom_tt 功耗 5.99 → 5.87 mW，只差約 2%；原本預期 VCD 是每秒切換次數、會差約 10% | 推測（沒讀 OpenSTA 原始碼）：OpenSTA 讀 VCD 後依 SDC 的時脈週期換算切換率。原本寫在規則 9 本文，2026-10-15 移到這裡（`review_skills.md` 1.3） | 錄波仍用 run 的 `CLOCK_PERIOD`，IR 判定前核對 VCD 的週期（規則 9） | ADR-0019 決定 20 |
+| 2026-10-15 | Phase 0–7 問題總檢討（ADR-0021，`verify_and_merge.md` B10、C1、C2） | 規則 6、8 有每次 run 的秒數與 `mdworker` 個數；規則 9 有一句推測，「testbench 預設 40 ns」容易讀成 signoff 週期是 40 ns；跳脫名稱結尾空白的陷阱只在 EQY 的經驗紀錄 | 已驗證（`review_skills.md` 1.2 R21、1.3、3.1 Q22、3.2） | 數字改指向 `dv/gl_soc/README.md` 與經驗紀錄；推測移到經驗紀錄；規則 9 寫明 signoff 週期取 run 的 `CLOCK_PERIOD`；規則 4 補跳脫名稱 | 本檔 |

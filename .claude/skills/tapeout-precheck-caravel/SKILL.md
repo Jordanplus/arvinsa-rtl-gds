@@ -1,11 +1,11 @@
 ---
 name: tapeout-precheck-caravel
-description: 把設計放進 ChipFoundry Caravel 的 user_project_wrapper（2920 × 3520 µm，固定 DEF 範本 `FP_DEF_TEMPLATE`），或要跑 ChipFoundry 收件前的自動檢查（precheck、`cf precheck`、`cf-precheck`、`mpw_precheck`）時使用，也包括選定下線平台時的平台試算表（每項收件檢查、外殼邊界 SDC、供電結構、fill 與密度上下限、平台 image 的 PDK 與工具版本，都算到對本設計的數字；需要平台回覆的問題當天送出）、採用官方 wrapper SDC 前先試算 input transition 對 slew 上限與邊界 hold 要多少延遲、第一次探索 harden 之後就用探索 GDS 跑一次完整 precheck 並量 VM 記憶體：precheck 一定用 Docker 跑只有 linux/amd64 的官方 image（Apple Silicon 要用 VM＋Rosetta 模擬，本 repo 用 lima），容器每次都 `pip install --upgrade cf-precheck`；precheck 自帶的 KLayout deck 比 flow 用的新，flow 的 KLayout DRC 是 0 不代表 precheck 的 `klayout_feol`／`klayout_beol` 會過；pad 與 wrapper 腳位固定，先定 block 位置再挑最近的 GPIO（0–14 右緣、15–23 上緣、24–37 左緣，Wishbone 在下緣左段）；OpenRAM bitcell（包括 PDK 預建的 `sky130_sram_*`）在新 deck 報 `MR_mcon.CON.10`（mcon should covered by li）與 `MR_licon.SP.6`，因為 2026-05 拿掉了 `areaid.ce` 的豁免，判定用 `make precheck-check`（其他 11 項 PASS，這兩條展開到相對 bitcell array 的位置後要和 PDK 預建 macro 一致；deep 模式下違規掛在哪層 cell 會隨 macro 不同，不能比 cell 名稱）與 `make neg-precheck`，本機 deck 用 `make precheck-deck` 固定版本；precheck PDK（`3e0e31dc`）的預建 SRAM 另有 nsdm／psdm 的 FEOL 違規，比對基準只比允許的規則；VM 記憶體不夠時 `klayout_beol failed (stat=-9)`、LVS 報 `extraction did not complete successfully`、`OEB FAILED (stat=5)`，看 VM 的 `dmesg` 有沒有 OOM kill（wrapper 要 16 GiB）；wrapper 頂層放標準 cell 時，PDK 預設的 `decap_3` 把空白填滿，`klayout_met_min_ca_density` 報 `li1.pd.1d`（0.4 min li1 ca pattern density），改用 `sky130_ef_sc_hd__decap_12` 與 fill；SRAM 當 black box 時 LVS log 結尾的 `possible errors ... CVC` 是 SRAM 輸出的 HI-Z 輸入，LVS 仍是 PASS；user area 的 vccd1／vssd1 各只有一顆 pad（右側），經 5 µm met4 ring 與只在 wrapper ring 左右兩側的 met3 跨接線供電，IR 要把這段放進模型；LVS 是 transistor-level，SRAM 要用 `EXTRACT_ABSTRACT` 當 black box；`gpio_defines` 範本全是 `GPIO_MODE_INVALID`、`oeb` 檢查實體接線；XOR 要求 die 外那圈與官方空 wrapper 相同；`lvs_config.json` 路徑要以 `$PDK_ROOT`／`$UPRJ_ROOT` 開頭；`wb_clk_i` 是管理用 CPU 的核心時脈（外部時脈或 PLL 除頻），設計的週期就是管理端時脈的下限，邊界約束用官方 wrapper SDC 的數值。Use for ChipFoundry Caravel user_project_wrapper integration and cf-precheck (docker amd64 image, KLayout deck newer than the flow's, OpenRAM bitcell MR_mcon.CON.10, LVS black box, GPIO/OEB checks).
+description: 跑 ChipFoundry 收件前的自動檢查（precheck、`cf precheck`、`cf-precheck`、`mpw_precheck`）與判定結果時使用。症狀：`klayout_beol` 報 `MR_mcon.CON.10`（mcon should covered by li）、`klayout_feol` 報 `MR_licon.SP.6`（OpenRAM bitcell，PDK 預建的 SRAM 也有；判定用 `make precheck-check`），預建 SRAM 另有 nsdm／psdm 違規；`klayout_beol failed (stat=-9)`、LVS 報 `extraction did not complete successfully`、`OEB FAILED (stat=5)`（VM 記憶體不夠被 OOM kill）；LVS log 結尾 `possible errors SOFT ... CVC`；checker 報 `the results directory checked this GDS`（讀到前一次 run 的報表）；flow 的 KLayout DRC 是 0 而 precheck FAIL（deck 比 flow 的新）；Apple Silicon 沒有 amd64 Docker（用 lima VM）；SRAM 在 LVS 用 `EXTRACT_ABSTRACT` 當 black box；外殼設計第一次探索 harden 後就跑一次完整 precheck。wrapper 範本、GPIO、供電、li1 密度與 fill 看 caravel-user-project-integration。Use for running and judging ChipFoundry cf-precheck (amd64 docker image, newer KLayout deck, OpenRAM bitcell rules, LVS black box, stale reports).
 ---
 
-# Caravel 整合與 ChipFoundry precheck
+# ChipFoundry precheck 的執行與判定
 
-macro 本身的整合（view QA、LEF、`FOREIGN`）看 `hard-macro-integration`；DRC 的一般判讀看 `drc-signoff`；LVS 的一般做法看 `lvs-signoff`；floorplan 看 `floorplan-congestion`。本 repo 實例：ADR-0019、`docs/notes/caravel_precheck_phase7.md`（Phase 7 進行中）。
+本 skill 只管 precheck 怎麼跑、結果怎麼判。設計放進 Caravel `user_project_wrapper` 的做法（範本 DEF、GPIO、`wb_clk_i`、供電、decap／li1、fill 與密度下限、邊界 SDC 試算、平台試算表）看 `caravel-user-project-integration`；macro 本身的 view QA 看 `macro-qualification`；DRC 的一般判讀看 `drc-signoff`；LVS 的一般做法看 `lvs-signoff`。本 repo 實例：ADR-0019、`docs/notes/caravel_precheck_phase7.md`、`signoff/precheck/README.md`。
 
 名詞：
 - **Caravel**：ChipFoundry（2025 年接手 Efabless 的 sky130 共乘下線）的載具晶片。pad、電源與一顆管理用的 RISC-V 都做好了，使用者的設計放在 `user_project_wrapper` 裡。
@@ -21,73 +21,55 @@ macro 本身的整合（view QA、LEF、`FOREIGN`）看 `hard-macro-integration`
    - **VM 的記憶體要夠**（已驗證，2026-10-14，三次 OOM kill）：
      - 症狀：`klayout_beol failed (stat=-9)`，沒有報表；`lvs` 的 `Error: extraction did not complete successfully`，`logs/ext.log` 停在 `Extracting <top> into <top>.ext`，沒有 `exttospice finished.`；`OEB FAILED (stat=5)`。
      - 怎麼發現：在 VM 裡 `sudo dmesg | grep 'Killed process'`，會看到 `klayout`、`magicdnull` 與它們的 `anon-rss`。
-     - 怎麼繞過：加大 VM 記憶體（`limactl edit --memory <GiB>`），並減少版圖的 instance 數（規則 8）。本 repo 的 wrapper 有 246 萬個 decap 時，各用到約 9.2 GB，10 GiB 不夠，改成 16 GiB。
-     - 防復發：這三項沒跑完時 `project.json` 是 fail，`make precheck-check` 一定 FAIL，不會漏；但看不出是記憶體，所以先看 `dmesg` 再查設計。
+     - 怎麼繞過：加大 VM 記憶體（`limactl edit --memory <GiB>`），並減少版圖的 instance 數。本 repo 的 wrapper 有 246 萬個 decap 時，KLayout 與兩次 Magic 各用到約 9.2 GB，10 GiB 不夠；VM 改成 16 GiB、decap 改成 `ef_decap_12`（instance 約少四分之三，`caravel-user-project-integration` 規則 4）之後才 PASS。兩件事同一天一起做，沒有分開實驗，哪一個是必要的不知道（ADR-0019 決定 24）。
+     - 防復發：這三項沒跑完時 `project.json` 是 fail，`make precheck-check` 一定 FAIL，不會漏；但看不出是記憶體，所以先看 `dmesg` 再查設計。VM 記憶體本身由 `env/check_env.sh` 檢查：`make regress-caravel`（`--flow`、`CPU=caravel`）在 docker context `lima-cf-precheck` 小於 15 GB 時 FAIL（`precheck VM not ready ... need >= 15 GB`），其他情況只提示。
+   - cf-precheck 的版本由 `make precheck-check` 比對 `env/versions.mk` 的 `CF_PRECHECK_VERSION`，不同就 FAIL（`neg-precheck` 的 `other_version`）；image 升級了 cf-precheck 時先讀新版的變更，再更新版本與規則 3 的比對基準。
 2. **flow 的 KLayout DRC 是 0，不代表 precheck 的 KLayout DRC 會過**：precheck 用自帶的 `drc_scripts/sky130A_mr.drc`（2026-10 時是 release `2026.03.30_01.00`），flow 用 PDK 的 deck（`8afc834` 是 `2024.2.11_01.09`），規則名稱與內容都不同。每一顆 macro 交給 wrapper 之前，先用 precheck 的 deck 單獨跑 `feol`／`beol`／`offgrid`（參數照 `checks/klayout_drc.py`：`input`、`topcell`＝GDS 檔名、`report`、`thr`），幾十秒就有結果。
    - 先讀過 deck 再執行：它是第三方的 Ruby 腳本。
 3. **OpenRAM bitcell 在新 deck 的兩條規則**（工具缺陷的防護，CLAUDE.md 規則 10）：
    - **症狀**：`klayout_beol` 報 `MR_mcon.CON.10 : mcon should covered by li`、`klayout_feol` 報 `MR_licon.SP.6 : poly_licon minimum space to psdm`，位置在 `sky130_fd_bd_sram__openram_dp_cell*` 與 `*_replica_column*`。PDK 預建的 `sky130_sram_2kbyte_1rw1r_32x512_8` 與 OpenRAM 自產的 macro 一樣，BEOL 264、FEOL 3（依 cell 計）。
    - **怎麼發現**：precheck 的 `outputs/reports/klayout_{feol,beol}_check.xml` 的 `<category>` 與 `<cell>`；或規則 2 的 macro 單獨檢查。
    - **原因**：cf-precheck commit `08f559e30a`（2026-05-07）把 `mconnotace.not(li)`（不檢查 SRAM 核心區 `areaid.ce`，81/2）改成 `mcon.not(li)`；`MR_licon.SP.6` 是新規則。`$sram_exclude` 只管 nsdm／psdm，而且只認 `sky130_sram_*` 名稱，關不掉這兩條。
-   - **怎麼繞過**：沒有能讓官方結果 PASS 的設定。本 repo 的判定（ADR-0019 決定 5）：這兩項只允許這兩條規則，每一個違規都在 SRAM 外框內，而且 PDK 預建 macro 單獨檢查時同一個 cell、同一個相對位置也有；並向 ChipFoundry 反映。
+   - **怎麼繞過**：沒有能讓官方結果 PASS 的設定。本 repo 的判定（ADR-0019 決定 5）：這兩項只允許這兩條規則，每一個違規都在 SRAM 外框內，而且 PDK 預建 macro 單獨檢查時同一個 cell、同一個相對位置也有。向 ChipFoundry 反映的草稿由使用者決定是否送出，到 Phase 7 結案仍是草稿、列為下線前要做（ADR-0019 決定 6、26）。
    - **比對要展開到位置，不能比 cell**（已驗證，2026-10-14）：deck 用 deep 模式，一個違規只在找到它的那層 cell 回報一次，掛在哪層會隨 macro 的階層不同（自產 macro 有 2 個 BEOL 違規掛在 `dummy_array`，預建 macro 掛在 `replica_bitcell_array`），cell 名稱也有各自的前綴。新版 OpenRAM 產生的 macro 外框較大，bitcell array 在 macro 裡的位置也不同（本 repo 差 (5.61, 9.32) µm）。做法：把違規展開到所在 cell 的每個 instance，換回 macro 座標，以 bitcell array（`sky130_fd_bd_sram__openram_dp_cell` 所有 instance 的外框）左下角為原點；位移由 GDS 的 instance 位置決定，不從違規位置擬合。兩顆 macro 單獨檢查時 FEOL 16,900、BEOL 50,184 個位置完全相同。
    - **比對基準只比允許的規則**（已驗證，2026-10-14）：precheck 的 PDK（`3e0e31dc`）裡的 `sky130_sram_2kbyte_1rw1r_32x512_8`（sha1 `de2cf967…`）FEOL 另有控制邏輯的 `MR_psdm.SP.1`、`MR_nsdm.WID.2`、`MR_psdm.WID.2` 共 10 個（flow 的 `8afc834` 那顆沒有），ChipFoundry 自己的預建 SRAM 也過不了 FEOL。比對基準要用 precheck 實際用的那顆 macro，在同一個 image 用同一份 deck 跑（`signoff/precheck/run_precheck.sh`），它的其他規則印出、不列入比對；設計仍然只能有允許的規則（ADR-0019 決定 24）。
-   - **防復發**：`make precheck-check`（`signoff/precheck/check_precheck.py`）照上面的方法判定，並確認其他 11 項 PASS、檢查項目齊全（precheck 升版加了新檢查會 FAIL）、報表與比對基準是同一版 deck（規則清單相同）、專案來自通過 run guard 的正式 harden（`arvinsa_source.json`，查證用要加 `--verification`，結論印成「只供查證」）、時間戳換成 UTC 再比（Phase 7 審查 H6、H7）；negative test `make neg-precheck`（在 `make regress` 裡；`ref_other_rule` 確認比對基準的其他規則不會放過設計的同一條違規）。本機的 deck 由 `make precheck-deck` 依 `env/versions.mk` 的版本與 sha256 取得。deck 升版時：先讀 deck，更新 `CF_PRECHECK_*`，重跑規則 2 的兩顆對照與 `make neg-precheck`。
+   - **防復發**：`make precheck-check`（`signoff/precheck/check_precheck.py`）照上面的方法判定，並確認其他 11 項 PASS、檢查項目齊全（precheck 升版加了新檢查會 FAIL）、報表與比對基準是同一版 deck（規則清單相同）、專案來自通過 run guard 的正式 harden（`arvinsa_source.json`，查證用要加 `--verification`，結論印成「只供查證」）、時間戳換成 UTC 再比（Phase 7 審查 H6、H7）；negative test `make neg-precheck`（在 `make regress` 裡；案例表在 `signoff/precheck/neg_precheck.py` 開頭，`ref_other_rule` 確認比對基準的其他規則不會放過設計的同一條違規）。本機的 deck 由 `make precheck-deck` 依 `env/versions.mk` 的版本與 sha256 取得。deck 升版時：先讀 deck，更新 `CF_PRECHECK_*`，重跑規則 2 的兩顆對照與 `make neg-precheck`。
 4. **SRAM 的 LVS 用 black box**：precheck 的 LVS 是 Magic 萃取到電晶體層級加 Netgen。ChipFoundry 的 PDK `3e0e31dc` 對 bitcell 的元件命名和 `8afc834` 相同（`special_pfet_latch`、`special_nfet_01v8`），OpenRAM 的網表（2022 PDK 的命名）對不上。在 `lvs/user_project_wrapper/lvs_config.json` 的 `EXTRACT_ABSTRACT` 加入 SRAM 的 cell 名稱，ChipFoundry 自己的 `caravel_user_sram` 範例也這樣做。代價：SRAM 內部不檢查，要靠 view QA 與 `check_macro_gds.py`。
    - 已實跑（2026-10-14）：`lvs_config.json` 的路徑都以 `$PDK_ROOT`／`$UPRJ_ROOT` 開頭（`signoff/precheck/make_project.py`），Netgen `Circuits match uniquely`。
    - LVS log 結尾的 `WARNING: possible errors SOFT - ... CVC <n>` 不是比對失敗：同一支腳本最後跑的 CVC（電路合理性檢查）看不到 black box 的輸出驅動，`logs/cvc.log` 的 `HI-Z Inputs` 就是 SRAM 輸出（本 repo 32 個 `dout0` net 加上接在上面的 buffer 內部節點，74 個 MOS）。要確認時，從 `outputs/reports/<top>.gds.spice.gz` 對 SRAM instance 的腳位，HI-Z 的頂層 net 應全部是 SRAM 的輸出；有不是的就是真的浮接。沒有自動防護：cf-precheck 不把 CVC 算進 LVS 的 PASS／FAIL，`make precheck-check` 也不讀它。
+   - 防復發：`signoff/precheck/make_project.py` 產生 `lvs_config.json`（`EXTRACT_ABSTRACT` 與 `$PDK_ROOT`／`$UPRJ_ROOT` 開頭的路徑），不手寫；precheck 的 `lvs` 不是 pass 時 `make precheck-check` FAIL（`neg-precheck` 的 `other_check`）。bitcell 命名對不上時 Netgen 的確切訊息沒有存下（本 repo 一開始就用 black box），換 PDK 或 OpenRAM 版本要拿掉 black box 時，先單獨跑一次 SRAM 的 LVS 記下訊息。
 
-5. **先定 block 位置，再選 GPIO**（使用者 2026-10-12：「block擺放位置應該在後段開始前就應該先確認之後出pin決定好」）。Caravel 的 pad 與 wrapper 腳位位置都固定（`xor` 檢查 die 外那圈），能選的只有用哪幾支 GPIO、接什麼訊號、什麼模式，訊號也可以改走 logic analyzer 或 Wishbone。順序：
-   - 依有時序要求的介面定 block 位置：Wishbone（含 `wb_clk_i`、`wb_rst_i`）與 logic analyzer 在下緣左段 x = 0–870 µm；
-   - 再依範本 DEF 的座標挑最近的 GPIO：0–14 在右緣（0–4 系統保留），15–23 在上緣，24–37 在左緣由上往下，37 在 y = 162 µm；
-   - 最後才寫 wrapper RTL 的腳位對應與 `user_defines.v`。
-   - 規劃文件、使用者核准、checker 與 hook 的做法在 `chip-floorplan-pin-planning`（ADR-0019 決定 13）。
-6. **`wb_clk_i` 是管理用 CPU 的核心時脈**：Caravel `verilog/rtl/caravel_clocking.v` 第 93–94 行，開機時是外部時脈 `ext_clk`（duty 由板子的振盪器決定），firmware 啟用 PLL 後是 `clock_div` 除頻的輸出（設計成 50% duty；除數 0 時直通 PLL）。所以：
-   - 設計用 `wb_clk_i` 時，設計的週期就是管理端時脈的下限，要寫成使用限制（測試 firmware、板子）。本 repo：44 ns，管理端不能超過 22.7 MHz（ADR-0019 決定 15）。
-   - duty cycle 與 jitter 沒有官方數字，`clock_uncertainty.sdc` 的假設要記成下線風險。
-   - wrapper 邊界的約束（clock source latency、Wishbone／LA delay、transition、負載）用 caravel_user_project 的 wrapper SDC 數值，做法與 OpenSTA 的 driving cell 陷阱看 `timing-constraints-sdc` 規則 14、15。
-   - Phase 7 先在 RTL 選了 GPIO 8–20，到 floorplan 才發現離 block 2–3 mm，RTL、`user_defines.v`、testbench 與文件都要重做（ADR-0019 決定 10）。
-7. **user area 的供電結構（vccd1／vssd1；CC2509，原始檔查證）**：vccd1、vssd1 各只有一顆 pad，都在晶片右側（`def/chip_io.def` 第 17057、16653 行，換到 wrapper 座標約 y = 3290、1051）；電流經 Caravel 自己 5 µm 寬的 met4 ring，再由 `manual_power_connections` 的 met3 跨接線接到 wrapper ring 的**左右兩側**（左 54、右 53 條，間距約 65 µm），上下兩邊沒有接點，caravel_core 的 PDN 不跨過 wrapper。所以：
-   - wrapper 自己的電源 pin 不能當理想電源；IR 要把這段網路放進模型，供電點放在 pad（本 repo `pnr/user_project_wrapper/ir_caravel.py` 與 `caravel_pwr/`，ADR-0019 決定 18）。壓降幾乎都在 pad 到 wrapper 邊緣的垂直傳導上：Phase 7 預設切換率、nom_tt 時，wrapper 右上角 5–9 mV、右下角約 30 mV，wrapper 內部只多 2–5 mV（ADR-0019 決定 18）。
-   - 兩顆 pad 相距約 2.2 mm，block 放哪裡都至少離其中一顆遠；移 block 最多改善約 14 mV。能改的是 wrapper 的 met4 strap（垂直方向與 Caravel ring 並聯：1.6 → 4.8 µm，104 → 72 mV；這兩個是 ff 電流加 ss 電阻的最壞組合，ADR-0019 決定 19 起只當參考，判定用慢 corner 的 max power pattern，正式 run 19.56 mV）與電流本身（用 max power pattern 量，`pdn-ir-drop` 規則 12）。
-   - 開新的 Caravel 設計時，在 pad 階段就照這條把供電模型列出來（`chip-floorplan-pin-planning` 規則 2）；Caravel 換版本時，用 `caravel_pwr/extract.py` 重抽、核對 blob hash。
+5. 規則 5 移到 `caravel-user-project-integration` 規則 1（先定 block 位置，再選 GPIO）。
+6. 規則 6 移到 `caravel-user-project-integration` 規則 2（`wb_clk_i`）。
+7. 規則 7 移到 `caravel-user-project-integration` 規則 3（user area 的供電結構）。
+8. 規則 8 移到 `caravel-user-project-integration` 規則 4（wrapper 頂層的 decap 與 li1 密度）。
 
-8. **wrapper 頂層有標準 cell 時，空白區不能用 PDK 預設的 `decap_3` 填滿**（已驗證，2026-10-14，同一份設計只換 decap 的前後比較；ADR-0019 決定 24）：
-   - **症狀**：precheck 的 `klayout_met_min_ca_density` FAIL，報表一堆 `li1.pd.1d`（「0.4 min li1 ca pattern density」）。每個帶 235/4 的 cell 各印一筆，其實是同一個整體數值；log 有 `li1_ca_density is <值>`，小於 0.4 就 FAIL（li1 超過 wrapper 面積的 60%）。
-   - **原因**：`li1_ca_density = 1 − li1 面積 / 235/4 面積`，分母是整個 wrapper（10.28 mm²）。sky130 hd 的 `decap_3` 87% 是 li1，PDK 預設 `DECAP_CELL` 只有它；Fill Insertion 把空白全部填成 `decap_3` 時，本 repo 的 li1 75%。官方範例的 wrapper 只放 macro，關掉 fill（`RUN_FILL_INSERTION: false`），所以沒遇到。
-   - **怎麼發現**：harden 後不用等 precheck，用 KLayout flat 算 li1（67/* 除 5、10、44，加 56/28）合併面積除以 235/4 合併面積，與 precheck 的算法相同（本 repo 兩份版圖都對上 precheck 的值）；按 cell 拆就看得出是哪種 fill。
-   - **怎麼繞過**：`DECAP_CELLS` 改 `sky130_ef_sc_hd__decap_12`（li1 52%），`FILL_CELLS` 加 `fill_8`、`fill_4`。本 repo li1 75.1% → 39.9%，precheck PASS；timing、DRC、LVS 不變（Fill Insertion 在 detailed routing 之後），instance 少 163 萬、harden 快約 1 小時，precheck 的 BEOL 與 Magic 抽取也跑完了（同一天 VM 也加到 16 GiB，兩者沒有分開實驗，哪一個是必要的不知道）。代價：`ef_decap_12` 沒有 .lib，漏電不進功耗報告（`signoff-criteria` knowledge S29）。只放 fill（li1 約 14%）會連邏輯旁的 decap 一起拿掉，而靜態 IR 看不到，不建議。
-   - **防復發**：`make precheck-caravel` 的 checker 要求 `klayout_met_min_ca_density` PASS；harden 時沒有自動檢查（要等 precheck 才抓得到，約 1 小時）。
-
-### 提早檢查（流程回顧，ADR-0020）
+### 提早檢查（流程回顧，ADR-0020，使用者決定）
 
 2026-10-14 回顧（`docs/notes/flow_retro/retro_p6_7.md`）的結論之一：Phase 7 第一天的查證列出了平台的檢查項目、密度上限與官方 SDC，但沒有套到自己的設計上算數字；單顆 vccd1 pad、邊界 transition 與 hold、li1 密度、precheck PDK 的預建 SRAM、metal fill 誰補，全部在 harden 之後才發現，粗估重做約 2 天、3 項放寬。每項試算只要 10 分鐘到半天。使用者決定加下面三條（流程文件 4.1、4.5、4.6）。
 
-9. **選定下線平台時做平台試算表，需要平台回覆的問題當天送出**（提早檢查 A2）。
-   - 做什麼：平台的每一項收件檢查（本平台是 precheck 的 13 項）、外殼的邊界 SDC（input transition、IO delay、clock source latency）、供電結構（pad 數量與位置，規則 7）、fill 由誰做與密度上下限（規則 8 與「待確認」）、平台 image 的 PDK 與工具版本（規則 1），逐條算出「對本設計是多少」，和本設計的 signoff 上限並排；版本不同的寫明誰的結果算判定，平台會用到的 macro（例如 PDK 預建 SRAM）用平台的 PDK 另取一份。需要平台回覆的問題（已知 deck 問題、自產 macro 的 Magic DRC 怎麼看、fill 誰做）在選定平台當天送出，記下日期與回覆。
-   - 通過條件：每一條有數字，或寫「待查，在哪一步查」；衝突在第一次 harden 前已列選項、由使用者決定；每個問題是「已送出（日期）」或「使用者決定不送（原話）」。
-   - 為什麼：上面那段；本 repo 給 ChipFoundry 的 issue 到 Phase 7 結案仍是草稿，fill 也沒有書面確認，都列為下線前要做（ADR-0019 決定 26 與「後果」）。
-   - 自動防護：沒有（試算表與問題清單是文件）。
-10. **採用官方邊界 SDC 時，第一次 harden 前先試算 input transition 與邊界 hold**（提早檢查 C4）。
-    - 做什麼：官方 SDC 的 input transition 和自己的 slew 上限並排比；用官方的 clock source latency（min／max）、min input delay 加上預估的 clock tree，算邊界 hold 需要多少延遲，決定 hold 餘量與 resizer 要看的 corner（`timing-constraints-sdc` 規則 14、15）。
-    - 通過條件：有衝突的項目在 harden 前已列選項、由使用者決定。
-    - 為什麼：官方 input transition 0.84–0.97 ns 超過本 repo 的 0.70／0.75 ns，`p7_floorplan4` 網表上已量到 0.84 ns 卻沒拿去比，到探索 harden 才處理（ADR-0019 決定 14、16）；邊界 hold 在 ff 100°C −0.071 ns，官方約束下 ff 要多延遲約 2.4 ns，多跑了 `p7_harden3`、`p7_harden4` 一輪（決定 17；經驗紀錄 2026-10-12）。試算約 10 分鐘到 1 小時（回顧推算）。
-    - 自動防護：沒有（邊界 slew 的判定在 harden 後由 `check_soc.py max_slew` 做，試算本身是人工）。
+9. 規則 9 移到 `caravel-user-project-integration` 規則 5（平台試算表）。
+10. 規則 10 移到 `caravel-user-project-integration` 規則 6（官方邊界 SDC 的試算）。
 11. **外殼設計第一次探索 harden 之後，就用探索 GDS 跑一次平台的完整收件檢查；平台的密度上下限做成 harden 內的 checker**（提早檢查 D5）。
-    - 做什麼：查證用跑一次 `make precheck-caravel`（結論標明不是正式判定，`check_precheck.py --verification`，規則 3），量 VM 的記憶體峰值（規則 1）；fill 與 decap cell 依結果決定（規則 8）。li1 與金屬密度的上下限（規則 9 試算表的結果）在 harden 內判，不要等 precheck。
+    - 做什麼：查證用跑一次 `make precheck-caravel`（結論標明不是正式判定，`check_precheck.py --verification`，規則 3），量 VM 的記憶體峰值（規則 1）；fill 與 decap cell 依結果決定（`caravel-user-project-integration` 規則 4）。li1 與金屬密度的上下限（`caravel-user-project-integration` 規則 5 試算表的結果）在 harden 內判，不要等 precheck。
     - 通過條件：除了已由使用者決定的項目全 PASS；VM 記憶體峰值低於配置。
     - 為什麼：li1 75% 與 VM OOM 都到 Phase 7 步驟 7 才發現，整段約 14 小時、多兩次 harden（ADR-0019 決定 24）；本機算 li1 密度只要 84 秒，整套 precheck 約 1.5 小時（回顧 `retro_p6_7.md` #8）。
-    - 自動防護：harden 內的密度 checker 目前沒有（規則 8 的防復發），下一個專案開始時做成 checker 並加 negative test。
+    - 自動防護：harden 內的密度 checker 目前沒有（`caravel-user-project-integration` 規則 4 的防復發），下一個專案開始時做成 checker 並加 negative test。
 
-## 待確認（讀過原始碼，還沒實跑）
+## 規則（已驗證，2026-10-15 問題總檢討後補寫，ADR-0021）
 
-- `xor`（原始碼）：die（0–2920 × 0–3520 µm）外那一圈要和 caravel-lite 的空 wrapper 一樣，所以要用 `FP_DEF_TEMPLATE`（`openlane/user_project_wrapper/fixed_dont_change/user_project_wrapper.def`），core ring（寬 3.1 µm、offset 12.45 µm）不能改。
-- `gpio_defines`：`verilog/rtl/user_defines.v` 的 GPIO 5–37 都要有值、不能是 `GPIO_MODE_INVALID`；範本全是 INVALID。
-- `oeb`：CVC 在萃取網表上追 `io_out`／`io_oeb` 的實際接線，和 GPIO 模式比；user output 模式要真的接 `io_out` 與 `io_oeb`。RTL 對了不代表 PASS。2026-10-14 本 repo 實跑 PASS（報表 `cvc.oeb.report` 逐支列出接線與模式，與 `user_defines.v` 一致）；接錯時會不會 FAIL 沒有實測。
-- `klayout_met_min_ca_density` 的 met1–met4 ≤ 60%、met5 ≤ 76%：本 repo 都遠低於上限（m4 ca 0.73、m5 0.73），沒有遇過超標；li1 見規則 8。
-- `xor`、`gpio_defines`：2026-10-14 本 repo 的 wrapper 實跑 PASS（`FP_DEF_TEMPLATE`、`user_defines.v` 照規則 5）；違反時會不會 FAIL 沒有實測。
+12. **precheck 的報表要綁到這一次的 GDS：讀到前一次 run 的報表也會判 PASS**（工具缺陷的防護，CLAUDE.md 規則 10；Phase 7 步驟 6 獨立審查找到，`docs/phase_exit/phase7.md`「precheck 判定的 4 個漏洞」）。
+    - **症狀**：專案目錄的 `precheck_results/<開始時間>/` 報表與 `.cf/project.json` 是分開寫的；只看「最新的結果目錄」或只看 `project.json` 的 status，舊報表配新 GDS（precheck 中途停掉、GDS 在 precheck 之後被換掉）照樣判 PASS。checker 擋下時印 `the results directory checked this GDS (logs/gds.info: ...)` 或 `gds/<top>.gds sha1 ... = the checked file's ...` 的 FAIL 行。
+    - **怎麼發現**：cf-precheck 把這次檢查的 GDS sha1 寫在結果目錄的 `logs/gds.info`、`project.json` 的 `input_file_hash`（`runner.py` 第 23–31 行，`docs/notes/caravel_precheck_phase7.md` 第 112 行）；三者（`gds/<top>.gds` 的 sha1、`input_file_hash`、`gds.info`）要相同，`project.json` 要在結果目錄的開始時間之後寫入（時間戳換成 UTC 再比）。
+    - **怎麼繞過**：`make precheck-caravel` 每次用 `make_project.py` 重建專案目錄，precheck 中途停掉就沒有結果、判 FAIL；不要在舊的專案目錄重跑，也不要手動換 GDS。
+    - **防復發**：`make precheck-check` 的「檢查的是這份 GDS」一列（`signoff/precheck/README.md`「判定內容」）；`neg-precheck` 的 `stale_results`、`other_gds`、`results_after`、`results_after_tz`、`no_tz`（在 `make regress` 裡）。cf-precheck 升版改了 `logs/gds.info` 或 `input_file_hash` 的位置時，checker 讀不到就 FAIL（不會放過），照規則 1 的升版步驟更新。
+
+## 待確認
+
+讀過原始碼、還沒實跑：
 - `magic_drc` 是選用，預設不跑；只有 PDK 的 `sky130_sram_*` 會換成 maglef，自產 SRAM 用完整規則會 FAIL。下線時 ChipFoundry 怎麼看要另外問。
-- 官方範例的 flow 是 LibreLane 2.4.6（ChipFoundry fork `CI2511`）；LibreLane 3.0.14 支援 `FP_DEF_TEMPLATE`，舊的 `FP_PDN_*` 名稱會自動轉換。
+
+wrapper 本身要滿足的檢查（`xor`、`gpio_defines`、`oeb`、`klayout_met_min_ca_density`）與官方範例的 flow 版本，移到 `caravel-user-project-integration`「待確認」。
 
 ## 用完後
 
@@ -97,19 +79,12 @@ macro 本身的整合（view QA、LEF、`FOREIGN`）看 `hard-macro-integration`
 
 ## 經驗紀錄
 
+這張表 2026-10-15 拆分（ADR-0021 決定 5）：wrapper 整合的列（2026-10-12 的 GPIO、`PDN-0239`、`RSZ-0074`、邊界 max slew、`GRT-0036`、斷線腳位、邊界 hold，2026-10-13 的 IR what-if，2026-10-15 的 fill 試跑）搬到 `caravel-user-project-integration` 的經驗紀錄；這裡留 precheck 執行與判定的列。
+
 | 日期 | 專案／run | 現象 | 根因（已驗證／推測） | 處理 | 證據 |
 |---|---|---|---|---|---|
 | 2026-10-12 | arvinsa-rtl-gds Phase 7 開始（查證） | precheck 的 deck 檢查 SRAM：自產 macro 與 PDK 預建 macro 都是 FEOL 3（`MR_licon.SP.6`）、BEOL 264（`MR_mcon.CON.10`）、offgrid 0；flow 的舊 deck 兩顆都是 0 | 已驗證：比對兩份 deck 與 cf-precheck commit `08f559e30a` 的 diff | ADR-0019 決定 5：這兩條比對預建 macro；向 ChipFoundry 反映的草稿由使用者決定是否送出 | `docs/notes/caravel_precheck_phase7.md` 第 7 節 |
-| 2026-10-12 | arvinsa-rtl-gds Phase 7 步驟 3–4 | 寫 wrapper RTL 時先選 GPIO 8–20（沒看位置），到 floorplan 才發現在右緣與上緣，離左下角的 block 2–3 mm；我原本用「慢速訊號加 buffer 就好」帶過 | 已驗證（範本 DEF 座標）；流程順序錯誤，使用者指出 | 改成 GPIO 33–37（左緣最下面）、`gpio_out` 只走 LA；RTL、`user_defines.v`、testbench 重做，regress-rtl caravel 30/30、neg 42/42；寫成規則 5 | ADR-0019 決定 10、12 |
-| 2026-10-12 | `p7_floorplan4`（扁平 wrapper，跑到 global placement） | `OpenROAD.GeneratePDN` 報 `[WARNING PDN-0239] Ring shape falls outside the die bounds.` | 已驗證：Caravel 的 core ring（4 組電源 × 2，寬 3.1 µm、offset 12.45 µm）本來就畫到 die 外，最外到 x = -43.63 µm；8 組 net 的 ring 座標與官方範例 `user_project_wrapper.def` 完全相同，官方範例的 precheck XOR 是 PASS | 預期中的警告，不處理；之後 harden 的 checker 可以比對 ring 與官方 DEF 一致（第 5、6 項） | ADR-0019；`runs/p7_floorplan4/21-openroad-generatepdn/` |
-| 2026-10-12 | `p7_harden2`（wrapper 探索 harden） | 第 41 步 `RepairDesignPostGRT` 中止：`[ERROR RSZ-0074] failed to build tree from gloubal routes: found route to 1 pins, expected 0`，停在 `analog_io[9]` | 已驗證：沒接東西的 inout 腳位被 OpenROAD 同時算成 driver 和 load；官方範例沒開 `RUN_POST_GRT_DESIGN_REPAIR`，所以沒遇到 | `RSZ_DONT_TOUCH_RX` 設 `analog_io`；四項防護在 `librelane-run-debug` 已知陷阱 | `runs/p7_harden2/41-*` |
-| 2026-10-12 | `p7_harden2` 第 38 步（hold 修完後的 STA） | tt corner 有 384 個 max slew 違規（soc_top 是 0）：`la_oenb`、`la_data_in` 各 128 支腳位、`wbs_adr_i`、`wbs_dat_i` 各 32 支，以及接在這兩組腳位上的第一顆 cell（64 個，多是 hold delay cell） | 已驗證：全部在 Caravel 直接驅動的 net 上，slew 是 Caravel SDC 給的 input transition（0.84–0.97 ns），超過本 repo 的上限 0.70／0.75 ns（ADR-0009）；官方範例的上限是 1.5 ns（`MAX_TRANSITION_CONSTRAINT`），所以不算違規。wrapper 內部修不掉 | 使用者決定「內部照舊，邊界另判」（ADR-0019 決定 16）：`check_soc.py max_slew` 只允許這些 pin，到 Caravel 的 transition + 0.05 ns；wrapper 的 `MAX_SLEW_VIOLATION_CORNERS` 改回預設；P80 | `runs/p7_harden2/38-*/checks.rpt` |
-| 2026-10-12 | `p7_harden2`（wrapper 探索 harden）global routing 起的每一步 | `[WARNING GRT-0036] Pin io_oeb[0] is outside die area.`（and 1000 similar warnings） | 已驗證：固定範本 DEF 的腳位形狀一半在 die 外，例如 `io_oeb[0]` 在 x = 2921.2 µm、met3 從 −3.6 到 +3.6 µm，die 寬 2920 µm；官方設計就是這樣，precheck 的 `xor` 比的就是這圈 | 不用處理，不要為了消警告改腳位（會被 `xor` 抓） | `pnr/user_project_wrapper/fixed_dont_change/user_project_wrapper.def` |
-| 2026-10-12 | `p7_harden2` 第 51 步 `Odb.ReportDisconnectedPins` | `Found 327 disconnected pin(s), of which 0 are critical.`；soc_top 是 0，`check_soc.py disconnected` FAIL | 已驗證：全部是 wrapper 最上層沒用到的 Caravel 腳位：`analog_io` 29、`io_in` 35（用到的只有 GPIO 33／34／36）、`la_data_in`／`la_oenb` 各 128、`user_clock2`，加上沒有 cell 用到的 6 支電源腳位（只有 vccd1／vssd1 有 cell）；沒有 cell 的 pin 浮接 | `disconnected` 改成 wrapper 判法（`DESIGNS unused_ports`）：表上必須剛好是「不是 Wishbone、也不是 `pin_plan.toml` 輸入模式 GPIO 的輸入／inout 腳位」加「沒有 cell 用的電源腳位」，只在頂層、0 個 critical。四種植入錯誤（用到的輸入、cell pin、應該沒接的腳位被接上、critical 1）手動確認都 FAIL；正式 negative test 等 `neg_pnr` 支援 wrapper（步驟 8） | `pnr/soc_top/check_soc.py` |
-| 2026-10-12 | `p7_harden2`（wrapper 探索 harden，從第 41 步接續後跑完） | signoff 只剩 1 條 hold 違規：`wbs_adr_i[4]` → `_21509_`，`max_ff_100C` −0.071、`max_ff_n40C` −0.043 ns；post-GRT 的 hold 修復修完估計 +0.058 ns | 已驗證（STA 報表）：官方約束下 Caravel 輸入的 min input delay 0.79 ns 掛在 4.65 ns 的 latency，wrapper 暫存器在 5.57 ns 加內部約 2 ns 的 clock tree 取樣，ff 下資料要延遲約 2.4 ns；global routing 的估計對這條路徑樂觀約 0.1 ns。soc_top 沒有這類路徑 | `GRT_RESIZER_HOLD_SLACK_MARGIN` 0.2 ns（ADR-0019 決定 17）；試過把 ff_100C 加進 resizer 的 corner，`RepairDesignPostGRT` 壅塞失敗（`drv-timing-closure` 經驗紀錄）。驗證中（`p7_harden4`） | `runs/p7_harden2_out/attempt2_margin005/` |
-| 2026-10-13 | `p7_harden2` 版圖的 IR what-if（agent 讀 Caravel 原始碼、單步 IR） | 供電點放在 wrapper ring 時 8.4 mV，加上 Caravel 的供電網路變成 104 mV（預設切換率、最壞組合） | 已驗證（原始檔 blob hash 核對、對照組在 0.1% 內）：vccd1／vssd1 各一顆 pad、5 µm ring、跨接線只在左右兩側 | 規則 7；met4 4.8 µm（決定 18）；改用 max power pattern 判 20 mV（決定 20），p7_harden2 網表、met4 4.8 µm 19.9 mV（40 ns 錄）| `pnr/user_project_wrapper/caravel_pwr/`、ADR-0019 決定 18–20 |
 | 2026-10-14 | arvinsa-rtl-gds Phase 7 步驟 6（precheck 判定 checker） | 決定 5 要「同一個 cell、同一個相對位置」比對 PDK 預建 macro；兩顆 macro 單獨檢查的報表依 cell 分：BEOL 自產 2 個掛在 `arv_…_dummy_array`／`_0`，預建 2 個掛在 `sky130_…_replica_bitcell_array`，cell 名稱前綴也不同；展開後位置全部不同 | 已驗證：deep 模式在找到違規的那層 cell 回報；新版 OpenRAM 的 macro 外框較大，bitcell array 差 (5.61, 9.32) µm。以 bitcell array 左下角為原點後，FEOL 16,900、BEOL 50,184 個位置完全相同 | 規則 3「比對要展開到位置」；`signoff/precheck/`（`make precheck-check`、`make neg-precheck`） | `signoff/precheck/README.md`、ADR-0019 決定 5 |
 | 2026-10-14 | arvinsa-rtl-gds Phase 7 步驟 7（官方 image 跑 wrapper，查證用，`f4ea9de`） | 8 項 PASS、FEOL 符合決定 5；`klayout_beol failed (stat=-9)`、LVS `Error: extraction did not complete successfully`、`OEB FAILED (stat=5)`；`klayout_met_min_ca_density` 211 個 `li1.pd.1d`；checker 另判比對基準有 `MR_nsdm.WID.2` 等其他規則 | 已驗證：VM 10 GiB，KLayout 與兩次 Magic 各約 9.2 GB 被 OOM kill（`dmesg`）；li1 75%，其中 `decap_3`（87% li1）2,461,688 個佔 9.24 mm²；`3e0e31dc` 的預建 SRAM 控制邏輯有 10 個 nsdm／psdm 違規 | VM 改 16 GiB（規則 1）；`DECAP_CELLS` 改 `ef_decap_12`、`FILL_CELLS` 加 fill_8／fill_4（ADR-0019 決定 24，重新 harden 後驗證）；比對基準只比允許規則（規則 3），neg-precheck 25 個案例 | `docs/notes/caravel_precheck_phase7.md` 第 10 節、`runs/p7_precheck_verify/` |
-| 2026-10-14 | arvinsa-rtl-gds Phase 7 步驟 7（`7eff65a` 查證、`550869c` 正式） | decap 改 `ef_decap_12` 後：`klayout_met_min_ca_density` PASS（`li1_ca_density is 0.6010`）、BEOL／LVS／OEB 跑完 PASS，`make precheck-caravel` PASS；LVS log 結尾 `possible errors SOFT - ... CVC 4`，`HI-Z Inputs: 74` | 已驗證：li1 75.1% → 39.9%（前後比較）；CVC 的 HI-Z 是 SRAM black box 的 `dout0[31:0]`（抽取 SPICE 對腳位） | 規則 8；規則 4 補上 CVC 的判讀 | `docs/notes/caravel_precheck_phase7.md` 第 10a、10b 節、ADR-0019 決定 24 |
+| 2026-10-14 | arvinsa-rtl-gds Phase 7 步驟 7（`7eff65a` 查證、`550869c` 正式） | decap 改 `ef_decap_12` 後：`klayout_met_min_ca_density` PASS（`li1_ca_density is 0.6010`）、BEOL／LVS／OEB 跑完 PASS，`make precheck-caravel` PASS；LVS log 結尾 `possible errors SOFT - ... CVC 4`，`HI-Z Inputs: 74` | 已驗證：li1 75.1% → 39.9%（前後比較）；CVC 的 HI-Z 是 SRAM black box 的 `dout0[31:0]`（抽取 SPICE 對腳位） | 規則 8（現 `caravel-user-project-integration` 規則 4）；本 skill 規則 4 補上 CVC 的判讀 | `docs/notes/caravel_precheck_phase7.md` 第 10a、10b 節、ADR-0019 決定 24 |
 | 2026-10-15 | arvinsa-rtl-gds Phase 7 結案第二輪的 Hazard3 regress 重跑（`2b04451`，worktree p7close2_h3；同時跑 wrapper 的 regress 與 PicoRV32 的 regress） | `neg-precheck` FAIL（0.9 分鐘）：`neg-precheck: FAIL the reference's klayout_feol report has no item`；本機 KLayout 0.30.7 跑 precheck deck（`sky130A_mr.drc` 第 955 行的 `drc`）時 `ERROR: Signal number: 11`、`Address: 0x0`，backtrace 在多執行緒的 `db::local_processor` | 推測（沒有重現）：記憶體壓力，當時 swap 7.6／9.2 GB；同一個 GDS（sha1 與基準相同）、同一份 deck 在前三次 `neg-precheck` 都 31/31 PASS | 整條 regress 等負載降下來再重跑：第三次執行（07:51，只剩這一條 regress）同一項 31/31 PASS，與推測一致但不算證明；只出現一次，依規則不加重試。沒有自動防護：checker 會 FAIL（報表沒有項目），但看不出是工具當掉，要看 `ref/klayout_feol_check.log` | 主目錄 `runs/p7close2_h3_neg_precheck_ref_klayout_sig11.log`、`runs/p7close2_regress_hazard3.sig11.console` |
-| 2026-10-15 | arvinsa-rtl-gds Phase 7 的 fill 試跑（第二輪 wrapper GDS，ADR-0019 決定 26） | precheck 只查密度上限；照 Caravel `generate_fill.py`（`wafflefill(tiled)`）單獨補 wrapper、照 `check_density.py` 量 700 µm 視窗：li1、met1–5 只剩 met2 一個視窗 34.5%，FOM 15 個視窗低於 33%（最低 31.5%），都在 SoC 與 SRAM 擠在一起的左下角；met4 最高 59.7% 貼近上限。另外 precheck 的 `met_min_ca_density` 報的 met4／met5 比只算 die 內高 1.2–1.6 個百分點；LibreLane nix-shell 的 Magic Tcl 沒有 `clock` 指令（`invalid command name "clock"`） | 已驗證：fill 區塊分開量再相加，比一起量最多高 0.33 個百分點（實量一塊比對）。推測：precheck 的分母是 die 外框（`235/4`），分子含 die 外的電源環 | 不自己加 fill；結果列為下線前要向平台確認的項目。fill 很大（wrapper 1.2 GB）時每個區塊分開量再相加，省記憶體。只出現一次，不寫成規則；沒有自動防護（下限檢查在 tapeout 才跑，ADR-0020 的 D5 留到下一個專案） | 主目錄 `runs/p7_review/fill_trial/README.md`（腳本在同一目錄） |

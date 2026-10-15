@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The macro in the final GDS is the macro's own GDS: same cells, same contents (Phase 6, ADR-0018; skill
-hard-macro-integration).
+macro-qualification).
 
 usage: check_macro_gds.py --cell <macro> --macro-gds <macro.gds> --final-gds <design.gds>
 

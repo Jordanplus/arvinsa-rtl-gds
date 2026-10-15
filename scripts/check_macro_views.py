@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """QA of the views of a hard macro, whatever made it (a memory compiler such as OpenRAM, a vendor, a previous
-harden): check the contents of every delivered file, not only that it exists. Skill hard-macro-integration.
+harden): check the contents of every delivered file, not only that it exists. Skill macro-qualification.
 
     python3 scripts/check_macro_views.py --name <top> --lef <lef> --lib <lib> [--lib <lib> ...] --verilog <v>
                                          --spice <netlist> [--gds <gds>] [--power-max PJ] [--cap-max PF] [--dbu N] [--no-foreign] [--json out.json]

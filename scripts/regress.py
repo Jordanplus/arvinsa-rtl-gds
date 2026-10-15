@@ -37,7 +37,16 @@ own PASS. Before the first target: the working tree must be clean (no modified, 
 file) and MAKEFLAGS must not carry -i (ignore errors: a FAIL would exit 0), -n, -q or -t (nothing
 would run); the HEAD is recorded and must be the same after the last target, so every target ran
 on that one commit (Phase 4 review: provenance-final alone compares only the harden records).
-make neg-regress (scripts/neg_regress.py) checks these refusals. Outputs (runs/regress for hazard3,
+The disk holding the checkout must have at least REGRESS_MIN_FREE_GB (default 100) GiB free:
+a full disk made one 2026-10-15 regression FAIL on a write error and left another one hanging in an
+STA with no error and no end (ADR-0021 decision 3; each regress worktree keeps 40-70 GB of
+negative-test intermediates). Every target has a time limit, 3 x its reference time from the
+2026-10-15 closing runs (REF_MIN) and at least 30 minutes, times REGRESS_TIMEOUT_SCALE (default 1);
+a target over its limit is killed with its whole process group and FAILs with
+`regress: TIMEOUT <target> after <n> min (limit <m> min: ...)` in its log, so a hang reads as a hang.
+The group gets SIGTERM, then SIGKILL; a process that starts its own session (a docker or lima
+container) is outside the group and is not stopped.
+make neg-regress (scripts/neg_regress.py) checks these refusals and the timeout. Outputs (runs/regress for hazard3,
 runs/regress_picorv32 for picorv32): <target>.log (full output), summary.md (target, result,
 minutes, the last line of its output), junit.xml (one testcase per target).
 Needs a committed working tree (harden-soc and harden-core check it). A clean worktree has no .tools/:
@@ -48,6 +57,7 @@ Prints `regress: PASS n/n` / `regress: FAIL at <target>`; exit code 0 only on PA
 import argparse
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -70,6 +80,48 @@ TARGET_LISTS = {
                 "neg-precheck", "harden-caravel", "eqy-caravel", "neg-eqy-caravel", "gl-caravel", "neg-gl-caravel",
                 "ir-caravel", "neg-ir-caravel", "neg-pnr-caravel", "precheck-caravel", "provenance-final"],
 }
+
+
+# reference minutes: the longest of the 2026-10-15 closing runs (docs/phase_exit/phase7.md, the three
+# runs/regress*/summary.md); targets not listed take the 30-minute floor
+REF_MIN = {"harden-caravel": 287, "precheck-caravel": 99, "harden-soc": 53, "neg-eqy-soc": 47, "neg-eqy-core": 48,
+           "ir-caravel": 29, "neg-eqy-caravel": 25, "gl-soc-powered": 24, "neg-pnr": 23, "harden-core": 21,
+           "gl-caravel": 17, "eqy-caravel": 14, "neg-precheck": 14, "gl-soc": 13, "neg-gl-core": 12, "neg-gl-soc": 10}
+MIN_TIMEOUT_MIN = 30
+TIMEOUT_FACTOR = 3
+
+
+def timeout_min(target):
+    scale = float(os.environ.get("REGRESS_TIMEOUT_SCALE", "1"))
+    return max(MIN_TIMEOUT_MIN, TIMEOUT_FACTOR * REF_MIN.get(target, 0)) * scale
+
+
+def run_target(cmd, env, log, target):
+    """(exit code, timed out) of one make target; on timeout the whole process group is killed"""
+    limit = timeout_min(target)
+    t0 = time.time()
+    with open(log, "w") as f:
+        p = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            return p.wait(timeout=limit * 60), False
+        except subprocess.TimeoutExpired:
+            pass
+    # SIGTERM first so tools can flush, then SIGKILL the whole group: a child that ignores SIGTERM
+    # would otherwise survive once make itself has exited. Processes that start their own session
+    # (a docker / lima container) are not in the group and are not stopped here.
+    for sig, wait_s in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
+        try:
+            os.killpg(p.pid, sig)
+        except ProcessLookupError:
+            pass
+        try:
+            p.wait(timeout=wait_s)
+        except subprocess.TimeoutExpired:
+            pass
+    with open(log, "a") as f:
+        f.write(f"\nregress: TIMEOUT {target} after {(time.time() - t0) / 60:.1f} min (limit {limit:.1f} min: "
+                f"3 x its reference time, at least {MIN_TIMEOUT_MIN} min; REF_MIN in scripts/regress.py)\n")
+    return 124, True
 
 
 def log_of(out, target):
@@ -110,12 +162,16 @@ def main():
         refuse.append(f"{len(dirty)} uncommitted file(s), e.g. {', '.join(dirty[:3])}: the regression must run on a commit")
     if not start:
         refuse.append("not a git checkout")
+    free_gb = shutil.disk_usage(ROOT).free / 2**30
+    min_gb = float(os.environ.get("REGRESS_MIN_FREE_GB", "100"))
+    if free_gb < min_gb:
+        refuse.append(f"only {free_gb:.0f} GiB free on the disk of {ROOT}, at least {min_gb:.0f} GiB needed "
+                      "(REGRESS_MIN_FREE_GB; remove old worktrees and negative-test intermediates)")
     for t in TARGETS if not refuse else []:
         t0 = time.time()
         log = log_of(OUT, t)
         print(f"[regress] {t} (CPU={args.cpu}) ...", flush=True)
-        with open(log, "w") as f:
-            rc = subprocess.run([make, "--no-print-directory", t], cwd=ROOT, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+        rc, _ = run_target([make, "--no-print-directory", t], env, log, t)
         text = open(log, errors="replace").read()
         rows.append((t, rc, time.time() - t0, last_line(text)))
         print(f"[regress] {t}: {'PASS' if rc == 0 else 'FAIL'} ({(time.time() - t0) / 60:.1f} min) {last_line(text)}", flush=True)

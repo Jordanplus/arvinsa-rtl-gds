@@ -18,6 +18,13 @@ CPU=neg_regress_outer, which every target must see replaced by the CPU of the ru
                                                         FAIL, HEAD changed during the regression
   target_fail    the fake make exits 1 on the third target
                                                         FAIL at that target, the later ones not run
+  low_disk       REGRESS_MIN_FREE_GB above the free space FAIL before the first target (GiB free)
+  timeout        the fake make hangs on the second target, FAIL at that target with `regress: TIMEOUT`
+                 its child ignores SIGTERM and writes   in the log, and no marker 10 s later: the
+                 a marker after 8 s;
+                 REGRESS_TIMEOUT_SCALE makes the limit   whole process group was killed (2026-10-15:
+                 about 4 s                               a hung STA was not stopped; ADR-0021)
+Every case but low_disk sets REGRESS_MIN_FREE_GB=1, so the cases do not depend on this machine's disk.
 And env/check_env.sh's xPack check (make env-check-flow, the first target of make regress), with
 CPU=hazard3 and --flow:
   xpack_real     XPACK_DIR = the pinned toolchain       [OK] xPack (positive control)
@@ -29,6 +36,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "runs", "neg_regress")
@@ -40,6 +48,7 @@ NEG_REGRESS_N=$(wc -l < "$NEG_REGRESS_LOG" | tr -d ' ')
 case "$NEG_REGRESS_MODE:$NEG_REGRESS_N:$2" in
   head_changed:2:*) git -c user.name=neg -c user.email=neg@example.invalid commit -q --allow-empty -m neg ;;
   target_fail:3:*) echo "$2: FAIL"; exit 1 ;;
+  timeout:2:*) (trap '' TERM; sleep 8; echo late > "$NEG_REGRESS_MARKER") & sleep 60 ;;
 esac
 echo "$2: PASS"
 """
@@ -60,7 +69,7 @@ def main():
     os.chmod(fake, 0o755)
     results = []
 
-    def case(name, want_rc, want_last, want_targets, extra_env=None, prepare=None, cpu="hazard3"):
+    def case(name, want_rc, want_last, want_targets, extra_env=None, prepare=None, cpu="hazard3", check=None):
         d = os.path.join(OUT, name)
         repo = os.path.join(d, "repo")
         subprocess.run(["git", "clone", "-q", ROOT, repo], check=True)
@@ -70,7 +79,8 @@ def main():
             prepare(repo)
         log = os.path.join(d, "targets.txt")
         open(log, "w").close()
-        env = dict(os.environ, MAKE=fake, NEG_REGRESS_LOG=log, NEG_REGRESS_MODE=name, MAKEFLAGS="", CPU="neg_regress_outer")
+        env = dict(os.environ, MAKE=fake, NEG_REGRESS_LOG=log, NEG_REGRESS_MODE=name, MAKEFLAGS="", CPU="neg_regress_outer",
+                   NEG_REGRESS_MARKER=os.path.join(d, "marker.txt"), REGRESS_MIN_FREE_GB="1")
         env.update(extra_env or {})
         cp = subprocess.run([sys.executable, os.path.join(repo, "scripts", "regress.py")] + ([] if cpu == "hazard3" else ["--cpu", cpu]),
                             cwd=repo, env=env, capture_output=True, text=True)
@@ -79,7 +89,11 @@ def main():
         ran, cpus = [x[0] for x in lines], {x[-1] for x in lines}
         last = (cp.stdout.strip().splitlines() or [""])[-1]
         ok = cp.returncode == want_rc and last.startswith(want_last) and ran == want_targets and cpus <= {cpu}
+        extra = check(repo, d) if check else ""
+        ok = ok and not extra
         results.append(ok)
+        if extra:
+            print(f"    {name}: {extra}")
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: expected '{want_last}...' after {len(want_targets)} target(s) with CPU={cpu}; "
               f"got rc {cp.returncode}, {len(ran)} target(s) with CPU={','.join(sorted(cpus)) or '-'}, '{last[:100]}'")
 
@@ -93,6 +107,18 @@ def main():
     case("ignore_errors", 1, "regress: FAIL before the first target (make flags 'i'", [], extra_env={"MAKEFLAGS": "i"})
     case("head_changed", 1, "regress: FAIL (HEAD changed during the regression", targets)
     case("target_fail", 1, f"regress: FAIL at {targets[2]}", targets[:3])
+    case("low_disk", 1, "regress: FAIL before the first target (only", [], extra_env={"REGRESS_MIN_FREE_GB": "1000000000"})
+
+    def timed_out(repo, d):
+        log = os.path.join(repo, "runs", "regress", f"{targets[1]}.log")
+        if "regress: TIMEOUT" not in (open(log).read() if os.path.exists(log) else ""):
+            return f"no 'regress: TIMEOUT' in {os.path.relpath(log, ROOT)}"
+        time.sleep(10)
+        if os.path.exists(os.path.join(d, "marker.txt")):
+            return "the hung target's child was not killed (marker written after the timeout)"
+        return ""
+    case("timeout", 1, f"regress: FAIL at {targets[1]}", targets[:2], extra_env={"REGRESS_TIMEOUT_SCALE": "0.0022"},
+         check=timed_out)
     fake_xp = os.path.join(OUT, "xpack_fake", "bin")
     os.makedirs(fake_xp)
     open(os.path.join(fake_xp, "riscv-none-elf-gcc"), "w").write(

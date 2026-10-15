@@ -1,6 +1,6 @@
 ---
 name: drc-signoff
-description: Magic／KLayout DRC、GDS 輸出（streamout）、XOR 時使用，尤其設計含 SRAM 等 macro：DRC 數不為 0、abstract DRC 報大量 `nwell.4`、macro 內部 DRC 怎麼判（與 macro 單獨檢查比違規位置；兩顆 macro 比 DRC 時某幾種規則的框數多了幾百個，Magic 每 157.28 µm 切框，要比合併後的違規區域）、GDS 有多個 top cell（`KLayout.Render` 失敗）、兩套 deck 涵蓋的規則不同（latch-up、浮接金屬）、換了自產或改名的 macro 後 KLayout DRC 在 macro 裡報 nwell.6／psdm.1（deck 依名稱 `*sky130_sram_*kbyte_*` 排除 SRAM cell，也依名稱排除 IO cell、放寬 s8 cell 的 m1.4；名稱要從 deck 解析）、macro 在 GDS 裡是空的而 Magic DRC 位置比對仍 PASS、metal density 與 fill。antenna、LVS 另有 skill。Use for DRC (Magic/KLayout), GDS streamout and XOR signoff with hard macros, macro-internal DRC baselines and metal density (sky130).
+description: Magic／KLayout DRC、GDS 輸出（streamout）、XOR 時使用，尤其設計含 SRAM 等 macro：DRC 數不為 0、abstract DRC 報大量 `nwell.4`（`416 Magic DRC errors found - deferred`）、macro 內部 DRC 怎麼判（與 macro 單獨檢查比違規位置；兩顆 macro 比 DRC 時框數差幾百個，要比合併後的違規區域）、`The layout has multiple top cells in Layout.top_cell`（`KLayout.Render` 失敗）、換了自產或改名的 macro 後 KLayout DRC 在 macro 裡報 nwell.6／psdm.1（deck 依 cell 名稱排除）、macro 在 GDS 裡是空的而 Magic DRC 位置比對仍 PASS。也包括兩套 deck 涵蓋的規則不同：latch-up 只查 15 µm，交付的 GDS 沒有 81/14（`areaid.lowTapDensity`），6 µm 規則沒有任何檢查；`KLAYOUT_DRC_DEFINES` 的 `floating_metal` 傳不進 deck（deck 讀 `floating_met`，浮接金屬檢查一直是關的）。下線平台的 fill 與密度下限看 caravel-user-project-integration；antenna、LVS 另有 skill。Use for DRC (Magic/KLayout), GDS streamout and XOR signoff with hard macros, the latch-up marker and metal density (sky130).
 ---
 
 # DRC、GDS 輸出與 XOR signoff
@@ -13,14 +13,14 @@ antenna 看 `antenna-signoff`；LVS 看 `lvs-signoff`。本 repo 實例：`pnr/s
    - abstract（`MAGIC_DRC_USE_GDS=false`）會在每條 standard cell row 報 `nwell.4`（soc_top 416 個、LibreLane CI SRAM 參考設計 532 個），因為 abstract cell 沒有 tap → 假錯誤。
    - 完整 GDS（預設）在 macro 外是 0。所以「abstract DRC = 0」（`project-plan.md` §6.3 原案）的前提不成立，改用完整 GDS。
 2. **macro 內部 DRC**：
-   - 標準規則對 SRAM bitcell 會報大量違規（2 KB SRAM 約 466 萬個，bitcell 用 SRAM 專用規則）。
+   - 標準規則對 SRAM bitcell 會報大量違規（2 KB SRAM 是幾百萬個，bitcell 用 SRAM 專用規則；本 repo 的數字在 `pnr/soc_top/README.md` 的 `ERROR_ON_MAGIC_DRC` 列與已知限制 2）。
    - 設 `ERROR_ON_MAGIC_DRC=false`，由自寫 checker 取代（`check_soc.py` magic_drc）：macro 外框外 = 0；框內**每一個**錯誤框都必須落在 macro 單獨檢查的報告中、**同規則**的框的聯集內（報告平移到 instance 位置，每個框放大容許值 δ）。
    - **只比規則種類不夠**（Phase 3 的做法）：外框內多一個已有規則的新錯誤（例如頂層 PDN 與 macro 圖形部分重疊，Magic 報的 `can't abut or partially overlap` 正好在 baseline 裡），checker 照樣 PASS，只剩 golden 總數擋，而改設計時 golden 一定重建。KLayout 不能補位：sky130 deck 對 `areaid:ce` 內的形狀有 22 處豁免。
-   - macro 單獨檢查與放進設計後檢查，同一個錯誤被切成不同的框（5,579,161 vs 4,665,810，30 種規則相同），所以比「面積」不比「框」：先找完全相同的框，剩下的看是否被同規則框的聯集蓋住。
-   - 切框的規律（Phase 6 已驗證）：Magic 在被列出 cell 的座標每 157.28 µm（31,456 個內部單位）切一條線，跨線的違規拆成兩個框；同一顆預建 SRAM 從 bank 與從最上層列出，diff/tap.1 就差 130 個框。兩顆 macro 之間比 DRC（例如自產對預建）也一樣：逐種類比**合併後**的區域塊數與面積，不比框數（`ip/sram/openram/macro_drc.py`、`drc_merge.py`）。面積也受切線影響：Magic 在切線處畫出的違規少一小條，版圖相同的兩顆 macro 合併後面積差到 0.015%（388 塊差異全貼在某顆 macro 的切線上），所以塊數嚴格、面積容許 0.05%（使用者 2026-10-11）。157.28 µm 是否就是 Magic DRC 分塊大小是推測。
-   - **δ 只給量到需要的規則**（Phase 4 獨立審查）：100 nm 原本對 30 種規則都放寬，li.3 看不到新違規的面積從 SRAM 的 0.9% 變 6.5%。改成只有 li.5、diff/tap.9（`DRC_POS_TOL_RULES`）；golden run 仍是 0 個無法解釋的框（14,166 個在聯集內）。換 macro 要重新量：Phase 6 的自產 SRAM 在晶片裡有 195 個 licon.14 框比 macro 單獨檢查長 60–90 nm（兩個 CPU 相同），加進清單是使用者的決定（ADR-0018 決定 17），因為它讓 checker 變寬（licon.14 看不到新違規的面積從 SRAM 的 0.65% 變 3.32%；這個比例的計算沒有存檔）。
-   - **比對的對象不能是空的**：框內違規至少要是 macro 單獨檢查的一半（`check_soc.py magic_drc`，P69）。Phase 6 第一輪 harden 的 SRAM 在最終 GDS 裡是空的（LEF 沒有 `FOREIGN`），框內 0 個違規，「每個違規都找得到」照樣成立而 PASS；只有 XOR 抓到（`signoff-checker-qualification`「比對的對象是空的」、`hard-macro-integration` 清單）。
-   - **δ 用一個已知乾淨的 run 量出來**：Phase 3 的 run 中 4,651,644 個框完全相同、13,935 個在聯集內、231 個（li.5、diff/tap.9）只多出最多 85 nm（同一個錯誤畫得比較長），δ 取 100 nm。
+   - macro 單獨檢查與放進設計後檢查，同一個錯誤被切成不同的框（規則種類相同、框數差約 90 萬，`pnr/soc_top/README.md` 已知限制 2），所以比「面積」不比「框」：先找完全相同的框，剩下的看是否被同規則框的聯集蓋住。
+   - 切框的規律（Phase 6 已驗證）：Magic 在被列出 cell 的座標每 157.28 µm（31,456 個內部單位）切一條線，跨線的違規拆成兩個框；同一顆預建 SRAM 從 bank 與從最上層列出，diff/tap.1 就差 130 個框。兩顆 macro 之間比 DRC（例如自產對預建）也一樣：逐種類比**合併後**的區域塊數與面積，不比框數（`ip/sram/openram/macro_drc.py`、`drc_merge.py`）。面積也受切線影響：Magic 在切線處畫出的違規少一小條，版圖相同的兩顆 macro 合併後面積差到 0.015%（388 塊差異全貼在某顆 macro 的切線上），所以塊數嚴格、面積容許 0.05%（使用者 2026-10-11，ADR-0018 決定 19）。
+   - **δ 只給量到需要的規則**（Phase 4 獨立審查）：100 nm 原本對 30 種規則都放寬，li.3 看不到新違規的面積從 SRAM 的 0.9% 變 6.5%。改成只有 li.5、diff/tap.9（`DRC_POS_TOL_RULES`）；golden run 仍是 0 個無法解釋的框。換 macro 要重新量：Phase 6 的自產 SRAM 在晶片裡有一列 licon.14 框比 macro 單獨檢查長 60–90 nm（經驗紀錄 2026-10-10），加進清單是使用者的決定（ADR-0018 決定 17），因為它讓 checker 變寬（看不到新違規的面積變大多少，見 ADR-0018 決定 17 與 `docs/relaxation_register.md` D03；那幾個比例當時沒有存檔，無法核對）。
+   - **比對的對象不能是空的**：框內違規至少要是 macro 單獨檢查的一半（`check_soc.py magic_drc`，P69）。Phase 6 第一輪 harden 的 SRAM 在最終 GDS 裡是空的（LEF 沒有 `FOREIGN`），框內 0 個違規，「每個違規都找得到」照樣成立而 PASS；只有 XOR 抓到（`signoff-checker-qualification`「比對的對象是空的」、`macro-qualification` 規則 1）。
+   - **δ 用一個已知乾淨的 run 量出來**：先找完全相同的框，再看剩下的有沒有被同規則框的聯集蓋住；仍沒蓋住的量它突出多少。Phase 3 的 run 有 231 個（li.5、diff/tap.9）只多出最多 85 nm（同一個錯誤畫得比較長），δ 取 100 nm（經驗紀錄 2026-10-04；其他計數在 `pnr/soc_top/README.md`）。
    - **macro 單獨的報告每次重新產生**（`pnr/soc_top/sram_drc_alone.py`：用 run 自己的 Magic.DRC 設定，只把 `DESIGN_NAME` 換成 macro，約 2.5 分鐘、寫出約 1.5 GB），並與審查過的規則數量（`signoff/waivers/`）比對。兩次產生的報告逐 byte 相同（Phase 4 實測），所以可以當固定參考。位置比對約 20 秒（兩份報告共約 450 MB）。
 3. **GDS 輸出**：Magic 的 GDS 可能多出 top cell（soc_top：13 個；SRAM 子 cell 改名成 `T2_*` 放進設計，原名的 160 個又沒有引用地寫出一次），`KLayout.Render` 因此失敗 → 設 `PRIMARY_GDSII_STREAMOUT_TOOL=klayout`。確認方法：從 top cell 走得到所有 macro cell（自寫 GDS 結構解析），且 KLayout XOR = 0。
 4. **代價**：完整 GDS DRC 約 4.5 分鐘；`drc.magic.rpt` 約 190 MB、`drc.magic.lyrdb` 約 1 GB；解析報告 7 秒。
@@ -29,21 +29,37 @@ antenna 看 `antenna-signoff`；LVS 看 `lvs-signoff`。本 repo 實例：`pnr/s
    | 規則 | Magic（`sky130A.tech`，完整 GDS） | KLayout（`sky130A_mr.drc`，LibreLane 傳參） |
    |---|---|---|
    | FEOL／BEOL 幾何 | 有 | 有 |
-   | latch-up（LU.2／LU.3）、`nwell.4` | 有 | **沒有** |
+   | latch-up（LU.2／LU.3，只有 15 µm 版本，規則 7）、`nwell.4` | 有 | **沒有** |
    | nsdm／psdm 的寬度、間距、包覆 | 有 | 有：`sram_exclude` 的兩個分支（557–633、639–729 行）跑同一組規則（nsdm.1–6a、psdm.1–6a、`nsdm_psdm_overlap`），`true` 只是先排除名稱符合 `*sky130_sram_*kbyte_*` 的 cell；LibreLane 用預設 `false`，全部形狀都查（Phase 3 誤讀成只在 `true` 時跑，Phase 6 在自產 SRAM 裡報 psdm.1 22 個才更正） |
    | off-grid、角度 | — | 有 |
-   | 浮接金屬 | — | **開不起來**：LibreLane 傳 `floating_metal`，deck 讀 `$floating_met`；`topcell`、`threads` 也對不上（deck 讀 `$top_cell`、`$thr`，實際只用 4 threads） |
+   | 浮接金屬 | — | **開不起來**（見下面「傳參名稱對不上」） |
    | density、antenna | 沒有 | 沒有 |
 
-   所以「KLayout DRC = 0」不代表 latch-up、density 合格。latch-up 要看 Magic 完整 GDS DRC，density 則屬 chip-level。
+   所以「KLayout DRC = 0」不代表 latch-up、density 合格。Magic 完整 GDS DRC 只查 15 µm 的 latch-up 規則，6 µm 規則目前沒有任何檢查（規則 7）；density 看下面「金屬密度」一節。
+
+   **LibreLane 傳給 KLayout deck 的參數名稱對不上**（工具缺陷；LibreLane 3.0.14 的 `librelane/steps/klayout.py` `run_sky130`，PDK 的 `sky130A_mr.drc`，經驗紀錄 2026-10-03）：
+   - 症狀：config 的 `KLAYOUT_DRC_DEFINES.floating_metal` 設成 1，浮接金屬檢查仍然沒跑；`KLAYOUT_DRC_THREADS` 設多少都只用 4 threads。沒有任何警告或錯誤。
+   - 原因：LibreLane 傳 `-rd floating_metal=`、`-rd topcell=`、`-rd threads=`；deck 讀的是 `$floating_met`（第 69–70 行，沒定義就是 false）、`$top_cell`（第 49 行）、`$thr`（第 136 行，沒定義就是 4）。`topcell` 對不上沒有影響：deck 拿不到名稱時用 GDS 唯一的 top cell（GDS 只能有一個 top cell，規則 3）。
+   - 怎麼發現：`KLayout.DRC` step 的 `klayout-drc.log` 結尾的 `Args:` 段會印出 deck 實際讀到的值（`floating_met: false`、`feol: 1`…），和同一個 step 目錄 `config.json` 的 `KLAYOUT_DRC_DEFINES` 對照，不一致就是踩到了。
+   - 怎麼繞過：本 repo 沒有繞過。sky130 的預設本來就是不查浮接金屬（`KLAYOUT_DRC_DEFINES` 的 `floating_metal` 是 `"0"`），threads 只影響時間。真的要查浮接金屬時，用 repo 的 plugin 替換 `KLayout.DRC`（`librelane-run-debug` 的 `substituting_steps` 做法），改傳 `floating_met`、`thr`，不改 LibreLane 本身。
+   - 防復發：沒有自動防護。原因：本 repo 的 signoff 條件不含浮接金屬，這個缺陷不會讓任何判定變寬；照 ADR-0020 決定 2，下一個專案若要判浮接金屬，開始時做成 negative test：在 GDS 植入一塊浮接金屬，`KLayout.DRC` 必須報出來（不讀 log 的措辭，`CLAUDE.md` 規則 10）。LibreLane 或 PDK 升版時，重看這兩邊的參數名稱。
 6. **SRAM 在 KLayout deck 的處理**：依 cell 名稱（`-*sky130_sram_*kbyte_*`）無條件排除 SRAM 的只有 `nwell.6`（299–326 行）；nsdm／psdm 只在 `sram_exclude=true` 時排除（規則 5）；其他 SRAM 相容規則靠 `areaid:ce`（81/2）切換數值。換 macro 時，cell 名稱與 81/2 標記都要確認。
    - Phase 6 實測：自產 macro（`arv_sram_*`）不符合排除樣式，flow 的 KLayout DRC 在 SRAM 裡報 27 個（nwell.6 4、psdm.1 22、m2.2 1），都是真的錯誤（預建 macro 改名成不符合樣式後重跑仍是 0），用 OpenRAM patch 修掉（ADR-0018 決定 17）。
    - 所以 macro 的 KLayout DRC 要在 macro 單獨時、用 flow 同一份 deck 與參數跑，要求 0（`ip/sram/openram/macro_klayout_drc.py`，接在 `make openram-macro`）；名稱符合 deck 特別處理的樣式時 checker 直接 FAIL，否則一部分規則看不到（`neg-openram` K6）。
    - deck 依名稱特別處理的不只 SRAM：`*sky130_fd_io__gpiov2_amux`、`*sky130_fd_io__simple_pad_and_busses` 也不查 nwell.6，6 個 `s8cell_*`／`s8f*` cell 用另一條 m1.4。checker 從 deck 原文解析所有 `select(...)` 的樣式（`deck_patterns()`），不要抄一份寫死（Phase 6 獨立審查 H5：同一個 nwell.6 錯誤，cell 取 IO 的名稱就 0 個；K7、K8）。Magic deck 沒有依名稱排除，只比 Magic 會漏掉這類錯誤（步驟 2 只用 Magic 比過）。
-7. **latch-up 的區域標記**：
-   - SkyWater 的預設規則是 tap 到 diffusion 6 µm。只有 `areaid.lowTapDensity`（81/14）覆蓋、而且距 padframe ≥ 50 µm 的區域，才能用 15 µm（skywater-pdk `rules/layers.html`）。
-   - Magic 寫 GDS 時會自動產生 81/14（top cell 外框內縮 250 µm）；KLayout 寫的 GDS 沒有。
-   - soc_top 的 primary GDS 是 KLayout 寫的，所以 chip-level 組裝時要確認 81/14 有覆蓋 soc_top，否則 6 µm 規則會大面積違規（推論）。
+7. **latch-up 的區域標記與 6 µm 規則**（2026-10-15 實測，`docs/notes/problem_review/verify_and_merge.md` 2.2）：
+   - SkyWater 的預設規則是 tap 到 diffusion 6 µm。只有 `areaid.lowTapDensity`（81/14）覆蓋、而且距 padframe ≥ 50 µm 的區域，才能用 15 µm（skywater-pdk `rules/layers.html` Table C3 與 GDS 層表）。
+   - **交付的 GDS 沒有 81/14**：`soc_top.gds` 與 `user_project_wrapper.gds` 都由 KLayout 寫出（`PRIMARY_GDSII_STREAMOUT_TOOL=klayout`，規則 3），用 `klayout -z` 列層都沒有 81/14；同一個 run 的 Magic GDS 有。
+   - **Magic 寫 GDS 時產生的 81/14 只蓋 top cell 外框內縮 250 µm**（soc_top：一個矩形，外圈 250 µm 不在標記內），所以改回 Magic 輸出也不是完整的解法。
+   - **Magic 的 DRC 只實作 15 µm 的 LU.2／LU.3**（`sky130A.tech` 第 1566–1600、4325–4330 行，只在 full variant 跑），DRC 不讀 81/14（它只在寫 GDS 時產生，第 1393–1398 行）。所以「Magic 完整 GDS DRC 在 macro 外 0」只證明了 15 µm 規則。
+   - **KLayout deck 也不查**：PDK 的 `sky130A.lydrc`（第 151 行）、`sky130A_mr.drc`（第 235 行）與 precheck 用的 `.tools/cf-precheck-1.3.7/sky130A_mr.drc`（第 248 行）都只宣告 `areaid_ld = polygons(81, 14)`，沒有任何規則用到它；precheck 的 `magic_drc` 預設不跑（`signoff/precheck/README.md` 判定表）。
+   - 結論：**6 µm 規則在 flow 與 precheck 裡都沒有檢查**。
+   - **量測**（2026-10-15，`docs/notes/latchup/README.md`）：腳本 `docs/notes/latchup/tap_distance.drc`（KLayout deep mode）把 diffusion 扣掉同型 tap 外擴 d µm，剩下的就是離 tap 太遠的部分。
+     - 指令：`klayout -b -rd input=<gds> -rd report=<lyrdb> -rd sram=x1,y1,x2,y2 -r docs/notes/latchup/tap_distance.drc`。
+     - 結果：soc_top 與 wrapper 在 15 µm 都是 0，和 Magic 的 LU.2／LU.3 一致；6 µm 時，SRAM 外約 7% 的 diffusion 面積太遠。原因是 PDK 給 LibreLane 的 `FP_TAPCELL_DIST` 是 13 µm，標準元件本來就照 15 µm 規則放 tap、靠 81/14。
+     - 這支腳本沒有植入錯誤的 negative test，正確性只靠「15 µm 為 0」的一致性支持。
+   - **處理**：使用者 2026-10-15 選「記錄＋問平台，不改設計」（ADR-0021 決定 2；Phase 7 已知限制 21；登記表 D10）。是否構成下線風險，要看平台組全晶片時會不會加標記、SkyWater 怎麼判（推測，查不到原文）。
+   - **沒有自動防護**：harden 內沒有 tap 距離或 81/14 覆蓋的 checker（ADR-0021 留到下一個專案）。新設計在 floorplan 試跑就用上面的腳本量；選定下線平台時就要問清楚 latch-up 標記由誰加、用哪個距離判（`caravel-user-project-integration` 規則 5 的平台試算表）。
 8. **不適用的規則**：m1–m4 的 slotting（.11／.12）與 m*.13 最大密度是銅後段（CU）專用，sky130 是鋁後段，不必檢查。
 
 ## 金屬密度與金屬填補（density／metal fill）
@@ -52,8 +68,8 @@ antenna 看 `antenna-signoff`；LVS 看 `lvs-signoff`。本 repo 實例：`pnr/s
 - `OpenROAD.FillInsertion` 放的是 standard cell filler 與 decap，**不是金屬填補**。
 - `KLayout.Filler`、`KLayout.Density`、`Checker.KLayoutDensity` 只在 Chip flow，而且 sky130A 的 PDK config 沒有提供它們需要的腳本，會被略過。Classic flow 完全不檢查 density。
 - 規則數值：下限 35%（met5 45%）只寫在 PDK 的 Magic `check_density.py`；tech LEF 只有上限 70%。
-- ChipFoundry 的 cf-precheck 只檢查上限（`met_min_ca_density.lydrc`）。它的 `metal_check` 是「不得使用 via4／met5」的檢查，不是密度。
-- soc_top 實測（KLayout，700 µm 視窗）：met1 25.8%、met2 14.3%、met3 7.8%、met4 3.5%、met5 2.6%，遠低於下限，chip-level 一定要補 fill。視窗是否可以超出 die 邊界的慣例會影響最低值（li1 的最低值是 33.2% 還是 36.4%），量之前要先定義。
+- 下線平台（Caravel／ChipFoundry）的 fill 由誰補、precheck 查哪些密度、密度下限怎麼確認，看 `caravel-user-project-integration` 的 fill 與密度下限（規則 4、5 與「待確認」）。本 repo 的實測（soc_top 遠低於下限、wrapper 的 fill 試跑）在 `docs/notes/signoff_criteria_soc_top.md` 與 ADR-0019 決定 26。
+- 量密度之前先定義視窗可不可以超出 die 邊界：這個慣例會改變最低值（soc_top 的 li1：33.2% 或 36.4%）。
 - macro-level 不判 density。但 macro 若畫了禁止 fill 的區域（cmmX waffleDrop），該區的密度要自己達標：SkyWater 的 (mX.-) 規則旗標是 RC，對 IP 等級是必須遵守的。
 
 ## negative test（`pnr/soc_top/neg_pnr.py`）
@@ -87,4 +103,5 @@ P11：只改 KLayout 那份 GDS → `Checker.XOR` FAIL。
 | 2026-10-10 | Phase 6 步驟 4b 第二輪 harden（`3ceca55`，自產 SRAM 真的進了最終 GDS） | flow 的 KLayout DRC 在 SRAM 裡報 27 個：nwell.6 4、psdm.1 22、m2.2 1；預建 macro 是 0 | 已驗證：deck 依名稱排除 `*sky130_sram_*kbyte_*`，自產 macro 名稱不符合；預建 macro 改名後重跑仍是 0，所以 27 個是自產 macro 真的錯誤（根因見 ADR-0018 決定 17） | OpenRAM patch 0002–0004 修到 0；`macro_klayout_drc.py`＋K0–K6；規則 6 | `docs/notes/openram_phase6_bringup.md` 步驟 4b 第二輪、3m |
 | 2026-10-10 | Phase 6 步驟 4b 第二輪 harden | `check_soc.py magic_drc` 在 SRAM 框內有 195 個 licon.14 框不在同規則框的聯集內，比 SRAM 單獨檢查長 60–90 nm（y = 157.255 µm 一列，兩個 CPU 相同） | 已驗證（位置比對的輸出）：同一個錯誤在晶片裡被切成比較長的框，和 Phase 4 的 li.5、diff/tap.9 同類 | 使用者選加進 100 nm 容許清單（ADR-0018 決定 17）；規則 2 | `runs/p6_3m_*_signoff/soc_checks.txt` |
 | 2026-10-11 | Phase 6 結案前寫回 skill，讀 deck 原文 | 規則 5 原本寫 KLayout 沒有 nsdm／psdm 規則（只在 `sram_exclude=true` 時跑），但 Phase 6 flow（預設 `false`）在 SRAM 裡報了 psdm.1 | 已驗證（`sky130A_mr.drc` 553–700 行）：`if SRAM_EXCLUDE` 的兩個分支輸出同一組規則，`true` 只是改用排除 SRAM 名稱後的圖層 | 規則 5 的表與結論、knowledge S15、README、`docs/notes/signoff_criteria_soc_top.md` 更正；這個錯誤是低估 KLayout 的涵蓋範圍，沒有讓任何 checker 變寬 | `sky130A_mr.drc` 第 553–700 行 |
-| 2026-10-11 | Phase 6 獨立審查後查 macro DRC（背景 agent，我核對 XOR 輸入與結果） | 自產 SRAM 的 Magic full DRC 有 3 種規則比預建多（diff/tap.1 +130、licon.5a +260、poly.2 +65），總數卻少 550 | 已驗證：都在 bitcell 陣列，Magic 在列出 cell 的座標每 157.28 µm 切框，自產陣列原點不同，切到的框較多；相接的框合併、對齊陣列原點後 XOR 0，塊數與面積逐值相同；`bitcell_array` 版圖 28 層 XOR 0 | 規則 2 補切框的規律；`macro_drc.py` 改比合併後的區域（使用者 2026-10-11，ADR-0018 決定 19）；`neg-openram` D1–D7 | ADR-0018 決定 19；`docs/phase_exit/phase6.md`「獨立審查」 |
+| 2026-10-11 | Phase 6 獨立審查後查 macro DRC（背景 agent，我核對 XOR 輸入與結果） | 自產 SRAM 的 Magic full DRC 有 3 種規則比預建多（diff/tap.1 +130、licon.5a +260、poly.2 +65），總數卻少 550 | 已驗證：都在 bitcell 陣列，Magic 在列出 cell 的座標每 157.28 µm 切框，自產陣列原點不同，切到的框較多；相接的框合併、對齊陣列原點後 XOR 0，塊數與面積逐值相同；`bitcell_array` 版圖 28 層 XOR 0。推測（沒有讀 Magic 原始碼）：157.28 µm 就是 Magic DRC 的分塊大小 | 規則 2 補切框的規律；`macro_drc.py` 改比合併後的區域（使用者 2026-10-11，ADR-0018 決定 19）；`neg-openram` 的 D 系列案例（清單在 `ip/sram/openram/neg_openram.py` 開頭） | ADR-0018 決定 19；`docs/phase_exit/phase6.md`「獨立審查」 |
+| 2026-10-15 | Phase 0–7 問題總檢討（反向驗證 agent，`klayout -z` 列交付 GDS 的層） | 規則 7 原本把「81/14 沒覆蓋時 6 µm 規則會大面積違規」以推論寫在規則本文；實測交付的 `soc_top.gds`、`user_project_wrapper.gds`（KLayout 寫出）沒有 81/14，同 run 的 Magic GDS 有一個內縮 250 µm 的矩形 | 已驗證（列層、讀 Magic tech 檔與三份 KLayout deck）：Magic DRC 只實作 15 µm，KLayout deck 只宣告 `areaid_ld` 沒有使用，所以 6 µm 規則沒有任何檢查。是否構成下線風險：未知（推測，要看平台與 SkyWater 怎麼判） | 規則 7 改成實測事實；量測與處理由使用者決定（ADR-0021 決定 2） | `docs/notes/problem_review/verify_and_merge.md` 2.2 |

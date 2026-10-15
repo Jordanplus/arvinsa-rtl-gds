@@ -54,7 +54,7 @@ help:
 	@echo "  make neg-ir-soc / neg-ir-caravel  bug injection into those IR checks and the window recording"
 	@echo "  make precheck-check PRECHECK_PROJECT=<dir>  judge a precheck result by ADR-0019 decision 5 (reference: make precheck-sram-ref)"
 	@echo "  make precheck-caravel     the official precheck of runs/user_project_wrapper in the lima VM and its judgement (~1 h)"
-	@echo "  make neg-precheck         bug injection into that judgement, 25 cases (about 5 minutes; part of make regress)"
+	@echo "  make neg-precheck         bug injection into that judgement, 31 cases (about 5 minutes; part of make regress)"
 	@echo "                            (fw/tests/maxpower windows recorded on the final netlist, slow corners)"
 	@echo "  make core-stock           upstream PicoRV32 tests (L1a)"
 	@echo "  make smoke                env-check py-check skill-check lint fw regress-rtl-smoke"
@@ -76,7 +76,7 @@ help:
 	@echo "  make neg-eqy-soc          bug injection into the hardened soc_top netlist, eqy-soc must FAIL on each"
 	@echo "  make gl-soc               SoC tests with the RTL and the final netlist in lockstep (gate-level simulation)"
 	@echo "  make neg-gl-soc           bug injection into the hardened soc_top netlist, gl-soc must FAIL on each (lockstep)"
-	@echo "  make neg-pnr              bug injection P00-P80, 81 cases (STA, PDN, IR, worst-case IR, DRC, XOR, placement, inputs, SRAM views, .lib and SPICE, weak cells, criteria review, CTS, ...), each must FAIL at its checker"
+	@echo "  make neg-pnr              bug injection P00-P81, 82 cases (STA, PDN, IR, worst-case IR, DRC, XOR, placement, inputs, SRAM views, .lib and SPICE, weak cells, criteria review, CTS, ...), each must FAIL at its checker"
 	@echo "  make neg-provenance       bug injection into the source tracking (uncommitted files, edited LibreLane/PDK, ...)"
 	@echo "  make neg-run-guard        the steps that use a harden run must refuse a FAILed run or one from another commit"
 	@echo "  make test-flow-retry      the GRT-0229 retry in pnr/librelane_flow.sh, with a mocked LibreLane"
@@ -99,7 +99,7 @@ help:
 	@echo "                            (hazard3: harden-soc; caravel: harden-caravel; picorv32: harden-soc and harden-core)"
 	@echo "  make py-check             every name a tracked Python file reads is defined in that file, no file emptied before it is read (seconds)"
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
-	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, and stop at a FAIL"
+	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, too little free disk, a target past its time limit, and stop at a FAIL"
 	@echo "  make harden D=soc_top|soc_top_hazard3|user_project_wrapper|picorv32_core   harden-soc CPU=picorv32 / hazard3 / caravel, or harden-core"
 	@echo ""
 	@echo "Phase 5 targets (Hazard3 replaces PicoRV32 as the main CPU, docs/decisions/0011-hazard3-integration.md):"
@@ -371,13 +371,13 @@ neg-openram:
 
 OPENRAM_NAME = $(basename $(notdir $(OPENRAM_CONFIG)))
 # Four checks after OpenRAM: its own DRC/LVS (gen_macro), the contents of every delivered view (check_macro_views,
-# skill hard-macro-integration), the Magic full-deck DRC against the prebuilt macro, and the flow's KLayout DRC deck
+# skill macro-qualification), the Magic full-deck DRC against the prebuilt macro, and the flow's KLayout DRC deck
 # with 0 errors (ADR-0018 decision 17); all run, any FAIL fails.
 # OpenRAM's LEF has DATABASE MICRONS 2000 and no FOREIGN (--dbu 2000 --no-foreign here): the flow reads the LEF
 # that gen_antenna_lef.py rewrites to 1000 with FOREIGN added, which check_inputs.py macro_views checks with the
 # defaults (OpenROAD ODB-0292; KLayout stream-out leaves a macro without FOREIGN empty).
 # The .lib checked is the characterization template made from OpenRAM's TT .lib (internal_power from the prebuilt
-# macro): OpenRAM dev writes internal_power 1e9-1e11 (skill openram-macro-characterization rule 24), its .lib never
+# macro): OpenRAM dev writes internal_power 1e9-1e11 (skill openram-macro-generation rule 8), its .lib never
 # goes to the flow, and the template is the .lib the flow's .lib files are made from (user 2026-10-10).
 OPENRAM_OUT = runs/openram/$(OPENRAM_NAME)/macro/$(OPENRAM_NAME)
 openram-macro:
@@ -392,7 +392,7 @@ openram-macro:
 
 # View QA of the SRAM the SoC uses now (Phase 6: the OpenRAM self-generated one, ADR-0018): the repo LEF
 # (antenna added), the five characterized .lib, and OpenRAM's Verilog, SPICE and GDS (skill
-# hard-macro-integration). Seconds. check_inputs.py macro_views runs the same before every harden.
+# macro-qualification). Seconds. check_inputs.py macro_views runs the same before every harden.
 SRAM_NAME = arv_sram_2kbyte_1rw1r_32x512_8
 macro-views:
 	$(PY) scripts/check_macro_views.py --name $(SRAM_NAME) --lef ip/sram/$(SRAM_NAME)/$(SRAM_NAME).lef \

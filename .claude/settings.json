@@ -25,5 +25,31 @@
         ]
       }
     ]
+  },
+  "skillOverrides": {
+    "rtl-synthesis-lint": "name-only",
+    "dv-directed-tests": "name-only",
+    "core-migration-hazard3": "name-only",
+    "timing-constraints-sdc": "name-only",
+    "formal-equivalence-eqy": "name-only",
+    "macro-qualification": "name-only",
+    "openram-macro-generation": "name-only",
+    "openram-macro-characterization": "name-only",
+    "sram-layout-extraction": "name-only",
+    "floorplan-congestion": "name-only",
+    "hard-macro-integration": "name-only",
+    "pdn-ir-drop": "name-only",
+    "cts-clock-tree": "name-only",
+    "drv-timing-closure": "name-only",
+    "multicorner-sta": "name-only",
+    "antenna-signoff": "name-only",
+    "drc-signoff": "name-only",
+    "lvs-signoff": "name-only",
+    "gate-level-simulation": "name-only",
+    "signoff-criteria": "name-only",
+    "librelane-run-debug": "name-only",
+    "chip-floorplan-pin-planning": "name-only",
+    "caravel-user-project-integration": "name-only",
+    "tapeout-precheck-caravel": "name-only"
   }
 }

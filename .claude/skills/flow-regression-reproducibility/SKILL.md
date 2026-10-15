@@ -1,6 +1,6 @@
 ---
 name: flow-regression-reproducibility
-description: 建立或執行一鍵 regression（`make regress`、`make phase<N>`）、在乾淨 checkout 驗證端到端結果（worktree 沒有 `.tools/`：`LIBRELANE_DIR`、`XPACK_DIR`；`xPack toolchain missing`）、做來源追溯（哪個 commit、哪版 LibreLane／PDK 產生了這個 run，內容有沒有被改）、讓下游步驟拒絕過期或沒 PASS 的 run、在長時間 run 期間繼續開發或等待它結束（用 PID）、用舊 run 測新 checker（dev fixture），長 regression 開跑前的快速檢查與預跑（`make py-check`、dev fixture），或長 regression 中途因機器負載 FAIL 時使用。同樣設定重跑結果不同、golden 該給多少誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, verifying it on a clean checkout, tracking provenance, guarding downstream steps against stale runs, or developing during a long run.
+description: 建立或執行一鍵 regression（`make regress`、`regress-picorv32`、`regress-caravel`、`make phase<N>`）時使用，也用在它的機器資源問題，例如 `No space left on device`（`Errno 28`、`write error`）、regress 某一項卡住而沒有報錯（工具程序 CPU 0%、log 不再更新）、同時跑幾條被系統以記憶體不足中止、開跑前要決定同時跑幾條與看磁碟、清理舊 worktree 與中間產物、Spotlight 拖慢。其他情況：乾淨 checkout 驗證端到端結果（worktree 沒有 `.tools/`，`xPack toolchain missing`）、來源追溯（run 來自哪個 commit、哪版 LibreLane／PDK、內容有沒有被改）、下游步驟拒絕過期或沒 PASS 的 run、長 run 期間開發或用 PID 等它結束、用舊 run 測新 checker（dev fixture）、開跑前的 `make py-check` 與預跑、GDS 的 sha256 每次不同、改了共用 flow 設定後另一個設計變體 FAIL。同樣設定重跑結果不同、golden 誤差看 signoff-checker-qualification；錯誤時有時無看 librelane-run-debug。Use when building or running the end-to-end regression, its disk, memory, timeout and hang problems, clean-checkout verification, provenance and stale-run guards.
 ---
 
 # 一鍵 regression、可重現性與來源追溯
@@ -19,7 +19,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - 每個 target 各自一次 `make <target>`，依相依順序排（後面的要用前面的結果），第一個 FAIL 就停。
    - 只認 exit code 0；每支腳本自己也只在 PASS 時回 0。
    - 每個 target 的完整輸出存成 log，另外輸出摘要表與 JUnit XML。
-   - **開始前**：工作目錄必須乾淨、`MAKEFLAGS` 不能有 `-i`（子 make FAIL 也回 0）、`-n`／`-q`／`-t`（什麼都沒跑），並記下 HEAD；**結束時** HEAD 必須相同。只靠 `provenance-final` 時，它只比 harden 的紀錄：harden 之前的 target 可能跑在別的 commit 上（Phase 4 獨立審查）。`make neg-regress` 用假的 make 測這些拒絕條件（5 個情境，2 秒）。
+   - **開始前**：工作目錄必須乾淨、`MAKEFLAGS` 不能有 `-i`（子 make FAIL 也回 0）、`-n`／`-q`／`-t`（什麼都沒跑），並記下 HEAD；**結束時** HEAD 必須相同。只靠 `provenance-final` 時，它只比 harden 的紀錄：harden 之前的 target 可能跑在別的 commit 上（Phase 4 獨立審查）。`make neg-regress` 用假的 make 測這些拒絕條件（情境清單是 `scripts/neg_regress.py` 裡的 `case(...)` 呼叫，幾秒內跑完）。
    - 最後一個 target 是 `provenance-final`：HEAD 等於每個 harden run 記錄的 commit，而且工作目錄仍然乾淨，證明中間的步驟都在同一個 commit 上跑。
    - Makefile 加 `.NOTPARALLEL:`：多個 target 共用並會刪除 `runs/` 下的目錄，`make -j` 會互相刪檔。
 2. **只有乾淨 checkout 從頭跑到底才算驗證過**（`signoff-checker-qualification` 規則 10）：Phase 3 的 `make phase3` 跑了 4 次才在乾淨 checkout 跑完；前 3 次分別卡在隨機的工具錯誤、漏宣告 `fw` 依賴、植入腳本產生 Icarus 不收的網表。開發目錄都沒發現後兩個。`.tools/` 不在版控內：worktree 用 `LIBRELANE_DIR` 指向主目錄的 `.tools/librelane`、`XPACK_DIR` 指向主目錄的 `.tools/xpack-riscv-none-elf-gcc-<版本>`（Hazard3 的 `core-hazard3` 用）。regression 的第一個 target `env-check-flow` 要檢查後面每個 target 會用到的、版控外的工具，缺了就在第 1 分鐘 FAIL，不要等到用它的 target（`env/check_env.sh`：`CPU=hazard3` 時缺 xPack 判 FAIL）。
@@ -34,7 +34,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
    - `<run>_signoff/result.txt` 是 harden 的**整體**判定 PASS。
    - `provenance.json` 的 `repo_head` 等於現在的 HEAD。只看 `result.txt` 時，commit 新的 RTL 後單獨跑 `make eqy-soc` 仍會拿舊網表 PASS。
    - 檢查之前先刪掉自己的輸出目錄：被拒絕時不能留下上一次的 PASS 結果讓人誤讀。
-   - negative test：每個下游步驟 × 3 種壞 run（不是 PASS、別的 commit、沒有紀錄）＋ positive control（PASS 且是 HEAD 的 run 要通過檢查、再因為缺檔而 FAIL，證明檢查不是永遠拒絕）。`neg_run_guard.py` 共 57 個案例（14 個下游步驟，Phase 7 加了 Caravel wrapper 的 5 個），約 1 分鐘。
+   - negative test：每個下游步驟 × 3 種壞 run（不是 PASS、別的 commit、沒有紀錄）＋ positive control（PASS 且是 HEAD 的 run 要通過檢查、再因為缺檔而 FAIL，證明檢查不是永遠拒絕）。下游步驟的清單是 `neg_run_guard.py` 的 `STEPS`，壞 run 的種類與每步的 positive control 是 `CASES`；案例數以 `make neg-run-guard` 的總結行 `neg-run-guard: PASS <n>/<n>` 為準（skill 不寫案例數，`phase-exit-review` 規則 11），約 1 分鐘。
 5. **長時間 run 期間不要改主工作目錄**：harden 結束時的來源追溯會因為未提交的修改判 FAIL。要邊跑邊開發，就另開 worktree 與分支（`git worktree add -b dev ../<repo>-dev HEAD`），commit 在分支上，run 結束後在主目錄 `git merge --ff-only dev`。
 6. **拿舊 run 測試新寫的 checker**（dev fixture）：
    - 下游檢查會拒絕舊 commit 的 run，所以開發測試要另建一個假的 run 目錄：真目錄，裡面每個檔案 symlink 到舊 run，`<run>_signoff/` 寫 PASS 與現在的 HEAD。
@@ -51,6 +51,46 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
     - 從 log 判斷結果時比對整行的開頭：`regress: PASS` 也會比到 `[regress] regress-rtl: PASS ... regress: PASS 30/30` 那一行，要比 `regress: PASS <n>/<n>` 或 `^\[regress\] <target>: `。
     - 做法：開跑時記下 PID（`$!`），`while ps -p <pid> >/dev/null; do sleep 60; done`，結束後再讀 log 的總結行。Claude Code 的背景指令有時限（最長 2 小時），超過就以同一個 PID 重新等待，不要重開 run。
 
+11. **共用 flow 設定的設計變體：改了共用的設定，每個變體都要重 harden**（`review_p4_5.md` R6；根因已用實驗確認，ADR-0016）：
+    - 幾個設計變體（不同 core、macro 或 corner 組合）共用同一份 flow 設定、plugin 或 SDC 時，為其中一個改的設定，改完就在每個變體上各 harden 一次，不要等結案的 regression 才發現。
+    - 出處：Phase 5 為 Hazard3 改的設定（ADR-0013／0014、44 ns）拿回去跑 PicoRV32，signoff setup −0.113 ns FAIL；根因是兩個 CPU 共用的 CTS 對 SRAM 的 latency 對齊（ADR-0016 背景、`core-migration-hazard3` 經驗紀錄 2026-10-07）。結案前改到 harden 流程（例如重試邏輯）時，每個變體也都要在同一個 commit 重跑（本 skill 經驗紀錄 2026-10-08）。
+    - 現有防護：`pnr/soc_top/check_inputs.py` 的 `cpu_config` 列要求兩份 soc_top config 只差 RTL；`make regress-picorv32` 在結案時跑。開發中改設定時沒有自動提醒，靠本條。
+12. **GDS 的 sha256 每次不同，不代表 flow 不可重現**（工具行為；出現三次，都已驗證：`docs/notes/openram_phase6_bringup.md:90`、本 skill 經驗紀錄 2026-10-11、`docs/notes/caravel_precheck_phase7.md:157`；`review_p6_7.md` 建議 6、`verify_and_merge.md` 1.3 第 6 項）：
+    - **症狀**：同一個 commit、同樣設定的兩次 harden（或兩次產生 macro），網表、DEF 的 sha256 相同，GDS 的 sha256 不同。
+    - **怎麼發現**：差異的位元組落在 GDS 的 BGNLIB 與每個 cell 的 BGNSTR 記錄，這兩種記錄存的是修改與存取日期；把它們清成零後 sha256 相同（Phase 6 三個設計實測）。
+    - **怎麼繞過**：比對版圖是否重現時，網表、DEF 比 sha256；GDS 用 KLayout XOR，或先清掉日期記錄再比（macro 的同一做法在 `openram-macro-generation` 規則 4）。反過來，把結果綁到某一份 GDS 的 checker 要綁**這一次**的雜湊：同一個版圖重新 harden 後雜湊也會變，不能拿上一次 harden 的報表代替。
+    - **防復發**：regression 比的是 metrics 與 golden，不比 GDS 的 sha256，所以不會因日期誤判；precheck 的報表要對得上這一次 GDS 的 sha1，由 `signoff/precheck/check_precheck.py` 檢查（植入錯誤 `neg_precheck.py` 的 `stale_results`）；macro 的 GDS 由 `check_macro_gds.py` 逐圖形比對，不受日期影響。「同一設定重產兩次的 GDS 要 XOR 為 0」沒有自動防護（`docs/phase_exit/phase6.md`「規則 10 稽核」表）。
+
+## 資源與長時間工作
+
+本節的規則都已驗證：記憶體不足 2 次（2026-10-07 被使用者另一個程式佔掉、2026-10-10 兩個 CPU 的 `neg-pnr` 同時跑）、磁碟滿 1 次（2026-10-15）、Spotlight 負載 1 次（Phase 4 regress 第 3 次），見下方經驗紀錄與「已知陷阱」；合併與核對在 `docs/notes/problem_review/verify_and_merge.md` B1 與 2.3（`review_p4_5.md` R1、`review_p6_7.md` 建議 1、`review_skills.md` R1–R3）。本設計的數字（機器記憶體、每條 regress 的磁碟用量、平行上限）放在 ADR 與 exit review，這裡只寫判斷方法。
+
+13. **同時跑幾條，依記憶體決定**：
+    - **症狀**：背景工作被中止，log 沒有 FAIL 行；swap 一直漲。Claude Code 在系統記憶體吃緊時會停掉閒置 session 的背景指令（經驗紀錄 2026-10-07）。
+    - **怎麼發現**：開跑前與執行中看 `vm_stat`／`top` 的可用記憶體與 swap，`ps` 看有沒有別的大程式在跑；工作消失時先看當時的記憶體，再判斷是不是設計或工具的問題。
+    - **怎麼做**：開跑前算「同時執行的重工作總數」：每條 regress 自己的 harden，加上 `neg-pnr` 等用 `-j` 平行的 negative test（各條的 `-j` 要加總），加上 EQY、ngspice（`openram-macro-characterization` 規則 4 的每個 run 約 4.2 GB）；乘以每個的記憶體峰值（先量一次，記在 repo 文件），要小於實體記憶體減去其他程式。超過就依序跑或降低 `-j`，上限寫進 ADR。本 repo（24 GB 機器）：兩個 CPU 的 `neg-pnr` 各 `-j 4` 被系統中止，改成一次一個 CPU、`-j 2` 跑完（ADR-0018 決定 17）。被系統中止的工作不自動重開，回報使用者。
+    - **防復發**：沒有通用的自動防護。使用者這台機器的全域 hook 讀 `.claude/guard.json`（同時最多 2 個 LibreLane 或 EQY、可用記憶體至少 4 GB），但它只在 Claude Code 下指令那一刻數程序，數不到 `make regress` 之後才產生的程序與 `neg-pnr` 用的 `librelane.steps run`，換機器或用 Codex 時不存在（`verify_and_merge.md` 2.3、`review_skills.md` 5.2）。原因：記憶體峰值隨設計、corner 數與 `-j` 變，門檻要每個專案先量；照 ADR-0020 決定 2，下一個專案開始時做成 checker。
+14. **開跑前看磁碟剩餘空間**：
+    - **症狀**：`OSError: [Errno 28] No space left on device`、`echo: write error: No space left on device`；EQY 的 negative test 因為寫檔失敗被判成「eqy 沒有 FAIL」（看起來像 checker 沒抓到植入的錯誤）；另一條同時跑的 regress 不報錯而是卡住（規則 15）。
+    - **怎麼發現**：`df -h <repo>`；FAIL 的 log 裡搜 `No space left`、`Errno 28`、`write error`。
+    - **怎麼做**：開跑前確認剩餘空間 ≥ 條數 × 每條的峰值，再加餘量；峰值先量一次記在 repo 文件，還沒量之前用已知的中間產物大小估（本 repo 每個 regress worktree 的 negative test 中間產物 40–70 GB，`docs/phase_exit/phase7.md` 已知限制 20）。不夠就先做規則 16 的清理。磁碟滿過的那一輪不算證據：FAIL 的那條整條重跑；沒報錯的那條要查過 log 沒有寫入錯誤、golden 逐值相同才保留（經驗紀錄 2026-10-15）。
+    - **防復發**：`scripts/regress.py` 開跑前檢查 checkout 所在磁碟的剩餘空間，少於 `REGRESS_MIN_FREE_GB`（預設 100 GiB）就在第一個 target 之前 FAIL（`regress: FAIL before the first target (only <n> GiB free ...)`；ADR-0021 決定 3）；negative test `make neg-regress` 的 `low_disk`。門檻是一條 regress 的估計，同時跑幾條時要自己乘上條數。
+15. **每個 regress 項目都要有逾時；卡住要能判斷**：
+    - **症狀**：某一項跑得比平常久很多、沒有任何錯誤訊息。2026-10-15：磁碟滿之後，`neg-pnr` 一個案例的 10 個 `sta` 程序 CPU 0%，`sta.log` 87 分鐘沒更新（同一項上一輪整個只要 16 分鐘）。
+    - **怎麼發現**（卡住的判斷）：該項的耗時和上一次完整 regress 的 `summary.md` 比（`scripts/progress.py` 也依它估剩餘時間）；`ps -o pid,pcpu,etime,command` 看工具程序的 CPU，長時間接近 0% 就可疑；`ls -lt` 看該項 log 與工具 log 的修改時間有沒有在動；最後 `df -h`。只有「沒有輸出」不算卡住：有些步驟本來就長時間不印東西，要三項（耗時、CPU、log 修改時間）一起看。
+    - **怎麼做**：確定卡住就用 PID 停掉那條 regress（規則 10），先排除原因（例如磁碟），再整條重跑；不要只重跑卡住的那一項當證據（規則 2）。寫檢查或 regress 項目時，逾時的例外要轉成 FAIL 並印出 FAIL 那一行，不能讓 `TimeoutExpired` 這類例外讓腳本直接結束而沒有判定（`openram-macro-characterization` 經驗紀錄 2026-10-09：`make openram-power` 逾時中斷，沒有 `power: FAIL` 行）。
+    - **防復發**：`scripts/regress.py` 每個 target 有逾時：參考時間（`REF_MIN`，2026-10-15 結案 run 的實測）× 3、至少 30 分鐘，再乘 `REGRESS_TIMEOUT_SCALE`（預設 1）；逾時先送 SIGTERM、再對整個程序群組送 SIGKILL，判 FAIL，log 有 `regress: TIMEOUT <target> after <n> min (limit <m> min: ...)`（ADR-0021 決定 3）；negative test `make neg-regress` 的 `timeout`（子程序忽略 SIGTERM，仍要被砍掉）。限制：自己開 session 的程序（docker／lima 容器裡的 precheck）不在程序群組裡，逾時砍不到，要另外 `limactl`／`docker` 停掉。target 的時間變長很多（換設計、加 corner）時要更新 `REF_MIN`。工具「停住但程序還在」只能靠逾時抓，沒有更早的自動偵測。
+16. **舊 worktree 與中間產物的清理**：
+    - **症狀**：磁碟慢慢被佔滿（規則 14）；在上層目錄開 Claude Code 時，舊 worktree 裡舊版的 skill 也會列出來（`arvinsa-rtl-gds-flow.md` 1.1）。2026-10-15 時之前 Phase 留下的 11 個 worktree 合計約 650 GB（經驗紀錄 2026-10-15）。
+    - **怎麼發現**：`git worktree list`；`du -sh ../<repo>-*/runs` 與各 negative test 的目錄（本 repo 最大的是 `neg_eqy_*`、`neg_pnr`）。
+    - **怎麼做**：每條結案 regress 跑完，先把 exit review 要引用的證據（console log、`summary.md`、`criteria_review.md` 等）複製到主目錄 `runs/<名稱>/` 並改引用路徑（`phase-exit-review` 規則 3），再刪 negative test 的中間目錄（重跑會重新產生）；Phase 結案後列出要刪的 worktree 與大小，經使用者確認後用 `git worktree remove --force <目錄>` 刪（有 submodule 的 worktree 不加 `--force` 會被拒絕，`git help worktree`）。只刪自己建的 worktree 與自己的產出。
+    - **防復發**：沒有自動防護；`phase-exit-review` 規則 9 的收尾清單有這一項，開跑前的磁碟檢查（規則 14）會在空間不夠時擋下。原因：哪些證據要留由 exit review 決定，不適合讓 checker 自動刪。
+17. **`runs/` 與 worktree 不要被 Spotlight 索引**（macOS）：
+    - **症狀**：長 run 期間 `mds`、`mdworker` 佔 CPU；多個 worktree 同時有新 run 時開到約 10 個 `mdworker`（load 17–21），有牆鐘時限的步驟（gate-level 模擬）逾時（Phase 4 regress 第 3 次，「已知陷阱」最後一列）。
+    - **怎麼發現**：`ps` 看 `mdworker` 的數量與 CPU；`mdfind -onlyin <repo>/runs -name criteria_review.md` 有結果就表示 `runs/` 還在被索引（2026-10-15 本機實測仍有結果）。
+    - **怎麼做**：把 repo 與 worktree 的上層目錄加進「系統設定 → Spotlight」的排除清單（要使用者操作，由使用者決定）；做之前，有牆鐘時限的步驟留足餘裕（`gate-level-simulation` 規則 6）。
+    - **防復發**：沒有自動防護。原因：這是作業系統的設定，不在 repo 裡；換機器時要重新做。
+
 ## 已知陷阱
 
 | 陷阱 | 對策 | 出處 |
@@ -63,7 +103,7 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 長 run 中改了檔案，結束時來源追溯 FAIL | 另開 worktree（規則 5） | Phase 4 |
 | 函式改名後漏改的呼叫，要跑到那一案才 `NameError` | `make py-check`（規則 9） | Phase 4 預跑（neg-pnr P11） |
 | 一次乾淨 run 與 golden 完全相同，就當作流程可重現 | 不可重現的那一步（多執行緒 detailed routing）產生的 metrics 先逐一分類（`signoff-checker-qualification` 規則 5）；完全相同可能只是剛好 | Phase 4 regress 1 434/434 相同，regress 2 有 1 個中間數字不同而 FAIL |
-| macOS 的 Spotlight 會索引 `runs/` 裡幾 GB 的報告檔：平常占兩個核心，多個 worktree 同時有新 run 時開到約 10 個 `mdworker`（load 17–21） | 有牆鐘時限的步驟要留足餘裕（`gate-level-simulation` 規則 6）；長 run 時注意 `mds` 的 CPU；可把 repo 與 worktree 排除在索引外（系統設定 → Spotlight，使用者決定） | Phase 4（`ps` 觀察；regress 3 因此 FAIL） |
+| macOS 的 Spotlight 會索引 `runs/` 裡幾 GB 的報告檔：平常占兩個核心，多個 worktree 同時有新 run 時開到約 10 個 `mdworker`（load 17–21） | 規則 17：把 repo 與 worktree 排除在索引外（使用者決定）；有牆鐘時限的步驟要留足餘裕（`gate-level-simulation` 規則 6） | Phase 4（`ps` 觀察；regress 3 因此 FAIL） |
 
 ## 用完後
 
@@ -96,3 +136,4 @@ checker 本身怎麼設計、golden 怎麼比，看 `signoff-checker-qualificati
 | 2026-10-11 | Phase 6 結案前兩輪（`4713c5f`，worktree p6final_h3、p6final_pico） | Hazard3 `make regress` 23/23（152 分鐘）、PicoRV32 `make regress-picorv32` 28/28（135 分鐘）；三次 harden 的 golden 逐值相同，最終網表、DEF 的 sha256 與先前的 run 相同，GDS 的 sha256 卻不同 | 已驗證：差異位元組在 GDS 的 BGNLIB／BGNSTR 記錄（只存修改與存取日期）；把這兩種記錄的內容清成零後 sha256 相同（三個設計） | 比對 harden 的版圖是否重現，比網表、DEF 的 sha256，GDS 用 XOR 或清除日期記錄後再比；不要因為 GDS sha256 不同就判 flow 不可重現 | `runs/p6final_summary.txt`、`../arvinsa-rtl-gds-p6final_*/runs/*_signoff/criteria_review.md`、筆記 `docs/notes/openram_phase6_bringup.md` 步驟 4d |
 | 2026-10-14 | Phase 7 結案第一輪（`84fe505`，worktree p7close_h3、p7close_caravel、p7close_pico 同時跑） | 三條平行：Hazard3 157 分鐘、wrapper 約 6.5 小時（harden 236 分鐘，單獨跑 182）、PicoRV32 216 分鐘；swap 最高約 5 GB。wrapper 455、Hazard3 441、PicoRV32 SoC 435 個 metrics 逐值相同；picorv32_core 第一次有 29 個落在誤差內（繞線 +2 µm、via −1，hold slack 差 10⁻⁶ ns） | 推測：負載重時多執行緒 detailed routing 的順序不同（Phase 5 已知限制 4 的同一現象） | 誤差表吸收；wrapper 的誤差維持 hazard3 的值（ADR-0019 決定 26）。`PRECHECK_DIR` 依 checkout 分開，兩個 worktree 的 precheck 互不覆蓋 | `runs/p7close_regress_*.console`；`p7close_pico/runs/picorv32_core_signoff/criteria_review.md` |
 | 2026-10-15 | Phase 7 結案第二輪（`2b04451`，worktree p7close2_h3、p7close2_caravel、p7close2_pico 同時跑） | PicoRV32 `make regress-picorv32` 在 `neg-eqy-core` FAIL（第 30 項，前 29 項 PASS）：`OSError: [Errno 28] No space left on device`，同時兩個案例被判「eqy 沒有 FAIL」（`x8_bit24_stuck0` exit 120、`nand2_to_nor2` 沒有原因），`eqy_run.log` 是 `./run.sh: line 9: echo: write error: No space left on device`；rc=2。同時跑的 Hazard3 `make regress` 沒有報錯，而是 `neg-pnr` 卡住：P32 案例 10 個 corner 的 `sta` 程序 CPU 0%，`sta.log` 停在 03:33，87 分鐘沒有進度（第一輪整個 neg-pnr 16 分鐘）。1.8 TB 磁碟剩 0.8–29 GiB 之間擺動 | 已驗證：每個 regress worktree 的 negative test 中間產物 40–70 GB（PicoRV32：`neg_eqy_soc_top` 21 GB、`neg_pnr` 14 GB、`neg_eqy_picorv32_core` 8.5 GB），之前 Phase 留下的 11 個 worktree 合計約 650 GB；三條平行時 neg-pnr、neg-eqy 反覆建立與刪除案例目錄 | 刪掉失敗那條的三個中間目錄（約 43 GB，重跑會重新產生）；停掉卡住的 Hazard3 regress，兩條都整條重跑；wrapper 那條查過 log 沒有寫入錯誤、golden 逐值相同，保留。沒有自動防護：regress 的項目沒有逾時，寫檔失敗後卡住的工具不會變成 FAIL（看各項的耗時與 log 的修改時間才發現）；`env-check-flow` 不檢查剩餘空間（推測每條 regress 的峰值約 50–70 GB，還沒量） | 主目錄 `runs/p7close2_regress_picorv32.console`；worktree p7close2_pico 的 `runs/regress_picorv32/neg-eqy-core.log` |
+| 2026-10-15 | Phase 0–7 問題總檢討（ADR-0021） | 四份審查與反向驗證：資源問題（記憶體、磁碟、卡住、舊 worktree）已驗證 5 次，規則本文只有規則 9 一句事後判讀；GDS sha256 三次；共用 flow 設定讓另一個變體 FAIL 一次（根因已實驗確認）；規則 1、4 寫死的案例數已和腳本不符 | 已驗證（`docs/notes/problem_review/verify_and_merge.md` 1.2 R1／R6、1.3 第 1、6 項、2.3；`review_skills.md` Q10）。`mdfind -onlyin <repo>/runs` 本機仍有結果，`runs/` 還在被 Spotlight 索引 | 新增規則 11、12 與「資源與長時間工作」一節（規則 13–17），規則 1、4 改成指向腳本；磁碟檢查與逾時的 checker 由 ADR-0021 決定 3 另做 | `docs/notes/problem_review/`、ADR-0021 |

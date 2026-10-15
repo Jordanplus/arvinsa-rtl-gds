@@ -46,7 +46,7 @@ OpenRAM 不在 repo 裡改，改動一律放在 `patches/*.patch`（相對 OpenR
 | `macro_drc.py` | 整顆 macro 的 Magic full 規則 DRC，逐種類和預建 macro 的 baseline（`drc_baseline_*.json`）比較（`make openram-macro` 的第三步；四步都會跑，任一 FAIL 就 FAIL） |
 | `macro_klayout_drc.py` | 整顆 macro 跑 flow 的 KLayout deck（`sky130A_mr.drc`，參數同 flow 的 `KLAYOUT_DRC_DEFINES`），要 0；cell 名稱符合 deck 的排除樣式 `*sky130_sram_*kbyte_*` 也算 FAIL（`make openram-macro` 的第四步） |
 | `read_check.py` | 步驟 3a：用 `ip/sram/char/` 的方法在各 PVT 檢查讀取正確性 |
-| `lib_template.py` | `make openram-lib-template`：OpenRAM 的 TT .lib 當特性化範本前，internal_power 換成預建 macro 的值（OpenRAM dev 寫成 1e9–1e11；skill `openram-macro-characterization` 規則 24） |
+| `lib_template.py` | `make openram-lib-template`：OpenRAM 的 TT .lib 當特性化範本前，internal_power 換成預建 macro 的值（OpenRAM dev 寫成 1e9–1e11；skill `openram-macro-generation` 規則 8） |
 | `patches/` | 對 OpenRAM 的修改（上一節） |
 | `gen_macro.py` | `make openram-macro`。PASS 要同時滿足：log 沒有 `ERROR`（OpenRAM 在 LVS 不一致時仍回傳 0）、DRC ≤ 上限、LVS `Circuits match uniquely.`、產出檔齊全。`summary.json` 也記 `spice_content_sha256`（與子電路順序、註解無關的網表雜湊，ADR-0018 決定 17）；`--judge-only` 對已跑完的 run 重新判定並改寫 `summary.json` |
 | `check_install.py` | cell 庫安裝完整、OpenRAM 工作樹＝釘選 commit＋patch |
