@@ -1,0 +1,38 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+Warning: ~/claude_prjs/arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v line 23905, module sky130_fd_sc_hd__fill_1 not found. Creating black box for FILLER_0_1007.
+Warning: ~/claude_prjs/arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v line 23917, module sky130_fd_sc_hd__fill_2 not found. Creating black box for FILLER_0_1073.
+Warning: ~/claude_prjs/arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v line 85819, module sky130_fd_sc_hd__tapvpwrvgnd_1 not found. Creating black box for TAP_TAPCELL_ROW_0_572.
+== hazard3 min_ff_n40C hold to sram0 inputs
+min_delay/hold group clk
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+sram0/wmask0[0] (arv_sram_2kbyte_1rw1r_32x512_8)    2.07    2.35    0.28 (MET)
+
+== hazard3 min_ff_n40C hold worst 126412440.000
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib line 1, library sky130_fd_sc_hd__ff_n40C_1v95 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95 already exists.
+== picorv32 min_ff_n40C hold to sram0 inputs
+min_delay/hold group clk
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+sram0/wmask0[0] (arv_sram_2kbyte_1rw1r_32x512_8)    2.14    2.23    0.09 (MET)
+
+== picorv32 min_ff_n40C hold worst 81536120.000

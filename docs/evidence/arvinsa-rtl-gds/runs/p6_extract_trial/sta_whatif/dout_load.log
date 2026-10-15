@@ -1,0 +1,28 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+Warning: ~/claude_prjs/arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v line 23905, module sky130_fd_sc_hd__fill_1 not found. Creating black box for FILLER_0_1007.
+Warning: ~/claude_prjs/arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v line 23917, module sky130_fd_sc_hd__fill_2 not found. Creating black box for FILLER_0_1073.
+Warning: ~/claude_prjs/arvinsa-rtl-gds-p6final_h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v line 85819, module sky130_fd_sc_hd__tapvpwrvgnd_1 not found. Creating black box for TAP_TAPCELL_ROW_0_572.
+== hazard3 min dout0 load pF: min 0.0035 max 0.0234 n 32
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib line 1, library sky130_fd_sc_hd__tt_025C_1v80 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80 already exists.
+== hazard3 max dout0 load pF: min 0.0038 max 0.0264 n 32
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib line 1, library sky130_fd_sc_hd__tt_025C_1v80 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80 already exists.
+== picorv32 min dout0 load pF: min 0.0034 max 0.0188 n 32
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib line 1, library sky130_fd_sc_hd__tt_025C_1v80 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80 already exists.
+== picorv32 max dout0 load pF: min 0.0036 max 0.0208 n 32

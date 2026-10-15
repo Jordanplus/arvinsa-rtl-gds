@@ -1,0 +1,257 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+[12:57:14] [I] Starting a new run of the 'Classic'' flow with the    flow.py:654
+               tag 'p6_fp_pico'.                                                
+[12:57:14] [I] Starting…                                       sequential.py:339
+[12:57:14] [V] Running 'Verilator.Lint' at                          step.py:1138
+               '../../runs/p6_fp_pico/01-verilator-lint'…                       
+[12:57:14] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/01-verilator-lint/verilator-l             
+               int.log'…                                                        
+[12:57:15] [V] Running 'Checker.LintTimingConstructs' at            step.py:1138
+               '../../runs/p6_fp_pico/02-checker-linttimingconstruc             
+               ts'…                                                             
+[12:57:15] [I] Check for Lint Timing Errors clear.                checker.py:412
+[12:57:15] [V] Running 'Checker.LintErrors' at                      step.py:1138
+               '../../runs/p6_fp_pico/03-checker-linterrors'…                   
+[12:57:15] [I] Check for Lint errors clear.                       checker.py:131
+[12:57:15] [V] Running 'Checker.LintWarnings' at                    step.py:1138
+               '../../runs/p6_fp_pico/04-checker-lintwarnings'…                 
+[12:57:15] [W] 499 Lint warnings found.                           checker.py:122
+[12:57:15] [V] Running 'Yosys.JsonHeader' at                        step.py:1138
+               '../../runs/p6_fp_pico/05-yosys-jsonheader'…                     
+[12:57:15] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/05-yosys-jsonheader/yosys-jso             
+               nheader.log'…                                                    
+[12:57:15] [V] Running 'Yosys.Synthesis' at                         step.py:1138
+               '../../runs/p6_fp_pico/06-yosys-synthesis'…                      
+[12:57:15] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/06-yosys-synthesis/yosys-synt             
+               hesis.log'…                                                      
+[12:57:29] [V] Parsing synthesis checks…                            pyosys.py:59
+[12:57:29] [V] Parsing synthesis checks…                            pyosys.py:59
+[12:57:29] [V] Running 'Checker.YosysUnmappedCells' at              step.py:1138
+               '../../runs/p6_fp_pico/07-checker-yosysunmappedcells             
+               '…                                                               
+[12:57:29] [I] Check for Unmapped Yosys instances clear.          checker.py:131
+[12:57:29] [V] Running 'Checker.YosysSynthChecks' at                step.py:1138
+               '../../runs/p6_fp_pico/08-checker-yosyssynthchecks'…             
+[12:57:29] [I] Check for Yosys check errors clear.                checker.py:131
+[12:57:29] [V] Running 'Checker.NetlistAssignStatements' at         step.py:1138
+               '../../runs/p6_fp_pico/09-checker-netlistassignstate             
+               ments'…                                                          
+[12:57:29] [V] Running 'OpenROAD.CheckSDCFiles' at                  step.py:1138
+               '../../runs/p6_fp_pico/10-openroad-checksdcfiles'…               
+[12:57:29] [V] Running 'OpenROAD.CheckMacroInstances' at            step.py:1138
+               '../../runs/p6_fp_pico/11-openroad-checkmacroinstanc             
+               es'…                                                             
+[12:57:29] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/11-openroad-checkmacroinstanc             
+               es/openroad-checkmacroinstances.log'…                            
+[12:57:29] [V] Running 'OpenROAD.STAPrePNR' at                      step.py:1138
+               '../../runs/p6_fp_pico/12-openroad-staprepnr'…                   
+[12:57:29] [I] Starting STA for the nom_tt_025C_1v80 timing      openroad.py:749
+               corner…                                                          
+[12:57:29] [I] Starting STA for the nom_ss_100C_1v60 timing      openroad.py:749
+               corner…                                                          
+[12:57:29] [I] Starting STA for the nom_ff_n40C_1v95 timing      openroad.py:749
+               corner…                                                          
+[12:57:29] [I] Starting STA for the nom_ss_n40C_1v60 timing      openroad.py:749
+               corner…                                                          
+[12:57:29] [I] Starting STA for the nom_ff_100C_1v95 timing      openroad.py:749
+               corner…                                                          
+[12:57:29] [I] Skipping corner min_tt_025C_1v80 for STA          openroad.py:787
+               (identical to nom_tt_025C_1v80 at this stage)…                   
+[12:57:29] [I] Skipping corner min_ss_100C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_100C_1v60 at this stage)…                   
+[12:57:29] [I] Skipping corner min_ff_n40C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_n40C_1v95 at this stage)…                   
+[12:57:29] [I] Skipping corner min_ss_n40C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_n40C_1v60 at this stage)…                   
+[12:57:29] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/12-openroad-staprepnr/nom_tt_             
+               025C_1v80/sta.log'…                                              
+[12:57:29] [I] Skipping corner min_ff_100C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_100C_1v95 at this stage)…                   
+[12:57:29] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/12-openroad-staprepnr/nom_ss_             
+               100C_1v60/sta.log'…                                              
+[12:57:29] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/12-openroad-staprepnr/nom_ff_             
+               n40C_1v95/sta.log'…                                              
+[12:57:29] [I] Skipping corner max_tt_025C_1v80 for STA          openroad.py:787
+               (identical to nom_tt_025C_1v80 at this stage)…                   
+[12:57:29] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/12-openroad-staprepnr/nom_ss_             
+               n40C_1v60/sta.log'…                                              
+[12:57:29] [I] Skipping corner max_ss_100C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_100C_1v60 at this stage)…                   
+[12:57:29] [I] Skipping corner max_ff_n40C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_n40C_1v95 at this stage)…                   
+[12:57:29] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/12-openroad-staprepnr/nom_ff_             
+               100C_1v95/sta.log'…                                              
+[12:57:29] [I] Skipping corner max_ss_n40C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_n40C_1v60 at this stage)…                   
+[12:57:29] [I] Skipping corner max_ff_100C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_100C_1v95 at this stage)…                   
+[12:57:35] [I] Finished STA for the nom_ff_n40C_1v95 timing      openroad.py:764
+               corner.                                                          
+[12:57:35] [I] Finished STA for the nom_ff_100C_1v95 timing      openroad.py:764
+               corner.                                                          
+[12:57:35] [I] Finished STA for the nom_ss_n40C_1v60 timing      openroad.py:764
+               corner.                                                          
+[12:57:35] [I] Finished STA for the nom_tt_025C_1v80 timing      openroad.py:764
+               corner.                                                          
+[12:57:35] [I] Finished STA for the nom_ss_100C_1v60 timing      openroad.py:764
+               corner.                                                          
+[12:57:35] [V] Running 'OpenROAD.Floorplan' at                      step.py:1138
+               '../../runs/p6_fp_pico/13-openroad-floorplan'…                   
+[12:57:35] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/13-openroad-floorplan/openroa             
+               d-floorplan.log'…                                                
+[12:57:36] [V] Running 'OpenROAD.DumpRCValues' at                   step.py:1138
+               '../../runs/p6_fp_pico/14-openroad-dumprcvalues'…                
+[12:57:36] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/14-openroad-dumprcvalues/open             
+               road-dumprcvalues.log'…                                          
+[12:57:36] [V] Running 'Odb.CheckMacroAntennaProperties' at         step.py:1138
+               '../../runs/p6_fp_pico/15-odb-checkmacroantennaprope             
+               rties'…                                                          
+[12:57:36] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/15-odb-checkmacroantennaprope             
+               rties/odb-checkmacroantennaproperties.log'…                      
+[12:57:36] [W] Cell 'arv_sram_2kbyte_1rw1r_32x512_8' has (64) output   odb.py:71
+               pin(s) without antenna diffusion information. They               
+               might not be driven.                                             
+[12:57:37] [V] Running 'Odb.SetPowerConnections' at                 step.py:1138
+               '../../runs/p6_fp_pico/16-odb-setpowerconnections'…              
+[12:57:37] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/16-odb-setpowerconnections/od             
+               b-setpowerconnections.log'…                                      
+[12:57:37] [V] Running 'Odb.ManualMacroPlacement' at                step.py:1138
+               '../../runs/p6_fp_pico/17-odb-manualmacroplacement'…             
+[12:57:37] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/17-odb-manualmacroplacement/o             
+               db-manualmacroplacement.log'…                                    
+[12:57:37] [V] Running 'OpenROAD.CutRows' at                        step.py:1138
+               '../../runs/p6_fp_pico/18-openroad-cutrows'…                     
+[12:57:37] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/18-openroad-cutrows/openroad-             
+               cutrows.log'…                                                    
+[12:57:38] [V] Running 'OpenROAD.TapEndcapInsertion' at             step.py:1138
+               '../../runs/p6_fp_pico/19-openroad-tapendcapinsertio             
+               n'…                                                              
+[12:57:38] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/19-openroad-tapendcapinsertio             
+               n/openroad-tapendcapinsertion.log'…                              
+[12:57:39] [V] Running 'Odb.AddPDNObstructions' at                  step.py:1138
+               '../../runs/p6_fp_pico/20-odb-addpdnobstructions'…               
+[12:57:39] [I] 'PDN_OBSTRUCTIONS' is not defined. Skipping            odb.py:589
+               'Odb.AddPDNObstructions'…                                        
+[12:57:39] [V] Running 'OpenROAD.GeneratePDN' at                    step.py:1138
+               '../../runs/p6_fp_pico/21-openroad-generatepdn'…                 
+[12:57:39] [I] 'PDN_CFG' not explicitly set, setting it to      openroad.py:1483
+               ~/claude_prjs/arvinsa-rtl-gds/.t                 
+               ools/librelane/librelane/scripts/openroad/common                 
+               /pdn_cfg.tcl…                                                    
+[12:57:39] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p6_fp_pico/21-openroad-generatepdn/openr             
+               oad-generatepdn.log'…                                            
+[12:57:39] [I] Skipping step 'Remove PDN obstructions'…        sequential.py:370
+[12:57:39] [I] Skipping step 'Add Obstructions'…               sequential.py:370
+[12:57:39] [I] Skipping step 'Global Placement Skip IO'…       sequential.py:370
+[12:57:39] [I] Skipping step 'I/O Placement'…                  sequential.py:370
+[12:57:39] [I] Skipping step 'Custom I/O Placement'…           sequential.py:370
+[12:57:39] [I] Skipping step 'Apply DEF Template'…             sequential.py:370
+[12:57:39] [I] Skipping step 'Global Placement'…               sequential.py:370
+[12:57:39] [I] Skipping step 'Write Verilog Header'…           sequential.py:370
+[12:57:39] [I] Skipping step 'Power Grid Violation Checker'…   sequential.py:370
+[12:57:39] [I] Skipping step 'STA (Mid-PnR)'…                  sequential.py:370
+[12:57:39] [I] Skipping step 'Repair Design (Post-Global       sequential.py:370
+               Placement)'…                                                     
+[12:57:39] [I] Skipping step 'Manual Global Placement'…        sequential.py:370
+[12:57:39] [I] Skipping step 'Detailed Placement'…             sequential.py:370
+[12:57:39] [I] Skipping step 'Clock Tree Synthesis (no macro   sequential.py:370
+               latency balancing)'…                                             
+[12:57:39] [I] Skipping step 'STA (Mid-PnR)'…                  sequential.py:370
+[12:57:39] [I] Skipping step 'Resizer Timing Optimizations     sequential.py:370
+               (Post-Clock Tree Synthesis)'…                                    
+[12:57:39] [I] Skipping step 'STA (Mid-PnR)'…                  sequential.py:370
+[12:57:39] [I] Skipping step 'Global Routing'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'Check Antennas'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'Repair Design (Post-Global       sequential.py:370
+               Routing)'…                                                       
+[12:57:39] [I] Skipping step 'Diodes on Ports'…                sequential.py:370
+[12:57:39] [I] Gating variable for step                        sequential.py:362
+               'Odb.HeuristicDiodeInsertion' set to 'False'-                    
+               the step will be skipped.                                        
+[12:57:39] [I] Skipping step 'Heuristic Diode Insertion'…      sequential.py:370
+[12:57:39] [I] Skipping step 'Antenna Repair'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'Resizer Timing Optimizations     sequential.py:370
+               (Post-Global Routing)'…                                          
+[12:57:39] [I] Skipping step 'STA (Mid-PnR)'…                  sequential.py:370
+[12:57:39] [I] Skipping step 'Detailed Routing'…               sequential.py:370
+[12:57:39] [I] Skipping step 'Remove Obstructions'…            sequential.py:370
+[12:57:39] [I] Skipping step 'Check Antennas'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'Routing DRC Checker'…            sequential.py:370
+[12:57:39] [I] Skipping step 'Report Disconnected Pins'…       sequential.py:370
+[12:57:39] [I] Skipping step 'Disconnected Pins Checker'…      sequential.py:370
+[12:57:39] [I] Skipping step 'Report Wire Length'…             sequential.py:370
+[12:57:39] [I] Skipping step 'Wire Length Threshold Checker'…  sequential.py:370
+[12:57:39] [I] Skipping step 'Fill Insertion'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'Generate Cell Frequency Tables'… sequential.py:370
+[12:57:39] [I] Skipping step 'Parasitics (RC) Extraction'…     sequential.py:370
+[12:57:39] [I] Skipping step 'STA (Post-PnR)'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'IR Drop Report'…                 sequential.py:370
+[12:57:39] [I] Skipping step 'GDSII Stream Out (Magic)'…       sequential.py:370
+[12:57:39] [I] Skipping step 'GDSII Stream Out (KLayout)'…     sequential.py:370
+[12:57:39] [I] Skipping step 'Render Image (w/ KLayout)'…      sequential.py:370
+[12:57:39] [I] Skipping step 'Write LEF (Magic)'…              sequential.py:370
+[12:57:39] [I] Skipping step 'Check Antenna Properties of Pins sequential.py:370
+               in The Generated Design LEF view'…                               
+[12:57:39] [I] Skipping step 'KLayout vs. Magic XOR'…          sequential.py:370
+[12:57:39] [I] Skipping step 'XOR Difference Checker'…         sequential.py:370
+[12:57:39] [I] Skipping step 'DRC'…                            sequential.py:370
+[12:57:39] [I] Skipping step 'Design Rule Check (KLayout)'…    sequential.py:370
+[12:57:39] [I] Skipping step 'Magic DRC Checker'…              sequential.py:370
+[12:57:39] [I] Skipping step 'KLayout DRC Checker'…            sequential.py:370
+[12:57:39] [I] Skipping step 'SPICE Extraction'…               sequential.py:370
+[12:57:39] [I] Skipping step 'Illegal Overlap Checker'…        sequential.py:370
+[12:57:39] [I] Skipping step 'Netgen LVS'…                     sequential.py:370
+[12:57:39] [I] Skipping step 'LVS Error Checker'…              sequential.py:370
+[12:57:39] [I] Gating variable for step 'Yosys.EQY' set to     sequential.py:362
+               'False'- the step will be skipped.                               
+[12:57:39] [I] Skipping step 'Equivalence Check'…              sequential.py:370
+[12:57:39] [I] Skipping step 'Setup Timing Violations          sequential.py:370
+               Checker'…                                                        
+[12:57:39] [I] Skipping step 'Hold Timing Violations Checker'… sequential.py:370
+[12:57:39] [I] Skipping step 'Max Slew Violations Checker'…    sequential.py:370
+[12:57:39] [I] Skipping step 'Max Cap Violations Checker'…     sequential.py:370
+[12:57:39] [I] Skipping step 'Report Manufacturability'…       sequential.py:370
+[12:57:39] [I] Saving views to                                      state.py:209
+               '~/claude_prjs/arvinsa-rtl-gds/runs/             
+               p6_fp_pico/final'…                                               
+[12:57:40] [I] Flow complete.                                  sequential.py:413
+
+
+[12:57:40] [W] The following warnings were generated by the flow:    flow.py:699
+[12:57:40] [W] [Checker.LintWarnings] 499 Lint warnings found.       flow.py:701
+[12:57:40] [W] [Odb.CheckMacroAntennaProperties] Cell                flow.py:701
+               'arv_sram_2kbyte_1rw1r_32x512_8' has (64) output                 
+               pin(s) without antenna diffusion information. They               
+               might not be driven.                                             
+rc=0

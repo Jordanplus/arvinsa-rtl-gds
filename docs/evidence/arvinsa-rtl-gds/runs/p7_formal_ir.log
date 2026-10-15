@@ -1,0 +1,51 @@
+/Library/Developer/CommandLineTools/usr/bin/make -C fw CPU=hazard3 all check-bootrom
+python3 ../rtl/bootrom/gen_bootrom.py --hex build_hazard3/bootrom.hex --out build_hazard3/bootrom_check.v
+check-bootrom: PASS: ../rtl/bootrom/bootrom.v matches the boot ROM image
+python3 dv/gl_soc/run_gl_soc.py --cpu caravel --tests maxpower --out runs/ir_caravel_vcd \
+	  --record-window 5a,5b,5c --clk-half-ns 22
+[gl-record] cpu caravel, netlist ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v
+[gl-record] compile tb_soc with the RTL and gate-level SoC (Icarus, -DGL_LOCKSTEP -DFUNCTIONAL -DUNIT_DELAY=#1 -DTB_CLK_HALF_NS=22 -s vcd_window)
+  [PASS] window 5a: 5328 cycles recorded to ~/claude_prjs/arvinsa-rtl-gds/runs/ir_caravel_vcd/win_5a.vcd (333677540 bytes), 0 lockstep mismatch(es)
+  [PASS] window 5b: 5048 cycles recorded to ~/claude_prjs/arvinsa-rtl-gds/runs/ir_caravel_vcd/win_5b.vcd (313492949 bytes), 0 lockstep mismatch(es)
+  [PASS] window 5c: 4904 cycles recorded to ~/claude_prjs/arvinsa-rtl-gds/runs/ir_caravel_vcd/win_5c.vcd (351492266 bytes), 0 lockstep mismatch(es)
+gl-record: PASS maxpower windows 5a,5b,5c
+python3 pnr/user_project_wrapper/ir_caravel.py runs/user_project_wrapper runs/ir_caravel \
+	  signoff/limits/user_project_wrapper.toml --vcd runs/ir_caravel_vcd/win_5a.vcd --vcd runs/ir_caravel_vcd/win_5b.vcd --vcd runs/ir_caravel_vcd/win_5c.vcd
+  [PASS] vccd1: 54 + 53 met3 bridges (left + right), expected 54 + 53
+  [PASS] vssd1: 54 + 53 met3 bridges (left + right), expected 54 + 53
+  [PASS] vccd1: 2 pad straps (expected 2)
+  [PASS] vssd1: 2 pad straps (expected 2)
+  [PASS] via definitions: 10 of the 10 met4-met5 vias used
+  [PASS] control: the run's supply points on the ODB with Caravel's network give [0.00203825, 0.00205593] V, the run's IR step [0.00203839, 0.00205633] V (within 0.1%)
+  [PASS] max_ss_n40C_1v60 currents: the step read 2 ss_n40C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.030 mW) and no tt one
+  [PASS] max_ss_n40C_1v60 supply points: the run's 4 points at 1.60 V
+  [PASS] max_ss_n40C_1v60_win_5a activity: 73872 pins annotated from win_5a.vcd, 0 unannotated
+  [PASS] max_ss_n40C_1v60_win_5a drop from the pads: VDD 10.89 + GND 6.99 = 17.88 mV
+  [PASS] max_ss_100C_1v60 currents: the step read 2 ss_100C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.151 mW) and no tt one
+  [PASS] max_ss_100C_1v60 supply points: the run's 4 points at 1.60 V
+  [PASS] max_ss_100C_1v60_win_5a activity: 73872 pins annotated from win_5a.vcd, 0 unannotated
+  [PASS] max_ss_100C_1v60_win_5a drop from the pads: VDD 11.88 + GND 7.62 = 19.50 mV
+  [PASS] max_ss_n40C_1v60 currents: the step read 2 ss_n40C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.030 mW) and no tt one
+  [PASS] max_ss_n40C_1v60 supply points: the run's 4 points at 1.60 V
+  [PASS] max_ss_n40C_1v60_win_5b activity: 73872 pins annotated from win_5b.vcd, 0 unannotated
+  [PASS] max_ss_n40C_1v60_win_5b drop from the pads: VDD 10.68 + GND 6.86 = 17.54 mV
+  [PASS] max_ss_100C_1v60 currents: the step read 2 ss_100C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.151 mW) and no tt one
+  [PASS] max_ss_100C_1v60 supply points: the run's 4 points at 1.60 V
+  [PASS] max_ss_100C_1v60_win_5b activity: 73872 pins annotated from win_5b.vcd, 0 unannotated
+  [PASS] max_ss_100C_1v60_win_5b drop from the pads: VDD 11.66 + GND 7.48 = 19.14 mV
+  [PASS] max_ss_n40C_1v60 currents: the step read 2 ss_n40C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.030 mW) and no tt one
+  [PASS] max_ss_n40C_1v60 supply points: the run's 4 points at 1.60 V
+  [PASS] max_ss_n40C_1v60_win_5c activity: 73872 pins annotated from win_5c.vcd, 0 unannotated
+  [PASS] max_ss_n40C_1v60_win_5c drop from the pads: VDD 10.93 + GND 7.02 = 17.96 mV
+  [PASS] max_ss_100C_1v60 currents: the step read 2 ss_100C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.151 mW) and no tt one
+  [PASS] max_ss_100C_1v60 supply points: the run's 4 points at 1.60 V
+  [PASS] max_ss_100C_1v60_win_5c activity: 73872 pins annotated from win_5c.vcd, 0 unannotated
+  [PASS] max_ss_100C_1v60_win_5c drop from the pads: VDD 11.93 + GND 7.65 = 19.58 mV
+  [PASS] drop: worst max_ss_100C_1v60_win_5c 19.58 mV from Caravel's pads (max-power pattern, slow corner) vs max 20.0 mV
+  [INFO] max_ss_n40C_1v60 currents: the step read 2 ss_n40C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.030 mW) and no tt one
+  [INFO] max_ss_n40C_1v60 supply points: the run's 4 points at 1.60 V
+  [INFO] max_ss_n40C_1v60_vectorless drop from the pads: VDD 25.98 + GND 16.90 = 42.88 mV
+  [INFO] max_ss_100C_1v60 currents: the step read 2 ss_100C_1v60 .lib file(s), the SRAM copy with the port 1 floating current (+0.151 mW) and no tt one
+  [INFO] max_ss_100C_1v60 supply points: the run's 4 points at 1.60 V
+  [INFO] max_ss_100C_1v60_vectorless drop from the pads: VDD 27.62 + GND 17.95 = 45.57 mV
+ir-caravel: PASS

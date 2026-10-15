@@ -1,0 +1,50 @@
+  [PASS] must   flow__errors__count: local=0 expected=== 0
+  [PASS] must   design__lvs_error__count: local=0 expected=== 0
+  [PASS] must   route__drc_errors: local=0 expected=== 0
+  [PASS] must   klayout__drc_error__count: local=0 expected=== 0
+  [PASS] must   magic__illegal_overlap__count: local=0 expected=== 0
+  [PASS] must   design__power_grid_violation__count: local=0 expected=== 0
+  [PASS] must   design__disconnected_pin__count: local=0 expected=== 0
+  [PASS] must   design__critical_disconnected_pin__count: local=0 expected=== 0
+  [PASS] must   antenna__violating__nets: local=0 expected=== 0
+  [PASS] must   antenna__violating__pins: local=0 expected=== 0
+  [PASS] must   route__antenna_violation__count: local=0 expected=== 0
+  [PASS] must   design__instance_unmapped__count: local=0 expected=== 0
+  [PASS] must   synthesis__check_error__count: local=0 expected=== 0
+  [PASS] must   timing__setup_vio__count: local=0 expected=== 0
+  [PASS] must   timing__hold_vio__count: local=0 expected=== 0
+  [PASS] must   design__instance__count__macros: local=2 expected=== 2
+  [PASS] corner timing__setup__ws__corner:nom_tt_025C_1v80: local=5.058114958934515 expected=>= 0 (upstream 5.054934391923616)
+  [PASS] corner timing__setup__ws__corner:nom_ss_100C_1v60: local=3.486851794880961 expected=>= 0 (upstream 3.4911878820485702)
+  [PASS] corner timing__setup__ws__corner:nom_ff_n40C_1v95: local=5.649611605117196 expected=>= 0 (upstream 5.644585403297962)
+  [PASS] corner timing__setup__ws__corner:min_tt_025C_1v80: local=5.112234336112703 expected=>= 0 (upstream 5.111038847925975)
+  [PASS] corner timing__setup__ws__corner:min_ss_100C_1v60: local=3.571733232495474 expected=>= 0 (upstream 3.5816026713743083)
+  [PASS] corner timing__setup__ws__corner:min_ff_n40C_1v95: local=5.693320642743655 expected=>= 0 (upstream 5.6891568621943405)
+  [PASS] corner timing__setup__ws__corner:max_tt_025C_1v80: local=4.998566146923144 expected=>= 0 (upstream 4.993523957891904)
+  [PASS] corner timing__setup__ws__corner:max_ss_100C_1v60: local=3.398907917988711 expected=>= 0 (upstream 3.398524224900549)
+  [PASS] corner timing__setup__ws__corner:max_ff_n40C_1v95: local=5.5997004174105625 expected=>= 0 (upstream 5.59213136070381)
+  [PASS] corner timing__hold__ws__corner:nom_tt_025C_1v80: local=0.8509830858627637 expected=>= 0 (upstream 0.8522085500720035)
+  [PASS] corner timing__hold__ws__corner:nom_ss_100C_1v60: local=1.9785340592563792 expected=>= 0 (upstream 1.9771309593581756)
+  [PASS] corner timing__hold__ws__corner:nom_ff_n40C_1v95: local=0.46415117507673587 expected=>= 0 (upstream 0.4648467298213351)
+  [PASS] corner timing__hold__ws__corner:min_tt_025C_1v80: local=0.8436984683029652 expected=>= 0 (upstream 0.8446243943316896)
+  [PASS] corner timing__hold__ws__corner:min_ss_100C_1v60: local=1.965209828271808 expected=>= 0 (upstream 1.9641506754763607)
+  [PASS] corner timing__hold__ws__corner:min_ff_n40C_1v95: local=0.4591737120496616 expected=>= 0 (upstream 0.4582877540509541)
+  [PASS] corner timing__hold__ws__corner:max_tt_025C_1v80: local=0.8582232945003213 expected=>= 0 (upstream 0.8597193200683142)
+  [PASS] corner timing__hold__ws__corner:max_ss_100C_1v60: local=1.990075938146809 expected=>= 0 (upstream 1.990020649038619)
+  [PASS] corner timing__hold__ws__corner:max_ff_n40C_1v95: local=0.4688455312245238 expected=>= 0 (upstream 0.47057092887589136)
+  [PASS] golden all 307 metrics: local=identical expected=local golden
+  [INFO] info   magic__drc_error__count: local=532 expected=532 (upstream)
+  [INFO] info   design__max_slew_violation__count: local=74 expected=70 (upstream)
+  [INFO] info   design__max_cap_violation__count: local=2 expected=3 (upstream)
+  [INFO] info   design__max_fanout_violation__count: local=0 expected=2 (upstream)
+  [INFO] info   timing__unannotated_net__count: local=85 expected=85 (upstream)
+  [INFO] info   design__die__bbox: local=0.0 0.0 750.0 1250.0 expected=0.0 0.0 750.0 1250.0 (upstream)
+  [INFO] info   design__instance__count__stdcell: local=7451 expected=7454 (upstream)
+  [INFO] info   design__instance__count__class:sequential_cell: local=65 expected=65 (upstream)
+  [INFO] info   design__instance__utilization: local=0.437443 expected=0.437475 (upstream)
+  [INFO] info   route__wirelength: local=64489 expected=65305 (upstream)
+  [INFO] info   timing__setup__ws: local=3.398907917988711 expected=3.398524224900549 (upstream)
+  [INFO] info   timing__hold__ws: local=0.4591737120496616 expected=0.4582877540509541 (upstream)
+  [INFO] info   ir__drop__worst: local=0.000246 expected=0.000411 (upstream)
+  [INFO] info   power__total: local=0.002198103815317154 expected=0.0022079236805438995 (upstream)
+ci-sram-ref: PASS

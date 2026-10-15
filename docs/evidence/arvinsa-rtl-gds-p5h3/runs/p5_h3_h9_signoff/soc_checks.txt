@@ -1,0 +1,1 @@
+soc-checks: FAIL (missing ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3/final/nl/soc_top.nl.v)

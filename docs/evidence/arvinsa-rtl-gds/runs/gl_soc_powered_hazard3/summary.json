@@ -1,0 +1,7 @@
+{
+  "cpu": "hazard3",
+  "netlist": "~/claude_prjs/arvinsa-rtl-gds/runs/soc_top_hazard3/final/pnl/soc_top.pnl.v",
+  "tests": 15,
+  "failed": 0,
+  "wall_time_s": 1339.1
+}

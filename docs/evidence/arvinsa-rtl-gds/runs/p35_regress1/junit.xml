@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="regress" tests="25" failures="1" skipped="6" time="4745">
+  <testcase classname="make" name="env-check-flow" time="2"></testcase>
+  <testcase classname="make" name="py-check" time="0"></testcase>
+  <testcase classname="make" name="lint" time="2"></testcase>
+  <testcase classname="make" name="synth-check" time="3"></testcase>
+  <testcase classname="make" name="fw" time="3"></testcase>
+  <testcase classname="make" name="core-stock" time="187"></testcase>
+  <testcase classname="make" name="regress-rtl" time="27"></testcase>
+  <testcase classname="make" name="neg-rtl" time="27"></testcase>
+  <testcase classname="make" name="neg-provenance" time="8"></testcase>
+  <testcase classname="make" name="neg-run-guard" time="2"></testcase>
+  <testcase classname="make" name="neg-regress" time="3"></testcase>
+  <testcase classname="make" name="test-flow-retry" time="0"></testcase>
+  <testcase classname="make" name="harden-soc" time="1344"></testcase>
+  <testcase classname="make" name="eqy-soc" time="255"></testcase>
+  <testcase classname="make" name="neg-eqy-soc" time="958"></testcase>
+  <testcase classname="make" name="gl-soc" time="441"></testcase>
+  <testcase classname="make" name="gl-soc-powered" time="599"></testcase>
+  <testcase classname="make" name="neg-gl-soc" time="217"></testcase>
+  <testcase classname="make" name="neg-pnr" time="666"><failure message="make[1]: *** [neg-pnr] Error 1">see runs/regress/neg-pnr.log</failure></testcase>
+  <testcase classname="make" name="harden-core"><skipped message="not run: an earlier target FAILed"/></testcase>
+  <testcase classname="make" name="gl-core"><skipped message="not run: an earlier target FAILed"/></testcase>
+  <testcase classname="make" name="neg-gl-core"><skipped message="not run: an earlier target FAILed"/></testcase>
+  <testcase classname="make" name="eqy-core"><skipped message="not run: an earlier target FAILed"/></testcase>
+  <testcase classname="make" name="neg-eqy-core"><skipped message="not run: an earlier target FAILed"/></testcase>
+  <testcase classname="make" name="provenance-final"><skipped message="not run: an earlier target FAILed"/></testcase>
+</testsuite>

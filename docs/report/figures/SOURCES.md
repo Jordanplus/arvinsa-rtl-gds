@@ -3,6 +3,7 @@
 這份清單涵蓋版圖截圖與數據圖（`layout_*.png`、`floorplan_pin_plan.png`、`timing_wrapper_corners.png`、`density_fill_trial.png`、`ir_drop_map.png`、`phase_metrics.png`）。同目錄的其他圖（`flow_*`、`checkers_*`、`roadmap_*` 等示意圖）不在這份清單。
 
 - 產生日期：2026-10-15。
+- 2026-10-15 產生之後，worktree 與 `runs/` 都已刪除（ADR-0021 決定 7）。下面引用的報告類檔案收在 `docs/evidence/`（路徑對照與收錄狀態見 `docs/evidence/references.md`）；GDS、DEF 等版圖檔沒有收，要重畫時先在乾淨 checkout 重跑對應的 regress。
 - 資料來源：正式結案 run（commit `2b04451`）的三個乾淨 worktree，路徑都在 `~/claude_prjs/` 下：
   - `arvinsa-rtl-gds-p7close2_caravel`：Caravel wrapper。
   - `arvinsa-rtl-gds-p7close2_h3`：Hazard3 SoC。

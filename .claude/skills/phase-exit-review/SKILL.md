@@ -1,6 +1,6 @@
 ---
 name: phase-exit-review
-description: 一個 Phase（階段）收尾時使用：對照 project-plan.md 的 exit criteria 整理證據（只用乾淨 checkout 的最後一次 run）、寫 docs/phase_exit/phase<N>.md、追延後的項目（筆記裡「Phase N 才能處理」「之後會加」）、證據存到不會被覆蓋或消失的地方、與計畫不同時寫明原本保護什麼與現在由誰保護、已知限制引用放寬與補償登記表、決定改了同步前文、開結案 regress 前先讓最後改過的 checker 在現有 run 上跑 positive control、排結案時程（至少兩輪乾淨 regress 加一輪修正，審查與 regress 同時進行）、請沒參與實作的 agent 獨立審查（找 checker 漏洞只審最後改過的）、記錄使用者決定，以及收尾清單（skill、README、流程文件與 AGENTS.md 同步，規則 10 稽核，清空 runs/todo.md，清理舊 worktree，推送）。Use when closing a project phase (exit criteria evidence, deviations from plan, known limitations, independent review, user decisions, skill and README write-back).
+description: 一個 Phase（階段）收尾時使用：對照 project-plan.md 的 exit criteria 整理證據（只用乾淨 checkout 的最後一次 run）、寫 docs/phase_exit/phase<N>.md、追延後的項目（筆記裡「Phase N 才能處理」「之後會加」）、證據存到不會被覆蓋或消失的地方、與計畫不同時寫明原本保護什麼與現在由誰保護、已知限制引用放寬與補償登記表、決定改了同步前文、開結案 regress 前先讓最後改過的 checker 在現有 run 上跑 positive control、排結案時程（至少兩輪乾淨 regress 加一輪修正，審查與 regress 同時進行）、請沒參與實作的 agent 獨立審查（找 checker 漏洞只審最後改過的）、記錄使用者決定，以及收尾清單（skill、README、流程文件與 AGENTS.md 同步，規則 10 稽核，清空 runs/todo.md，清理舊 worktree；專案結束清掉 runs/ 前用 make collect-evidence 把引用的佐證報告收進 docs/evidence/，推送）。Use when closing a project phase (exit criteria evidence, deviations from plan, known limitations, independent review, user decisions, skill and README write-back).
 ---
 
 # Phase exit review 與獨立審查
@@ -18,7 +18,7 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
 3. **每個數字都要對得回證據檔，而且用對 metric 的意思**：
    - Phase 3 文件核對找到 6 個寫錯的數字或事實（案例數、clock skew、使用率、cell 組成、最長線的來源、密度）。
    - 容易誤讀的彙總值：`power__total` 是最後寫入的 corner；`clock__skew__worst_setup` 是各 corner 的最小值，`clock__skew__worst_hold` 是各 corner 的最大值（最不負，不是最差）；DRV 計數是各 corner 的最大值（`librelane-run-debug` 規則 4）。
-   - **證據在做的當下存到不會被覆蓋或消失的地方**，文件引用的就是那個路徑：小檔與實驗腳本放 `docs/notes/<主題>/`（進版控）；大檔放主目錄 `runs/<實驗名>/`（不進版控，引用時註明）。不能引用：session scratchpad（session 結束就消失）；會被下一次 harden 覆蓋的 `runs/<tag>_signoff/`、`runs/<design>/`（先複製成另一個名稱，例如本 repo 的 `runs/p7_formal_signoff/`）；收尾後會刪的 worktree（規則 9 清理前先複製）；只在終端機看到的訊息（例如 precheck VM 的 `dmesg`，要存成檔）。算出來的比例或門檻，算式與輸入一起存。Phase 3、3.5、4、5、6、7 都發生過（`verify_and_merge.md` B3）：Phase 6 licon.14 容許面積比例的計算沒存檔；Phase 7 VM OOM 的 `dmesg` 只在終端機、開發量測只在已消失的 scratchpad、knowledge 檔引用的 `runs/user_project_wrapper_signoff/` 被下一次 harden 覆蓋，審查因此 4 列無法核對（`runs/p7_review/doc_check.md`、`review_p6_7.md` P7-39）。
+   - **證據在做的當下存到不會被覆蓋或消失的地方**，文件引用的就是那個路徑：小檔與實驗腳本放 `docs/notes/<主題>/`（進版控）；大檔放主目錄 `runs/<實驗名>/`（不進版控，引用時註明）。`runs/` 不進版控，清理前要把文件引用到的報告類證據收進 repo 的 `docs/evidence/`（`make collect-evidence`，規則 9）；GDS、DEF、網表、整個 run 目錄不收，靠 commit 重跑產生（使用者 2026-10-15：「主要是重要的佐證報告才收」，ADR-0021 決定 7）。不能引用：session scratchpad（session 結束就消失）；會被下一次 harden 覆蓋的 `runs/<tag>_signoff/`、`runs/<design>/`（先複製成另一個名稱，例如本 repo 的 `runs/p7_formal_signoff/`）；收尾後會刪的 worktree（規則 9 清理前先複製）；只在終端機看到的訊息（例如 precheck VM 的 `dmesg`，要存成檔）。算出來的比例或門檻，算式與輸入一起存。Phase 3、3.5、4、5、6、7 都發生過（`verify_and_merge.md` B3）：Phase 6 licon.14 容許面積比例的計算沒存檔；Phase 7 VM OOM 的 `dmesg` 只在終端機、開發量測只在已消失的 scratchpad、knowledge 檔引用的 `runs/user_project_wrapper_signoff/` 被下一次 harden 覆蓋，審查因此 4 列無法核對（`runs/p7_review/doc_check.md`、`review_p6_7.md` P7-39）。
 4. **章節**（Phase 7 的版本，`docs/phase_exit/phase7.md`）：結論 → 正式 run（commit、開始與結束時間、exit code、跑了幾次、前幾次為什麼不算）→ exit criteria 表（每列：結果、證據）→ signoff 結果 → 收斂過程 → 帶進本階段的項目（前幾階段的已知限制逐條，規則 1）→ 可重現性（每個 run 與 golden 比對；不在 regression 裡的 target 最後一次在哪裡跑，規則 2）→ checker qualification（每個植入錯誤：植入、預期的 checker、結果、與計畫的差異）→ 本階段找到並修正的 checker 問題 → 與計畫不同的地方（編號）→ 已知限制（編號，每條寫為什麼不影響本次結果，或缺什麼；放寬引用登記表，規則 10）→ 獨立審查（文件核對、找 checker 漏洞；有做流程回顧也放這裡）→ 使用者決定 → Skill 分析（規則 8，含規則 10 稽核：本階段每個工具缺陷的四項防護齊不齊）→ 交付物。
    - **與計畫不同的地方，每一項寫兩點**：原本那一項保護什麼（哪一類錯誤會被抓到）、現在由誰保護（哪支 checker 或哪個測試）。沒有替代的，列入已知限制並登記到放寬與補償登記表；改檢查方式本身不算放寬，登記表不會自動收到它。兩次：Phase 1 改了 R02 的測試後，memtest 的上半部沒人保護（`phase1.md:43`）；Phase 3 P07、P12 改成只測 checker、EQY 範圍縮小（`phase3.md:138–153`）（`review_p0_35.md` 建議 4）。
 5. **獨立審查用兩個沒參與實作的 agent**：一個逐條核對文件與證據（數字、說法），一個找 checker 漏洞（要做實驗，不能只讀程式）。審查找到的問題：修正並重跑，或列為已知限制並寫理由；沒有重跑就不能寫「已修正」。
@@ -32,7 +32,7 @@ description: 一個 Phase（階段）收尾時使用：對照 project-plan.md �
    - 流程文件 `arvinsa-rtl-gds-flow.md` 同步：本階段流程的步驟、順序、checker 或 negative test 有改，同一個 commit 更新它；`AGENTS.md` 只指回 `CLAUDE.md` 與流程文件，確認沒有另寫規則（`CLAUDE.md` 規則 8）。
    - 規則 10 稽核：本階段每個工具缺陷，逐條確認症狀、怎麼發現、怎麼繞過、防復發四項都有，寫在 exit review 的「Skill 分析」（`CLAUDE.md` 規則 10；例：`phase7.md`「規則 10 稽核」）。
    - 清空 `runs/todo.md`（`CLAUDE.md` 規則 11）；清空前確認還沒結的項目都已進 exit review 的已知限制或登記表（規則 1）。
-   - 舊 worktree 與 negative test 中間產物的清理：先把引用的證據複製到主目錄（規則 3），再照 `flow-regression-reproducibility` 規則 16 做（刪 worktree 前列出目錄與大小請使用者確認）。
+   - 舊 worktree 與 negative test 中間產物的清理：先把引用的證據複製到主目錄（規則 3），再照 `flow-regression-reproducibility` 規則 16 做（刪 worktree 前列出目錄與大小請使用者確認）。專案結束、要清掉 `runs/` 與所有 worktree 時，先跑 `make collect-evidence` 把報告類證據收進 `docs/evidence/` 並提交（規則 3）。
    - 推送只在使用者明確要求時做，兩個 remote 都推並用 `git ls-remote` 確認；repo 是 public，推送前檢查本機絕對路徑與機密。
 10. **收尾的 checker 漏洞審查只審本 Phase 最後改過的 checker；其他 checker 在寫完時就審過**（提早檢查 E3，流程回顧 ADR-0020；做法在 `signoff-checker-qualification` 規則 12）。
     - 為什麼：審查都排在收尾，Phase 4 到 7 每次都找到 7–12 個漏洞（Phase 7 是 8 個加 1 個缺口），修完要整套 regression 重跑，經驗紀錄的 Phase 5、6 兩列就是這樣多跑的輪數。

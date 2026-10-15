@@ -20,8 +20,8 @@ description: Clock tree（CTS）問題，或 setup／hold 違規可能是 clock 
    - **症狀**：沒有錯誤或警告；clock net 幾乎都繞在 met1／met2（Phase 3 soc_top 的 clock 繞線段：met1 9750、met2 2901、met3 90、met4 7；這份統計沒有存進 repo，結論記在 `docs/notes/signoff_criteria_soc_top.md` 的 signal EM 列）。
    - **已知的事實**：PDK 的 `libs.tech/openlane/config.tcl` 第 158 行設了 `met3`，`runs/<tag>/resolved.json` 卻是 null；LibreLane 的 `scripts/openroad/common/set_routing_layers.tcl` 第 20–21 行只在這個環境變數存在時才限制 clock 的最低層。推測（讀原始碼，沒有實驗）：LibreLane `steps/common_variables.py` 宣告這個變數時沒有標 `pdk=True`，所以 PDK 的值沒有讀進來。
    - **怎麼發現**：看 `resolved.json` 的 `RT_CLOCK_MIN_LAYER`；或統計最終 DEF 裡 clock net 每一層的繞線。
-   - **怎麼繞過**：要讓 clock 走 met3 以上，只能在專案 config 明確設定。**現況**：本 repo 的 config 都沒設，clock 走 met1／met2；clock net 的 EM 只有估算（同上筆記：上界約 0.39 mA，met1 最小線寬上限 0.85 mA rms）。要不要設定交使用者決定（ADR-0021 A6），尚未決定。
-   - **防復發：沒有自動防護**。原因：沒有 checker 比對 PDK 設定與 `resolved.json`，要新寫，依 ADR-0021 決定 3 留到下一個專案開始時做。LibreLane 升版時重看 `resolved.json` 的這個值。
+   - **怎麼繞過**：要讓 clock 走 met3 以上，只能在專案 config 明確設定。**現況**：本 repo 的 config 都沒設，clock 走 met1／met2；clock net 的 EM 只有估算（同上筆記：上界約 0.39 mA，met1 最小線寬上限 0.85 mA rms）。使用者 2026-10-15 選「本專案不設，下專案一開始就設 (建議)」（ADR-0021 決定 8）：本 repo 已結案、不下線，不設（設了要重新 harden 三個設計、更新 golden 並重跑 regress）；**新專案的 config 第一版就明確設 `RT_CLOCK_MIN_LAYER`**（sky130 用 PDK 原意的 `met3`），第一次 harden 後看 `resolved.json` 確認不是 null。
+   - **防復發：沒有自動防護**。原因：沒有 checker 比對 PDK 設定與 `resolved.json`，要新寫，依 ADR-0021 決定 3、8 在下一個專案開始時做：`resolved.json` 的 `RT_CLOCK_MIN_LAYER` 是 null 就 FAIL，加植入錯誤（config 拿掉這個設定）。LibreLane 升版時重看 `resolved.json` 的這個值。
 9. **duty cycle**：clock tree 本身造成的 rise／fall 延遲差（nom_ss 下 SRAM `clk0` 約 0.30 ns），STA 已經算到；clock 來源本身的 duty 偏差 STA 不知道，要靠約束（`signoff-criteria`）。
 10. **CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚**（latency 對齊）：soc_top 的 `sram0/clk0` 前面被插了一串 delay buffer（`delaybuf_*`，Phase 4 是 10 顆）。各項數字在 ADR-0016 與 `pnr/soc_top/README.md` 設定表，這裡只寫機制。
     - 後果一，SRAM 輸入腳的 hold 變差：SRAM .lib 的 hold 要求是保守的下限（ADR-0007、ADR-0010），post-CTS 修到正值，繞線後在 min_ff_n40C 變負（Phase 4 第 2、3 次 harden-soc）。當時用 `PL_RESIZER_HOLD_SLACK_MARGIN` 0.3 ns 補（`drv-timing-closure` 規則 7，放寬與補償登記表 T16）。

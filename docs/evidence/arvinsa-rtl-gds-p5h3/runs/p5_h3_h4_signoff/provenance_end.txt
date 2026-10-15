@@ -1,0 +1,12 @@
+  [PASS] repo_head: 1292ca48e8458d439e9a3dfd071cae5b6850fdd7
+  [PASS] uncommitted: working tree clean
+  [PASS] submodules: 2 at the recorded commit
+  [PASS] librelane: ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane at f24e0ea5db2260719e9a0c7d51d07db74a87fa23, pinned f24e0ea5db2260719e9a0c7d51d07db74a87fa23
+  [PASS] librelane_clean: no modified or untracked file in the LibreLane clone
+  [PASS] pdk: ~/.ciel/sky130A -> ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A, pinned 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+  [PASS] pdk_content: 6 directories, 2109 files, same content as env/pdk_content.sha256
+  [PASS] same_head: start 1292ca48e8458d439e9a3dfd071cae5b6850fdd7, end 1292ca48e8458d439e9a3dfd071cae5b6850fdd7
+  [PASS] resolved_librelane: 3.0.14, pinned 3.0.14
+  [PASS] resolved_pdk: PDK_ROOT ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+  [PASS] resolved_pdk_paths: 937 PDK paths in resolved.json, all in the content-checked directories
+provenance: PASS

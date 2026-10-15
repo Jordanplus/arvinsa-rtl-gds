@@ -1,0 +1,10 @@
+  [PASS] max_ff_n40C_1v95 currents: the step read 2 ff_n40C_1v95 .lib file(s), the SRAM copy with the port 1 floating current (+1.342 mW) and no tt one
+  [PASS] max_ff_n40C_1v95 ss metal resistance: LAYERS_RC *ff* = the run's *ss* values
+  [PASS] max_ff_n40C_1v95 supply points: the run's 10 points at 1.95 V
+  [PASS] max_ff_n40C_1v95 drop: VDD 2.94 + GND 2.94 = 5.88 mV
+  [PASS] max_ff_100C_1v95 currents: the step read 2 ff_100C_1v95 .lib file(s), the SRAM copy with the port 1 floating current (+5.338 mW) and no tt one
+  [PASS] max_ff_100C_1v95 ss metal resistance: LAYERS_RC *ff* = the run's *ss* values
+  [PASS] max_ff_100C_1v95 supply points: the run's 10 points at 1.95 V
+  [PASS] max_ff_100C_1v95 drop: VDD 6.77 + GND 6.72 = 13.49 mV
+  [PASS] drop: worst max_ff_100C_1v95 13.49 mV (ff currents + port 1 floating current + ss metal R) vs max 20.0 mV
+ir-worst: PASS

@@ -1,0 +1,1 @@
+harden-soc: attempt 1 stopped with the known intermittent GRT-0229 in OpenROAD.ResizerTimingPostGRT (44-openroad-resizertimingpostgrt; console_attempt1.log); resuming from that step

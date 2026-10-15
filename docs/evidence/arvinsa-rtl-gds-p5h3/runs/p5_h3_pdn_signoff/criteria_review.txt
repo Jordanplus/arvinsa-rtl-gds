@@ -1,0 +1,19 @@
+criteria-review: run ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3, config ~/claude_prjs/arvinsa-rtl-gds-p5h3/pnr/soc_top/config_hazard3.json
+  [PASS] config_applied: 42 settings of config_hazard3.json = resolved.json
+  [PASS] step_config: 78 step configs agree with resolved.json
+  [PASS] uncertainty: 'clock_uncertainty.sdc: setup 0.25, hold 0.25, half-cycle setup 2.450000000000002 (duty cycle distortion 2.200000000000002)' in 8 timing steps and 15 signoff corners
+  [PASS] uncertainty_applied: 50670 signoff paths in 15 corners got setup 0.250, half-cycle 2.450, hold 0.250 ns
+  [PASS] signoff_corners: 15 corners = STA_CORNERS
+  [PASS] checkers_ran: verdict lines in signoff.txt, soc_checks.txt, inputs_resolved.txt, ir_worst.txt, provenance_end.txt
+  [INFO] setup: ResizerTimingPostCTS ended its setup repair at WNS +0.212 ns (placement parasitics); ResizerTimingPostGRT ended its setup repair at WNS +0.075 ns (global routing parasitics); signoff worst +1.114 ns (min_ss_n40C_1v60); gap from the last setup repair (ResizerTimingPostGRT) -1.039 ns vs GRT_RESIZER_SETUP_SLACK_MARGIN 0.025 ns
+  [INFO] hold: ResizerTimingPostCTS ended its hold repair at WNS +0.293 ns (placement parasitics); ResizerTimingPostGRT has no hold repair table (no hold violation in RSZ_CORNERS); signoff worst +0.109 ns (min_ff_n40C_1v95); gap from the last hold repair (ResizerTimingPostCTS) 0.184 ns vs PL_RESIZER_HOLD_SLACK_MARGIN 0.3 ns
+  [INFO] signoff setup ws per corner: min_ss_n40C_1v60 +1.114, nom_ss_n40C_1v60 +1.165, max_ss_n40C_1v60 +1.223, min_ss_100C_1v60 +1.428, nom_ss_100C_1v60 +1.442
+  [INFO] ResizerTimingPostCTS stdcell area 205010 -> 232352 um^2 (+13.3 %); final netlist hold buffers 2721, repair buffers fanout 1818, load_slew 2278, max_length 79, rebuffer 2, wire 3676
+  [INFO] worst setup path (min_ss_n40C_1v60) sram0 -> _21031_, slack 1.114476, launched at the fall edge (22.00 ns), captured at the rise edge (44.00 ns), a half-cycle path, uncertainty 2.450 ns: clk->Q 15.77 ns (1 cells), launch clock 3.26 ns, hold buffers 1.17 ns (1 cells), logic 0.96 ns (1 cells), interconnect 0.00 ns; arrival 21.16 ns after the launch edge
+  [INFO] worst half-cycle setup path (min_ss_n40C_1v60) sram0 -> _21031_, slack +1.114 ns, uncertainty 2.450 ns of which duty cycle distortion 2.200 ns
+  [INFO] clock skew metric (hold) nom_ff_n40C_1v95 -0.577 ns, without the hold uncertainty -0.327 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] clock skew metric (hold) nom_ss_n40C_1v60 -1.214 ns, without the hold uncertainty -0.964 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] PNR_SDC_FILE set_max_transition 0.70; DESIGN_REPAIR_MAX_SLEW_PCT 30, GRT_DESIGN_REPAIR_MAX_SLEW_PCT 40
+  [INFO] SIGNOFF_SDC_FILE set_max_transition not set (PDK default)
+  [INFO] part 2: review these numbers with skill signoff-criteria and write ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/criteria_review.md
+criteria-review: PASS

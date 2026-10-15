@@ -1,0 +1,14 @@
+  [PASS] macro: arv_sram_2kbyte_1rw1r_32x512_8 instances in the final netlist: ['\\u_soc.sram0']
+  [PASS] placement: u_soc.sram0 FIXED (350.98, 413.44) N; config.json (350.98, 413.44) N
+  [FAIL] ir_sources: the core-ring supply model of ADR-0019 decision 11 is not implemented yet
+  [PASS] port1_tieoff: csb1 tie-high, addr1[8:0] tie-low, clk1 from the clock port wb_clk_i
+  [FAIL] disconnected: Odb.ReportDisconnectedPins: [('327', '0')]; table runs/p7_harden2/51-odb-reportdisconnectedpins/full_disconnected_pins_table.txt exists
+  [PASS] cts_macro_latency: CTS step with -no_insertion_delay, 0 delaybuf_* instances, 0 single-fanout clock buffer(s) above u_soc.sram0/clk0
+  [PASS] sta_setup: check_setup in 15 corners: no warning other than the 1 allowed one(s) of user_project_wrapper
+  [PASS] max_slew: 15 corners: 5820 violators, all on nets driven by input ports with an external transition, at most +0.002 ns from it (margin 0.05 ns)
+  [PASS] pulse_width: 15 corners; worst min pulse width slack 9.368531 (u_soc.sram0/clk0 (low)), min period slack 14.000002 (u_soc.sram0/clk0), all >= the required slack
+  [PASS] macro_gds: macro-gds: PASS - arv_sram_2kbyte_1rw1r_32x512_8: 169 cells identical to the macro GDS, none renamed; 10 without the macro-name prefix, each defined once: sky130_fd_bd_sram__openram_dff, sky130_fd_bd_sram__openram_dp_cell, sky130_fd_bd_sram__openram_dp_cell_cap_col, sky130_fd_bd_
+  [PASS] sram_lib: 15 corners, each read only the char .lib of its PVT (ADR-0010)
+  [PASS] sram_drc_ref: SRAM alone: 5576010 violations in 29 rule types, same as the reviewed baseline
+  [PASS] magic_drc: 0 violations outside the SRAM outline; inside 5572955, all at the position of a violation of the SRAM alone (5567755 identical boxes, 5200 in the union of same-rule boxes, 100 nm wider for (li.5) (diff/tap.9) (licon.14))
+soc-checks: FAIL

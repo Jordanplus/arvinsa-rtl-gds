@@ -246,7 +246,7 @@ FAIL 時先找出是哪條 criteria 沒生效、為什麼沒生效，不要只�
 - `## 學習`：
   - 新量到的數字追加到 `knowledge/<製程>.md` 的「實測校準資料」。**出處欄的證據要在下一次 harden 之後還找得到**（2026-10-15 問題總檢討，`docs/notes/problem_review/review_p6_7.md` 建議 5、`review_p4_5.md` R3；ADR-0021 決定 1）：
     - 不能引用下一次 harden 會覆蓋的目錄：`runs/<tag>/`、`runs/<tag>_signoff/`（包括這份 `criteria_review.md` 本身）、只留一層的 `runs/<tag>.prev/`（`librelane-run-debug` 規則 6）。`<tag>` 是 `make harden-*` 固定用的名字（本 repo `soc_top`、`soc_top_hazard3`、`user_project_wrapper`，`pnr/soc_top/run.sh` 第 49–55 行）。也不能引用 session scratchpad、之後會刪的 worktree、只在終端機看過的輸出。
-    - 寫進 knowledge 之前，先把要引用的檔案複製到不會被 harden 用到的名字，引用複製後的路徑：本 repo 用 `runs/<實驗名>_signoff/`（例如 `runs/p7_formal_signoff/`、`runs/p7_decap_signoff/`，不進版控）；小檔或摘要放 `docs/notes/<主題>/`（進版控）。
+    - 寫進 knowledge 之前，先把要引用的檔案複製到不會被 harden 用到的名字，引用複製後的路徑：本 repo 用 `runs/<實驗名>_signoff/`（例如 `runs/p7_formal_signoff/`、`runs/p7_decap_signoff/`，不進版控；2026-10-15 清理前其中的報告已收進 `docs/evidence/arvinsa-rtl-gds/runs/`，`make collect-evidence`）；小檔或摘要放 `docs/notes/<主題>/`（進版控）。
     - 算出來的比例或門檻，連同算式與輸入一起存。
     - 為什麼：Phase 6、7 的審查各有幾列因為證據被覆蓋或消失而無法核對，例如 knowledge 檔引用的 `runs/user_project_wrapper_signoff/` 被下一次 harden 覆蓋（`review_p6_7.md` P7-39）。knowledge 檔早期幾列引用 p5h3 worktree 裡的路徑，那個 worktree 清掉之後也會找不到。
     - 自動防護：沒有。Stop hook（`require_criteria_review.py`）只查 `criteria_review.md` 的章節與結果行，不查 knowledge 的出處路徑。照 ADR-0020 決定 2、ADR-0021 決定 3，下一個專案開始時做成 checker：knowledge 出處欄出現 harden 固定的 run 目錄或 scratchpad 路徑就 FAIL，並加植入錯誤。

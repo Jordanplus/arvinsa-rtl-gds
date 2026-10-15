@@ -1,0 +1,26 @@
+python3 signoff/precheck/make_project.py --out ../arvinsa-rtl-gds-p7precheck/user_project_wrapper 
+precheck-project: PASS ~/claude_prjs/arvinsa-rtl-gds-p7precheck/user_project_wrapper from runs/user_project_wrapper (550869cfd63c7d517dbbd639bf0086e27dd084af), formal (run guard PASS)
+PRECHECK_WORK=~/claude_prjs/arvinsa-rtl-gds-p7precheck zsh signoff/precheck/run_precheck.sh ../arvinsa-rtl-gds-p7precheck/user_project_wrapper \
+	  || echo "run-precheck: exit $? (cf-precheck fails on klayout_feol/beol by design; judged below)"
+start 2026-10-14 14:40:52
+image chipfoundry/mpw_precheck@sha256:f1523bcb7c959c80f2d7d6dded0c4bcf3483d84b6ff2437f49754e4ec53eac84
+pdk ciel/sky130/versions/3e0e31dcce8519a7dbb82590346db16d91b7244f/sky130A
+cf-precheck 1.3.7
+sram_ref feol rc=0 items=13
+sram_ref beol rc=0 items=264
+rc=2 53 min end 2026-10-14 15:34:48
+python3 signoff/precheck/check_precheck.py --project ../arvinsa-rtl-gds-p7precheck/user_project_wrapper --ref-dir ../arvinsa-rtl-gds-p7precheck/user_project_wrapper/sram_ref \
+	  --ref-gds ../arvinsa-rtl-gds-p7precheck/pdks/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_2kbyte_1rw1r_32x512_8.gds
+[precheck] cf-precheck 1.3.7, 2026-10-14T07:33:42.057711+00:00, results ../arvinsa-rtl-gds-p7precheck/user_project_wrapper/precheck_results/14_OCT_2026___06_40_55
+  [INFO] project from runs/user_project_wrapper (commit 550869cfd63c7d517dbbd639bf0086e27dd084af, HEAD then 550869cfd63c7d517dbbd639bf0086e27dd084af): run guard PASS
+  [PASS] cf-precheck 1.3.7 (pinned 1.3.7; another version: read its deck and checks, then update env/versions.mk)
+  [PASS] checks: 13 expected
+  [PASS] magic_drc: skip (allowed ['pass', 'skip'])
+  [PASS] 11 checks other than klayout_feol/klayout_beol: all pass
+  [PASS] gds/user_project_wrapper.gds sha1 29f7b5994c7192365affa97bcd95dcdd3c94e33f = the checked file's 29f7b5994c7192365affa97bcd95dcdd3c94e33f
+  [PASS] the results directory checked this GDS (logs/gds.info: user_project_wrapper.gds: 29f7b5994c7192365affa97bcd95dcdd3c94e33f)
+  [PASS] project.json written 2026-10-14 07:33:42.057711, after the results directory's start 2026-10-14 06:40:55
+  [PASS] klayout_feol: fail, 3 item(s) = 16900 marker(s), all MR_licon.SP.6 inside arv_sram_2kbyte_1rw1r_32x512_8 at places the PDK macro alone also has (16900 there); the reference's other rule(s), not compared: {'MR_nsdm.WID.2': 3, 'MR_psdm.SP.1': 6, 'MR_psdm.WID.2': 1}
+  [PASS] klayout_beol: fail, 264 item(s) = 50184 marker(s), all MR_mcon.CON.10 inside arv_sram_2kbyte_1rw1r_32x512_8 at places the PDK macro alone also has (50184 there)
+precheck: PASS (ADR-0019 decision 5)
+rc=0

@@ -1,0 +1,6 @@
+OpenROAD.RepairDesignPostGPL rc=0 75s
+Odb.ManualGlobalPlacement rc=0 11s
+OpenROAD.DetailedPlacement rc=0 10s
+OpenROAD.CTS rc=0 43s
+OpenROAD.ResizerTimingPostCTS rc=0 334s
+sta rc=0

@@ -1,0 +1,2 @@
+soc_top_hazard3 o21ai_swap rc=0 9 min |   [PASS] o21ai_swap: eqy FAIL as expected (2/16222 partitions not proved), at the injection (_10144_, _10149_)
+soc_top o21ai_swap rc=0 10 min |   [PASS] o21ai_swap: eqy FAIL as expected (2/18156 partitions not proved), at the injection (_10135_, _10136_)

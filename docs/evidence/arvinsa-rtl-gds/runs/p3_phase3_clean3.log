@@ -1,0 +1,334 @@
+start 00:01:49
+bash env/check_env.sh --flow
+== Local tools (Phase 1) ==
+  [OK]      verilator: Verilator 5.050 2026-07-01 rev vUNKNOWN-built20260701 (>= 5.050)
+  [OK]      iverilog: 13.0 (>= 13.0)
+  [OK]      yosys: 0.69 (>= 0.69)
+  [OK]      riscv64-elf-gcc: 16.1.0 (>= 16.1)
+  [OK]      python3: 3.14.6 (>= 3.11)
+  [OK]      c++ (for Verilator --binary): Apple clang version 21.0.0 (clang-2100.3.34.2)
+  [OK]      python3 tomllib
+  [OK]      riscv gcc multilib rv32im/ilp32
+== Pinned IP ==
+  [OK]      picorv32 submodule @ ef203c2b0a3f
+  [OK]      SRAM model sha256 matches
+  [OK]      SRAM sim model regenerates identically
+== toolchain.md ==
+toolchain.md 一致：10 個本機工具、19 個釘版值
+== RTL-to-GDS flow (Phase 0, needs Nix) ==
+  [OK]      nix: nix (Nix) 2.35.2
+  [OK]      LibreLane 3.0.14 clone at ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane (tools run inside its nix-shell)
+  [OK]      librelane --version in nix-shell: LibreLane v3.0.14
+  [OK]      PDK dir: ~/.ciel/sky130A
+  [OK]      PDK version 8afc8346a57f
+  [OK]      PDK SRAM LEF has FOREIGN
+  [OK]      PDK SRAM model == pinned ip/sram copy
+
+env-check: PASS
+python3 signoff/scripts/neg_provenance.py
+  [PASS] clean: expected PASS
+  [PASS] clean_verify: expected PASS
+  [PASS] untracked: expected FAIL at uncommitted
+  [PASS] modified: expected FAIL at uncommitted
+  [PASS] no_submodule: expected FAIL at submodules
+  [PASS] librelane: expected FAIL at librelane
+  [PASS] pdk: expected FAIL at pdk
+  [PASS] head_changed: expected FAIL at same_head
+  [PASS] resolved_pdk: expected FAIL at resolved_pdk
+  [PASS] resolved_ll: expected FAIL at resolved_librelane
+  [PASS] no_record: expected FAIL at record
+neg-provenance: PASS 11/11
+bash pnr/test_librelane_flow.sh
+  [PASS] 'ok': rc=0 attempts=1 retries=0 (want rc=0 attempts=1 retries=0)
+  [PASS] 'grt ok': rc=0 attempts=2 retries=1 (want rc=0 attempts=2 retries=1)
+  [PASS] 'grt grt ok': rc=0 attempts=3 retries=2 (want rc=0 attempts=3 retries=2)
+  [PASS] 'grt grt grt': rc=2 attempts=3 retries=2 (want rc=fail attempts=3 retries=2)
+  [PASS] 'other': rc=2 attempts=1 retries=0 (want rc=fail attempts=1 retries=0)
+  [PASS] 'grtother': rc=2 attempts=1 retries=0 (want rc=fail attempts=1 retries=0)
+  [PASS] 'grt other': rc=2 attempts=2 retries=1 (want rc=fail attempts=2 retries=1)
+test-flow-retry: PASS 7/7
+bash pnr/soc_top/run.sh
+harden-soc: source tracking (committed working tree, pinned LibreLane and PDK)
+  [PASS] repo_head: acbc126ca12763337ac9efcc0d8f8913dc4b5cf6
+  [PASS] uncommitted: working tree clean
+  [PASS] submodules: 1 at the recorded commit
+  [PASS] librelane: ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane at f24e0ea5db2260719e9a0c7d51d07db74a87fa23, pinned f24e0ea5db2260719e9a0c7d51d07db74a87fa23
+  [PASS] pdk: ~/.ciel/sky130A -> ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A, pinned 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+provenance: PASS
+harden-soc: inputs (config.json vs rtl/rtl.f, padded.lib vs the PDK .lib)
+  [PASS] rtl_files: 8 files and 1 include dir(s) in config.json vs 8 and 1 in rtl/rtl.f
+  [PASS] padded_lib: gen_padded_lib: ~/claude_prjs/arvinsa-rtl-gds-phase3c/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/padded.lib is up to date
+  [PASS] antenna_lef: gen_antenna_lef: ~/claude_prjs/arvinsa-rtl-gds-phase3c/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef is up to date
+  [PASS] macro_lib: MACROS sky130_sram_2kbyte_1rw1r_32x512_8 lib = {'*': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/padded.lib']}, lef = ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef']
+soc-inputs: PASS
+harden-soc: running LibreLane Classic flow on soc_top (about 20-30 minutes on this machine); full log: ~/claude_prjs/arvinsa-rtl-gds-phase3c/runs/soc_top/flow.log
+  [PASS] equal  flow__errors__count: run=0 expected=== 0
+  [PASS] equal  design__lint_error__count: run=0 expected=== 0
+  [PASS] equal  synthesis__check_error__count: run=0 expected=== 0
+  [PASS] equal  design__instance_unmapped__count: run=0 expected=== 0
+  [PASS] equal  design__instance__count__macros: run=1 expected=== 1
+  [PASS] equal  design__power_grid_violation__count: run=0 expected=== 0
+  [PASS] equal  design__disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  design__critical_disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  route__drc_errors: run=0 expected=== 0
+  [PASS] equal  antenna__violating__nets: run=0 expected=== 0
+  [PASS] equal  antenna__violating__pins: run=0 expected=== 0
+  [PASS] equal  route__antenna_violation__count: run=0 expected=== 0
+  [PASS] equal  klayout__drc_error__count: run=0 expected=== 0
+  [PASS] equal  magic__illegal_overlap__count: run=0 expected=== 0
+  [PASS] equal  design__xor_difference__count: run=0 expected=== 0
+  [PASS] equal  design__lvs_error__count: run=0 expected=== 0
+  [PASS] equal  timing__setup_vio__count: run=0 expected=== 0
+  [PASS] equal  timing__hold_vio__count: run=0 expected=== 0
+  [PASS] equal  design__max_slew_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_cap_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_fanout_violation__count: run=0 expected=== 0
+  [PASS] equal  timing__unannotated_net__count: run=134 expected=== 134
+  [PASS] equal  timing__unannotated_net_filtered__count: run=0 expected=== 0
+  [PASS] min    timing__setup__ws__corner:nom_tt_025C_1v80: run=8.670362451190432 expected=>= 4.0
+  [PASS] max    ir__drop__worst: run=0.000306 expected=<= 0.09
+  [PASS] corner timing__setup__ws__corner:nom_tt_025C_1v80: run=8.670362451190432 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:nom_ss_100C_1v60: run=3.5782791076337936 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_n40C_1v95: run=8.87386900189504 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:min_tt_025C_1v80: run=8.65772189556376 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:min_ss_100C_1v60: run=3.552926942104865 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:min_ff_n40C_1v95: run=8.865704865630258 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:max_tt_025C_1v80: run=8.694744725857618 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:max_ss_100C_1v60: run=3.6296655597372722 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:max_ff_n40C_1v95: run=8.892097976296515 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:nom_tt_025C_1v80: run=0.20447599747712913 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_100C_1v60: run=0.7022065350171568 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:nom_ff_n40C_1v95: run=0.033710035716985935 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:min_tt_025C_1v80: run=0.2028972602914624 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:min_ss_100C_1v60: run=0.6997680410969048 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:min_ff_n40C_1v95: run=0.03246480953734896 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:max_tt_025C_1v80: run=0.20631474890251675 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:max_ss_100C_1v60: run=0.7054377281994103 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:max_ff_n40C_1v95: run=0.035139669946228566 expected=>= 0.0 and < 40.0
+  [PASS] golden 320 metrics: run=320 identical, 0 within tolerance expected=golden/soc_top/metrics.json
+  [INFO] info   magic__drc_error__count: run=4665810 expected=-
+  [INFO] info   design__instance__count: run=96838 expected=-
+  [INFO] info   design__instance__area__stdcell: run=227740 expected=-
+  [INFO] info   design__instance__utilization: run=0.666157 expected=-
+  [INFO] info   timing__setup__ws: run=3.552926942104865 expected=-
+  [INFO] info   timing__hold__ws: run=0.03246480953734896 expected=-
+  [INFO] info   ir__drop__worst: run=0.000306 expected=-
+  [INFO] info   power__total: run=0.009030875749886036 expected=-
+signoff: PASS
+  [PASS] macro: sky130_sram_2kbyte_1rw1r_32x512_8 instances in the final netlist: ['sram0']
+  [PASS] placement: sram0 FIXED (301.76, 364.48) N; config.json (301.76, 364.48) N
+  [PASS] port1_tieoff: csb1 tie-high, clk1 and addr1[8:0] tie-low
+  [PASS] disconnected: Odb.ReportDisconnectedPins: [('0', '0')]
+  [PASS] sta_setup: check_setup in 9 corners: only the expected unclocked sram0/clk1
+  [PASS] magic_drc: 0 violations outside the SRAM outline; inside 4665810 in 30 rule types, all also violated by the SRAM alone
+soc-checks: PASS
+soc-inputs: PASS
+provenance: PASS
+harden-soc: PASS
+python3 signoff/eqy/run_eqy.py --design soc_top
+[eqy] soc_top: gold runs/soc_top/06-yosys-synthesis/soc_top.nl.v
+[eqy] soc_top: gate runs/soc_top/final/nl/soc_top.nl.v
+[eqy] soc_top: running EQY (10 jobs; log runs/eqy_soc_top/eqy_run.log)
+  [PASS] soc_top: 18100/18100 partitions proved equivalent, 90142 matched names, 295.5 s
+eqy: PASS
+python3 signoff/eqy/neg_eqy.py --design soc_top
+  [PASS] din5_stuck0: eqy FAIL as expected (1/18100 partitions not proved; 1 bit(s) mapped to a constant)
+  [PASS] csb0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches)
+  [PASS] host_rdata7_inverted: eqy FAIL as expected (partition step refused: conflicting name matches)
+  [PASS] mux_swap: eqy FAIL as expected (partition step refused: conflicting name matches)
+neg-eqy: PASS 4/4 caught (441 s)
+/Library/Developer/CommandLineTools/usr/bin/make -C fw all check-bootrom
+python3 scripts/gen_soc_h.py --in ../rtl/include/memmap.vh --out build/soc.h
+fw: build flags changed, rebuilding (build/build_flags.txt)
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c common/start.S -o build/obj/common/start.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c common/fwlib.c -o build/obj/common/fwlib.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/hello/main.c -o build/obj/hello/main.o
+riscv64-elf-gcc -E -P -undef -x c -Icommon -Ibuild common/link.ld -o build/link.ld
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/hello.map -o build/hello.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/hello/main.o -lgcc
+riscv64-elf-objcopy -O binary build/hello.elf build/hello.bin
+python3 scripts/bin2hex.py build/hello.bin build/hello.hex
+riscv64-elf-objdump -h -d -S build/hello.elf > build/hello.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/hello.elf --name hello \
+	    --limit-sym _stack_limit --out build/hello.size
+size_check: PASS: hello: _free_start = 0x0130 <= 0x0700 (_stack_limit), 1488 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/memtest/main.c -o build/obj/memtest/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/memtest.map -o build/memtest.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/memtest/main.o -lgcc
+riscv64-elf-objcopy -O binary build/memtest.elf build/memtest.bin
+python3 scripts/bin2hex.py build/memtest.bin build/memtest.hex
+riscv64-elf-objdump -h -d -S build/memtest.elf > build/memtest.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/memtest.elf --name memtest \
+	    --limit-sym _sram_half --out build/memtest.size
+size_check: PASS: memtest: _free_start = 0x0328 <= 0x0400 (_sram_half), 216 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/irq/main.c -o build/obj/irq/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/irq.map -o build/irq.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/irq/main.o -lgcc
+riscv64-elf-objcopy -O binary build/irq.elf build/irq.bin
+python3 scripts/bin2hex.py build/irq.bin build/irq.hex
+riscv64-elf-objdump -h -d -S build/irq.elf > build/irq.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/irq.elf --name irq \
+	    --limit-sym _stack_limit --out build/irq.size
+size_check: PASS: irq: _free_start = 0x0174 <= 0x0700 (_stack_limit), 1420 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/muldiv/main.c -o build/obj/muldiv/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/muldiv.map -o build/muldiv.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/muldiv/main.o -lgcc
+riscv64-elf-objcopy -O binary build/muldiv.elf build/muldiv.bin
+python3 scripts/bin2hex.py build/muldiv.bin build/muldiv.hex
+riscv64-elf-objdump -h -d -S build/muldiv.elf > build/muldiv.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/muldiv.elf --name muldiv \
+	    --limit-sym _stack_limit --out build/muldiv.size
+size_check: PASS: muldiv: _free_start = 0x0384 <= 0x0700 (_stack_limit), 892 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/uart_echo/main.c -o build/obj/uart_echo/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/uart_echo.map -o build/uart_echo.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/uart_echo/main.o -lgcc
+riscv64-elf-objcopy -O binary build/uart_echo.elf build/uart_echo.bin
+python3 scripts/bin2hex.py build/uart_echo.bin build/uart_echo.hex
+riscv64-elf-objdump -h -d -S build/uart_echo.elf > build/uart_echo.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/uart_echo.elf --name uart_echo \
+	    --limit-sym _stack_limit --out build/uart_echo.size
+size_check: PASS: uart_echo: _free_start = 0x01b0 <= 0x0700 (_stack_limit), 1360 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/neg_fw_hang/main.c -o build/obj/neg_fw_hang/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/neg_fw_hang.map -o build/neg_fw_hang.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/neg_fw_hang/main.o -lgcc
+riscv64-elf-objcopy -O binary build/neg_fw_hang.elf build/neg_fw_hang.bin
+python3 scripts/bin2hex.py build/neg_fw_hang.bin build/neg_fw_hang.hex
+riscv64-elf-objdump -h -d -S build/neg_fw_hang.elf > build/neg_fw_hang.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/neg_fw_hang.elf --name neg_fw_hang \
+	    --limit-sym _stack_limit --out build/neg_fw_hang.size
+size_check: PASS: neg_fw_hang: _free_start = 0x0118 <= 0x0700 (_stack_limit), 1512 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/neg_fw_illegal/main.c -o build/obj/neg_fw_illegal/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/neg_fw_illegal.map -o build/neg_fw_illegal.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/neg_fw_illegal/main.o -lgcc
+riscv64-elf-objcopy -O binary build/neg_fw_illegal.elf build/neg_fw_illegal.bin
+python3 scripts/bin2hex.py build/neg_fw_illegal.bin build/neg_fw_illegal.hex
+riscv64-elf-objdump -h -d -S build/neg_fw_illegal.elf > build/neg_fw_illegal.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/neg_fw_illegal.elf --name neg_fw_illegal \
+	    --limit-sym _stack_limit --out build/neg_fw_illegal.size
+size_check: PASS: neg_fw_illegal: _free_start = 0x0120 <= 0x0700 (_stack_limit), 1504 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/hello/main.c -o build/obj/boot_uart_hello/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/boot_uart_hello.map -o build/boot_uart_hello.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/boot_uart_hello/main.o -lgcc
+riscv64-elf-objcopy -O binary build/boot_uart_hello.elf build/boot_uart_hello.bin
+python3 scripts/bin2hex.py build/boot_uart_hello.bin build/boot_uart_hello.hex
+riscv64-elf-objdump -h -d -S build/boot_uart_hello.elf > build/boot_uart_hello.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/boot_uart_hello.elf --name boot_uart_hello \
+	    --limit-sym _stack_limit --out build/boot_uart_hello.size
+size_check: PASS: boot_uart_hello: _free_start = 0x0130 <= 0x0700 (_stack_limit), 1488 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/hello/main.c -o build/obj/boot_host_hello/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/boot_host_hello.map -o build/boot_host_hello.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/boot_host_hello/main.o -lgcc
+riscv64-elf-objcopy -O binary build/boot_host_hello.elf build/boot_host_hello.bin
+python3 scripts/bin2hex.py build/boot_host_hello.bin build/boot_host_hello.hex
+riscv64-elf-objdump -h -d -S build/boot_host_hello.elf > build/boot_host_hello.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/boot_host_hello.elf --name boot_host_hello \
+	    --limit-sym _stack_limit --out build/boot_host_hello.size
+size_check: PASS: boot_host_hello: _free_start = 0x0130 <= 0x0700 (_stack_limit), 1488 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/regs/main.c -o build/obj/regs/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/regs.map -o build/regs.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/regs/main.o -lgcc
+riscv64-elf-objcopy -O binary build/regs.elf build/regs.bin
+python3 scripts/bin2hex.py build/regs.bin build/regs.hex
+riscv64-elf-objdump -h -d -S build/regs.elf > build/regs.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/regs.elf --name regs \
+	    --limit-sym _stack_limit --out build/regs.size
+size_check: PASS: regs: _free_start = 0x0380 <= 0x0700 (_stack_limit), 896 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/unmapped/main.c -o build/obj/unmapped/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/unmapped.map -o build/unmapped.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/unmapped/main.o -lgcc
+riscv64-elf-objcopy -O binary build/unmapped.elf build/unmapped.bin
+python3 scripts/bin2hex.py build/unmapped.bin build/unmapped.hex
+riscv64-elf-objdump -h -d -S build/unmapped.elf > build/unmapped.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/unmapped.elf --name unmapped \
+	    --limit-sym _stack_limit --out build/unmapped.size
+size_check: PASS: unmapped: _free_start = 0x0268 <= 0x0700 (_stack_limit), 1176 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/uart_burst/main.c -o build/obj/uart_burst/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/uart_burst.map -o build/uart_burst.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/uart_burst/main.o -lgcc
+riscv64-elf-objcopy -O binary build/uart_burst.elf build/uart_burst.bin
+python3 scripts/bin2hex.py build/uart_burst.bin build/uart_burst.hex
+riscv64-elf-objdump -h -d -S build/uart_burst.elf > build/uart_burst.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/uart_burst.elf --name uart_burst \
+	    --limit-sym _stack_limit --out build/uart_burst.size
+size_check: PASS: uart_burst: _free_start = 0x017c <= 0x0700 (_stack_limit), 1412 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -c tests/reset_store/main.c -o build/obj/reset_store/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/reset_store.map -o build/reset_store.elf build/obj/common/start.o build/obj/common/fwlib.o build/obj/reset_store/main.o -lgcc
+riscv64-elf-objcopy -O binary build/reset_store.elf build/reset_store.bin
+python3 scripts/bin2hex.py build/reset_store.bin build/reset_store.hex
+riscv64-elf-objdump -h -d -S build/reset_store.elf > build/reset_store.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/reset_store.elf --name reset_store \
+	    --limit-sym _stack_limit --out build/reset_store.size
+size_check: PASS: reset_store: _free_start = 0x0188 <= 0x0700 (_stack_limit), 1400 bytes free
+python3 scripts/size_check.py --report build/size_report.txt build/hello.size build/memtest.size build/irq.size build/muldiv.size build/uart_echo.size build/neg_fw_hang.size build/neg_fw_illegal.size build/boot_uart_hello.size build/boot_host_hello.size build/regs.size build/unmapped.size build/uart_burst.size build/reset_store.size
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -g -MMD -MP -Icommon -Ibuild -c bootrom/bootrom.S -o build/obj/bootrom/bootrom.o
+riscv64-elf-gcc -E -P -undef -x c -Icommon -Ibuild bootrom/bootrom.ld -o build/bootrom.ld
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments -T build/bootrom.ld -Wl,-Map=build/bootrom.map -o build/bootrom.elf build/obj/bootrom/bootrom.o
+riscv64-elf-objcopy -O binary build/bootrom.elf build/bootrom.bin
+python3 scripts/bin2hex.py build/bootrom.bin build/bootrom.hex
+riscv64-elf-objdump -h -d -S build/bootrom.elf > build/bootrom.lst
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_MEMTEST_NO_MARCH -c common/start.S -o build/obj/memtest__no_march/common/start.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_MEMTEST_NO_MARCH -c common/fwlib.c -o build/obj/memtest__no_march/common/fwlib.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_MEMTEST_NO_MARCH -c tests/memtest/main.c -o build/obj/memtest__no_march/test/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/memtest__no_march.map -o build/memtest__no_march.elf build/obj/memtest__no_march/common/start.o build/obj/memtest__no_march/common/fwlib.o build/obj/memtest__no_march/test/main.o -lgcc
+riscv64-elf-objcopy -O binary build/memtest__no_march.elf build/memtest__no_march.bin
+python3 scripts/bin2hex.py build/memtest__no_march.bin build/memtest__no_march.hex
+riscv64-elf-objdump -h -d -S build/memtest__no_march.elf > build/memtest__no_march.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/memtest__no_march.elf --name memtest__no_march \
+	    --limit-sym _sram_half --out build/memtest__no_march.size
+size_check: PASS: memtest__no_march: _free_start = 0x02a8 <= 0x0400 (_sram_half), 344 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_DONE_BEFORE_SIG -c common/start.S -o build/obj/hello__done_before_sig/common/start.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_DONE_BEFORE_SIG -c common/fwlib.c -o build/obj/hello__done_before_sig/common/fwlib.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_DONE_BEFORE_SIG -c tests/hello/main.c -o build/obj/hello__done_before_sig/test/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/hello__done_before_sig.map -o build/hello__done_before_sig.elf build/obj/hello__done_before_sig/common/start.o build/obj/hello__done_before_sig/common/fwlib.o build/obj/hello__done_before_sig/test/main.o -lgcc
+riscv64-elf-objcopy -O binary build/hello__done_before_sig.elf build/hello__done_before_sig.bin
+python3 scripts/bin2hex.py build/hello__done_before_sig.bin build/hello__done_before_sig.hex
+riscv64-elf-objdump -h -d -S build/hello__done_before_sig.elf > build/hello__done_before_sig.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/hello__done_before_sig.elf --name hello__done_before_sig \
+	    --limit-sym _stack_limit --out build/hello__done_before_sig.size
+size_check: PASS: hello__done_before_sig: _free_start = 0x0130 <= 0x0700 (_stack_limit), 1488 bytes free
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_RESET_STORE_NO_VICTIM -c common/start.S -o build/obj/reset_store__no_victim/common/start.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_RESET_STORE_NO_VICTIM -c common/fwlib.c -o build/obj/reset_store__no_victim/common/fwlib.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections -MMD -MP -Icommon -Ibuild -I../third_party/picorv32/firmware -DFWBUG_RESET_STORE_NO_VICTIM -c tests/reset_store/main.c -o build/obj/reset_store__no_victim/test/main.o
+riscv64-elf-gcc -march=rv32imc -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments -T build/link.ld -Wl,-Map=build/reset_store__no_victim.map -o build/reset_store__no_victim.elf build/obj/reset_store__no_victim/common/start.o build/obj/reset_store__no_victim/common/fwlib.o build/obj/reset_store__no_victim/test/main.o -lgcc
+riscv64-elf-objcopy -O binary build/reset_store__no_victim.elf build/reset_store__no_victim.bin
+python3 scripts/bin2hex.py build/reset_store__no_victim.bin build/reset_store__no_victim.hex
+riscv64-elf-objdump -h -d -S build/reset_store__no_victim.elf > build/reset_store__no_victim.lst
+python3 scripts/size_check.py --nm riscv64-elf-nm --size riscv64-elf-size --elf build/reset_store__no_victim.elf --name reset_store__no_victim \
+	    --limit-sym _stack_limit --out build/reset_store__no_victim.size
+size_check: PASS: reset_store__no_victim: _free_start = 0x018c <= 0x0700 (_stack_limit), 1396 bytes free
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -g -MMD -MP -Icommon -Ibuild -DBRBUG_SKIP_LAST_WORD -c bootrom/bootrom.S -o build/obj/bootrom/bootrom__skip_last_word.o
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments -T build/bootrom.ld -Wl,-Map=build/bootrom__skip_last_word.map -o build/bootrom__skip_last_word.elf build/obj/bootrom/bootrom__skip_last_word.o
+riscv64-elf-objcopy -O binary build/bootrom__skip_last_word.elf build/bootrom__skip_last_word.bin
+python3 scripts/bin2hex.py build/bootrom__skip_last_word.bin build/bootrom__skip_last_word.hex
+riscv64-elf-objdump -h -d -S build/bootrom__skip_last_word.elf > build/bootrom__skip_last_word.lst
+python3 ../rtl/bootrom/gen_bootrom.py --hex build/bootrom__skip_last_word.hex --out build/bootrom__skip_last_word.v --source "fw/bootrom/bootrom.S -DBRBUG_SKIP_LAST_WORD (negative-test variant)"
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -g -MMD -MP -Icommon -Ibuild -DBRBUG_NO_AIA_READBACK -c bootrom/bootrom.S -o build/obj/bootrom/bootrom__no_aia_readback.o
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments -T build/bootrom.ld -Wl,-Map=build/bootrom__no_aia_readback.map -o build/bootrom__no_aia_readback.elf build/obj/bootrom/bootrom__no_aia_readback.o
+riscv64-elf-objcopy -O binary build/bootrom__no_aia_readback.elf build/bootrom__no_aia_readback.bin
+python3 scripts/bin2hex.py build/bootrom__no_aia_readback.bin build/bootrom__no_aia_readback.hex
+riscv64-elf-objdump -h -d -S build/bootrom__no_aia_readback.elf > build/bootrom__no_aia_readback.lst
+python3 ../rtl/bootrom/gen_bootrom.py --hex build/bootrom__no_aia_readback.hex --out build/bootrom__no_aia_readback.v --source "fw/bootrom/bootrom.S -DBRBUG_NO_AIA_READBACK (negative-test variant)"
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -g -MMD -MP -Icommon -Ibuild -DBRBUG_NO_DIV_WRITE -c bootrom/bootrom.S -o build/obj/bootrom/bootrom__no_div_write.o
+riscv64-elf-gcc -march=rv32i -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments -T build/bootrom.ld -Wl,-Map=build/bootrom__no_div_write.map -o build/bootrom__no_div_write.elf build/obj/bootrom/bootrom__no_div_write.o
+riscv64-elf-objcopy -O binary build/bootrom__no_div_write.elf build/bootrom__no_div_write.bin
+python3 scripts/bin2hex.py build/bootrom__no_div_write.bin build/bootrom__no_div_write.hex
+riscv64-elf-objdump -h -d -S build/bootrom__no_div_write.elf > build/bootrom__no_div_write.lst
+python3 ../rtl/bootrom/gen_bootrom.py --hex build/bootrom__no_div_write.hex --out build/bootrom__no_div_write.v --source "fw/bootrom/bootrom.S -DBRBUG_NO_DIV_WRITE (negative-test variant)"
+python3 ../rtl/bootrom/gen_bootrom.py --hex build/bootrom.hex --out build/bootrom_check.v
+check-bootrom: PASS: ../rtl/bootrom/bootrom.v matches the boot ROM image
+rm build/obj/bootrom/bootrom__skip_last_word.o build/obj/bootrom/bootrom__no_div_write.o build/obj/bootrom/bootrom__no_aia_readback.o
+python3 dv/gl_soc/run_gl_soc.py
+[gl-soc] netlist ~/claude_prjs/arvinsa-rtl-gds-phase3c/runs/soc_top/final/nl/soc_top.nl.v
+[gl-soc] compile tb_soc with the RTL and gate-level SoC (Icarus)
+[gl-soc] run 13 tests, 8 in parallel
+  [PASS] hello: 3466 cycles, 3466 RTL/GL comparisons, 5.53 s
+  [PASS] memtest: 871219 cycles, 871219 RTL/GL comparisons, 453.33 s
+  [PASS] irq: 6967 cycles, 6967 RTL/GL comparisons, 9.66 s
+  [PASS] muldiv: 17824 cycles, 17824 RTL/GL comparisons, 20.39 s
+  [PASS] uart_echo: 6555 cycles, 6555 RTL/GL comparisons, 9.34 s
+  [PASS] bootrom_march: 112280 cycles, 112280 RTL/GL comparisons, 96.87 s
+  [PASS] boot_uart_hello: 62838 cycles, 62838 RTL/GL comparisons, 74.6 s
+  [PASS] boot_host_hello: 3902 cycles, 3902 RTL/GL comparisons, 5.62 s
+  [PASS] boot_uart_max: 362843 cycles, 362843 RTL/GL comparisons, 246.27 s
+  [PASS] regs: 19100 cycles, 19100 RTL/GL comparisons, 24.83 s
+  [PASS] unmapped: 10653 cycles, 10653 RTL/GL comparisons, 15.06 s
+  [PASS] uart_burst: 43958 cycles, 43958 RTL/GL comparisons, 43.92 s
+  [PASS] reset_store: 8602 cycles, 8602 RTL/GL comparisons, 12.12 s
+gl-soc: PASS 13/13 tests passed (454.5 s)
+python3 dv/gl_soc/neg_gl_soc.py
+  [PASS] din5_stuck0: lockstep mismatch in 11/11 tests
+  [FAIL] csb0_inverted: expected gl-soc FAIL with fail.gl_lockstep > 0; gl-soc: FAIL (compile: compile failed (exit code 2), see runs/sim_build/icarus/default-gl/compile.log)
+  [PASS] host_rdata7_inverted: lockstep mismatch in 11/11 tests
+  [PASS] mux_swap: lockstep mismatch in 1/11 tests
+neg-gl-soc: FAIL 3/4 caught (201 s)
+make: *** [neg-gl-soc] Error 1
+phase3 rc=2 (2700 s)
+end 00:46:49

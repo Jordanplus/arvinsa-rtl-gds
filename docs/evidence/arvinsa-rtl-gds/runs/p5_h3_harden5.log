@@ -1,0 +1,120 @@
+CPU=hazard3 bash pnr/soc_top/run.sh
+harden-soc: source tracking (committed working tree, pinned LibreLane and PDK)
+  [PASS] repo_head: 3a28d54469cff3e5ca70ce45291d417566359e8e
+  [PASS] uncommitted: working tree clean
+  [PASS] submodules: 2 at the recorded commit
+  [PASS] librelane: ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane at f24e0ea5db2260719e9a0c7d51d07db74a87fa23, pinned f24e0ea5db2260719e9a0c7d51d07db74a87fa23
+  [PASS] librelane_clean: no modified or untracked file in the LibreLane clone
+  [PASS] pdk: ~/.ciel/sky130A -> ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A, pinned 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+  [PASS] pdk_content: 6 directories, 2109 files, same content as env/pdk_content.sha256
+provenance: PASS
+harden-soc: CPU=hazard3, inputs (config_hazard3.json vs the RTL file list, SRAM .lib vs char.json and the PDK .lib)
+  [PASS] rtl_files: 29 files and 2 include dir(s) in config_hazard3.json vs 29 and 2 in rtl/rtl_hazard3.f
+  [PASS] cpu_config: config.json and config_hazard3.json differ only in VERILOG_FILES, VERILOG_INCLUDE_DIRS, VERILOG_DEFINES (and comments)
+  [PASS] char_lib: gen_char_lib: up to date 5 .lib in ~/claude_prjs/arvinsa-rtl-gds-p5h3/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char (placeholder, the macro does not read correctly: ss_n40C_1v60)
+  [PASS] char_values: check_char_lib.py PASS (values recomputed independently, provenance, confirmation simulations)
+  [PASS] antenna_lef: gen_antenna_lef: ~/claude_prjs/arvinsa-rtl-gds-p5h3/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef is up to date
+  [PASS] macro_lib: MACROS sky130_sram_2kbyte_1rw1r_32x512_8 lib = {'*_tt_025C_1v80': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib'], '*_ss_100C_1v60': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib'], '*_ff_n40C_1v95': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib'], '*_ss_n40C_1v60': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib'], '*_ff_100C_1v95': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib']}, lef = ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef']
+  [PASS] other_libs: LIB = the sky130_fd_sc_hd .lib of each PVT, EXTRA_LIBS unset
+  [PASS] weak_cells: check_weak_cells.py PASS on config_hazard3.json (8 step x PVT rows)
+soc-inputs: PASS
+harden-soc: running LibreLane Classic flow on soc_top with hazard3 (about 20-30 minutes on this machine); full log: ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3/flow.log
+  [PASS] equal  flow__errors__count: run=0 expected=== 0
+  [PASS] equal  design__lint_error__count: run=0 expected=== 0
+  [PASS] equal  synthesis__check_error__count: run=0 expected=== 0
+  [PASS] equal  design__instance_unmapped__count: run=0 expected=== 0
+  [PASS] equal  design__instance__count__macros: run=1 expected=== 1
+  [PASS] equal  design__power_grid_violation__count: run=0 expected=== 0
+  [PASS] equal  design__disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  design__critical_disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  route__drc_errors: run=0 expected=== 0
+  [PASS] equal  antenna__violating__nets: run=0 expected=== 0
+  [PASS] equal  antenna__violating__pins: run=0 expected=== 0
+  [PASS] equal  route__antenna_violation__count: run=0 expected=== 0
+  [PASS] equal  klayout__drc_error__count: run=0 expected=== 0
+  [PASS] equal  magic__illegal_overlap__count: run=0 expected=== 0
+  [PASS] equal  design__xor_difference__count: run=0 expected=== 0
+  [PASS] equal  design__lvs_error__count: run=0 expected=== 0
+  [PASS] equal  timing__setup_vio__count: run=0 expected=== 0
+  [PASS] equal  timing__hold_vio__count: run=0 expected=== 0
+  [PASS] equal  design__max_slew_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_cap_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_fanout_violation__count: run=0 expected=== 0
+  [FAIL] equal  timing__unannotated_net__count: run=125 expected=== 133
+  [PASS] equal  timing__unannotated_net_filtered__count: run=0 expected=== 0
+  [PASS] max    ir_vdd_drop_plus_gnd_rise (sum of design_powergrid__drop__worst__net:vccd1, design_powergrid__drop__worst__net:vssd1): run=0.01835608 expected=<= 0.02, each >= 0
+  [PASS] corner timing__setup__ws__corner:nom_tt_025C_1v80: run=7.711122625357783 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ss_100C_1v60: run=1.1359482565001617 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_n40C_1v95: run=8.181754172412534 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ss_n40C_1v60: run=0.5841904902955958 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_100C_1v95: run=8.234735793002908 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_tt_025C_1v80: run=7.698869315533053 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ss_100C_1v60: run=1.1131540448923134 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ff_n40C_1v95: run=8.173909780387888 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ss_n40C_1v60: run=0.529645675642339 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ff_100C_1v95: run=8.230209635648107 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_tt_025C_1v80: run=7.7214858914519375 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ss_100C_1v60: run=1.1591865573304199 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ff_n40C_1v95: run=8.186866527540914 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ss_n40C_1v60: run=0.6361062967521868 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ff_100C_1v95: run=8.237293746923989 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_tt_025C_1v80: run=0.3292095578214715 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_100C_1v60: run=0.8845622262814444 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ff_n40C_1v95: run=0.11135503945233141 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_n40C_1v60: run=0.8342677895758714 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ff_100C_1v95: run=0.12514345469662655 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_tt_025C_1v80: run=0.3222624480707043 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ss_100C_1v60: run=0.8746135174764097 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ff_n40C_1v95: run=0.10666912099976919 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ss_n40C_1v60: run=0.8951679650910344 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ff_100C_1v95: run=0.1208241318971636 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_tt_025C_1v80: run=0.33694115118362544 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ss_100C_1v60: run=0.8914504942102423 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ff_n40C_1v95: run=0.11643664140206073 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ss_n40C_1v60: run=0.7907519307611611 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ff_100C_1v95: run=0.1299124178337794 expected=>= 0.0 and < 44.0
+  [FAIL] golden file: run=<missing> expected=~/claude_prjs/arvinsa-rtl-gds-p5h3/signoff/golden/soc_top_hazard3/metrics.json
+  [INFO] info   timing__setup__ws__corner:nom_tt_025C_1v80: run=7.711122625357783 expected=-
+  [INFO] info   magic__drc_error__count: run=4665810 expected=-
+  [INFO] info   design__instance__count: run=96042 expected=-
+  [INFO] info   design__instance__area__stdcell: run=239577 expected=-
+  [INFO] info   design__instance__utilization: run=0.68155 expected=-
+  [INFO] info   timing__setup__ws: run=0.529645675642339 expected=-
+  [INFO] info   timing__hold__ws: run=0.10666912099976919 expected=-
+  [INFO] info   ir__drop__worst: run=0.00922 expected=-
+  [INFO] info   power__total: run=0.01942591369152069 expected=-
+signoff: FAIL (2 rows)
+sram-drc-alone: PASS (~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/sram_drc_alone/step/reports/drc.magic.rpt)
+  [PASS] macro: sky130_sram_2kbyte_1rw1r_32x512_8 instances in the final netlist: ['sram0']
+  [PASS] placement: sram0 FIXED (301.76, 364.48) N; config.json (301.76, 364.48) N
+  [PASS] ir_sources: one source, no larger than the stripe width, at the left end of each met5 stripe of vccd1, vssd1
+  [PASS] port1_tieoff: csb1 tie-high, clk1 and addr1[8:0] tie-low
+  [PASS] disconnected: Odb.ReportDisconnectedPins: [('0', '0')]
+  [PASS] sta_setup: check_setup in 15 corners: only the expected unclocked sram0/clk1
+  [PASS] pulse_width: 15 corners; worst min pulse width slack 9.147087 (sram0/clk0 (low)), min period slack 14.000002 (sram0/clk0), all >= the required slack
+  [PASS] sram_lib: 15 corners, each read only the char .lib of its PVT (ADR-0010)
+  [PASS] sram_drc_ref: SRAM alone: 5579161 violations in 30 rule types, same as the reviewed baseline
+  [PASS] magic_drc: 0 violations outside the SRAM outline; inside 4665810, all at the position of a violation of the SRAM alone (4651644 identical boxes, 14166 in the union of same-rule boxes, 100 nm wider for (li.5) (diff/tap.9))
+soc-checks: PASS
+soc-inputs: PASS
+provenance: PASS
+criteria-review: run ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3, config ~/claude_prjs/arvinsa-rtl-gds-p5h3/pnr/soc_top/config_hazard3.json
+  [PASS] config_applied: 41 settings of config_hazard3.json = resolved.json
+  [PASS] step_config: 78 step configs agree with resolved.json
+  [PASS] uncertainty: 'clock_uncertainty.sdc: setup 0.25, hold 0.25, half-cycle setup 2.450000000000002 (duty cycle distortion 2.200000000000002)' in 7 timing steps and 15 signoff corners
+  [PASS] signoff_corners: 15 corners = STA_CORNERS
+  [PASS] checkers_ran: verdict lines in signoff.txt, soc_checks.txt, inputs_resolved.txt, provenance_end.txt
+  [INFO] setup: ResizerTimingPostCTS ended its setup repair at WNS +0.112 ns (RSZ_CORNERS, placement parasitics); signoff worst +0.530 ns (min_ss_n40C_1v60); gap -0.418 ns vs PL_RESIZER_SETUP_SLACK_MARGIN 0.1 ns
+  [INFO] hold: ResizerTimingPostCTS ended its hold repair at WNS +0.275 ns; signoff worst +0.107 ns (min_ff_n40C_1v95); gap 0.168 ns vs PL_RESIZER_HOLD_SLACK_MARGIN 0.3 ns
+  [INFO] signoff setup ws per corner: min_ss_n40C_1v60 +0.530, nom_ss_n40C_1v60 +0.584, max_ss_n40C_1v60 +0.636, min_ss_100C_1v60 +1.113, nom_ss_100C_1v60 +1.136
+  [INFO] ResizerTimingPostCTS stdcell area 205294 -> 232837 um^2 (+13.4 %); final netlist hold buffers 2739, repair buffers fanout 1815, load_slew 2278, max_length 79, rebuffer 2, wire 3677
+  [INFO] worst setup path (min_ss_n40C_1v60) sram0 -> _21021_, slack 0.529646: clk->Q 15.76 ns (1 cells), launch clock 3.79 ns, hold buffers 1.44 ns (1 cells), logic 0.83 ns (1 cells), interconnect 0.00 ns; arrival 21.81 ns
+  [INFO] clock skew metric (hold) nom_ff_n40C_1v95 -0.590 ns, without the hold uncertainty -0.340 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] clock skew metric (hold) nom_ss_n40C_1v60 -1.249 ns, without the hold uncertainty -0.999 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] PNR_SDC_FILE set_max_transition 0.70; DESIGN_REPAIR_MAX_SLEW_PCT 30, GRT_DESIGN_REPAIR_MAX_SLEW_PCT 40
+  [INFO] SIGNOFF_SDC_FILE set_max_transition not set (PDK default)
+  [INFO] part 2: review these numbers with skill signoff-criteria and write ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/criteria_review.md
+criteria-review: PASS
+harden-soc: FAIL
+make: *** [harden-soc] Error 1
+make rc=2

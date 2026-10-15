@@ -1,0 +1,5 @@
+h3 neg-eqy-2cases rc=1 13 min | neg-eqy: FAIL 1/2 caught (639 s) (o21ai_swap: eqy FAILed, but not at the injection: _10099_, _17299_ not connected to the edited cells)
+pico eqy-soc rc=0 7 min | eqy: PASS
+pico neg-eqy-soc rc=2 26 min | neg-eqy: FAIL 9/10 caught (1567 s) (o21ai_swap: eqy FAILed without 'partitions not proved' (partition step refused: conflicting name matches): not caught by the check this case is about)
+h3 neg-gl-soc rc=0 13 min | neg-gl-soc: PASS 8/8 caught (839 s)
+pico neg-gl-soc rc=0 6 min | neg-gl-soc: PASS 8/8 caught (363 s)

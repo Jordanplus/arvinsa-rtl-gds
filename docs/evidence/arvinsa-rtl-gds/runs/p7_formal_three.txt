@@ -1,0 +1,3 @@
+eqy-caravel rc=0 9 min
+gl-caravel rc=0 11 min
+ir-caravel rc=0 24 min

@@ -1,0 +1,2 @@
+  [PASS] picorv32: disconnected pins are exactly the 35 unused PCPI inputs
+disconnected-pins: PASS

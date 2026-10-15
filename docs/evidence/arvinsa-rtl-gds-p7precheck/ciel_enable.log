@@ -1,0 +1,7 @@
+Version 3e0e31dcce8519a7dbb82590346db16d91b7244f not found locally, attempting 
+to download…
+Downloading common.tar.zst… ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+Downloading sky130_fd_sc_hd.tar.zst… ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+Downloading sky130_sram_macros.tar.zst… ━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+Version 3e0e31dcce8519a7dbb82590346db16d91b7244f enabled for the sky130 PDK.
+rc=0 2793 s

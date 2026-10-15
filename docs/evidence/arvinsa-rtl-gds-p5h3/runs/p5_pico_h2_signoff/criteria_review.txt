@@ -1,0 +1,16 @@
+criteria-review: run ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top, config ~/claude_prjs/arvinsa-rtl-gds-p5h3/pnr/soc_top/config.json
+  [PASS] config_applied: 40 settings of config.json = resolved.json
+  [PASS] step_config: 44 step configs agree with resolved.json
+  [FAIL] uncertainty: 'clock_uncertainty.sdc: setup 0.25, hold 0.25, half-cycle setup 2.450000000000002 (duty cycle distortion 2.200000000000002)' missing in: signoff STA (no corner sta.log)
+  [FAIL] signoff_corners: missing ['max_ff_100C_1v95', 'max_ff_n40C_1v95', 'max_ss_100C_1v60', 'max_ss_n40C_1v60', 'max_tt_025C_1v80', 'min_ff_100C_1v95', 'min_ff_n40C_1v95', 'min_ss_100C_1v60', 'min_ss_n40C_1v60', 'min_tt_025C_1v80', 'nom_ff_100C_1v95', 'nom_ff_n40C_1v95', 'nom_ss_100C_1v60', 'nom_ss_n40C_1v60', 'nom_tt_025C_1v80'], extra []
+  [PASS] checkers_ran: verdict lines in signoff.txt, soc_checks.txt, inputs_resolved.txt, provenance_end.txt
+  [INFO] setup: ResizerTimingPostCTS has no setup repair table (no setup violation in RSZ_CORNERS); ResizerTimingPostGRT has no setup repair table (no setup violation in RSZ_CORNERS)
+  [INFO] hold: ResizerTimingPostCTS ended its hold repair at WNS +0.300 ns (placement parasitics); ResizerTimingPostGRT ended its hold repair at WNS +0.069 ns (global routing parasitics); signoff worst -0.453 ns (nom_ff_n40C_1v95); gap from the last hold repair (ResizerTimingPostGRT) 0.522 ns vs GRT_RESIZER_HOLD_SLACK_MARGIN 0.05 ns
+  [INFO] signoff setup ws per corner: nom_ss_n40C_1v60 +2.484, nom_ss_100C_1v60 +2.705, nom_tt_025C_1v80 +7.770, nom_ff_n40C_1v95 +8.687, nom_ff_100C_1v95 +8.711
+  [INFO] ResizerTimingPostCTS stdcell area 213539 -> 248959 um^2 (+16.6 %); final netlist hold buffers 0, repair buffers 
+  [INFO] clock skew metric (hold) nom_ff_n40C_1v95 -8.081 ns, without the hold uncertainty -7.831 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] clock skew metric (hold) nom_ss_n40C_1v60 -21.014 ns, without the hold uncertainty -20.764 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] PNR_SDC_FILE set_max_transition 0.70; DESIGN_REPAIR_MAX_SLEW_PCT 30, GRT_DESIGN_REPAIR_MAX_SLEW_PCT 40
+  [INFO] SIGNOFF_SDC_FILE set_max_transition not set (PDK default)
+  [INFO] part 2: review these numbers with skill signoff-criteria and write ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_signoff/criteria_review.md
+criteria-review: FAIL

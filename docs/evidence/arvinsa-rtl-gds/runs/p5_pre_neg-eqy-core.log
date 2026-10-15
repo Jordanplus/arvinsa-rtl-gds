@@ -1,0 +1,14 @@
+python3 signoff/eqy/neg_eqy.py --design picorv32_core
+  [PASS] wdata3_stuck0: eqy FAIL as expected (1 bit(s) mapped to a constant), at the injection (_18685_)
+  [PASS] instr_inverted: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_18681_, mem_instr)
+  [PASS] count_cycle45_stuck1: eqy FAIL as expected (1/15135 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_18285_)
+  [PASS] count_instr40_stuck1: eqy FAIL as expected (1/15134 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_18344_)
+  [PASS] buserr_irq_stuck0: eqy FAIL as expected (1/15134 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_18818_)
+  [PASS] x8_bit24_stuck0: eqy FAIL as expected (1/15137 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_17725_)
+  [PASS] mux_swap: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_08709_, _09176_)
+  [PASS] nand2_to_nor2: eqy FAIL as expected (1/15137 partitions not proved), at the injection (_08330_)
+  [PASS] flop_q_inverted: eqy FAIL as expected (partition step refused: conflicting name matches; sequential cells differ: _16577_), at the injection (_11304_, _16577_)
+  [PASS] flop_async_reset: eqy FAIL as expected (sequential cells differ: _16577_), at the injection (_16577_)
+  [PASS] flop_clk_inverted: eqy FAIL as expected (clock source differs: _16577_), at the injection (_16577_)
+  [PASS] location check: 104 ordered pairs of cases on different instances, none accepts the other's FAIL names
+neg-eqy: PASS 11/11 caught (1421 s)

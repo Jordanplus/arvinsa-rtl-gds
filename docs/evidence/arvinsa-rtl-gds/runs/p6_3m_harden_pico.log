@@ -1,0 +1,265 @@
+CPU=picorv32 bash pnr/soc_top/run.sh
+harden-soc: source tracking (committed working tree, pinned LibreLane and PDK)
+  [PASS] repo_head: ad184f5a572c673957b26d655401289ab007350e
+  [PASS] uncommitted: working tree clean
+  [PASS] submodules: 2 at the recorded commit
+  [PASS] librelane: ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane at f24e0ea5db2260719e9a0c7d51d07db74a87fa23, pinned f24e0ea5db2260719e9a0c7d51d07db74a87fa23
+  [PASS] librelane_clean: no modified or untracked file in the LibreLane clone
+  [PASS] pdk: ~/.ciel/sky130A -> ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A, pinned 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+  [PASS] pdk_content: 6 directories, 2109 files, same content as env/pdk_content.sha256
+provenance: PASS
+harden-soc: CPU=picorv32, inputs (config.json vs the RTL file list, SRAM .lib vs char.json and the PDK .lib)
+  [PASS] rtl_files: 8 files and 1 include dir(s) in config.json vs 8 and 1 in rtl/rtl.f
+  [PASS] cpu_config: config.json and config_hazard3.json differ only in VERILOG_FILES, VERILOG_INCLUDE_DIRS, VERILOG_DEFINES (and comments)
+  [PASS] macro_source: openram/ GDS, LEF, SPICE and Verilog match summary.json (SPICE: same subcircuits, other order/comments); upstream/ model = openram/ model
+  [PASS] sim_model: gen_sim_model: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/sim/arv_sram_2kbyte_1rw1r_32x512_8.v is up to date
+  [PASS] macro_views: check_macro_views: PASS - arv_sram_2kbyte_1rw1r_32x512_8: names, 123 signal pins and 2 power pins agree in LEF, 5 .lib, Verilog and SPICE; .lib numbers in range; .lib area and GDS box match the LEF SIZE
+  [PASS] char_lib: gen_char_lib: up to date 5 .lib in ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char
+  [PASS] char_values: check_char_lib.py PASS (values recomputed independently, provenance, confirmation simulations)
+  [PASS] antenna_lef: gen_antenna_lef: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.lef is up to date
+  [PASS] macro_lib: MACROS arv_sram_2kbyte_1rw1r_32x512_8 lib = {'*_tt_025C_1v80': ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib'], '*_ss_100C_1v60': ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib'], '*_ff_n40C_1v95': ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib'], '*_ss_n40C_1v60': ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib'], '*_ff_100C_1v95': ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib']}, lef = ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/arv_sram_2kbyte_1rw1r_32x512_8.lef'], gds = ['dir::ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/openram/arv_sram_2kbyte_1rw1r_32x512_8.gds']
+  [PASS] other_libs: LIB = the sky130_fd_sc_hd .lib of each PVT, EXTRA_LIBS unset
+  [PASS] weak_cells: check_weak_cells.py PASS on config.json (8 step x PVT rows)
+soc-inputs: PASS
+harden-soc: running LibreLane Classic flow on soc_top with picorv32 (about 20-30 minutes on this machine); full log: ~/claude_prjs/arvinsa-rtl-gds/runs/soc_top/flow.log
+  [PASS] equal  flow__errors__count: run=0 expected=== 0
+  [PASS] equal  design__lint_error__count: run=0 expected=== 0
+  [PASS] equal  synthesis__check_error__count: run=0 expected=== 0
+  [PASS] equal  design__instance_unmapped__count: run=0 expected=== 0
+  [PASS] equal  design__instance__count__macros: run=1 expected=== 1
+  [PASS] equal  design__power_grid_violation__count: run=0 expected=== 0
+  [PASS] equal  design__disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  design__critical_disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  route__drc_errors: run=0 expected=== 0
+  [PASS] equal  antenna__violating__nets: run=0 expected=== 0
+  [PASS] equal  antenna__violating__pins: run=0 expected=== 0
+  [PASS] equal  route__antenna_violation__count: run=0 expected=== 0
+  [PASS] equal  klayout__drc_error__count: run=0 expected=== 0
+  [PASS] equal  magic__illegal_overlap__count: run=0 expected=== 0
+  [PASS] equal  design__xor_difference__count: run=0 expected=== 0
+  [PASS] equal  design__lvs_error__count: run=0 expected=== 0
+  [PASS] equal  timing__setup_vio__count: run=0 expected=== 0
+  [PASS] equal  timing__hold_vio__count: run=0 expected=== 0
+  [PASS] equal  design__max_slew_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_cap_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_fanout_violation__count: run=0 expected=== 0
+  [FAIL] equal  timing__unannotated_net__count: run=144 expected=== 118
+  [PASS] equal  timing__unannotated_net_filtered__count: run=0 expected=== 0
+  [PASS] max    ir_vdd_drop_plus_gnd_rise (sum of design_powergrid__drop__worst__net:vccd1, design_powergrid__drop__worst__net:vssd1): run=0.004169330000000001 expected=<= 0.02, each >= 0
+  [PASS] corner timing__setup__ws__corner:nom_tt_025C_1v80: run=7.768196972221886 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ss_100C_1v60: run=1.2127117431290237 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_n40C_1v95: run=8.207877276831566 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ss_n40C_1v60: run=0.8361134243842064 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_100C_1v95: run=8.235197645794214 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_tt_025C_1v80: run=7.7546327110126025 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ss_100C_1v60: run=1.1900809563550223 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ff_n40C_1v95: run=8.198888910969991 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ss_n40C_1v60: run=0.7694787247400663 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:min_ff_100C_1v95: run=8.232735615145174 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_tt_025C_1v80: run=7.78953812389401 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ss_100C_1v60: run=1.2461498852195894 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ff_n40C_1v95: run=8.221498381461318 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ss_n40C_1v60: run=0.9251053518413438 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:max_ff_100C_1v95: run=8.242068594243339 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_tt_025C_1v80: run=0.2779743180982234 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_100C_1v60: run=0.821764901608147 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ff_n40C_1v95: run=0.08329215330981363 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_n40C_1v60: run=0.8869589758147899 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ff_100C_1v95: run=0.09629819436652837 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_tt_025C_1v80: run=0.27547453986527887 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ss_100C_1v60: run=0.8188439047477468 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ff_n40C_1v95: run=0.08153611350209981 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ss_n40C_1v60: run=0.8816885249232308 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:min_ff_100C_1v95: run=0.09466305784961562 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_tt_025C_1v80: run=0.2806825962210894 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ss_100C_1v60: run=0.8264029694469945 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ff_n40C_1v95: run=0.08523260116713309 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ss_n40C_1v60: run=0.8927503433642356 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:max_ff_100C_1v95: run=0.09811784995535237 expected=>= 0.0 and < 44.0
+  [FAIL] golden antenna_diodes_count: run=108 expected=100 (antenna_diodes_count: {'abs': 5})
+  [FAIL] golden clock__skew__worst_hold: run=-0.7110789935916815 expected=-0.591729904046752 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:max_ff_100C_1v95: run=-0.7625765790230681 expected=-0.6273857166917263 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:max_ff_n40C_1v95: run=-0.7509442169535724 expected=-0.6168907781431275 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:max_ss_100C_1v60: run=-1.5839925375247066 expected=-1.218150281791265 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:max_ss_n40C_1v60: run=-1.7492836563286767 expected=-1.3428623038083205 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:max_tt_025C_1v80: run=-0.9914174206654033 expected=-0.7926575176145214 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:min_ff_100C_1v95: run=-0.7256423445290817 expected=-0.6038834048187456 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:min_ff_n40C_1v95: run=-0.7110789935916815 expected=-0.591729904046752 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:min_ss_100C_1v60: run=-1.4867338891924116 expected=-1.1571102181710429 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:min_ss_n40C_1v60: run=-1.6167345697591449 expected=-1.249959948703254 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:min_tt_025C_1v80: run=-0.9349554728390036 expected=-0.7567189311571777 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ff_100C_1v95: run=-0.7427189073984043 expected=-0.6146048288707733 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ff_n40C_1v95: run=-0.7294905996858735 expected=-0.6032498005206725 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ss_100C_1v60: run=-1.5323369673524478 expected=-1.1858576678499053 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ss_n40C_1v60: run=-1.6787820497804034 expected=-1.2919232715964197 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_tt_025C_1v80: run=-0.9611139933735227 expected=-0.77330244396732 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup: run=0.5376834685233445 expected=0.44144242288862495 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:max_ff_100C_1v95: run=0.5756550954408801 expected=0.4607890865961771 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:max_ff_n40C_1v95: run=0.5712731560610573 expected=0.45117941215687585 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:max_ss_100C_1v60: run=1.1036474269081875 expected=0.780320496971367 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:max_ss_n40C_1v60: run=1.2272934127468484 expected=0.8690366450213879 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:max_tt_025C_1v80: run=0.724421321212066 expected=0.5474127972525088 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:min_ff_100C_1v95: run=0.5524379998709921 expected=0.44752616767987474 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:min_ff_n40C_1v95: run=0.5376834685233445 expected=0.44144242288862495 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:min_ss_100C_1v60: run=1.02187949883199 expected=0.8127946323823866 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:min_ss_n40C_1v60: run=1.1167158625006508 expected=1.0062835294301813 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:min_tt_025C_1v80: run=0.6770141305859901 expected=0.5403464495455247 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ff_100C_1v95: run=0.5593456967032704 expected=0.4538983484210796 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ff_n40C_1v95: run=0.5530290826260195 expected=0.4438777804287437 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ss_100C_1v60: run=1.0599224020697222 expected=0.7878296016330937 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ss_n40C_1v60: run=1.1679519904023437 expected=0.9356984341080951 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_tt_025C_1v80: run=0.6990322962776775 expected=0.5360154694039734 (clock__skew__*: {'abs': 0.01})
+  [FAIL] golden design__instance__area: run=748180 expected=747850
+  [FAIL] golden design__instance__area__class:antenna_cell: run=350.336 expected=300.288 (design__instance__area__class:antenna_cell: {'abs': 12.5})
+  [FAIL] golden design__instance__area__class:clock_buffer: run=7111.82 expected=6987.95
+  [FAIL] golden design__instance__area__class:clock_inverter: run=512.992 expected=310.298
+  [FAIL] golden design__instance__area__class:fill_cell: run=193959 expected=208954 (design__instance__area__class:fill_cell: {'abs': 15})
+  [FAIL] golden design__instance__area__class:inverter: run=1039.75 expected=1034.74
+  [FAIL] golden design__instance__area__class:macro: run=297436 expected=284538
+  [FAIL] golden design__instance__area__class:multi_input_combinational_cell: run=98957.4 expected=98587.1
+  [FAIL] golden design__instance__area__class:sequential_cell: run=56730.7 expected=56720.6
+  [FAIL] golden design__instance__area__class:tap_cell: run=8063.98 expected=8301.71
+  [FAIL] golden design__instance__area__class:timing_repair_buffer: run=83899.2 expected=81994.9
+  [FAIL] golden design__instance__area__macros: run=297436 expected=284538
+  [FAIL] golden design__instance__area__stdcell: run=256786 expected=254358 (design__instance__area__stdcell: {'abs': 15})
+  [FAIL] golden design__instance__count: run=89850 expected=93764
+  [FAIL] golden design__instance__count__class:antenna_cell: run=140 expected=120 (design__instance__count__class:antenna_cell: {'abs': 5})
+  [FAIL] golden design__instance__count__class:clock_buffer: run=521 expected=508
+  [FAIL] golden design__instance__count__class:clock_inverter: run=87 expected=49
+  [FAIL] golden design__instance__count__class:fill_cell: run=57779 expected=61797 (design__instance__count__class:fill_cell: {'abs': 5})
+  [FAIL] golden design__instance__count__class:multi_input_combinational_cell: run=9583 expected=9584
+  [FAIL] golden design__instance__count__class:tap_cell: run=6445 expected=6635
+  [FAIL] golden design__instance__count__class:timing_repair_buffer: run=12352 expected=12128
+  [FAIL] golden design__instance__count__hold_buffer: run=11 expected=7
+  [FAIL] golden design__instance__count__stdcell: run=32070 expected=31966 (design__instance__count__stdcell: {'abs': 5})
+  [FAIL] golden design__instance__displacement__max: run=16.56 expected=17.4
+  [FAIL] golden design__instance__displacement__mean: run=0.012 expected=0.005
+  [FAIL] golden design__instance__displacement__total: run=394.08 expected=182.52
+  [FAIL] golden design__instance__utilization: run=0.7207 expected=0.700771 (design__instance__utilization: {'abs': 2e-05})
+  [FAIL] golden design__instance__utilization__stdcell: run=0.544536 expected=0.525026 (design__instance__utilization__stdcell: {'abs': 2.5e-05})
+  [FAIL] golden design__sites: run=360250 expected=370294
+  [FAIL] golden design__sites:unithd: run=360250 expected=370294
+  [FAIL] golden design_powergrid__drop__average__net:vssd1__corner:nom_tt_025C_1v80: run=0.00108256 expected=0.00107676 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__drop__worst: run=0.00208534 expected=0.00203428 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__drop__worst__net:vccd1: run=0.00208534 expected=0.00203428 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__drop__worst__net:vccd1__corner:nom_tt_025C_1v80: run=0.00208534 expected=0.00203428 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__drop__worst__net:vssd1: run=0.00208399 expected=0.00202626 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__drop__worst__net:vssd1__corner:nom_tt_025C_1v80: run=0.00208399 expected=0.00202626 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__voltage__worst: run=0.00208399 expected=0.00202626 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__voltage__worst__net:vssd1: run=0.00208399 expected=0.00202626 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden design_powergrid__voltage__worst__net:vssd1__corner:nom_tt_025C_1v80: run=0.00208399 expected=0.00202626 (design_powergrid__*: {'rel': 0.001})
+  [FAIL] golden flow__warnings__count:DRT-0418: run=25 expected=<missing>
+  [FAIL] golden global_route__wirelength: run=1254689 expected=1227054
+  [FAIL] golden ir__drop__avg: run=0.00109 expected=0.00108 (ir__*: {'rel': 0.001})
+  [FAIL] golden ir__drop__worst: run=0.00209 expected=0.00203 (ir__*: {'rel': 0.001})
+  [FAIL] golden magic__drc_error__count: run=4770846 expected=4746079
+  [FAIL] golden power__internal__total: run=0.0061961580067873 expected=0.005912312772125006 (power__*: {'rel': 0.001})
+  [FAIL] golden power__leakage__total: run=0.0007420759066008031 expected=0.00034662161488085985 (power__*: {'rel': 0.001})
+  [FAIL] golden power__switching__total: run=0.0025350924115628004 expected=0.002473783679306507 (power__*: {'rel': 0.001})
+  [FAIL] golden power__total: run=0.009473326615989208 expected=0.008732717484235764 (power__*: {'rel': 0.001})
+  [FAIL] golden route__net: run=25500 expected=25253
+  [FAIL] golden route__vias: run=171818 expected=170527 (route__vias*: {'rel': 0.001})
+  [FAIL] golden route__vias__singlecut: run=171818 expected=170527 (route__vias*: {'rel': 0.001})
+  [FAIL] golden route__wirelength: run=886987 expected=863205 (route__wirelength: {'rel': 0.001})
+  [FAIL] golden route__wirelength__estimated: run=857954 expected=834023
+  [FAIL] golden route__wirelength__iter:0: run=887020 expected=863230 (route__wirelength__iter:*: {'rel': 0.001})
+  [FAIL] golden route__wirelength__iter:1: run=887018 expected=863212 (route__wirelength__iter:*: {'rel': 0.001})
+  [FAIL] golden route__wirelength__iter:2: run=887016 expected=863212 (route__wirelength__iter:*: {'rel': 0.001})
+  [FAIL] golden route__wirelength__iter:3: run=887007 expected=863205 (route__wirelength__iter:*: {'rel': 0.001})
+  [FAIL] golden route__wirelength__iter:4: run=886987 expected=863232 (route__wirelength__iter:*: {'rel': 0.001})
+  [FAIL] golden route__wirelength__iter:5: run=886351 expected=863231 (route__wirelength__iter:*: {'rel': 0.001})
+  [FAIL] golden route__wirelength__max: run=629.665 expected=618.61
+  [FAIL] golden timing__hold__ws__corner:max_ss_100C_1v60: run=0.8264029694469945 expected=0.8505589806553624 (timing__hold__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold__ws__corner:max_ss_n40C_1v60: run=0.8927503433642356 expected=0.40755533434977953 (timing__hold__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold__ws__corner:min_ss_100C_1v60: run=0.8188439047477468 expected=0.837365755991402 (timing__hold__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold__ws__corner:min_ss_n40C_1v60: run=0.8816885249232308 expected=0.44832672176999755 (timing__hold__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold__ws__corner:nom_ss_100C_1v60: run=0.821764901608147 expected=0.8444434279735576 (timing__hold__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold__ws__corner:nom_ss_n40C_1v60: run=0.8869589758147899 expected=0.42625504332700986 (timing__hold__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold_r2r__ws__corner:max_ss_100C_1v60: run=0.826403 expected=0.850559 (timing__hold_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold_r2r__ws__corner:max_ss_n40C_1v60: run=0.89275 expected=0.407555 (timing__hold_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold_r2r__ws__corner:min_ss_100C_1v60: run=0.818844 expected=0.837366 (timing__hold_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold_r2r__ws__corner:min_ss_n40C_1v60: run=0.881689 expected=0.448327 (timing__hold_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold_r2r__ws__corner:nom_ss_100C_1v60: run=0.821765 expected=0.844443 (timing__hold_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__hold_r2r__ws__corner:nom_ss_n40C_1v60: run=0.886959 expected=0.426255 (timing__hold_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup__ws: run=0.7694787247400663 expected=0.7886456155792716 (timing__setup__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup__ws__corner:max_ss_100C_1v60: run=1.2461498852195894 expected=1.2107826195468758 (timing__setup__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup__ws__corner:min_ss_100C_1v60: run=1.1900809563550223 expected=1.1615206902834054 (timing__setup__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup__ws__corner:min_ss_n40C_1v60: run=0.7694787247400663 expected=0.7886456155792716 (timing__setup__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup__ws__corner:nom_ss_100C_1v60: run=1.2127117431290237 expected=1.1807195555466243 (timing__setup__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup__ws__corner:nom_ss_n40C_1v60: run=0.8361134243842064 expected=0.8509531098402511 (timing__setup__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup_r2r__ws: run=0.769479 expected=0.788646 (timing__setup_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup_r2r__ws__corner:max_ss_100C_1v60: run=1.24615 expected=1.210783 (timing__setup_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup_r2r__ws__corner:min_ss_100C_1v60: run=1.190081 expected=1.161521 (timing__setup_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup_r2r__ws__corner:min_ss_n40C_1v60: run=0.769479 expected=0.788646 (timing__setup_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_ss_100C_1v60: run=1.212712 expected=1.18072 (timing__setup_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_ss_n40C_1v60: run=0.836113 expected=0.850953 (timing__setup_r2r__ws*: {'abs': 0.01})
+  [FAIL] golden timing__unannotated_net__count: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:max_ff_100C_1v95: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:max_ff_n40C_1v95: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:max_ss_100C_1v60: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:max_ss_n40C_1v60: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:max_tt_025C_1v80: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:min_ff_100C_1v95: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:min_ff_n40C_1v95: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:min_ss_100C_1v60: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:min_ss_n40C_1v60: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:min_tt_025C_1v80: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ff_100C_1v95: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ff_n40C_1v95: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ss_100C_1v60: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ss_n40C_1v60: run=144 expected=118
+  [FAIL] golden timing__unannotated_net__count__corner:nom_tt_025C_1v80: run=144 expected=118
+  [FAIL] golden 436 metrics: run=253 identical, 49 within tolerance, 1 optional key(s) in one side only, 133 different expected=golden/soc_top/metrics.json
+  [INFO] info   timing__setup__ws__corner:nom_tt_025C_1v80: run=7.768196972221886 expected=-
+  [INFO] info   magic__drc_error__count: run=4770846 expected=-
+  [INFO] info   design__instance__count: run=89850 expected=-
+  [INFO] info   design__instance__area__stdcell: run=256786 expected=-
+  [INFO] info   design__instance__utilization: run=0.7207 expected=-
+  [INFO] info   timing__setup__ws: run=0.7694787247400663 expected=-
+  [INFO] info   timing__hold__ws: run=0.08153611350209981 expected=-
+  [INFO] info   ir__drop__worst: run=0.00209 expected=-
+  [INFO] info   power__total: run=0.009473326615989208 expected=-
+signoff: FAIL (135 rows)
+sram-drc-alone: PASS (~/claude_prjs/arvinsa-rtl-gds/runs/soc_top_signoff/sram_drc_alone/step/reports/drc.magic.rpt)
+  [PASS] macro: arv_sram_2kbyte_1rw1r_32x512_8 instances in the final netlist: ['sram0']
+  [PASS] placement: sram0 FIXED (290.72, 353.6) N; config.json (290.72, 353.6) N
+  [PASS] ir_sources: one source, no larger than the stripe width, at the left end of each met5 stripe of vccd1, vssd1
+  [PASS] port1_tieoff: csb1 tie-high, addr1[8:0] tie-low, clk1 from the clock port clk
+  [PASS] disconnected: Odb.ReportDisconnectedPins: [('0', '0')]
+  [PASS] cts_macro_latency: CTS step with -no_insertion_delay, 0 delaybuf_* instances, 0 single-fanout clock buffer(s) above sram0/clk0
+  [PASS] sta_setup: check_setup in 15 corners: no warning
+  [PASS] pulse_width: 15 corners; worst min pulse width slack 9.766074 (sram0/clk0 (low)), min period slack 14.000002 (sram0/clk0), all >= the required slack
+  [PASS] macro_gds: macro-gds: PASS - arv_sram_2kbyte_1rw1r_32x512_8: 169 cells identical to the macro GDS, none renamed; 10 without the macro-name prefix, each defined once: sky130_fd_bd_sram__openram_dff, sky130_fd_bd_sram__openram_dp_cell, sky130_fd_bd_sram__openram_dp_cell_cap_col, sky130_fd_bd_sram__openram_dp_cell_cap_row ...
+  [PASS] sram_lib: 15 corners, each read only the char .lib of its PVT (ADR-0010)
+  [FAIL] sram_drc_ref: SRAM alone: 5576010 violations in 29 rule types; baseline 5579161 in 30 rule types
+  [PASS] magic_drc: 0 violations outside the SRAM outline; inside 4770846, all at the position of a violation of the SRAM alone (4757673 identical boxes, 13173 in the union of same-rule boxes, 100 nm wider for (li.5) (diff/tap.9) (licon.14))
+soc-checks: FAIL
+soc-inputs: PASS
+  [PASS] ff currents: the step read 2 ff_n40C_1v95 .lib file(s) and no tt one
+  [PASS] ss metal resistance: LAYERS_RC *ff* = the run's *ss* values
+  [PASS] supply points: the run's 10 points at 1.95 V
+  [PASS] drop: VDD 2.93 + GND 2.93 = 5.87 mV (ff currents + ss metal R) vs max 20.0 mV
+ir-worst: PASS
+provenance: PASS
+criteria-review: run ~/claude_prjs/arvinsa-rtl-gds/runs/soc_top, config ~/claude_prjs/arvinsa-rtl-gds/pnr/soc_top/config.json
+  [PASS] config_applied: 41 settings of config.json = resolved.json
+  [PASS] step_config: 78 step configs agree with resolved.json
+  [PASS] uncertainty: 'clock_uncertainty.sdc: setup 0.25, hold 0.25, half-cycle setup 2.450000000000002 (duty cycle distortion 2.200000000000002)' in 8 timing steps and 15 signoff corners
+  [PASS] uncertainty_applied: 30000 signoff paths in 15 corners got setup 0.250, half-cycle 2.450, hold 0.250 ns
+  [PASS] signoff_corners: 15 corners = STA_CORNERS
+  [PASS] checkers_ran: verdict lines in signoff.txt, soc_checks.txt, inputs_resolved.txt, ir_worst.txt, provenance_end.txt
+  [INFO] setup: ResizerTimingPostCTS has no setup repair table (no setup violation in RSZ_CORNERS); ResizerTimingPostGRT has no setup repair table (no setup violation in RSZ_CORNERS)
+  [INFO] hold: ResizerTimingPostCTS ended its hold repair at WNS +0.300 ns (placement parasitics); ResizerTimingPostGRT ended its hold repair at WNS +0.068 ns (global routing parasitics); signoff worst +0.082 ns (min_ff_n40C_1v95); gap from the last hold repair (ResizerTimingPostGRT) -0.014 ns vs GRT_RESIZER_HOLD_SLACK_MARGIN 0.05 ns
+  [INFO] signoff setup ws per corner: min_ss_n40C_1v60 +0.769, nom_ss_n40C_1v60 +0.836, max_ss_n40C_1v60 +0.925, min_ss_100C_1v60 +1.190, nom_ss_100C_1v60 +1.213
+  [INFO] ResizerTimingPostCTS stdcell area 215642 -> 251220 um^2 (+16.5 %); final netlist hold buffers 3589, repair buffers fanout 1901, load_slew 2455, max_length 69, wire 3921
+  [INFO] worst setup path (min_ss_n40C_1v60) sram0 -> _21857_, slack 0.769479, launched at the fall edge (22.00 ns), captured at the rise edge (44.00 ns), a half-cycle path, uncertainty 2.450 ns: clk->Q 15.78 ns (1 cells), launch clock 4.31 ns, hold buffers 1.15 ns (1 cells), logic 0.94 ns (1 cells), interconnect 0.00 ns; arrival 22.18 ns after the launch edge
+  [INFO] worst half-cycle setup path (min_ss_n40C_1v60) sram0 -> _21857_, slack +0.769 ns, uncertainty 2.450 ns of which duty cycle distortion 2.200 ns
+  [INFO] clock skew metric (hold) nom_ff_n40C_1v95 -0.729 ns, without the hold uncertainty -0.479 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] clock skew metric (hold) nom_ss_n40C_1v60 -1.679 ns, without the hold uncertainty -1.429 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] PNR_SDC_FILE set_max_transition 0.70; DESIGN_REPAIR_MAX_SLEW_PCT 30, GRT_DESIGN_REPAIR_MAX_SLEW_PCT 40
+  [INFO] SIGNOFF_SDC_FILE set_max_transition not set (PDK default)
+  [INFO] part 2: review these numbers with skill signoff-criteria and write ~/claude_prjs/arvinsa-rtl-gds/runs/soc_top_signoff/criteria_review.md
+criteria-review: PASS
+harden-soc: FAIL
+make: *** [harden-soc] Error 1
+rc=2

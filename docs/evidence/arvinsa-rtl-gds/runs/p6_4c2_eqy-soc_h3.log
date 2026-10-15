@@ -1,0 +1,7 @@
+python3 signoff/eqy/run_eqy.py --design soc_top_hazard3
+[eqy] soc_top: gold runs/soc_top_hazard3/06-yosys-synthesis/soc_top.nl.v
+[eqy] soc_top: gate runs/soc_top_hazard3/final/nl/soc_top.nl.v
+[eqy] soc_top: 2 cell(s) with swapped equivalent inputs, pin names left out of the name matching: _10787_.A, _10787_.B, _10793_.A1, _10793_.A2
+[eqy] soc_top: running EQY (10 jobs; log runs/eqy_soc_top_hazard3/eqy_run.log)
+  [PASS] soc_top: 16222/16222 partitions proved equivalent, 87839 matched names, 2152 sequential cells identical in function, 2154 clock pins on the same source (clk), 307.8 s
+eqy: PASS

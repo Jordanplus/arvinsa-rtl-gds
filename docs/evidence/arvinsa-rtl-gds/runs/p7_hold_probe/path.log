@@ -1,0 +1,148 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+Reading timing models for corner min_ss_100C_1v60…
+Reading timing library for the 'min_ss_100C_1v60' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib'…
+Reading timing library for the 'min_ss_100C_1v60' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib'…
+Reading timing models for corner max_ff_n40C_1v95…
+Reading timing library for the 'max_ff_n40C_1v95' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib'…
+Reading timing library for the 'max_ff_n40C_1v95' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib'…
+Reading timing models for corner min_ss_n40C_1v60…
+Reading timing library for the 'min_ss_n40C_1v60' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C_1v60.lib'…
+Reading timing library for the 'min_ss_n40C_1v60' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib'…
+Reading timing models for corner min_tt_025C_1v80…
+Reading timing library for the 'min_tt_025C_1v80' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib'…
+Reading timing library for the 'min_tt_025C_1v80' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib'…
+Reading timing models for corner max_ss_100C_1v60…
+Reading timing library for the 'max_ss_100C_1v60' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib line 1, library sky130_fd_sc_hd__ss_100C_1v60 already exists.
+Reading timing library for the 'max_ss_100C_1v60' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60 already exists.
+Reading timing models for corner max_ss_n40C_1v60…
+Reading timing library for the 'max_ss_n40C_1v60' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C_1v60.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C_1v60.lib line 1, library sky130_fd_sc_hd__ss_n40C_1v60 already exists.
+Reading timing library for the 'max_ss_n40C_1v60' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60 already exists.
+Reading timing models for corner max_tt_025C_1v80…
+Reading timing library for the 'max_tt_025C_1v80' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib line 1, library sky130_fd_sc_hd__tt_025C_1v80 already exists.
+Reading timing library for the 'max_tt_025C_1v80' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80 already exists.
+Reading timing models for corner nom_ff_n40C_1v95…
+Reading timing library for the 'nom_ff_n40C_1v95' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib line 1, library sky130_fd_sc_hd__ff_n40C_1v95 already exists.
+Reading timing library for the 'nom_ff_n40C_1v95' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95 already exists.
+Reading timing models for corner nom_ss_100C_1v60…
+Reading timing library for the 'nom_ss_100C_1v60' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib line 1, library sky130_fd_sc_hd__ss_100C_1v60 already exists.
+Reading timing library for the 'nom_ss_100C_1v60' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60 already exists.
+Reading timing models for corner nom_ss_n40C_1v60…
+Reading timing library for the 'nom_ss_n40C_1v60' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C_1v60.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C_1v60.lib line 1, library sky130_fd_sc_hd__ss_n40C_1v60 already exists.
+Reading timing library for the 'nom_ss_n40C_1v60' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60 already exists.
+Reading timing models for corner nom_tt_025C_1v80…
+Reading timing library for the 'nom_tt_025C_1v80' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib line 1, library sky130_fd_sc_hd__tt_025C_1v80 already exists.
+Reading timing library for the 'nom_tt_025C_1v80' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80 already exists.
+Reading timing models for corner min_ff_n40C_1v95…
+Reading timing library for the 'min_ff_n40C_1v95' corner at '~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib'…
+[WARNING STA-1140] ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib line 1, library sky130_fd_sc_hd__ff_n40C_1v95 already exists.
+Reading timing library for the 'min_ff_n40C_1v95' corner at '~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib'…
+[WARNING STA-1140] ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95 already exists.
+Reading OpenROAD database at '~/claude_prjs/arvinsa-rtl-gds/runs/p7_harden1/35-arvinsa-ctsnoinsertiondelay/user_project_wrapper.odb'…
+Reading design constraints file at '~/claude_prjs/arvinsa-rtl-gds/pnr/user_project_wrapper/pnr.sdc'…
+[INFO] Using clock wb_clk_i…
+[INFO] Setting output delay to: 8.8
+[INFO] Setting input delay to: 8.8
+[INFO] Setting load to: 0.033442
+[INFO] Setting clock uncertainty to: 0.25
+[INFO] Setting clock transition to: 0.15
+[INFO] Setting timing derate to: 5.0%
+clock_uncertainty.sdc: setup 0.25, hold 0.25, half-cycle setup 2.450000000000002 (duty cycle distortion 2.200000000000002)
+caravel_io.sdc: Caravel boundary constraints (source latency 4.65-5.57 ns, clock pin transition 0.61 ns, Wishbone/LA delays, load 0.19 pF)
+[INFO] No information on clock propagation in input SDC file-- propagating all clocks.
+=== fanout along wbs_adr_i[9] path
+net wbs_adr_i[9] loads: input36/A
+net net36 loads: _19440_/A0 _19349_/B
+net _05669_ loads: _19441_/B
+net _01581_ loads: _21514_/D
+=== worst setup through each pin (all corners)
+--- input36/X
+max_delay/setup group wb_clk_i
+
+                                     Required   Actual
+Endpoint                                Delay    Delay    Slack
+---------------------------------------------------------------
+_21504_/D (sky130_fd_sc_hd__dfxtp_4)   53.492   16.534   36.958 (MET)
+
+--- _19440_/X
+max_delay/setup group wb_clk_i
+
+                                     Required   Actual
+Endpoint                                Delay    Delay    Slack
+---------------------------------------------------------------
+_21514_/D (sky130_fd_sc_hd__dfxtp_4)   55.009   21.008   34.001 (MET)
+
+--- _19441_/X
+max_delay/setup group wb_clk_i
+
+                                     Required   Actual
+Endpoint                                Delay    Delay    Slack
+---------------------------------------------------------------
+_21514_/D (sky130_fd_sc_hd__dfxtp_4)   53.515   35.315   18.200 (MET)
+
+=== setup path through input36/X
+Startpoint: wbs_adr_i[9] (input port clocked by wb_clk_i)
+Endpoint: _21504_ (rising edge-triggered flip-flop clocked by wb_clk_i)
+Path Group: wb_clk_i
+Path Type: max
+Corner: nom_ss_n40C_1v60
+
+   Delay     Time   Description
+-----------------------------------------------------------
+   0.000    0.000   clock wb_clk_i (rise edge)
+   5.570    5.570   clock network delay (propagated)
+   3.890    9.460 v input external delay
+   0.000    9.460 v wbs_adr_i[9] (in)
+   0.705   10.165 v input36/X (sky130_fd_sc_hd__buf_1)
+   1.899   12.064 v _19349_/X (sky130_fd_sc_hd__or4_2)
+   2.059   14.124 v _19352_/X (sky130_fd_sc_hd__or4_2)
+   0.324   14.448 ^ _19353_/Y (sky130_fd_sc_hd__nor2_2)
+   0.509   14.957 ^ _19420_/X (sky130_fd_sc_hd__and4_2)
+   0.829   15.786 v _19421_/X (sky130_fd_sc_hd__mux2_1)
+   0.748   16.534 v _19422_/X (sky130_fd_sc_hd__or2_2)
+   0.000   16.534 v _21504_/D (sky130_fd_sc_hd__dfxtp_4)
+           16.534   data arrival time
+
+  44.000   44.000   clock wb_clk_i (rise edge)
+  10.101   54.101   clock network delay (propagated)
+  -0.250   53.851   clock uncertainty
+   0.000   53.851   clock reconvergence pessimism
+           53.851 ^ _21504_/CLK (sky130_fd_sc_hd__dfxtp_4)
+  -0.359   53.492   library setup time
+           53.492   data required time
+-----------------------------------------------------------
+           53.492   data required time
+          -16.534   data arrival time
+-----------------------------------------------------------
+           36.958   slack (MET)
+
+
+=== hold slack of every wbs_* endpoint by corner
+Error: path_probe.tcl, 28 invalid command name "sta::corner_name"

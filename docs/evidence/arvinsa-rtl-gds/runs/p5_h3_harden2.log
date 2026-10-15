@@ -1,0 +1,44 @@
+CPU=hazard3 bash pnr/soc_top/run.sh
+harden-soc: source tracking (committed working tree, pinned LibreLane and PDK)
+  [PASS] repo_head: 2251c4a49873c3af1ed0f4c53c98a657517aca9e
+  [PASS] uncommitted: working tree clean
+  [PASS] submodules: 2 at the recorded commit
+  [PASS] librelane: ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane at f24e0ea5db2260719e9a0c7d51d07db74a87fa23, pinned f24e0ea5db2260719e9a0c7d51d07db74a87fa23
+  [PASS] librelane_clean: no modified or untracked file in the LibreLane clone
+  [PASS] pdk: ~/.ciel/sky130A -> ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A, pinned 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+  [PASS] pdk_content: 6 directories, 2109 files, same content as env/pdk_content.sha256
+provenance: PASS
+harden-soc: CPU=hazard3, inputs (config_hazard3.json vs the RTL file list, SRAM .lib vs char.json and the PDK .lib)
+  [PASS] rtl_files: 29 files and 2 include dir(s) in config_hazard3.json vs 29 and 2 in rtl/rtl_hazard3.f
+  [PASS] cpu_config: config.json and config_hazard3.json differ only in VERILOG_FILES, VERILOG_INCLUDE_DIRS, VERILOG_DEFINES (and comments)
+  [PASS] char_lib: gen_char_lib: up to date 5 .lib in ~/claude_prjs/arvinsa-rtl-gds-p5h3/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char (placeholder, the macro does not read correctly: ss_n40C_1v60)
+  [PASS] char_values: check_char_lib.py PASS (values recomputed independently, provenance, confirmation simulations)
+  [PASS] antenna_lef: gen_antenna_lef: ~/claude_prjs/arvinsa-rtl-gds-p5h3/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef is up to date
+  [PASS] macro_lib: MACROS sky130_sram_2kbyte_1rw1r_32x512_8 lib = {'*_tt_025C_1v80': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib'], '*_ss_100C_1v60': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib'], '*_ff_n40C_1v95': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib'], '*_ss_n40C_1v60': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib'], '*_ff_100C_1v95': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib']}, lef = ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef']
+  [PASS] other_libs: LIB = the sky130_fd_sc_hd .lib of each PVT, EXTRA_LIBS unset
+  [PASS] weak_cells: check_weak_cells.py PASS on config_hazard3.json (6 step x PVT rows)
+soc-inputs: PASS
+harden-soc: running LibreLane Classic flow on soc_top with hazard3 (about 20-30 minutes on this machine); full log: ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3/flow.log
+harden-soc: FAIL - LibreLane exited with 2; see ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/console.log
+[23:22:57] [W] [OpenROAD.ResizerTimingPostCTS] [RSZ-0064] Unable to  flow.py:701
+               repair all hold checks within margin.                            
+[23:22:57] [W] [OpenROAD.RepairDesignPostGRT] [EST-0026] Missing     flow.py:701
+               route to pin _21928_/D in net _00000_. (and 1000                 
+               similar warnings)                                                
+[23:22:57] [W] [OpenROAD.DetailedRouting] [DRT-0349] LEF58_ENCLOSURE flow.py:701
+               with no CUTCLASS is not supported. Skipping for layer            
+               mcon (and 9 similar warnings)                                    
+[23:22:57] [W] [Checker.WireLength] Threshold for                    flow.py:701
+               Threshold-surpassing long wires is not set. The                  
+               checker will be skipped.                                         
+[23:22:57] [W] [Checker.MagicDRC] 4665810 Magic DRC errors found.    flow.py:701
+[23:22:57] [E] The following error was encountered while running __main__.py:189
+               the flow:                                                        
+               One or more deferred errors were encountered:                    
+               Setup violations found in the following corners:                 
+               * max_ss_n40C_1v60                                               
+               * min_ss_n40C_1v60                                               
+               * nom_ss_n40C_1v60                                               
+[23:22:57] [E] LibreLane will now quit.                          __main__.py:190
+make: *** [harden-soc] Error 1
+make rc=2

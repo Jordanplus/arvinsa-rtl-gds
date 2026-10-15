@@ -620,6 +620,7 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
   - **A1** `scripts/check_skills.py`: each description ≤ 1,024 characters, the listed descriptions together ≤ 8,000, with an injected over-long case.
   - **B1** `scripts/regress.py`: refuses to start below `REGRESS_MIN_FREE_GB` (100 GiB); every target times out at 3 × its reference time (at least 30 min) and its whole process group is killed. `make neg-regress` adds `low_disk` and `timeout`, now 10/10. Confirmed on real regressions at `f02a1a0` in clean worktrees: Hazard3 30/30, PicoRV32 31/31, the wrapper 18/18 including the ChipFoundry precheck; every harden matched its golden value for value, no target took more than 35 % of its time limit, and all three passed the disk check.
 - **A2 (latch-up)**: measured (§9.1 item 7), recorded, and added to the ChipFoundry question draft; the design is unchanged.
+- **Evidence kept, runs removed** (ADR-0021 decision 7; user: the runs were for this report and the flow, keep "mainly the important supporting reports"): `make collect-evidence` (`scripts/collect_evidence.py`) copied the reports the documents cite, every harden's verdicts and criteria review, the regression summaries and the precheck results into `docs/evidence/` with their original paths (677 files, 6.8 MB; `docs/evidence/references.md` lists the status of each of the cited paths). GDS, DEF, netlists and whole run directories were not kept; a clean checkout regenerates them. Then all worktrees and `runs/` were removed. The rule is now part of the flow (`flow-regression-reproducibility` rule 16).
 - **Deferred to the next project** (ADR-0020 decision 2 style, "no automatic guard yet" written in the skills): A6 checker rows, A7 EM, B2 runaway stop, B6, B7, B9, B11; C7 and C8 not taken up.
 
 ### 8.6 Skill structure after the review
@@ -680,7 +681,8 @@ These do not change this result but have to be known:
 - **Latch-up marker** (A2, measured; see §9.1 item 7): the answer from ChipFoundry on who adds the marker in the user area and whether 6 µm or 15 µm applies.
 - **Skill listing in practice** (A1): `make skill-check` enforces the lengths, but whether the listing really shows the entry descriptions depends on the model's context window and the user's other skills; check with `/context` or `/doctor` when a new Claude Code version arrives.
 - **Automatic stop of a runaway step** (B2) and the other checkers deferred by ADR-0021 decision 3 (A6 `check_inputs.py` rows, A7 EM, B6, B7, B9, B11).
-- **EM** (A7): add an EM checker with the same max-power pattern current, and compare via currents with the tech LEF limits.
+- **EM** (A7): add an EM checker with the same max-power pattern current, and compare via currents with the tech LEF limits. The user set the scope to the power grid (straps and vias, ff and ss corners); signal-net EM is out of scope (ADR-0021 decision 8).
+- **Clock routing layer** (A6): a new project sets `RT_CLOCK_MIN_LAYER` explicitly in its first config (`met3` on sky130), with a checker that `resolved.json` does not hold null; this project leaves it unset (ADR-0021 decision 8).
 - **Measurement questions left open by the phases**:
   - the SRAM macro's internal IR (the PSM CSV has one supply node for the SRAM; whether this is PSM's model was not checked);
   - the 2.7 ns clock-skew reporting artefact (not confirmed in OpenSTA source);

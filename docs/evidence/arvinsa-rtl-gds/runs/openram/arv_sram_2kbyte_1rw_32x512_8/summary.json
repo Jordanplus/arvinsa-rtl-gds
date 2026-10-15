@@ -1,0 +1,32 @@
+{
+  "result": "FAIL",
+  "problems": [
+    "1 ERROR line(s): ERROR: file magic.py: line 387: arv_sram_2kbyte_1rw_32x512_8\tLVS mismatch (results in ~/claude_prjs/arvi",
+    "DRC 657 > 0",
+    "LVS: Netlists do not match."
+  ],
+  "minutes": 29.9,
+  "config": "runs/openram_try/arv_sram_2kbyte_1rw_32x512_8.py",
+  "config_sha256": "a2ae6b607f08946e24188426cef18e44b613fbce03a439bb98c0eaa100acb8eb",
+  "openram_commit": "3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8",
+  "openram_patches": [
+    {
+      "file": "0001-sense-amp-input-precharge.patch",
+      "sha256": "8eb4c4a7868decb373c4303c1ce52ff535e74d42e228f787918e32de4126a32e"
+    }
+  ],
+  "sky130_fd_bd_sram_commit": "fc63b12883b4bf458ee8c756ba64c37063e1ffb9",
+  "openram_pdk_hash": "e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066",
+  "pythonhashseed": 0,
+  "drc_errors": 657,
+  "drc_max": 0,
+  "lvs": "Netlists do not match.",
+  "outputs_sha256": {
+    "arv_sram_2kbyte_1rw_32x512_8.gds": "cdf4fe2797b5a46c63e12fc87cb383d844e5c511e85516fa1450f8072b8fbf23",
+    "arv_sram_2kbyte_1rw_32x512_8.lef": "898bf2e683df3f026a0d31c14bea6210fd8319fa48323dbc65773ef73219c786",
+    "arv_sram_2kbyte_1rw_32x512_8.sp": "0b339a32be0eb3b1e76afbc19ddf5e135ef4e1f0142f45ffebb46cf81c670120",
+    "arv_sram_2kbyte_1rw_32x512_8.lvs.sp": "d06b759b51c37cbd47f350cdd6a5ae392c9f898f98faf28c1089410fe7bb8c4e",
+    "arv_sram_2kbyte_1rw_32x512_8.v": "40f09bf70dd0fe20f091ae1cf640405b8113d2e628f6f9b6cf79504a6cfc7637",
+    "arv_sram_2kbyte_1rw_32x512_8_TT_1p8V_25C.lib": "729f9cdb541b2ca6d03117a0305ea9b92c10fe9c2243c25a96a065408b860c76"
+  }
+}

@@ -1,0 +1,10 @@
+pico eqy-soc rc=0 5 min | eqy: PASS
+pico neg-eqy-soc rc=2 0 min | 
+pico gl-soc rc=0 8 min | gl-soc: PASS 15/15 tests passed (521.2 s)
+pico gl-soc-powered rc=0 11 min | gl-soc-powered: PASS 15/15 tests passed (693.1 s)
+pico neg-gl-soc rc=2 1 min | check-bootrom: PASS: ../rtl/bootrom/bootrom.v matches the boot ROM image
+h3 eqy-soc rc=2 0 min | eqy: FAIL (soc_top; details in runs/eqy_soc_top_hazard3/eqy_run.log)
+h3 neg-eqy-soc rc=2 0 min | 
+h3 gl-soc rc=0 13 min | gl-soc: PASS 15/15 tests passed (837.2 s)
+h3 gl-soc-powered rc=0 22 min | gl-soc-powered: PASS 15/15 tests passed (1339.1 s)
+h3 neg-gl-soc rc=2 0 min | check-bootrom: PASS: ../rtl/bootrom/bootrom.v matches the boot ROM image

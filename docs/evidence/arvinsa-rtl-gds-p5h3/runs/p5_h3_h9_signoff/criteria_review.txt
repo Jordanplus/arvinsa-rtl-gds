@@ -1,0 +1,16 @@
+criteria-review: run ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3, config ~/claude_prjs/arvinsa-rtl-gds-p5h3/pnr/soc_top/config_hazard3.json
+  [PASS] config_applied: 41 settings of config_hazard3.json = resolved.json
+  [PASS] step_config: 44 step configs agree with resolved.json
+  [FAIL] uncertainty: 'clock_uncertainty.sdc: setup 0.25, hold 0.25, half-cycle setup 2.450000000000002 (duty cycle distortion 2.200000000000002)' missing in: signoff STA (no corner sta.log)
+  [FAIL] signoff_corners: missing ['max_ff_100C_1v95', 'max_ff_n40C_1v95', 'max_ss_100C_1v60', 'max_ss_n40C_1v60', 'max_tt_025C_1v80', 'min_ff_100C_1v95', 'min_ff_n40C_1v95', 'min_ss_100C_1v60', 'min_ss_n40C_1v60', 'min_tt_025C_1v80', 'nom_ff_100C_1v95', 'nom_ff_n40C_1v95', 'nom_ss_100C_1v60', 'nom_ss_n40C_1v60', 'nom_tt_025C_1v80'], extra []
+  [PASS] checkers_ran: verdict lines in signoff.txt, soc_checks.txt, inputs_resolved.txt, provenance_end.txt
+  [INFO] setup: ResizerTimingPostCTS ended its setup repair at WNS +0.212 ns (placement parasitics); ResizerTimingPostGRT ended its setup repair at WNS +0.074 ns (global routing parasitics); signoff worst -18.809 ns (nom_ss_n40C_1v60); gap from the last setup repair (ResizerTimingPostGRT) 18.883 ns vs GRT_RESIZER_SETUP_SLACK_MARGIN 0.025 ns
+  [INFO] hold: ResizerTimingPostCTS ended its hold repair at WNS +0.293 ns (placement parasitics); ResizerTimingPostGRT has no hold repair table (no hold violation in RSZ_CORNERS); signoff worst -0.442 ns (nom_ff_n40C_1v95); gap from the last hold repair (ResizerTimingPostCTS) 0.735 ns vs PL_RESIZER_HOLD_SLACK_MARGIN 0.3 ns
+  [INFO] signoff setup ws per corner: nom_ss_n40C_1v60 -18.809, nom_ss_100C_1v60 -6.580, nom_tt_025C_1v80 +7.912, nom_ff_n40C_1v95 +8.687, nom_ff_100C_1v95 +8.711; setup violations in nom_ss_100C_1v60, nom_ss_n40C_1v60
+  [INFO] ResizerTimingPostCTS stdcell area 205010 -> 232352 um^2 (+13.3 %); final netlist hold buffers 0, repair buffers 
+  [INFO] clock skew metric (hold) nom_ff_n40C_1v95 -6.600 ns, without the hold uncertainty -6.350 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] clock skew metric (hold) nom_ss_n40C_1v60 -17.421 ns, without the hold uncertainty -17.171 ns (still includes the 5 % derate; skill signoff-criteria rule 4)
+  [INFO] PNR_SDC_FILE set_max_transition 0.70; DESIGN_REPAIR_MAX_SLEW_PCT 30, GRT_DESIGN_REPAIR_MAX_SLEW_PCT 40
+  [INFO] SIGNOFF_SDC_FILE set_max_transition not set (PDK default)
+  [INFO] part 2: review these numbers with skill signoff-criteria and write ~/claude_prjs/arvinsa-rtl-gds-p5h3/runs/soc_top_hazard3_signoff/criteria_review.md
+criteria-review: FAIL

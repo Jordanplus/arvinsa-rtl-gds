@@ -1,0 +1,11 @@
+  [PASS] macro: sky130_sram_2kbyte_1rw1r_32x512_8 instances in the final netlist: ['sram0']
+  [PASS] placement: sram0 FIXED (301.76, 364.48) N; config.json (301.76, 364.48) N
+  [PASS] ir_sources: one source, no larger than the stripe width, at the left end of each met5 stripe of vccd1, vssd1
+  [PASS] port1_tieoff: csb1 tie-high, clk1 and addr1[8:0] tie-low
+  [PASS] disconnected: Odb.ReportDisconnectedPins: [('0', '0')]
+  [PASS] sta_setup: check_setup in 15 corners: only the expected unclocked sram0/clk1
+  [PASS] pulse_width: 15 corners; worst min pulse width slack 9.147087 (sram0/clk0 (low)), min period slack 14.000002 (sram0/clk0), all >= the required slack
+  [PASS] sram_lib: 15 corners, each read only the char .lib of its PVT (ADR-0010)
+  [PASS] sram_drc_ref: SRAM alone: 5579161 violations in 30 rule types, same as the reviewed baseline
+  [PASS] magic_drc: 0 violations outside the SRAM outline; inside 4665810, all at the position of a violation of the SRAM alone (4651644 identical boxes, 14166 in the union of same-rule boxes, 100 nm wider for (li.5) (diff/tap.9))
+soc-checks: PASS

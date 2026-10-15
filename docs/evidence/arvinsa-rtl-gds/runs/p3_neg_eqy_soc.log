@@ -1,0 +1,7 @@
+python3 signoff/eqy/neg_eqy.py --design soc_top
+  [PASS] din5_stuck0: eqy FAIL as expected (1/18100 partitions not proved; 1 bit(s) mapped to a constant)
+  [PASS] csb0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches)
+  [PASS] host_rdata7_inverted: eqy FAIL as expected (partition step refused: conflicting name matches)
+  [PASS] mux_swap: eqy FAIL as expected (partition step refused: conflicting name matches)
+neg-eqy: PASS 4/4 caught (444 s)
+neg-eqy-soc rc=0

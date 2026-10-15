@@ -1,0 +1,36 @@
+python3 pnr/soc_top/neg_pnr.py
+  [PASS] P00: FAIL at positive control: check_soc.py PASS on the unedited fake run
+  [PASS] P01: FAIL at Checker.SetupViolations: Setup violations found
+  [PASS] P02: FAIL at Checker.HoldViolations: Hold violations found
+  [PASS] P03: FAIL at Checker.MaxSlewViolations: Max Slew violations found
+  [PASS] P04: FAIL at Checker.SetupViolations, and the hook printed the derate 10
+  [PASS] P05: FAIL at Checker.LVS: LVS errors found (8 vias removed)
+  [PASS] P06: FAIL at OpenROAD check_antennas: 58 net violations with gate area / 1000 (flow LEF: 0)
+  [PASS] P07: FAIL at check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise (each net 11 mV, sum 22 mV)
+  [PASS] P08: FAIL at check_soc.py port1_tieoff (only row FAIL, soc-checks: FAIL)
+  [PASS] P09: FAIL at check_soc.py placement (with magic_drc, whose origin is the DEF position; soc-checks: FAIL)
+  [PASS] P10: FAIL at Checker.KLayoutDRC (KLayout DRC errors found) and check_soc.py magic_drc (violations outside the SRAM)
+  [PASS] P11: FAIL at Checker.XOR: XOR differences found
+  [PASS] P12: FAIL at check_signoff.py golden design__instance__count
+  [PASS] P13: FAIL at check_soc.py sta_setup: unexpected check_setup warnings (only row FAIL, soc-checks: FAIL)
+  [PASS] P14: FAIL at check_soc.py macro (with port1_tieoff, which looks for sram0; soc-checks: FAIL)
+  [PASS] P15: FAIL at check_soc.py disconnected (only row FAIL, soc-checks: FAIL)
+  [PASS] P16: FAIL at check_inputs.py rtl_files
+  [FAIL] P17: expected FAIL at case error: RuntimeError('injection point not found: the dout0 rising_edge arc') (see runs/neg_pnr/P17/run.log)
+  [PASS] P18: FAIL at check_inputs.py antenna_lef
+  [PASS] P19: FAIL at check_inputs.py macro_lib
+  [PASS] P20: FAIL at check_inputs.py --resolved
+  [PASS] P21: FAIL at check_soc.py magic_drc: a new 'Local interconnect spacing < 34 (li.3)' violation inside the SRAM outline at (306.76, 369.48) um; that rule is in the SRAM-alone baseline, so the Phase 3 rule-type check would PASS
+  [PASS] P22: FAIL at check_soc.py pulse_width: min_pulse_width slack below the required slack (only row FAIL, soc-checks: FAIL)
+  [PASS] P23: FAIL at check_soc.py pulse_width: min_period slack below the required slack (only row FAIL, soc-checks: FAIL)
+  [PASS] P24: FAIL at Checker.SetupViolations, worst nom_ss path launched by the sram0 falling edge
+  [PASS] P25: FAIL at Checker.SetupViolations, worst nom_ss path launched by the sram0 falling edge
+  [PASS] P26: FAIL at check_soc.py ir_sources: a vccd1 source point off its met5 stripe (only row FAIL, soc-checks: FAIL)
+  [PASS] P27: FAIL at check_soc.py ir_sources: a 2000 um vccd1 source (covers its whole stripe) (only row FAIL, soc-checks: FAIL)
+  [PASS] P28: FAIL at check_soc.py ir_sources: a vccd1 source in the middle of its stripe (only row FAIL, soc-checks: FAIL)
+  [PASS] P29: FAIL at check_signoff.py [max_sum] ir_vdd_drop_plus_gnd_rise (VDD 19 mV, GND -15 mV: sum 4 mV, a term below 0)
+  [PASS] P30: FAIL at check_soc.py sram_lib: nom_ff_n40C_1v95 read the tt SRAM .lib (only row FAIL, soc-checks: FAIL)
+  [PASS] P31: FAIL at check_signoff.py golden route__drc_errors and route__drc_errors__iter:2 FAIL; iter:2 + 3 PASS (final +1, iter +101, iter +3: [True, True, True])
+  [PASS] P32: FAIL at Checker.HoldViolations: Hold violations found
+neg-pnr: FAIL 32/33 caught (666 s)
+make[1]: *** [neg-pnr] Error 1

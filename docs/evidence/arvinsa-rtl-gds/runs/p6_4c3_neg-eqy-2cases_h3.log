@@ -1,0 +1,3 @@
+  [PASS] din5_stuck0: eqy FAIL as expected (1/16222 partitions not proved; 1 bit(s) mapped to a constant), at the injection (sram_din0[5])
+  [FAIL] o21ai_swap: eqy FAILed, but not at the injection: _10099_, _17299_ not connected to the edited cells
+neg-eqy: FAIL 1/2 caught (639 s) (o21ai_swap: eqy FAILed, but not at the injection: _10099_, _17299_ not connected to the edited cells)

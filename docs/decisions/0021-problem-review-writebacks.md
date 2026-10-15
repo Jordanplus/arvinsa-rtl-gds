@@ -75,6 +75,39 @@
        - Package：`chip-floorplan-pin-planning`、`caravel-user-project-integration`、`tapeout-precheck-caravel`。
    - 自動防護：`make skill-check` 檢查每個子 skill 剛好出現在一個入口的對照表、`skillOverrides` 與分段一致、清單上會出現描述的 skill（入口與共用）合計長度。
 
+7. **佐證報告收進 repo，之後刪掉所有 worktree 與 `runs/`**。
+   - 背景：確認 regress 跑完後，17 個 worktree 加主目錄 `runs/` 約 710 GB，磁碟剩 364 GiB。repo 文件引用了 307 個 `runs/` 或 worktree 路徑，`runs/` 不進版控，刪掉之後這些引用就找不到。
+   - 使用者 2026-10-15：「我們跑這些主要是出技術報告跟建立流程，相關重要資料與數據報告給技術流程都收錄後，就都不需要了」，接著補充：「主要是重要的佐證報告才收」。
+   - 做法：
+     - 刪之前確認沒有只存在 worktree 的修改：p7close_caravel 的 41 個修改檔都和 main 歷史的某一版相同；p7close_h3 有 10 個檔和 main 任何一版都不同，逐行查過，新增的內容 main 都已改寫收錄（wrapper 誤差那段是結案前的草稿，被 ADR-0019 決定 26 取代）。
+     - 新增 `scripts/collect_evidence.py`（`make collect-evidence`）。收錄範圍：
+       - 文件直接引用的報告檔；
+       - 每次 harden 的判定與 criteria review；
+       - regression 摘要與 console；
+       - 被引用的小型實驗目錄（≤ 20 個檔、≤ 2 MB）的腳本與 log；
+       - precheck 結果。
+
+       收錄位置是 `docs/evidence/<checkout 目錄名>/runs/…`，保留路徑。單檔上限 512 KB（放寬到 4 MB 會多出 319 個大型 log、壓縮後 40 MB，不划算）。共 677 個檔、6.8 MB。`docs/evidence/references.md` 列出每個被引用路徑的收錄狀態。
+     - 不收 GDS、DEF、網表、SPICE 輸出、整個 LibreLane run 目錄：它們由 commit 重跑產生，`f02a1a0` 的 regress 已證明四個設計的 metrics 逐值重現。
+     - ChipFoundry 問題草稿還沒定案，搬到 `docs/notes/chipfoundry_issue_draft.md`。
+     - 保留執行環境：`.tools/`、precheck 工作目錄的 `pdks/`、`cup_example/`、`run_precheck.sh`，以及 Docker／lima 的 image。
+   - 結果（2026-10-15）：
+     - 收錄提交為 `35fbb16`，之後刪掉 17 個 worktree、主目錄 `runs/`（只留 `todo.md`），以及 precheck 工作目錄裡 6 個執行結果目錄；
+     - 磁碟剩餘從約 351 GiB 增加到 1,106 GiB，約釋放 750 GiB；
+     - 刪除 worktree 的指令被 Claude Code 自動模式的安全檢查擋下，由使用者把指令送來確認後才執行。
+   - 流程寫回（決定 7）：`flow-regression-reproducibility` 規則 16「專案結束的清理」、`phase-exit-review` 規則 3 與 9、`signoff-criteria` 的 knowledge 出處、流程文件 4.9、README。原規則要求把大型證據另存到主目錄 `runs/<實驗名>/`，但沒寫到 `runs/` 本身也會被清掉。
+
+8. **剩下的四個待決事項**。使用者 2026-10-15 說「做給我決策吧」，選定：
+   - `RT_CLOCK_MIN_LAYER`（A6，`cts-clock-tree` 規則 8）：「本專案不設，下專案一開始就設 (建議)」。
+     - 本 repo 已結案、不下線，設了要重新 harden 三個設計、更新 golden 並重跑 regress（約 10 小時），run 也已刪除。
+     - 新專案的 config 第一版就設（sky130 用 `met3`）；checker 留到下一個專案：`resolved.json` 是 null 就 FAIL。
+   - EM checker 的範圍（A7，`pdn-ir-drop` 規則 8）：「電源網路 EM (建議)」。
+     - 範圍是 PDN 的 strap 與 via：用 `analyze_power_grid -enable_em` 輸出每段的電流，對 tech LEF 的上限比對；電流用 CPU max power pattern，ff 與 ss corner 都判；植入錯誤至少有「strap 改窄」與「via 改成單一 cut」。
+     - 理由：本專案唯一量到超標的是 via4，而且工具已經有。訊號線 EM 不在範圍。
+   - ChipFoundry 問題草稿（ADR-0019 決定 6）：「先不送，保留草稿 (建議)」。
+     - 本專案不下線，下一個真的要下線的專案再送，送之前先確認 deck 是否已修正。
+   - 推送：「兩個 remote 都推 (建議)」。
+
 ## 後果
 
 - 改了 `scripts/regress.py`，依 `phase-exit-review` 規則 2，在 `f02a1a0` 的乾淨 worktree 重跑了三條 regression（2026-10-15，兩條同時跑），全部 PASS：

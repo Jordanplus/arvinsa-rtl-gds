@@ -1,0 +1,62 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v line 25044, module sky130_fd_sc_hd__fill_2 not found. Creating black box for FILLER_0_1009.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v line 25045, module sky130_fd_sc_hd__fill_4 not found. Creating black box for FILLER_0_11.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v line 25047, module sky130_fd_sc_hd__fill_1 not found. Creating black box for FILLER_0_1133.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v line 25079, module sky130_fd_sc_hd__fill_8 not found. Creating black box for FILLER_0_1669.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v line 25098, module sky130_ef_sc_hd__decap_12 not found. Creating black box for FILLER_0_1849.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v line 999845, module sky130_fd_sc_hd__tapvpwrvgnd_1 not found. Creating black box for TAP_TAPCELL_ROW_0_2904.
+== wrapper min dout0 load pF: min 0.0043 max 0.0251 n 32
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib line 1, library sky130_fd_sc_hd__tt_025C_1v80 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80 already exists.
+== wrapper max dout0 load pF: min 0.0048 max 0.0279 n 32
+== wrapper min_ff_n40C hold to sram0 inputs
+min_delay/hold group wb_clk_i
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+u_soc.sram0/addr0[6] (arv_sram_2kbyte_1rw1r_32x512_8)    7.08    7.30    0.21 (MET)
+u_soc.sram0/wmask0[1] (arv_sram_2kbyte_1rw1r_32x512_8)    7.06    7.36    0.30 (MET)
+u_soc.sram0/addr0[8] (arv_sram_2kbyte_1rw1r_32x512_8)    7.08    7.47    0.38 (MET)
+
+== wrapper min_ff_n40C hold worst overall 202528672.000
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib line 1, library sky130_fd_sc_hd__ff_n40C_1v95 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95 already exists.
+== wrapper nom_ff_n40C hold to sram0 inputs
+min_delay/hold group wb_clk_i
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+u_soc.sram0/addr0[6] (arv_sram_2kbyte_1rw1r_32x512_8)    7.14    7.37    0.23 (MET)
+u_soc.sram0/wmask0[1] (arv_sram_2kbyte_1rw1r_32x512_8)    7.11    7.44    0.33 (MET)
+u_soc.sram0/addr0[8] (arv_sram_2kbyte_1rw1r_32x512_8)    7.14    7.54    0.41 (MET)
+
+== wrapper nom_ff_n40C hold worst overall 210701696.000
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib line 1, library sky130_fd_sc_hd__ff_n40C_1v95 already exists.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13, library arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95 already exists.
+== wrapper max_ff_n40C hold to sram0 inputs
+min_delay/hold group wb_clk_i
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+u_soc.sram0/addr0[6] (arv_sram_2kbyte_1rw1r_32x512_8)    7.20    7.45    0.25 (MET)
+u_soc.sram0/wmask0[1] (arv_sram_2kbyte_1rw1r_32x512_8)    7.17    7.52    0.35 (MET)
+u_soc.sram0/addr0[8] (arv_sram_2kbyte_1rw1r_32x512_8)    7.20    7.63    0.43 (MET)
+
+== wrapper max_ff_n40C hold worst overall 197573520.000

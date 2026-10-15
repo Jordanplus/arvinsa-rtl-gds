@@ -1,0 +1,5 @@
+  [PASS] ff currents: the step read 2 ff_n40C_1v95 .lib file(s) and no tt one
+  [PASS] ss metal resistance: LAYERS_RC *ff* = the run's *ss* values
+  [PASS] supply points: the run's 10 points at 1.95 V
+  [PASS] drop: VDD 7.11 + GND 7.02 = 14.13 mV (ff currents + ss metal R) vs max 20.0 mV
+ir-worst: PASS

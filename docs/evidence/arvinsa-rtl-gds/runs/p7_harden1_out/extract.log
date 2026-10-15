@@ -1,0 +1,24 @@
+unpacking 'https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.1.0/01948eb7-9cba-704f-bbf3-3fa956735b52/source.tar.gz' into the Git cache...
+warning: unable to download 'https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.1.0/01948eb7-9cba-704f-bbf3-3fa956735b52/source.tar.gz': Timeout was reached (28) Connection timed out after 15000 milliseconds; retrying in 70 ms (attempt 1/5)
+warning: unable to download 'https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.1.0/01948eb7-9cba-704f-bbf3-3fa956735b52/source.tar.gz': Timeout was reached (28) Connection timed out after 15004 milliseconds; retrying in 185 ms (attempt 2/5)
+warning: unable to download 'https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.1.0/01948eb7-9cba-704f-bbf3-3fa956735b52/source.tar.gz': Timeout was reached (28) Connection timed out after 15000 milliseconds; retrying in 84 ms (attempt 3/5)
+warning: unable to download 'https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.1.0/01948eb7-9cba-704f-bbf3-3fa956735b52/source.tar.gz': Timeout was reached (28) Connection timed out after 15002 milliseconds; retrying in 263 ms (attempt 4/5)
+waiting for another Nix process to finish fetching input 'github:fossi-foundation/nix-eda/8f990fb77529c09e540e453cd836af9930ec58db?narHash=sha256-nSKBMGP8/ZC7qB3Lzd%2BFwM8REqOxlh8wpYDf2hlK6Gg%3D'...
+waiting for another Nix process to finish fetching input 'github:numtide/devshell/255a2b1725a20d060f566e4755dbf571bbbb5f76?narHash=sha256-460jc0%2BCZfyaO8%2Bw8JNtlClB2n4ui1RbHfPTLkpwhU8%3D'...
+waiting for another Nix process to finish fetching input 'github:fossi-foundation/ciel/afcb23d368614ffa1e7e96584ed33f839c71c576?narHash=sha256-AWbkHL0zO3tD0mE3dZIcj8mVND7o3imTxOpEfOtlRDI%3D'...
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+~/claude_prjs/arvinsa-rtl-gds/runs/p7_harden1/37-openroad-resizertimingpostcts/state_in.json

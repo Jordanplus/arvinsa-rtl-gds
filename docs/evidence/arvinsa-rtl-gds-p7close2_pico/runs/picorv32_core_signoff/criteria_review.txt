@@ -1,0 +1,16 @@
+criteria-review: run ~/claude_prjs/arvinsa-rtl-gds-p7close2_pico/runs/picorv32_core, config ~/claude_prjs/arvinsa-rtl-gds-p7close2_pico/pnr/picorv32_core/config.json
+  [PASS] config_applied: 13 settings of config.json = resolved.json
+  [PASS] step_config: 77 step configs agree with resolved.json
+  [PASS] uncertainty_applied: 18000 signoff paths in 9 corners got setup 0.250, half-cycle 0.250, hold 0.250 ns
+  [PASS] signoff_corners: 9 corners = STA_CORNERS
+  [PASS] checkers_ran: verdict lines in signoff.txt, disconnected.txt, cpu_params_resolved.txt, provenance_end.txt
+  [INFO] setup: ResizerTimingPostCTS has no setup repair table (no setup violation in RSZ_CORNERS)
+  [INFO] hold: ResizerTimingPostCTS ended its hold repair at WNS +0.100 ns (placement parasitics); signoff worst +0.039 ns (min_ff_n40C_1v95); gap from the last hold repair (ResizerTimingPostCTS) 0.061 ns vs PL_RESIZER_HOLD_SLACK_MARGIN 0.1 ns
+  [INFO] signoff setup ws per corner: max_ss_100C_1v60 +6.175, nom_ss_100C_1v60 +6.615, min_ss_100C_1v60 +7.032, max_tt_025C_1v80 +14.657, nom_tt_025C_1v80 +14.910
+  [INFO] ResizerTimingPostCTS stdcell area 170534 -> 192852 um^2 (+13.1 %); final netlist hold buffers 2230, repair buffers fanout 1251, load_slew 949, wire 1447
+  [INFO] worst setup path (max_ss_100C_1v60) resetn -> mem_la_addr[30], slack 6.17513, launched at the rise edge (0.00 ns), captured at the rise edge (40.00 ns), uncertainty 0.250 ns: launch clock 17.55 ns; arrival 17.55 ns after the launch edge
+  [INFO] no half-cycle setup path in the 9000 paths of the signoff max.rpt files
+  [INFO] PNR_SDC_FILE set_max_transition not set (PDK default); DESIGN_REPAIR_MAX_SLEW_PCT 20, GRT_DESIGN_REPAIR_MAX_SLEW_PCT 30
+  [INFO] SIGNOFF_SDC_FILE set_max_transition not set (PDK default)
+  [INFO] part 2: review these numbers with skill signoff-criteria and write ~/claude_prjs/arvinsa-rtl-gds-p7close2_pico/runs/picorv32_core_signoff/criteria_review.md
+criteria-review: PASS

@@ -1,6 +1,8 @@
 # Build and run outputs
 .tools/
 runs/
+# evidence copied out of runs/ before the 2026-10-15 clean-up (docs/evidence/README.md)
+!docs/evidence/*/runs/
 sim_build/
 fw/build/
 fw/build_hazard3/

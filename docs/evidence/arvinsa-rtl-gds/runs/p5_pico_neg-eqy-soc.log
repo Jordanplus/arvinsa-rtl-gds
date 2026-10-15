@@ -1,0 +1,12 @@
+python3 signoff/eqy/neg_eqy.py --design soc_top
+  [PASS] din5_stuck0: eqy FAIL as expected (1/18156 partitions not proved; 1 bit(s) mapped to a constant), at the injection (sram_din0[5])
+  [PASS] csb0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_17061_, neg_eqy_inv)
+  [PASS] clk0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches; clock source differs: sram0), at the injection (clk, neg_eqy_clk0_inv, sram0)
+  [PASS] host_rdata7_inverted: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_21864_, output90)
+  [PASS] mux_swap: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_10313_)
+  [PASS] nand2_to_nor2: eqy FAIL as expected (1/18156 partitions not proved), at the injection (_09985_)
+  [PASS] flop_q_inverted: eqy FAIL as expected (partition step refused: conflicting name matches; sequential cells differ: _19687_), at the injection (_10038_, _19687_)
+  [PASS] flop_async_reset: eqy FAIL as expected (sequential cells differ: _19687_), at the injection (_19687_)
+  [PASS] flop_clk_inverted: eqy FAIL as expected (clock source differs: _19687_), at the injection (_19687_)
+  [PASS] location check: 60 ordered pairs of cases on different instances, none accepts the other's FAIL names
+neg-eqy: PASS 9/9 caught (931 s)

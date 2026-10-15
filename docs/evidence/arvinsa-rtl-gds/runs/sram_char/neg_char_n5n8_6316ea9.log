@@ -1,0 +1,10 @@
+  [PASS] N5: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n5.json tt_025C_1v80 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n5.json ss_100C_1v60 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n5.json ff_n40C_1v95 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n5.json ss_n40C_1v60 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n5.json ff_100C_1v95 lacks pulse
+  [PASS] N6: gen_char_lib: STALE ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n6_lib/sky130_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib (regenerate: python3 ~/claude_prjs/arvinsa-rtl-gds/ip/sram/char/gen_char_lib.py ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n6.json ~/.ciel/sky130A/libs.ref/sky130_sram_macros/lib/sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n6_lib)
+  [PASS] N7: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n7.json ss_100C_1v60 lacks a PLACEHOLDER_FROM entry (it does not read correctly)
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n7.json ss_n40C_1v60 lacks a characterized PLACEHOLDER_FROM PVT (ss_100C_1v60)
+  [PASS] N8: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg_n5n8_work/n8.json has PVTs ['ff_n40C_1v95', 'ss_100C_1v60', 'ss_n40C_1v60', 'tt_025C_1v80'], expected exactly ['ff_100C_1v95', 'ff_n40C_1v95', 'ss_100C_1v60', 'ss_n40C_1v60', 'tt_025C_1v80']
+neg-char: PASS 4/4

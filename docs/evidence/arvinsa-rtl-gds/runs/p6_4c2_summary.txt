@@ -1,0 +1,2 @@
+h3 eqy-soc rc=0 5 min | eqy: PASS
+h3 neg-eqy-soc rc=2 24 min | neg-eqy: FAIL 12/13 caught (1464 s) (din5_stuck0: eqy did not FAIL on a partition (exit 1, summary ['eqy exit code 1', 'EQY result missing', 'no partitions (nothing was compared)']))

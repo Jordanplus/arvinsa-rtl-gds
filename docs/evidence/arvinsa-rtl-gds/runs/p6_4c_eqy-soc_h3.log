@@ -1,0 +1,10 @@
+python3 signoff/eqy/run_eqy.py --design soc_top_hazard3
+[eqy] soc_top: gold runs/soc_top_hazard3/06-yosys-synthesis/soc_top.nl.v
+[eqy] soc_top: gate runs/soc_top_hazard3/final/nl/soc_top.nl.v
+[eqy] soc_top: running EQY (10 jobs; log runs/eqy_soc_top_hazard3/eqy_run.log)
+  [FAIL] eqy exit code 1
+  [FAIL] EQY result missing
+  [FAIL] no partitions (nothing was compared)
+  [FAIL] EQY partition step refused: conflicting matches for gold bit \_10711_.A: \_10711_.A vs \_10711_.B
+eqy: FAIL (soc_top; details in runs/eqy_soc_top_hazard3/eqy_run.log)
+make: *** [eqy-soc] Error 1

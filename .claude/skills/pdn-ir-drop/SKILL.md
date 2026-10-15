@@ -31,7 +31,7 @@ description: 電源網路（PDN）與 IR drop（供電線上的電壓降）的�
 8. **EM**：`analyze_power_grid -enable_em -em_outfile` 可以輸出每段電源線的電流（OpenROAD dcf36133 `src/psm/README.md`），再自己和 tech LEF 的 DCCURRENTDENSITY／ACCURRENTDENSITY 比對（例如 met1 2.8／6.1 mA/µm；mcon 0.36、via 0.29 mA/cut）。LibreLane 沒有開這個選項。
    - **本 repo 目前沒有判定 EM**：`ir_worst.py`、`ir_pattern.py`、`ir_caravel.py` 都沒開 `-enable_em`（2026-10-15 搜尋 repo 確認）；ff corner 的 IR 照跑只印 `[INFO]`，不讀電流密度。量過的只有 Phase 4 研究（單點供電時單一 via4 cut 3.3 mA，超過上限 2.49 mA，`docs/notes/ir_worst_case_soc_top.md`）與 Phase 5 的 what-if（via4 以單一 cut 計 78%，met5 加寬後 18%，ADR-0017）。
    - 登記：放寬與補償登記表 I12（列為下線前要做）、`docs/phase_exit/phase7.md` 已知限制 4。
-   - 自動防護：沒有。新 checker 依 ADR-0021 決定 3 留到下一個專案開始時做（照 ADR-0020 決定 2 的做法：這次只寫進流程與 skill）；做法與範圍要先列選項由使用者決定（`CLAUDE.md` 規則 13）。
+   - 自動防護：沒有。新 checker 依 ADR-0021 決定 3 留到下一個專案開始時做（照 ADR-0020 決定 2 的做法：這次只寫進流程與 skill）。**範圍**（使用者 2026-10-15 選「電源網路 EM (建議)」，ADR-0021 決定 8）：PDN 的 strap 與 via，用 `analyze_power_grid -enable_em` 輸出每段的電流，和 tech LEF 的電流密度上限（DCCURRENTDENSITY／via 每 cut）比對；電流用 CPU max power pattern，在 ff 與 ss corner 都判；植入錯誤至少有「strap 改窄」與「via 改成單一 cut」兩種。訊號線（含 clock）的 EM 不在範圍，OpenROAD 沒有現成檢查，仍只用估算（`cts-clock-tree` 規則 8）。
 9. **decap 的擺放**：`filler_placement` 會把 cell 依寬度由大到小排序，再從最寬的開始貪婪填空（`FillerPlacement.cpp` 104–106、251–280），與 `DECAP_CELLS` 在清單中的位置無關。在 `FILL_CELLS` 加入更寬的 fill 會搶走 decap 的位置；要更多 decap，就在 `DECAP_CELLS` 加更寬的 decap（decap_8、decap_12）。
 10. **供電模型要明講假設，checker 也要擋住比假設樂觀的設定**（Phase 4 獨立審查：電壓源大小改 2000 µm 或移到 strap 中間，原本都 PASS；`check_soc.py ir_sources` 現在要求大小 ≤ strap 寬度、soc_top 的點在 strap 左端，P27、P28）。
     - 細的 PDN（1.6 µm strap、153 µm pitch、單一 cut 的 via5）對供電點數非常敏感：同一份 soc_top 版圖，「所有 pin 理想」「met5 每 34 µm 一點」「每條 strap 一側一點」「整顆一點」四種模型差約 100 倍（數字在 `docs/notes/ir_worst_case_soc_top.md`）。

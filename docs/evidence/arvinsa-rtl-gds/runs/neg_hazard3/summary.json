@@ -1,0 +1,781 @@
+{
+  "cpu": "hazard3",
+  "status": "PASS",
+  "total": 36,
+  "caught": 36,
+  "escaped": 0,
+  "wall_time_s": 373.73,
+  "bugs": [
+    {
+      "id": "R01",
+      "define": "BUG_R01",
+      "test": "memtest",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00040",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "sram_port",
+        "test_ctrl",
+        "uart_golden",
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00040 (firmware fail code 0x0040), expected PASS magic 0x600dc0de (cycle 91982)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/memtest__R01/result.json"
+    },
+    {
+      "id": "R02",
+      "define": "BUG_R02",
+      "test": "bootrom_march",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00e10",
+      "exclusive": false,
+      "expect_gpio": [
+        177,
+        225
+      ],
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "sram_port",
+        "test_ctrl",
+        "signature",
+        "gpio_seq",
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00e10 (firmware fail code 0x0e10), expected PASS magic 0x600dc0de (cycle 10595)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/bootrom_march__R02/result.json"
+    },
+    {
+      "id": "R03",
+      "define": "BUG_R03",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "x_check",
+        "trap",
+        "timeout"
+      ],
+      "expect_regex": "",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "x_check",
+        "sram_port",
+        "timeout",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:x_check] FAIL mem_rdata has X/Z at read handshake: addr 0x00000000 rdata xxxxxxxx (cycle 58)",
+      "reason": "caught by x_check",
+      "result_json": "runs/neg_hazard3/icarus/hello__R03/result.json"
+    },
+    {
+      "id": "R04",
+      "define": "BUG_R04",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "uart_monitor"
+      ],
+      "expect_regex": "(?i)edge|timing|framing",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "uart_div",
+        "uart_monitor"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:uart_monitor] FAIL edge timing: transition to 1 at start+84 cycles (start bit edge at cycle 649), expected start+k*20 +/- 1",
+      "reason": "caught by uart_monitor",
+      "result_json": "runs/neg_hazard3/icarus/hello__R04/result.json"
+    },
+    {
+      "id": "R05",
+      "define": "BUG_R05",
+      "test": "irq",
+      "sim": "icarus",
+      "expect_checkers": [
+        "timeout"
+      ],
+      "expect_regex": "",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "irq_line",
+        "timeout",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:timeout] FAIL no DONE write within max_cycles=200000 (cycle 200000)",
+      "reason": "caught by timeout",
+      "result_json": "runs/neg_hazard3/icarus/irq__R05/result.json"
+    },
+    {
+      "id": "R06a",
+      "define": "",
+      "test": "neg_fw_hang",
+      "sim": "icarus",
+      "expect_checkers": [
+        "timeout"
+      ],
+      "expect_regex": "",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "timeout"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:timeout] FAIL no DONE write within max_cycles=100000 (cycle 100000)",
+      "reason": "caught by timeout",
+      "result_json": "runs/neg_hazard3/icarus/neg_fw_hang__R06a/result.json"
+    },
+    {
+      "id": "R06b",
+      "define": "",
+      "test": "neg_fw_illegal",
+      "sim": "icarus",
+      "expect_checkers": [
+        "trap"
+      ],
+      "expect_regex": "",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "trap"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:trap] FAIL trap asserted at cycle 2336 (last instruction fetch at 0x000000b0)",
+      "reason": "caught by trap",
+      "result_json": "runs/neg_hazard3/icarus/neg_fw_illegal__R06b/result.json"
+    },
+    {
+      "id": "R07",
+      "define": "BUG_R07",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "bus_assert"
+      ],
+      "expect_regex": "(?i)one-?hot|decode",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "bus_assert",
+        "gpio_seq"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:bus_assert] FAIL sel not one-hot: {sram,rom,uart,gpio,test,none}=001100 for addr 0x02000000 (cycle 27)",
+      "reason": "caught by bus_assert",
+      "result_json": "runs/neg_hazard3/icarus/hello__R07/result.json"
+    },
+    {
+      "id": "R02_memtest",
+      "define": "BUG_R02",
+      "test": "memtest",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl",
+        "trap",
+        "timeout"
+      ],
+      "expect_regex": "(?i)trap asserted|no DONE write|DONE=0xbad0",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "sram_port",
+        "timeout",
+        "uart_golden",
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:timeout] FAIL no DONE write within max_cycles=5000000 (cycle 5000000)",
+      "reason": "caught by timeout",
+      "result_json": "runs/neg_hazard3/icarus/memtest__R02_memtest/result.json"
+    },
+    {
+      "id": "R09",
+      "define": "BUG_R09",
+      "test": "unmapped",
+      "sim": "icarus",
+      "expect_checkers": [
+        "bus_assert"
+      ],
+      "expect_regex": "(?i)without mem_ready",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "bus_assert",
+        "timeout",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:bus_assert] FAIL transaction at addr 0x0000fffc pending for more than 1000 cycles without mem_ready (started cycle 362)",
+      "reason": "caught by bus_assert",
+      "result_json": "runs/neg_hazard3/icarus/unmapped__R09/result.json"
+    },
+    {
+      "id": "R10",
+      "define": "BUG_R10",
+      "test": "unmapped",
+      "sim": "icarus",
+      "expect_checkers": [
+        "bus_assert"
+      ],
+      "expect_regex": "(?i)decode mismatch",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "bus_assert",
+        "test_ctrl",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:bus_assert] FAIL decode mismatch: {sram,rom,uart,gpio,test,none}=001000, expected 000001 for addr 0x02000008 (cycle 562)",
+      "reason": "caught by bus_assert",
+      "result_json": "runs/neg_hazard3/icarus/unmapped__R10/result.json"
+    },
+    {
+      "id": "R11",
+      "define": "BUG_R11",
+      "test": "regs",
+      "sim": "icarus",
+      "expect_checkers": [
+        "gpio_seq"
+      ],
+      "expect_regex": "(?i)gpio_out sequence",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "gpio_seq"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:gpio_seq] FAIL gpio_out sequence [0xb3, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x00, 0x80, 0xbf, 0x00, 0xb3, 0x3c, 0x83, 0xb3], expected [0xb3, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xff, 0x00, 0xb3, 0x3c, 0xc3, 0xb3]",
+      "reason": "caught by gpio_seq",
+      "result_json": "runs/neg_hazard3/icarus/regs__R11/result.json"
+    },
+    {
+      "id": "R12",
+      "define": "BUG_R12",
+      "test": "regs",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad0021d",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl",
+        "uart_golden",
+        "gpio_seq"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad0021d (firmware fail code 0x021d), expected PASS magic 0x600dc0de (cycle 3810)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/regs__R12/result.json"
+    },
+    {
+      "id": "R13",
+      "define": "BUG_R13",
+      "test": "boot_host_hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "sim_error"
+      ],
+      "expect_regex": "(?i)host port partial-wmask write mismatch",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "sram_port",
+        "sim_error"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:sim_error] FAIL host port partial-wmask write mismatch (spec 4.4 wmask0 = host_wmask)",
+      "reason": "caught by sim_error",
+      "result_json": "runs/neg_hazard3/icarus/boot_host_hello__R13/result.json"
+    },
+    {
+      "id": "R14",
+      "define": "BUG_R14",
+      "test": "irq",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00020",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "irq_line",
+        "test_ctrl",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00020 (firmware fail code 0x0020), expected PASS magic 0x600dc0de (cycle 2574)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/irq__R14/result.json"
+    },
+    {
+      "id": "R15",
+      "define": "BUG_R15",
+      "test": "regs",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00240",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00240 (firmware fail code 0x0240), expected PASS magic 0x600dc0de (cycle 11159)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/regs__R15/result.json"
+    },
+    {
+      "id": "L01",
+      "define": "",
+      "test": "boot_uart_badck",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00b00",
+      "exclusive": true,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00b00 (firmware fail code 0x0b00), expected PASS magic 0x600dc0de (cycle 93040)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/boot_uart_badck__L01/result.json"
+    },
+    {
+      "id": "L02",
+      "define": "",
+      "test": "boot_uart_n0",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00b00",
+      "exclusive": true,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00b00 (firmware fail code 0x0b00), expected PASS magic 0x600dc0de (cycle 844)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/boot_uart_n0__L02/result.json"
+    },
+    {
+      "id": "L03",
+      "define": "",
+      "test": "boot_uart_n449",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00b00",
+      "exclusive": true,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00b00 (firmware fail code 0x0b00), expected PASS magic 0x600dc0de (cycle 848)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/boot_uart_n449__L03/result.json"
+    },
+    {
+      "id": "R16",
+      "define": "BUG_R16",
+      "test": "regs",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00332",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl",
+        "uart_golden",
+        "signature",
+        "gpio_seq"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00332 (firmware fail code 0x0332), expected PASS magic 0x600dc0de (cycle 5219)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/regs__R16/result.json"
+    },
+    {
+      "id": "R17",
+      "define": "BUG_R17",
+      "test": "uart_burst",
+      "sim": "icarus",
+      "expect_checkers": [
+        "coverage"
+      ],
+      "expect_regex": "(?i)held by the transmitter-busy stall",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "uart_golden",
+        "signature",
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:coverage] FAIL 0 of 81 UART DATA writes were held by the transmitter-busy stall, expected at least 80 (tests.toml min_uart_stalls; spec 4.2: no mem_ready while reg_dat_wait=1)",
+      "reason": "caught by coverage",
+      "result_json": "runs/neg_hazard3/icarus/uart_burst__R17/result.json"
+    },
+    {
+      "id": "R18",
+      "define": "BUG_R18",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "sram_port"
+      ],
+      "expect_regex": "(?i)SRAM access #2 of one transaction",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "sram_port"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:sram_port] FAIL SRAM access #2 of one transaction at edge T2 (addr 0x00000000 read): spec 4.3 allows csb0=0 only once, before T0 (cycle 59)",
+      "reason": "caught by sram_port",
+      "result_json": "runs/neg_hazard3/icarus/hello__R18/result.json"
+    },
+    {
+      "id": "R19",
+      "define": "BUG_R19",
+      "test": "reset_store",
+      "sim": "icarus",
+      "expect_checkers": [
+        "sram_port"
+      ],
+      "expect_regex": "(?i)SRAM access at a rising edge that samples resetn=0",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "sram_port",
+        "test_ctrl",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:sram_port] FAIL SRAM access at a rising edge that samples resetn=0: web0=0 addr0=135 (byte 0x21c) din0=0xdeadbeef wmask0=1111; spec 4.9: a store presented at the reset edge is dropped (cycle 339)",
+      "reason": "caught by sram_port",
+      "result_json": "runs/neg_hazard3/icarus/reset_store__R19/result.json"
+    },
+    {
+      "id": "R20",
+      "define": "BUG_R20",
+      "test": "irq",
+      "sim": "icarus",
+      "expect_checkers": [
+        "irq_line"
+      ],
+      "expect_regex": "(?i)irq\\[4\\]=1 but IRQ_TRIG\\[0\\]=0",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "irq_line"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:irq_line] FAIL irq[4]=1 but IRQ_TRIG[0]=0 (last IRQ_TRIG write 0x00000000 at cycle 430); spec 4.8: the line is the IRQ_TRIG[0] level (cycle 431)",
+      "reason": "caught by irq_line",
+      "result_json": "runs/neg_hazard3/icarus/irq__R20/result.json"
+    },
+    {
+      "id": "R21",
+      "define": "BUG_R21",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "uart_div"
+      ],
+      "expect_regex": "(?i)after reset release, expected the reset value",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "uart_div"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:uart_div] FAIL simpleuart divider is 19 after reset release, expected the reset value SOC_UART_DIV = 18 (spec 4.5 DEFAULT_DIV) (cycle 16)",
+      "reason": "caught by uart_div",
+      "result_json": "runs/neg_hazard3/icarus/hello__R21/result.json"
+    },
+    {
+      "id": "R22_h3",
+      "define": "BUG_R22",
+      "test": "irq",
+      "sim": "icarus",
+      "expect_checkers": [
+        "irq_line"
+      ],
+      "expect_regex": "(?i)=0 but IRQ_TRIG\\[0\\]=1",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "irq_line",
+        "timeout",
+        "uart_golden"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:irq_line] FAIL irq[4]=0 but IRQ_TRIG[0]=1 (last IRQ_TRIG write 0x00000001 at cycle 388); spec 4.8: the line is the IRQ_TRIG[0] level (cycle 389)",
+      "reason": "caught by irq_line",
+      "result_json": "runs/neg_hazard3/icarus/irq__R22_h3/result.json"
+    },
+    {
+      "id": "M01",
+      "define": "",
+      "test": "memtest",
+      "sim": "icarus",
+      "expect_checkers": [
+        "coverage"
+      ],
+      "expect_regex": "(?i)SRAM coverage rule 1 .*data reads 83 \\(expected 88\\)",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:coverage] FAIL SRAM coverage rule 1 [0x368, 0x700): 230 of 230 words off; 0x368: data reads 83 (expected 88), writes 17 (expected 22); 0x36c: data reads 83 (expected 88), writes 17 (expected 22); 0x370: data reads 83 (expected 88), writes 17 (expected 22); ...",
+      "reason": "caught by coverage",
+      "result_json": "runs/neg_hazard3/icarus/memtest__M01/result.json"
+    },
+    {
+      "id": "B01",
+      "define": "",
+      "test": "bootrom_march",
+      "sim": "icarus",
+      "expect_checkers": [
+        "coverage"
+      ],
+      "expect_regex": "(?i)SRAM coverage rule 1 .*1 of 512 words off; 0x7fc",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:coverage] FAIL SRAM coverage rule 1 [0x000, 0x800): 1 of 512 words off; 0x7fc: data reads 0 (expected 6), writes 0 (expected 6), write strobes f never seen",
+      "reason": "caught by coverage",
+      "result_json": "runs/neg_hazard3/icarus/bootrom_march__B01/result.json"
+    },
+    {
+      "id": "B02",
+      "define": "",
+      "test": "bootrom_march",
+      "sim": "icarus",
+      "expect_checkers": [
+        "coverage"
+      ],
+      "expect_regex": "(?i)SRAM coverage rule 1 .*data reads 5 \\(expected 6\\)",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl",
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:coverage] FAIL SRAM coverage rule 1 [0x000, 0x800): 512 of 512 words off; 0x000: data reads 5 (expected 6); 0x004: data reads 5 (expected 6); 0x008: data reads 5 (expected 6); ...",
+      "reason": "caught by coverage",
+      "result_json": "runs/neg_hazard3/icarus/bootrom_march__B02/result.json"
+    },
+    {
+      "id": "B03",
+      "define": "",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "uart_div"
+      ],
+      "expect_regex": "(?i)instruction fetch at 0x00000000 .*before the boot ROM wrote UART DIV",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "uart_div"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:uart_div] FAIL instruction fetch at 0x00000000 (outside the boot ROM) before the boot ROM wrote UART DIV = 18; spec 6.5 step 1 (cycle 53)",
+      "reason": "caught by uart_div",
+      "result_json": "runs/neg_hazard3/icarus/hello__B03/result.json"
+    },
+    {
+      "id": "S01",
+      "define": "",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "signature"
+      ],
+      "expect_regex": "(?i)SIG=0x00000000 at the DONE write",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "signature"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:signature] FAIL SIG=0x00000000 at the DONE write (cycle 1841), expected 0x363a3020 (CRC32 of the decoded UART bytes); spec 6.3: SIG is written before DONE (SIG at the end of the run: 0x363a3020)",
+      "reason": "caught by signature",
+      "result_json": "runs/neg_hazard3/icarus/hello__S01/result.json"
+    },
+    {
+      "id": "C01",
+      "define": "",
+      "test": "reset_store",
+      "sim": "icarus",
+      "expect_checkers": [
+        "coverage"
+      ],
+      "expect_regex": "(?i)applied 0 mid-run reset",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl",
+        "coverage",
+        "uart_golden",
+        "gpio_seq"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:coverage] FAIL the testbench applied 0 mid-run reset(s), expected 1: the CPU never presented a store to 0x00000220 (tests.toml reset_on_store)",
+      "reason": "caught by coverage",
+      "result_json": "runs/neg_hazard3/icarus/reset_store__C01/result.json"
+    },
+    {
+      "id": "H01",
+      "define": "BUG_H01",
+      "test": "memtest",
+      "sim": "icarus",
+      "expect_checkers": [
+        "test_ctrl"
+      ],
+      "expect_regex": "(?i)0xbad00040",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "test_ctrl",
+        "uart_golden",
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:test_ctrl] FAIL DONE=0xbad00040 (firmware fail code 0x0040), expected PASS magic 0x600dc0de (cycle 93093)",
+      "reason": "caught by test_ctrl",
+      "result_json": "runs/neg_hazard3/icarus/memtest__H01/result.json"
+    },
+    {
+      "id": "H02",
+      "define": "BUG_H02",
+      "test": "hello",
+      "sim": "icarus",
+      "expect_checkers": [
+        "bus_assert"
+      ],
+      "expect_regex": "(?i)changed while mem_valid=1",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "bus_assert",
+        "sram_port",
+        "uart_golden",
+        "signature"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:bus_assert] FAIL addr/wdata/wstrb changed while mem_valid=1: 0x00010000/0x00000000/0000 -> 0x00010004/0x00000000/0000 (cycle 20)",
+      "reason": "caught by bus_assert",
+      "result_json": "runs/neg_hazard3/icarus/hello__H02/result.json"
+    },
+    {
+      "id": "H03",
+      "define": "BUG_H03",
+      "test": "neg_fw_illegal",
+      "sim": "icarus",
+      "expect_checkers": [
+        "timeout"
+      ],
+      "expect_regex": "(?i)no DONE write within max_cycles",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "timeout"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:timeout] FAIL no DONE write within max_cycles=100000 (cycle 100000)",
+      "reason": "caught by timeout",
+      "result_json": "runs/neg_hazard3/icarus/neg_fw_illegal__H03/result.json"
+    },
+    {
+      "id": "H04",
+      "define": "BUG_H04",
+      "test": "memtest",
+      "sim": "icarus",
+      "expect_checkers": [
+        "coverage"
+      ],
+      "expect_regex": "(?i)data reads 0 \\(expected 88\\), fetches 88 \\(expected 0\\)",
+      "exclusive": false,
+      "expect_gpio": null,
+      "run_status": "FAIL",
+      "failing_checkers": [
+        "coverage"
+      ],
+      "caught": true,
+      "matched_message": "[CHK:coverage] FAIL SRAM coverage rule 1 [0x3e8, 0x700): 198 of 198 words off; 0x3e8: data reads 0 (expected 88), fetches 88 (expected 0); 0x3ec: data reads 0 (expected 88), fetches 88 (expected 0); 0x3f0: data reads 0 (expected 88), fetches 88 (expected 0); ...",
+      "reason": "caught by coverage",
+      "result_json": "runs/neg_hazard3/icarus/memtest__H04/result.json"
+    }
+  ]
+}

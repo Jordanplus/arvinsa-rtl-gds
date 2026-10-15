@@ -709,6 +709,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
   - **A1** `scripts/check_skills.py`：單份 description ≤ 1,024 字元、清單上保留描述的合計 ≤ 8,000，並有超長的植入錯誤。
   - **B1** `scripts/regress.py`：磁碟剩餘不到 `REGRESS_MIN_FREE_GB`（100 GiB）就拒絕開跑；每個 target 超過參考時間 3 倍（至少 30 分鐘）就逾時，整個程序群組都砍掉。`make neg-regress` 加 `low_disk`、`timeout` 兩案，現在 10/10。已在 `f02a1a0` 的乾淨 worktree 用真實 regression 確認：Hazard3 30/30、PicoRV32 31/31、wrapper 18/18（含 ChipFoundry precheck）；每次 harden 都和 golden 逐值相同，沒有任何一項超過逾時上限的 35%，三條都通過磁碟檢查。
 - **A2（latch-up）**：已量測（§9.1 第 7 項）、記錄，並併進 ChipFoundry 問題草稿；不改設計。
+- **佐證收錄、run 刪除**（ADR-0021 決定 7；使用者：這些 run 是為了這份報告與流程，「主要是重要的佐證報告才收」）：`make collect-evidence`（`scripts/collect_evidence.py`）把文件引用的報告、每次 harden 的判定與 criteria review、regression 摘要、precheck 結果收進 `docs/evidence/`，保留原路徑（677 個檔、6.8 MB；`docs/evidence/references.md` 列出每個被引用路徑的收錄狀態）。GDS、DEF、網表、整個 run 目錄不收，由乾淨 checkout 重跑產生。之後刪掉所有 worktree 與 `runs/`。這個做法已寫進流程（`flow-regression-reproducibility` 規則 16）。
 - **延到下一個專案**（照 ADR-0020 決定 2 的做法，skill 裡寫明「目前沒有自動防護」）：A6 的 checker 列、A7 EM、B2 失控自動停、B6、B7、B9、B11；C7、C8 不做。
 
 ### 8.6 總檢討後的 skill 結構
@@ -776,7 +777,8 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 - **latch-up 標記**（A2，已量測，見 §9.1 第 7 項）：等 ChipFoundry 回覆使用者區的標記由誰加、用 6 µm 還是 15 µm 判。
 - **skill 清單的實際狀況**（A1）：`make skill-check` 已強制長度，但清單上是否真的看得到入口的描述，取決於模型的 context window 與使用者的其他 skill；Claude Code 升版時用 `/context` 或 `/doctor` 確認。
 - **step 失控自動停止**（B2），以及 ADR-0021 決定 3 延到下一個專案的其他 checker（A6 的 `check_inputs.py` 列、A7 EM、B6、B7、B9、B11）。
-- **EM**（A7）：用和 IR 相同的 max power pattern 電流做 EM checker，via 電流也要和 tech LEF 的上限比。
+- **EM**（A7）：用和 IR 相同的 max power pattern 電流做 EM checker，via 電流也要和 tech LEF 的上限比。範圍已由使用者決定為電源網路（strap 與 via，ff 與 ss corner），訊號線不在範圍（ADR-0021 決定 8）。
+- **clock 的繞線層**（A6）：新專案的 config 第一版就明確設 `RT_CLOCK_MIN_LAYER`（sky130 用 `met3`），並做 checker 確認 `resolved.json` 不是 null；本專案不設（ADR-0021 決定 8）。
 - **各 Phase 留下的量測問題**：
   - SRAM macro 內部的 IR（PSM 的 CSV 裡 SRAM 只有一個供電節點；是不是 PSM 的建模方式沒有查）；
   - clock skew 的 2.7 ns 報表算法（沒有讀 OpenSTA 原始碼確認）；

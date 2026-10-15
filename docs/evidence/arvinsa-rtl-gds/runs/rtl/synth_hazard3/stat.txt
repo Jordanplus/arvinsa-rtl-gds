@@ -1,0 +1,43 @@
+
+36. Printing statistics.
+
+=== soc_top ===
+
+        +----------Local Count, excluding submodules.
+        | 
+    14115 wires
+    22753 wire bits
+      838 public wires
+     9352 public wire bits
+       14 ports
+       95 port bits
+    15876 cells
+     1017   $_ANDNOT_
+     3049   $_AND_
+       44   $_DFFE_PN0N_
+      423   $_DFFE_PN0P_
+        5   $_DFFE_PN1N_
+        8   $_DFFE_PN1P_
+     1089   $_DFFE_PP_
+      204   $_DFF_PN0_
+        5   $_DFF_PN1_
+       65   $_DFF_P_
+     1799   $_MUX_
+     4873   $_NAND_
+      264   $_NOR_
+       82   $_NOT_
+      870   $_ORNOT_
+     1130   $_OR_
+        2   $_SDFFCE_PN0P_
+      192   $_SDFFE_PN0P_
+        3   $_SDFFE_PN1P_
+        1   $_SDFFE_PP0P_
+        9   $_SDFFE_PP1P_
+       33   $_SDFF_PN0_
+        2   $_SDFF_PN1_
+       35   $_SDFF_PP0_
+      279   $_XNOR_
+      369   $_XOR_
+       23   $scopeinfo
+        1   sky130_sram_2kbyte_1rw1r_32x512_8
+

@@ -1,0 +1,26 @@
+core-stock (L1a) summary
+date:        2026-10-11 02:55:08 +0800
+repo HEAD:   4713c5fbacb46ae5086d952b119545fd6f844876
+picorv32:    ef203c2b0a3fb793280f5114941416c425c5b461 (pinned ef203c2b0a3fb793280f5114941416c425c5b461)
+source:      git archive of the submodule, extracted to runs/core_stock/src
+overrides:   TOOLCHAIN_PREFIX=riscv64-elf-  (no other make-variable overrides)
+tools used:
+  iverilog:  Icarus Verilog version 13.0 (stable) (v13_0)
+  vvp:       Icarus Verilog runtime version 13.0 (stable) (v13_0)
+  yosys:     Yosys 0.69+post (git sha1 143eb14f9cc55d6f8927e68523b0c9d2166ed02c, Release, AppleClang clang++ 21.0.0.21000101)
+  gcc:       riscv64-elf-gcc (GCC) 16.1.0
+  objcopy:   GNU objcopy (GNU Binutils) 2.46.1
+  python3:   Python 3.14.6
+  make:      GNU Make 3.81
+  bash:      GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+toolchain.md: PASS (toolchain.md 一致：11 個本機工具、30 個釘版值)
+targets:
+  test            PASS rc=0     12s  'ALL TESTS PASSED.', DONE, 45/45 instruction tests OK, TRAP after 474601 cycles
+  test_ez         PASS rc=0      0s  derived check (upstream prints no success text): counter at 0x3fc counted 0..44, 45 writes, all reads consistent, no X/Z
+  test_wb         PASS rc=0     15s  'ALL TESTS PASSED.', DONE, 45/45 instruction tests OK, TRAP after 871658 cycles
+  test_synth      PASS rc=0    171s  'ALL TESTS PASSED.', DONE, 45/45 instruction tests OK, TRAP after 474601 cycles
+  test_rvf        N/A  rc=2      0s  rvfimon.v not in repo (riscv-formal is not in the repo or toolchain.md and needs a network clone); make[2]: *** No rule to make target `rvfimon.v', needed by `testbench_rvf.vvp'.  Stop.
+  submodule_clean PASS rc=0      0s  git -C third_party/picorv32 status --porcelain is empty, HEAD is still ef203c2b0a3f
+runtime:     198 s total
+counts:      PASS=5 FAIL=0 N/A=1 (required: test test_ez test_wb test_synth submodule_clean)
+core-stock: PASS

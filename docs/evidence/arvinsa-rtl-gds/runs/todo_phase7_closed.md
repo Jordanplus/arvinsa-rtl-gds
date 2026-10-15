@@ -1,0 +1,69 @@
+# Phase 7 待辦：Hazard3 SoC 扁平放進 Caravel user_project_wrapper，precheck PASS（ADR-0019）
+
+- [x] 1. 開始：查證（`docs/notes/caravel_precheck_phase7.md`）、使用者決定（ADR-0019）、建 skill `tapeout-precheck-caravel`
+  - [x] 1a. precheck 的 KLayout deck 檢查自產與 PDK 預建 SRAM（兩顆都 FEOL 3、BEOL 264）
+  - [x] 1b. 擬 ChipFoundry issue 稿（`runs/p7_chipfoundry_issue_draft.md`，使用者決定是否送出）
+  - [x] 1c. 安裝 colima、docker CLI
+- [x] 2. precheck 環境（lima VM，官方範例 19 分鐘，11 項 PASS）：colima（vz＋Rosetta）啟動、pull 官方 image、用官方空 wrapper 或範例跑一次，量時間與記憶體（限時 1 小時，不行改 GitHub Actions）
+- [x] 3. wrapper 的 RTL：`user_project_wrapper` 包 Hazard3 SoC，接 Wishbone（host write port）、GPIO（UART 等）、la；`user_defines.v` 的 GPIO 模式；RTL 模擬
+- [x] 4. 扁平 floorplan 與 LibreLane config（pin 規劃已核准，決定 13；邊界約束決定 14；clock 假設決定 15）：`FP_DEF_TEMPLATE`、core ring、PDN 接 SRAM、SRAM 位置、時脈來源與週期
+- [x] 5. harden wrapper；signoff 上限檔、golden、criteria review；既有 checker（soc-checks、IR、EQY、GL 模擬）移植到 wrapper
+  - [x] 5a. harden 入口與 checker 改成能用在 wrapper（`c7d3d2a`）
+  - [x] 5b. 探索 run p7_harden2：hold 兩輪修完（+0.298 ns）；第 41 步 RSZ-0074（analog_io inout）→ `RSZ_DONT_TOUCH_RX`、`inout_dont_touch`、P79（`1855c8d`）
+  - [x] 5c. p7_harden2 從第 41 步接續到 signoff：DRC（SRAM 外 0）、LVS、antenna、max_slew PASS；`disconnected` 改 wrapper 判法（`d1a7888`）；剩 1 條 Caravel 輸入 hold −0.071 ns
+  - [x] 5c2. hold：決定 17（12 corner＋GRT hold 餘量 0.2，`01d9352`；加 ff_100C 的 p7_harden3 壅塞失敗）；p7_harden4 驗證 hold 最差 +0.148 ns（`6287a50`）
+  - [x] 5d. Caravel 輸入 transition 超過 slew 上限：決定 16「內部照舊，邊界另判」，`check_soc.py max_slew`、P80（邊界超標的正式案例待 neg_pnr 支援 wrapper，步驟 8）
+  - [x] 5e. IR：Caravel 實際供電（決定 18，met4 4.8）、慢 corner 判（決定 19）、max power pattern 判 20 mV（決定 20）；`ir_caravel.py`、`make ir-caravel`、`fw/tests/maxpower`、錄波模式；p7_harden2 網表 met4 1.6 版 28.25 mV（預期 FAIL）
+    - [x] p7_harden5（met4 4.8 從頭跑）：timing／DRC／LVS／壅塞 OK；pattern IR 19.71 mV ≤ 20（餘量 0.29 mV）
+    - [x] 內部 net slew 0.779 ns（修完 slew 後重繞把 net 擠去繞路）：ADR-0019 決定 21，密度 55→50%（3d9ff4c）；drv-timing-closure 規則 13；正式 harden（5g）重驗 pattern IR
+    - [x] check_soc 迴圈變數蓋掉 SRAM 原點（cbf2c5e 已修）：步驟 8 neg_pnr 支援 wrapper 時，wrapper positive run 的 magic_drc 要 PASS
+    - [x] negative test：`ir_caravel.py`（VCD 沒標註、上限在中間、缺 VCD）、`--record-window`（plusarg 撞名）→ 步驟 8 的 neg 整合
+    - [x] soc_top 也改用 maxpower pattern 判 IR（vcd_window 讀 soc_top 的 gpio_out、harden 後的 pattern IR）→ 步驟 8（使用者 2026-10-13：「那我們還是採用pattern 評估做法」）
+  - [x] 5f. signoff 上限檔（f721cff）；golden 用正式 harden 直接建（7e55852，ADR-0019 決定 22，使用者 2026-10-13「第一次正式 harden 直接建 (建議)」）；誤差沿用 hazard3，步驟 8 校正
+  - [x] 5g. 正式 harden（f721cff）：只缺 golden 那列 FAIL，criteria review 寫好；查證（guard 關）pattern IR 19.58 mV PASS
+    - [x] 查證（guard 關）：gate-level 模擬 16/16 PASS；EQY 1/16149 誤判 → 使用者選「沒證明時自動 amend 重試一次」（f4ea9de，ADR-0019 決定 23；第一版併入 flip-flop 變空洞證明，negative test 抓到後修正）
+    - [x] 確認 harden（f4ea9de，log runs/p7_harden_confirm.log；正式 run 另存 runs/p7_formal_signoff）→ 必須 harden-soc PASS → criteria review → 正式 eqy-caravel、gl-caravel、ir-caravel
+      - 關機前的狀態（2026-10-13 20:50）：確認 harden PASS（240 分鐘，golden 455 個逐值相同），criteria_review.md 已寫。開機後依序跑正式 make eqy-caravel、gl-caravel、ir-caravel（2026-10-13 開機後已開跑，log runs/p7_formal_{eqy,gl,ir}.log，結果彙總 runs/p7_formal_three.txt）；跑完前不能 commit（run guard 要求 harden 的 commit = HEAD = f4ea9de）。三項跑完後 git stash pop（stash@{0}：golden README 與 ADR 決定 22 的路徑修正 + 確認 harden 結果），補上正式三項的結果一起提交
+    - [x] 正式 eqy-caravel（16149/16149，amend 重試 1 個）、gl-caravel（16/16）、ir-caravel（19.58 mV）全部 PASS；golden README／ADR 決定 22 路徑修正一起提交（9e37d79）
+    - [x] 步驟 8：完整 neg-eqy（新案例 nand2_comb_to_nor2、nand2_flop_to_nor2，三個設計）
+    - [x] 步驟 8 待查：wrapper hold skew −3.6 ns（soc_top −1.5）葉端 latency 差 2 ns 的成因；pattern IR 餘量只有 0.42 mV
+- [x] 6. precheck 判定 checker（決定 5：兩條規則比對 PDK 預建 macro）與 negative test
+  - [x] 固定 deck 版本（`make precheck-deck`，cf-precheck 1.3.7 wheel／deck sha256）
+  - [x] `signoff/precheck/`：check_precheck.py、rdb_flatten.py（展開到相對 bitcell array 的位置；兩顆 macro 單獨檢查 16900／50184 個位置完全相同）、run_deck.py
+  - [x] `make neg-precheck` 24/24（268 s）＋ regress 整合、env-check、toolchain.md
+  - [x] 獨立 agent 審查：補 gds.info、版本、無座標值項目、比對基準來源四項檢查與 10 個案例
+  - [x] 本機預覽：wrapper GDS FEOL 3／BEOL 264，checker PASS（runs/p7_precheck_preview）；提交 1f9d3d9
+  - [x] 文件：ADR-0019 決定 5 的實作、skill 規則 3 防復發、README skill 一節、流程文件（審查後再核對）
+- [x] 7. 官方 image 跑 precheck，記錄版本與 digest（正式 PASS，550869c）
+  - [x] 7a. 查證用（f4ea9de，guard 關掉）：8 項 PASS、FEOL 符合；BEOL/LVS/OEB OOM、li1 密度 75%；比對基準另有 nsdm/psdm（筆記第 10 節）
+  - [x] 7b. 決定 24（使用者 2026-10-14「都選建議的」）：ef_decap_12＋fill、比對基準只比允許規則、VM 16 GiB；neg-precheck 25 案例
+  - [x] 7c. 重新 harden（7eff65a）：只 golden FAIL，差異都來自 fill；li1 39.9%；golden 更新 550869c
+  - [x] 7d. 查證用 precheck（7eff65a 版圖）PASS；確認 harden（550869c）PASS，golden 455 全同
+  - [x] 7e. 正式 eqy 16149/16149、gl 16/16、ir 19.56 mV、precheck PASS（550869c）；文件提交
+- [~] 8. regress 整合、乾淨 worktree 兩輪、phase7 exit review（決定 25：三條 regress、wrapper 只植入特有判斷、precheck 進 regress）
+  - [x] 8a. hold skew 成因（agent）：metric 多出的約 2.7 ns 是報表把 source latency 差與共同路徑 derate 算成扣分；真正多的是 wb_clk_i→root 1.9 ns（runs/p7_skew_analysis/）
+  - [x] 8b. soc_top pattern IR：vcd_window 改讀 tb_soc.gpio_out、ir_pattern.py、make ir-soc（fixture 4.67 mV）
+  - [x] 8c. neg-ir（soc 9/9；caravel 待 results.json）、run_gl_soc --plusarg
+  - [x] 8d. neg_pnr --cpu caravel 8/8（含 C00 magic_drc PASS）、neg_eqy／neg_gl wrapper 案例、neg_run_guard 57/57
+  - [x] 8e. regress-caravel 清單、PRECHECK_DIR 依 checkout、env-check 查 VM
+  - [x] 8f. 預跑：hazard3 neg_pnr（fixture）、neg-ir caravel、neg-eqy caravel、neg-gl caravel
+  - [x] 8g. 文件（skill、README、流程、ADR 實作）→ commit → 三個乾淨 worktree
+  - [~] 8h. 三個乾淨 worktree regress（84fe505：hazard3 30/30 PASS；caravel、picorv32 進行中）→ golden 誤差、獨立審查、exit review
+  - [x] 8i. 獨立審查：文件核對 110 列（錯 5、誤導 23，已修，未提交）；checker 漏洞 H1–H8＋slew 缺口（runs/p7_review/）
+  - [~] 8j. 決定 26（使用者 2026-10-14）：全部修正、三條 regress 重跑
+    - [x] H1 pin-plan 核准：ADR 要記 digest、hook 擋 [approval] 編輯、neg 案例
+    - [x] H2 IR 錄波週期 = CLOCK_PERIOD（VCD 量）、Makefile clk-half 從 config、neg period
+    - [x] H3 ir_caravel／ir_pattern 呼叫 run guard、三個 window 齊全、neg_run_guard 加兩支
+    - [x] H4 drop() 擋 NaN、neg nan_drop
+    - [x] H5 judged_by 必須是存在且在 regress 清單裡的 make target、P81 子案例
+    - [x] H6 precheck 時間戳換 UTC、neg results_after_tz
+    - [x] H7 precheck 要求來源檔 run_guard PASS、非 verification、GDS sha1、--verification 旗標、neg 兩例
+    - [x] H8 inout_dont_touch 每個 bit、P79 子案例
+    - [x] S36 Caravel 輸入腳位 slew 與 SDC transition 比對（check_soc）、C80d
+    - [~] positive control：p7close_h3（check_soc/signoff/inputs PASS、neg-pnr 81/82→P00 是 defines 蓋掉 bug，修後 P00/P79/P80/P81 4/4、neg-ir-soc 12/12、neg-run-guard 65/65、neg-pin-plan 26/26）；wrapper（check_inputs IR PASS、neg-ir caravel 10/10）；neg-precheck 31/31；待 p7close_caravel regress 完 → 套 patch 跑 neg-pnr --cpu caravel（C00、C80d）→ commit → 三個 worktree 重跑
+  - [x] 8k. 金屬密度：ChipFoundry fill 規定查證（agent）→ 使用者選「加一個限時試跑預估 fill 後密度」
+  - [ ] 8l. 第二輪 regress 後：generate_fill.py＋check_density.py 對 wrapper 試跑（限時 2 小時）
+  - [x] 8m. 流程回顧（三個 agent）→ docs/notes/flow_retro/（19 條）→ ADR-0020（使用者：全部 19 條、checker 留下一個專案、登記表現在建）
+  - [x] 8n. 19 條寫進 arvinsa-rtl-gds-flow.md 與 skill（agent）
+  - [x] 8o. 放寬與補償登記表 docs/relaxation_register.md（agent）
+  - [ ] 8p. 記錄：H8 修正時新變數 defines 蓋掉 resolved 列的 VERILOG_DEFINES（Phase 6 `files` 同類，第二次），p7close_h3 的 positive control 抓到；寫進 exit review「本階段找到並修正的 checker 問題」與 signoff-checker-qualification 經驗紀錄（等寫回 agent 完成再改 skill）

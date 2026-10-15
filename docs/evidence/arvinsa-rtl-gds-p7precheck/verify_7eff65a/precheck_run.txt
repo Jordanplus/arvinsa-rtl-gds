@@ -1,0 +1,7 @@
+start 2026-10-14 11:38:24
+image chipfoundry/mpw_precheck@sha256:f1523bcb7c959c80f2d7d6dded0c4bcf3483d84b6ff2437f49754e4ec53eac84
+pdk ciel/sky130/versions/3e0e31dcce8519a7dbb82590346db16d91b7244f/sky130A
+cf-precheck 1.3.7
+sram_ref feol rc=0 items=13
+sram_ref beol rc=0 items=264
+rc=2 49 min end 2026-10-14 12:28:11

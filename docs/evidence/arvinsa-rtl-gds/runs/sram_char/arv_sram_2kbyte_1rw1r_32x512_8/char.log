@@ -1,0 +1,7 @@
+Thu Oct  8 23:59:39 CST 2026
+characterize: PASS 1 PVT(s), 46 simulations -> ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/char.json
+tt rc=0
+Fri Oct  9 01:34:40 CST 2026
+characterize: PASS 4 PVT(s), 158 simulations -> ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/char.json
+others rc=0
+Fri Oct  9 06:10:24 CST 2026

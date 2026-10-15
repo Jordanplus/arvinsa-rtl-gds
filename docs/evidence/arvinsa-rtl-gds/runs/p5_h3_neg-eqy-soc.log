@@ -1,0 +1,16 @@
+python3 signoff/eqy/neg_eqy.py --design soc_top_hazard3
+  [PASS] din5_stuck0: eqy FAIL as expected (1/16222 partitions not proved; 1 bit(s) mapped to a constant), at the injection (sram_din0[5])
+  [PASS] csb0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_16128_)
+  [PASS] clk0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches; clock source differs: sram0), at the injection (clk, neg_eqy_clk0_inv, sram0)
+  [PASS] host_rdata7_inverted: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_21024_, output90)
+  [PASS] mux_swap: eqy FAIL as expected (partition step refused: conflicting name matches), at the injection (_10613_)
+  [PASS] nand2_to_nor2: eqy FAIL as expected (1/16221 partitions not proved), at the injection (_10000_)
+  [PASS] flop_q_inverted: eqy FAIL as expected (partition step refused: conflicting name matches; sequential cells differ: _19844_), at the injection (_12847_, _19844_)
+  [PASS] flop_async_reset: eqy FAIL as expected (sequential cells differ: _19844_), at the injection (_19844_)
+  [PASS] flop_clk_inverted: eqy FAIL as expected (clock source differs: _19844_), at the injection (_19844_)
+  [PASS] mcycleh13_stuck1: eqy FAIL as expected (1/16219 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_21837_)
+  [PASS] minstreth8_stuck1: eqy FAIL as expected (1/16219 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_21768_)
+  [PASS] irq0_stuck0: eqy FAIL as expected (1/16220 partitions not proved; 1 bit(s) mapped to a constant), at the injection (_21525_)
+  [PASS] reset_b_tied1: eqy FAIL as expected (1 bit(s) mapped to a constant; partition step refused: conflicting name matches), at the injection (_21925_)
+  [PASS] location check: 144 ordered pairs of cases on different instances, none accepts the other's FAIL names
+neg-eqy: PASS 13/13 caught (1454 s)

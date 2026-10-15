@@ -1,0 +1,1 @@
+sram-drc-alone: PASS (~/claude_prjs/arvinsa-rtl-gds-p6close_pico/runs/soc_top_signoff/sram_drc_alone/step/reports/drc.magic.rpt)

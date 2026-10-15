@@ -1,0 +1,15 @@
+  [PASS] SYNTH_PARAMETERS used by the run (~/claude_prjs/arvinsa-rtl-gds-p7close2_pico/runs/picorv32_core/resolved.json) == config.json
+  [PASS] BARREL_SHIFTER: config.json=1 soc_top.u_cpu=1
+  [PASS] CATCH_ILLINSN: config.json=1 soc_top.u_cpu=1
+  [PASS] CATCH_MISALIGN: config.json=1 soc_top.u_cpu=1
+  [PASS] COMPRESSED_ISA: config.json=1 soc_top.u_cpu=1
+  [PASS] ENABLE_DIV: config.json=1 soc_top.u_cpu=1
+  [PASS] ENABLE_IRQ: config.json=1 soc_top.u_cpu=1
+  [PASS] ENABLE_IRQ_QREGS: config.json=1 soc_top.u_cpu=1
+  [PASS] ENABLE_IRQ_TIMER: config.json=1 soc_top.u_cpu=1
+  [PASS] ENABLE_MUL: config.json=1 soc_top.u_cpu=1
+  [PASS] ENABLE_PCPI: config.json=0 soc_top.u_cpu=0
+  [PASS] ENABLE_TRACE: config.json=0 soc_top.u_cpu=0
+  [PASS] PROGADDR_IRQ: config.json=16 soc_top.u_cpu=16
+  [PASS] PROGADDR_RESET: config.json=65536 soc_top.u_cpu=65536
+cpu-params: PASS

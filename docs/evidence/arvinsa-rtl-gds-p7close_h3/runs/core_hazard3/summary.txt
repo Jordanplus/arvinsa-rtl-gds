@@ -1,0 +1,126 @@
+toolchain ~/claude_prjs/arvinsa-rtl-gds/.tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-gcc: riscv-none-elf-gcc (xPack GNU RISC-V Embedded GCC arm64) 15.2.0
+rv32mi-p-breakpoint rc=0
+rv32mi-p-csr rc=0
+rv32mi-p-illegal rc=0
+rv32mi-p-instret_overflow rc=0
+rv32mi-p-lh-misaligned rc=0
+rv32mi-p-lw-misaligned rc=0
+rv32mi-p-ma_addr rc=0
+rv32mi-p-ma_fetch rc=0
+rv32mi-p-mcsr rc=0
+rv32mi-p-pmpaddr rc=3 UNSUPPORTED: PMP_REGIONS = 0 (no PMP)
+rv32mi-p-sbreak rc=0
+rv32mi-p-scall rc=0
+rv32mi-p-sh-misaligned rc=0
+rv32mi-p-shamt rc=0
+rv32mi-p-sw-misaligned rc=0
+rv32mi-p-zicntr rc=0
+rv32uc-p-rvc rc=0
+rv32ui-p-add rc=0
+rv32ui-p-addi rc=0
+rv32ui-p-and rc=0
+rv32ui-p-andi rc=0
+rv32ui-p-auipc rc=0
+rv32ui-p-beq rc=0
+rv32ui-p-bge rc=0
+rv32ui-p-bgeu rc=0
+rv32ui-p-blt rc=0
+rv32ui-p-bltu rc=0
+rv32ui-p-bne rc=0
+rv32ui-p-fence_i rc=255 UNSUPPORTED: EXTENSION_ZIFENCEI = 0 (no fence.i)
+rv32ui-p-jal rc=0
+rv32ui-p-jalr rc=0
+rv32ui-p-lb rc=0
+rv32ui-p-lbu rc=0
+rv32ui-p-ld_st rc=0
+rv32ui-p-lh rc=0
+rv32ui-p-lhu rc=0
+rv32ui-p-lui rc=0
+rv32ui-p-lw rc=0
+rv32ui-p-ma_data rc=0
+rv32ui-p-or rc=0
+rv32ui-p-ori rc=0
+rv32ui-p-sb rc=0
+rv32ui-p-sh rc=0
+rv32ui-p-simple rc=0
+rv32ui-p-sll rc=0
+rv32ui-p-slli rc=0
+rv32ui-p-slt rc=0
+rv32ui-p-slti rc=0
+rv32ui-p-sltiu rc=0
+rv32ui-p-sltu rc=0
+rv32ui-p-sra rc=0
+rv32ui-p-srai rc=0
+rv32ui-p-srl rc=0
+rv32ui-p-srli rc=0
+rv32ui-p-st_ld rc=0
+rv32ui-p-sub rc=0
+rv32ui-p-sw rc=0
+rv32ui-p-xor rc=0
+rv32ui-p-xori rc=0
+rv32um-p-div rc=0
+rv32um-p-divu rc=0
+rv32um-p-mul rc=0
+rv32um-p-mulh rc=0
+rv32um-p-mulhsu rc=0
+rv32um-p-mulhu rc=0
+rv32um-p-rem rc=0
+rv32um-p-remu rc=0
+negative EXTENSION_M=0 rv32um-p-div rc=255
+negative EXTENSION_M=0 rv32um-p-divu rc=255
+negative EXTENSION_M=0 rv32um-p-mul rc=255
+negative EXTENSION_M=0 rv32um-p-mulh rc=255
+negative EXTENSION_M=0 rv32um-p-mulhsu rc=255
+negative EXTENSION_M=0 rv32um-p-mulhu rc=255
+negative EXTENSION_M=0 rv32um-p-rem rc=255
+negative EXTENSION_M=0 rv32um-p-remu rc=255
+trace rv32uc-p-rvc: compare_trace: PASS 179 instructions
+trace rv32ui-p-add: compare_trace: PASS 427 instructions
+trace rv32ui-p-addi: compare_trace: PASS 204 instructions
+trace rv32ui-p-and: compare_trace: PASS 447 instructions
+trace rv32ui-p-andi: compare_trace: PASS 160 instructions
+trace rv32ui-p-auipc: compare_trace: PASS 21 instructions
+trace rv32ui-p-beq: compare_trace: PASS 253 instructions
+trace rv32ui-p-bge: compare_trace: PASS 271 instructions
+trace rv32ui-p-bgeu: compare_trace: PASS 296 instructions
+trace rv32ui-p-blt: compare_trace: PASS 253 instructions
+trace rv32ui-p-bltu: compare_trace: PASS 278 instructions
+trace rv32ui-p-bne: compare_trace: PASS 253 instructions
+trace rv32ui-p-jal: compare_trace: PASS 17 instructions
+trace rv32ui-p-jalr: compare_trace: PASS 77 instructions
+trace rv32ui-p-lb: compare_trace: PASS 215 instructions
+trace rv32ui-p-lbu: compare_trace: PASS 215 instructions
+trace rv32ui-p-ld_st: compare_trace: PASS 925 instructions
+trace rv32ui-p-lh: compare_trace: PASS 231 instructions
+trace rv32ui-p-lhu: compare_trace: PASS 240 instructions
+trace rv32ui-p-lui: compare_trace: PASS 27 instructions
+trace rv32ui-p-lw: compare_trace: PASS 245 instructions
+trace rv32ui-p-or: compare_trace: PASS 450 instructions
+trace rv32ui-p-ori: compare_trace: PASS 167 instructions
+trace rv32ui-p-sb: compare_trace: PASS 416 instructions
+trace rv32ui-p-sh: compare_trace: PASS 469 instructions
+trace rv32ui-p-sll: compare_trace: PASS 455 instructions
+trace rv32ui-p-slli: compare_trace: PASS 203 instructions
+trace rv32ui-p-slt: compare_trace: PASS 421 instructions
+trace rv32ui-p-slti: compare_trace: PASS 199 instructions
+trace rv32ui-p-sltiu: compare_trace: PASS 199 instructions
+trace rv32ui-p-sltu: compare_trace: PASS 421 instructions
+trace rv32ui-p-sra: compare_trace: PASS 474 instructions
+trace rv32ui-p-srai: compare_trace: PASS 218 instructions
+trace rv32ui-p-srl: compare_trace: PASS 468 instructions
+trace rv32ui-p-srli: compare_trace: PASS 212 instructions
+trace rv32ui-p-st_ld: compare_trace: PASS 445 instructions
+trace rv32ui-p-sub: compare_trace: PASS 419 instructions
+trace rv32ui-p-sw: compare_trace: PASS 476 instructions
+trace rv32ui-p-xor: compare_trace: PASS 449 instructions
+trace rv32ui-p-xori: compare_trace: PASS 169 instructions
+trace rv32um-p-div: compare_trace: PASS 58 instructions
+trace rv32um-p-divu: compare_trace: PASS 59 instructions
+trace rv32um-p-mul: compare_trace: PASS 421 instructions
+trace rv32um-p-mulh: compare_trace: PASS 421 instructions
+trace rv32um-p-mulhsu: compare_trace: PASS 421 instructions
+trace rv32um-p-mulhu: compare_trace: PASS 421 instructions
+trace rv32um-p-rem: compare_trace: PASS 58 instructions
+trace rv32um-p-remu: compare_trace: PASS 58 instructions
+trace rv32ui-p-simple: not compared (no test body (passes at once))
+trace rv32ui-p-ma_data: not compared (misaligned data: implementation-defined, the test accepts a trap or an access)

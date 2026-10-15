@@ -1,0 +1,30 @@
+python3 ip/sram/char/neg_char.py
+  [PASS] N1: settle_max 2.821 -> 3.519 ns (+0.698, needs >= 0.2)
+  [PASS] N2: read check: [(5, 'r508', 'expected 0xa5a55a5a, wrong bits 31:0.00V'), (10, 'r508', 'expected 0xa5a55a5a, wrong bits 31:0.00V')]
+  [PASS] N3: tt_025C_1v80 din_setup_rise: passed everywhere down to -1.000 ns; check the lane or BRACKET
+  [PASS] N4: trim: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n4_missing_cell.spice: kept 1264, dropped 15119; expected kept 1264 of 16384 bitcells
+  [PASS] N5: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n5.json tt_025C_1v80 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n5.json ss_100C_1v60 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n5.json ff_n40C_1v95 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n5.json ss_n40C_1v60 lacks pulse
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n5.json ff_100C_1v95 lacks pulse
+  [PASS] N6: gen_char_lib: STALE ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n6_lib/sky130_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib (regenerate: python3 ~/claude_prjs/arvinsa-rtl-gds/ip/sram/char/gen_char_lib.py ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n6.json ~/.ciel/sky130A/libs.ref/sky130_sram_macros/lib/sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n6_lib)
+  [PASS] N7: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n7.json ss_100C_1v60 lacks a PLACEHOLDER_FROM entry (it does not read correctly)
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n7.json ss_n40C_1v60 lacks a characterized PLACEHOLDER_FROM PVT (ss_100C_1v60)
+  [PASS] N8: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n8.json has PVTs ['ff_n40C_1v95', 'ss_100C_1v60', 'ss_n40C_1v60', 'tt_025C_1v80'], expected exactly ['ff_100C_1v95', 'ff_n40C_1v95', 'ss_100C_1v60', 'ss_n40C_1v60', 'tt_025C_1v80']
+  [PASS] N9: gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n9.json ss_100C_1v60 is the record of ff_100C_1v95 (ff, 1.95 V, 100.0 C), not of ss_100C_1v60 ('ss', 1.6, 100.0)
+gen_char_lib: FAIL - ~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n9.json ff_100C
+  [PASS] N10: 6/6 fields reported
+  [PASS] N11: 4/4 reported
+  [PASS] N12: positive control PASS and 5/5 formula errors reported
+  [PASS] N13: 2/2 template variants reported
+  [PASS] N14: positive control PASS and 3/3 confirm.json faults reported
+  [PASS] N15: error log not reused True, short wave not reused True, read check on it raises True
+  [PASS] N16: rc 1, characterize: FAIL ff_100C_1v95: injected failure (~/claude_prjs/arvinsa-rtl-gds/runs/sram_char/neg/n16_char.json not changed; finished simulati; out.json unchanged: True
+  [PASS] N17: positive control PASS and 2/2 power.json faults reported
+  [PASS] N18: positive control PASS and 3/3 power faults reported
+  [PASS] N19: every energy, the clk1 share, the dout load share, a ramping static current and the standby leakage recovered within 1 %
+  [PASS] N20: positive controls PASS and 4/4 unsettled leakage windows and the missing bitcell reported
+  [PASS] N21: default gmin 49.8 pW vs 1.19 pW at 1e-18 reported; CELL_GMIN 1.19 pW PASS
+  [PASS] N22: positive control PASS; the large corrector on p and the floating corrector on X0/n1 reported
+neg-char: PASS 22/22

@@ -1,0 +1,2 @@
+SRAM_CHAR_MACRO=arv_sram_2kbyte_1rw1r_32x512_8 SRAM_CHAR_NETLIST=~/claude_prjs/arvinsa-rtl-gds/ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/openram/arv_sram_2kbyte_1rw1r_32x512_8.sp python3 ip/sram/char/power.py ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/char/power.json 
+make: *** [openram-power] Terminated: 15

@@ -1,0 +1,10 @@
+python3 signoff/eqy/run_eqy.py --design user_project_wrapper
+[eqy] user_project_wrapper: gold runs/user_project_wrapper/06-yosys-synthesis/user_project_wrapper.nl.v
+[eqy] user_project_wrapper: gate runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v
+[eqy] user_project_wrapper: 3 cell(s) with swapped equivalent inputs, pin names left out of the name matching: _10121_.B, _10121_.C, _10121_.D, _10130_.C, _10130_.D, _10136_.A
+[eqy] user_project_wrapper: running EQY (10 jobs; log runs/eqy_user_project_wrapper/eqy_run.log)
+[eqy] user_project_wrapper: 1 partition(s) not proved (user_project_wrapper._10122_.B); retrying once with 2 amend rule(s) (the partitions driving their inputs added)
+[eqy] user_project_wrapper: running EQY (10 jobs; log runs/eqy_user_project_wrapper/eqy_run.log)
+  [INFO] user_project_wrapper: 1 partition(s) proved only with the amend retry: user_project_wrapper._10122_.B (rules in summary.json, first round in eqy_run_round1.log)
+  [PASS] user_project_wrapper: 16149/16149 partitions proved equivalent, 88708 matched names, 2238 sequential cells identical in function, 2240 clock pins on the same source (wb_clk_i), 597.6 s
+eqy: PASS

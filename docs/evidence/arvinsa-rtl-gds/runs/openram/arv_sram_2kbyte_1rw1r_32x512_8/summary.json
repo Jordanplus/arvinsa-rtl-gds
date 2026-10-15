@@ -1,0 +1,42 @@
+{
+  "result": "PASS",
+  "problems": [],
+  "minutes": 45.8,
+  "config": "ip/sram/openram/configs/arv_sram_2kbyte_1rw1r_32x512_8.py",
+  "config_sha256": "fab161175c3bd4b053d770e8921b8464849dc8b93ed7f2b2597b7549747dc317",
+  "openram_commit": "3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8",
+  "openram_patches": [
+    {
+      "file": "0001-sense-amp-input-precharge.patch",
+      "sha256": "8eb4c4a7868decb373c4303c1ce52ff535e74d42e228f787918e32de4126a32e"
+    },
+    {
+      "file": "0002-sky130-dnwell-moat-overlap.patch",
+      "sha256": "2ae2b313e509b2e13c2d811e6cd47d58bbec30b5207dd12dd26511254f7fa004"
+    },
+    {
+      "file": "0003-col-addr-dff-m2-gap.patch",
+      "sha256": "b396be94af98d5a034625c87fcfa1c2495ccd118ce8dfc9a8c7eeb3a968c92bd"
+    },
+    {
+      "file": "0004-pgate-ptap-contact-height.patch",
+      "sha256": "3713c88907124a637f4606d89918dd6d1c1bee2b1e9763e7370a0eefd5ccf73e"
+    }
+  ],
+  "sky130_fd_bd_sram_commit": "fc63b12883b4bf458ee8c756ba64c37063e1ffb9",
+  "openram_pdk_hash": "e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066",
+  "pythonhashseed": 0,
+  "drc_errors": 0,
+  "drc_max": 0,
+  "lvs": "Circuits match uniquely.",
+  "outputs_sha256": {
+    "arv_sram_2kbyte_1rw1r_32x512_8.gds": "7154d9238d8ed48a0a1fe675aeeaef1f9a2702f4979b2d5df3f327b0400cdf41",
+    "arv_sram_2kbyte_1rw1r_32x512_8.lef": "f24b906847e91849898777064cab01889498462dd7cc069114ae082cc593371f",
+    "arv_sram_2kbyte_1rw1r_32x512_8.sp": "92b732500f75e685268612e55d032b326bd6d3d384d060b0497cb34ec7dae1d3",
+    "arv_sram_2kbyte_1rw1r_32x512_8.lvs.sp": "e1181faba7a0f232a41fce03f8092f1cabbac44dffed9c2b8a2fc28721920479",
+    "arv_sram_2kbyte_1rw1r_32x512_8.v": "966a4fccd7e8f8236a6f7104a830be88ce45191edfe6d76c0b96e0b7fe5e177a",
+    "arv_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib": "9a3d4d94223aeb768ecce62ec09205fdb20324a15ef50fee281730fab83d5686"
+  },
+  "openram_rc": 0,
+  "spice_content_sha256": "a29a77581d77639c0a5bb1f01f6c5e0ec5a76b17fca0886273dbdf9d8ae27c6d"
+}

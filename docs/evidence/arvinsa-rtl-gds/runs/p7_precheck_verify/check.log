@@ -1,0 +1,12 @@
+[precheck] cf-precheck 1.3.7, 2026-10-13T23:47:42.891491+00:00, results ../arvinsa-rtl-gds-p7precheck/user_project_wrapper/precheck_results/13_OCT_2026___22_25_48
+  [INFO] project from runs/user_project_wrapper (commit f4ea9deed763fa4665b913e54fd9072f6a686126, HEAD then 1f9d3d95a9099f5f4567bbe06bf47d7d0874ae03): verification, run guard skipped
+  [PASS] cf-precheck 1.3.7 (pinned 1.3.7; another version: read its deck and checks, then update env/versions.mk)
+  [PASS] checks: 13 expected
+  [PASS] magic_drc: skip (allowed ['pass', 'skip'])
+  [FAIL] 11 checks other than klayout_feol/klayout_beol: not pass {'klayout_met_min_ca_density': 'fail', 'lvs': 'fail', 'oeb': 'fail'}
+  [PASS] gds/user_project_wrapper.gds sha1 a7d766550a0e51a74c6c24e049a4f8fa79581280 = the checked file's a7d766550a0e51a74c6c24e049a4f8fa79581280
+  [PASS] the results directory checked this GDS (logs/gds.info: user_project_wrapper.gds: a7d766550a0e51a74c6c24e049a4f8fa79581280)
+  [PASS] project.json written 2026-10-13 23:47:42.891491, after the results directory's start 2026-10-13 22:25:48
+  [PASS] klayout_feol: fail, 3 item(s) = 16900 marker(s), all MR_licon.SP.6 inside arv_sram_2kbyte_1rw1r_32x512_8 at places the PDK macro alone also has (16900 there); the reference's other rule(s), not compared: {'MR_nsdm.WID.2': 3, 'MR_psdm.SP.1': 6, 'MR_psdm.WID.2': 1}
+  [FAIL] klayout_beol: fail, ../arvinsa-rtl-gds-p7precheck/user_project_wrapper/precheck_results/13_OCT_2026___22_25_48/outputs/reports/klayout_beol_check.xml not found
+precheck: FAIL 2 line(s) FAIL

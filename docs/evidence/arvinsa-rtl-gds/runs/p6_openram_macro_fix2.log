@@ -1,0 +1,13 @@
+python3 ip/sram/openram/gen_macro.py ip/sram/openram/configs/arv_sram_2kbyte_1rw1r_32x512_8.py runs/openram/arv_sram_2kbyte_1rw1r_32x512_8 --drc-max 0
+gen_macro: moved the previous ~/claude_prjs/arvinsa-rtl-gds/runs/openram/arv_sram_2kbyte_1rw1r_32x512_8 to ~/claude_prjs/arvinsa-rtl-gds/runs/openram/arv_sram_2kbyte_1rw1r_32x512_8.old-20261010-162152
+gen_macro: PASS - arv_sram_2kbyte_1rw1r_32x512_8, 45.8 min, DRC 0, LVS Circuits match uniquely. (~/claude_prjs/arvinsa-rtl-gds/runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/summary.json)
+rc=0; \
+	python3 scripts/check_macro_views.py --name arv_sram_2kbyte_1rw1r_32x512_8 --lef runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro/arv_sram_2kbyte_1rw1r_32x512_8.lef --lib runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro/arv_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib \
+	  --verilog runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro/arv_sram_2kbyte_1rw1r_32x512_8.v --spice runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro/arv_sram_2kbyte_1rw1r_32x512_8.sp --gds runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro/arv_sram_2kbyte_1rw1r_32x512_8.gds --dbu 2000 --no-foreign --json runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/views.json || rc=1; \
+	python3 ip/sram/openram/macro_drc.py runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro/arv_sram_2kbyte_1rw1r_32x512_8.gds arv_sram_2kbyte_1rw1r_32x512_8 runs/openram/arv_sram_2kbyte_1rw1r_32x512_8/macro_drc.json || rc=1; \
+	exit $rc
+check_macro_views: FAIL - arv_sram_2kbyte_1rw1r_32x512_8: arv_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib: internal_power 1.036316e+11 outside (0, 1000]
+macro_drc: PASS - arv_sram_2kbyte_1rw1r_32x512_8: 2234528 errors, 29 rule categories (baseline 2235078, 30)
+make: *** [openram-macro] Error 1
+make openram-macro  2914.27s user 82.31s system 97% cpu 51:12.95 total
+rc=2

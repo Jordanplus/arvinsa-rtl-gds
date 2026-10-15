@@ -1,0 +1,47 @@
+[gl-soc] netlist ~/claude_prjs/arvinsa-rtl-gds/runs/dev5/final/nl/soc_top.nl.v
+[gl-soc] compile tb_soc with the RTL and gate-level SoC (Icarus, -DGL_LOCKSTEP -DFUNCTIONAL -DUNIT_DELAY=#1)
+[gl-soc] run 15 tests, 3 in parallel
+  [PASS] hello: 3466 cycles, 3466 RTL/GL comparisons, 12.06 s
+  [FAIL] memtest: failing checkers: sim_error; [CHK:sim_error] FAIL wall-clock timeout: simulation killed after 1370 s; [CHK:sim_error] FAIL runs/gl_dev5/icarus/memtest/tb_result.txt missing or incomplete: simulation did not reach the end; fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [PASS] irq: 6967 cycles, 6967 RTL/GL comparisons, 36.09 s
+  [PASS] muldiv: 17824 cycles, 17824 RTL/GL comparisons, 94.9 s
+  [PASS] uart_echo: 6555 cycles, 6555 RTL/GL comparisons, 48.16 s
+  [PASS] bootrom_march: 112280 cycles, 112280 RTL/GL comparisons, 246.98 s
+  [PASS] boot_uart_hello: 62838 cycles, 62838 RTL/GL comparisons, 154.28 s
+  [PASS] boot_host_hello: 3902 cycles, 3902 RTL/GL comparisons, 14.93 s
+  [FAIL] boot_uart_max: failing checkers: sim_error; [CHK:sim_error] FAIL wall-clock timeout: simulation killed after 620 s; [CHK:sim_error] FAIL runs/gl_dev5/icarus/boot_uart_max/tb_result.txt missing or incomplete: simulation did not reach the end; fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [PASS] regs: 19100 cycles, 19100 RTL/GL comparisons, 48.65 s
+  [PASS] unmapped: 10653 cycles, 10653 RTL/GL comparisons, 82.0 s
+  [FAIL] uart_burst: failing checkers: sim_error; [CHK:sim_error] FAIL wall-clock timeout: simulation killed after 170 s; [CHK:sim_error] FAIL runs/gl_dev5/icarus/uart_burst/tb_result.txt missing or incomplete: simulation did not reach the end; fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [PASS] reset_store: 8602 cycles, 8602 RTL/GL comparisons, 30.81 s
+  [PASS] counters: 8598 cycles, 8598 RTL/GL comparisons, 33.22 s
+  [PASS] buserr: 5780 cycles, 5780 RTL/GL comparisons, 29.8 s
+gl-soc: FAIL 12/15 tests passed (1371.7 s)
+[gl-soc-powered] netlist ~/claude_prjs/arvinsa-rtl-gds/runs/dev5/final/pnl/soc_top.pnl.v
+[gl-soc-powered] compile tb_soc with the RTL and gate-level SoC (Icarus, -DGL_LOCKSTEP -DFUNCTIONAL -DUNIT_DELAY=#1 -DUSE_POWER_PINS)
+[gl-soc-powered] run 15 tests, 3 in parallel
+  [PASS] hello: 3466 cycles, 3466 RTL/GL comparisons, 10.01 s
+  [PASS] memtest: 871219 cycles, 871219 RTL/GL comparisons, 1004.34 s
+  [PASS] irq: 6967 cycles, 6967 RTL/GL comparisons, 17.71 s
+  [PASS] muldiv: 17824 cycles, 17824 RTL/GL comparisons, 35.26 s
+  [PASS] uart_echo: 6555 cycles, 6555 RTL/GL comparisons, 16.96 s
+  [PASS] bootrom_march: 112280 cycles, 112280 RTL/GL comparisons, 229.38 s
+  [PASS] boot_uart_hello: 62838 cycles, 62838 RTL/GL comparisons, 156.89 s
+  [PASS] boot_host_hello: 3902 cycles, 3902 RTL/GL comparisons, 10.8 s
+  [PASS] boot_uart_max: 362843 cycles, 362843 RTL/GL comparisons, 612.21 s
+  [PASS] regs: 19100 cycles, 19100 RTL/GL comparisons, 26.74 s
+  [PASS] unmapped: 10653 cycles, 10653 RTL/GL comparisons, 16.38 s
+  [PASS] uart_burst: 43958 cycles, 43958 RTL/GL comparisons, 54.45 s
+  [PASS] reset_store: 8602 cycles, 8602 RTL/GL comparisons, 12.61 s
+  [PASS] counters: 8598 cycles, 8598 RTL/GL comparisons, 13.61 s
+  [PASS] buserr: 5780 cycles, 5780 RTL/GL comparisons, 11.99 s
+gl-soc-powered: PASS 15/15 tests passed (1009.0 s)
+  [PASS] din5_stuck0: lockstep mismatch in 11/11 tests
+  [PASS] csb0_inverted: lockstep mismatch in 11/11 tests
+  [PASS] host_rdata7_inverted: lockstep mismatch in 11/11 tests
+  [PASS] mux_swap: lockstep mismatch in 11/11 tests
+  [PASS] count_cycle45_stuck1: lockstep mismatch in 1/1 tests
+  [PASS] count_instr40_stuck1: lockstep mismatch in 1/1 tests
+  [PASS] buserr_irq_stuck0: lockstep mismatch in 1/1 tests
+  [PASS] host_rdata7_unpowered: lockstep mismatch in 1/1 tests
+neg-gl-soc: PASS 8/8 caught (222 s)

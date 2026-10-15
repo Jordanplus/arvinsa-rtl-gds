@@ -1,0 +1,12 @@
+python3 signoff/precheck/check_precheck.py --project runs/p7_precheck_preview --ref-dir runs/precheck_sram_ref
+[precheck] cf-precheck 1.3.7, 2026-10-14T01:00:00+00:00, results runs/p7_precheck_preview/precheck_results/14_OCT_2026___00_00_00
+  [PASS] cf-precheck 1.3.7 (pinned 1.3.7; another version: read its deck and checks, then update env/versions.mk)
+  [PASS] checks: 13 expected
+  [PASS] magic_drc: skip (allowed ['pass', 'skip'])
+  [PASS] 11 checks other than klayout_feol/klayout_beol: all pass
+  [PASS] gds/user_project_wrapper.gds sha1 a7d766550a0e51a74c6c24e049a4f8fa79581280 = the checked file's a7d766550a0e51a74c6c24e049a4f8fa79581280
+  [PASS] the results directory checked this GDS (logs/gds.info: user_project_wrapper.gds: a7d766550a0e51a74c6c24e049a4f8fa79581280)
+  [PASS] project.json written 2026-10-14 01:00:00, after the results directory's start 2026-10-14 00:00:00
+  [PASS] klayout_feol: fail, 3 item(s) = 16900 marker(s), all MR_licon.SP.6 inside arv_sram_2kbyte_1rw1r_32x512_8 at places the PDK macro alone also has (16900 there)
+  [PASS] klayout_beol: fail, 264 item(s) = 50184 marker(s), all MR_mcon.CON.10 inside arv_sram_2kbyte_1rw1r_32x512_8 at places the PDK macro alone also has (50184 there)
+precheck: PASS (ADR-0019 decision 5)

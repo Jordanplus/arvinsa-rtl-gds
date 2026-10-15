@@ -1,0 +1,22 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+yosys -V: Yosys 0.62 (git sha1 7326bb7d6641500ecb285c291a54a662cb1e76cf, clang++ 21.1.2 -fPIC -O3)
+openroad -version: dcf36133a369abc8f3c5e5738cd4d82e4903c0e0 
+magic --version: 8.3.623
+klayout -v: KLayout 0.30.7
+verilator --version: Verilator 5.044 2026-01-01 rev v5.040
+librelane --version: LibreLane v3.0.14
+netgen: Netgen 1.5.316 compiled on Tue Feb 10 11:19:51 UTC 2026

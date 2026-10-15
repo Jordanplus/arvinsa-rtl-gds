@@ -1,0 +1,296 @@
+{
+  "cpu": "picorv32",
+  "suite": "all",
+  "sims": [
+    "icarus",
+    "verilator"
+  ],
+  "jobs": 8,
+  "status": "PASS",
+  "total": 30,
+  "passed": 30,
+  "failed": 0,
+  "wall_time_s": 28.06,
+  "tools": {
+    "icarus": [
+      "iverilog Icarus Verilog version 13.0 (stable) (v13_0) (/opt/homebrew/Cellar/icarus-verilog/13.0/bin/iverilog)",
+      "vvp Icarus Verilog runtime version 13.0 (stable) (v13_0) (/opt/homebrew/Cellar/icarus-verilog/13.0/bin/vvp)"
+    ],
+    "verilator": [
+      "verilator Verilator 5.050 2026-07-01 rev vUNKNOWN-built20260701 (/opt/homebrew/Cellar/verilator/5.050/bin/verilator)",
+      "c++ Apple clang version 21.0.0 (clang-2100.3.34.2) (/usr/bin/c++)"
+    ]
+  },
+  "results": [
+    {
+      "test": "hello",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 3466,
+      "wall_time_s": 0.24,
+      "result_json": "runs/sim/icarus/hello/result.json"
+    },
+    {
+      "test": "memtest",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 871219,
+      "wall_time_s": 25.97,
+      "result_json": "runs/sim/icarus/memtest/result.json"
+    },
+    {
+      "test": "irq",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 6967,
+      "wall_time_s": 0.42,
+      "result_json": "runs/sim/icarus/irq/result.json"
+    },
+    {
+      "test": "muldiv",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 17824,
+      "wall_time_s": 0.8,
+      "result_json": "runs/sim/icarus/muldiv/result.json"
+    },
+    {
+      "test": "uart_echo",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 6555,
+      "wall_time_s": 0.35,
+      "result_json": "runs/sim/icarus/uart_echo/result.json"
+    },
+    {
+      "test": "bootrom_march",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 112280,
+      "wall_time_s": 4.34,
+      "result_json": "runs/sim/icarus/bootrom_march/result.json"
+    },
+    {
+      "test": "boot_uart_hello",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 62838,
+      "wall_time_s": 2.81,
+      "result_json": "runs/sim/icarus/boot_uart_hello/result.json"
+    },
+    {
+      "test": "boot_host_hello",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 3902,
+      "wall_time_s": 0.22,
+      "result_json": "runs/sim/icarus/boot_host_hello/result.json"
+    },
+    {
+      "test": "boot_uart_max",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 362843,
+      "wall_time_s": 12.18,
+      "result_json": "runs/sim/icarus/boot_uart_max/result.json"
+    },
+    {
+      "test": "regs",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 19100,
+      "wall_time_s": 0.87,
+      "result_json": "runs/sim/icarus/regs/result.json"
+    },
+    {
+      "test": "unmapped",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 10653,
+      "wall_time_s": 0.5,
+      "result_json": "runs/sim/icarus/unmapped/result.json"
+    },
+    {
+      "test": "uart_burst",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 43958,
+      "wall_time_s": 1.71,
+      "result_json": "runs/sim/icarus/uart_burst/result.json"
+    },
+    {
+      "test": "reset_store",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 8602,
+      "wall_time_s": 0.44,
+      "result_json": "runs/sim/icarus/reset_store/result.json"
+    },
+    {
+      "test": "counters",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 8598,
+      "wall_time_s": 0.44,
+      "result_json": "runs/sim/icarus/counters/result.json"
+    },
+    {
+      "test": "buserr",
+      "sim": "icarus",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 5780,
+      "wall_time_s": 0.27,
+      "result_json": "runs/sim/icarus/buserr/result.json"
+    },
+    {
+      "test": "hello",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 3466,
+      "wall_time_s": 0.38,
+      "result_json": "runs/sim/verilator/hello/result.json"
+    },
+    {
+      "test": "memtest",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 871219,
+      "wall_time_s": 0.92,
+      "result_json": "runs/sim/verilator/memtest/result.json"
+    },
+    {
+      "test": "irq",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 6967,
+      "wall_time_s": 0.2,
+      "result_json": "runs/sim/verilator/irq/result.json"
+    },
+    {
+      "test": "muldiv",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 17824,
+      "wall_time_s": 0.03,
+      "result_json": "runs/sim/verilator/muldiv/result.json"
+    },
+    {
+      "test": "uart_echo",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 6555,
+      "wall_time_s": 0.02,
+      "result_json": "runs/sim/verilator/uart_echo/result.json"
+    },
+    {
+      "test": "bootrom_march",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 112280,
+      "wall_time_s": 0.11,
+      "result_json": "runs/sim/verilator/bootrom_march/result.json"
+    },
+    {
+      "test": "boot_uart_hello",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 62838,
+      "wall_time_s": 0.09,
+      "result_json": "runs/sim/verilator/boot_uart_hello/result.json"
+    },
+    {
+      "test": "boot_host_hello",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 3902,
+      "wall_time_s": 0.02,
+      "result_json": "runs/sim/verilator/boot_host_hello/result.json"
+    },
+    {
+      "test": "boot_uart_max",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 362843,
+      "wall_time_s": 0.32,
+      "result_json": "runs/sim/verilator/boot_uart_max/result.json"
+    },
+    {
+      "test": "regs",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 19100,
+      "wall_time_s": 0.05,
+      "result_json": "runs/sim/verilator/regs/result.json"
+    },
+    {
+      "test": "unmapped",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 10653,
+      "wall_time_s": 0.03,
+      "result_json": "runs/sim/verilator/unmapped/result.json"
+    },
+    {
+      "test": "uart_burst",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 43958,
+      "wall_time_s": 0.04,
+      "result_json": "runs/sim/verilator/uart_burst/result.json"
+    },
+    {
+      "test": "reset_store",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 8602,
+      "wall_time_s": 0.03,
+      "result_json": "runs/sim/verilator/reset_store/result.json"
+    },
+    {
+      "test": "counters",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 8598,
+      "wall_time_s": 0.03,
+      "result_json": "runs/sim/verilator/counters/result.json"
+    },
+    {
+      "test": "buserr",
+      "sim": "verilator",
+      "status": "PASS",
+      "failing_checkers": [],
+      "cycles": 5780,
+      "wall_time_s": 0.02,
+      "result_json": "runs/sim/verilator/buserr/result.json"
+    }
+  ]
+}

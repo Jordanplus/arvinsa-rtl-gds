@@ -1,0 +1,13 @@
+word_size = 16
+num_words = 64
+words_per_row = 2
+write_size = 8
+num_rw_ports = 1
+num_r_ports = 1
+num_w_ports = 0
+tech_name = "sky130"
+nominal_corner_only = True
+route_supplies = "side"
+check_lvsdrc = True
+uniquify = True
+output_name = "arv_small_1rw1r_16x64_8"

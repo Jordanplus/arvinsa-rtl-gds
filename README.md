@@ -464,7 +464,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 - **重點**：
   - clock pin 到 clock tree 根部的線不在 resizer 的修復範圍內。對策是把 pin 擺在 flip-flop 重心附近，或用 `CTS_CLK_MAX_WIRE_LENGTH` 讓 CTS 把這段線切開加 buffer（soc_top 這樣做之後通過，但同一次 run 也改了別的設定，這一項的效果沒有單獨實驗）。
   - clock buffer 的 fanout／cap 違規：`CTS_SINK_CLUSTERING_SIZE`、`CTS_DISTANCE_BETWEEN_BUFFERS`。
-  - 規則 8，PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效（`resolved.json` 是 null，沒有警告），clock 實際走 met1／met2；要走粗金屬只能在專案 config 明確設定。本 repo 沒設，clock 的 EM 只有估算；要不要設定等使用者決定。沒有自動防護。
+  - 規則 8，PDK 的 `RT_CLOCK_MIN_LAYER met3` 在 LibreLane 3 沒有生效（`resolved.json` 是 null，沒有警告），clock 實際走 met1／met2；要走粗金屬只能在專案 config 明確設定。本 repo 沒設，clock 的 EM 只有估算；使用者 2026-10-15 決定本 repo 不設、新專案的 config 第一版就設（sky130 用 `met3`），第一次 harden 後確認 `resolved.json` 不是 null（ADR-0021 決定 8）。沒有自動防護，checker 下一個專案做。
   - skew 的 metric 含 clock uncertainty 與 derate，不是 skew 的真值；彙總的 `clock__skew__worst_hold` 是各 corner 的最大值（最不負），要看最差 corner 讀 `__corner:` 的值。
   - CTS 會把 macro 的 clock 延到與 flip-flop 一樣晚（插 delay buffer），`CTS_DELAY_BUFFER_DERATE_PCT` 管不到這一步。這串 buffer 的上升緣、下降緣延遲不同，讓 SRAM 半週期路徑的 setup 與讀出的 hold 一起變差。關掉用 `clock_tree_synthesis -no_insertion_delay`；LibreLane 沒有對應設定，本 repo 用 LibreLane plugin 換掉 CTS step（ADR-0016）。
   - setup／hold 違規先拆 launch 與 capture 的 clock latency（各 corner、上升緣與下降緣），來自 clock 結構就在 clock 端修。在 data 端補 hold 很貴：delay cell 在慢 corner 的延遲是快 corner 的約 3 倍。
@@ -482,7 +482,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - IR 要判 VDD 降壓加 GND 抬升的合計；LibreLane 的 `ir__drop__worst` 只有 VDD。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner；「ff 電流＋ss 電阻」的人為組合只當上限參考，不是判定值（規則 11）。
-  - **EM 目前沒有判定**（規則 8）：`ir_worst.py`、`ir_pattern.py`、`ir_caravel.py` 都沒開 PSM 的 `-enable_em`，只有 Phase 4、5 量過一次 via4。登記在放寬與補償登記表 I12（下線前要做）；沒有自動防護，新 checker 留到下一個專案，做法與範圍先列選項由使用者決定。
+  - **EM 目前沒有判定**（規則 8）：`ir_worst.py`、`ir_pattern.py`、`ir_caravel.py` 都沒開 PSM 的 `-enable_em`，只有 Phase 4、5 量過一次 via4。登記在放寬與補償登記表 I12（下線前要做）；沒有自動防護，新 checker 留到下一個專案；範圍已由使用者決定為電源網路 EM（strap 與 via，`-enable_em` 的電流對 tech LEF 上限，max power pattern、ff 與 ss corner，植入「strap 改窄」「via 單一 cut」；ADR-0021 決定 8），訊號線 EM 不在範圍。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
   - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`、soc_top 的 `make ir-soc`，ADR-0019 決定 20、25；negative test `make neg-ir-soc`／`neg-ir-caravel`；判定前先核對 run guard、window 齊全、VCD 的時脈週期等於 `CLOCK_PERIOD`；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估約 9 倍）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。經驗紀錄：供電點放在外殼跨接線的位置時 PSM 會 Signal 11（Phase 7，根因沒查），改放在 ring 與 strap 的交點。
   - 提早檢查（流程回顧，ADR-0020）：規則 14，定 die 的 floorplan 試跑時 IR 就要成立（真實 pad、慢 corner，gate-level 模擬能跑之後用 max power pattern）；結果比預算小 100 倍以上先查供電模型（本 repo 的 IR 模型分四個 Phase 才修完）。
@@ -558,7 +558,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
     - 第一部分由 `signoff/scripts/review_criteria.py` 檢查 criteria 有沒有被執行：config 每個設定都進了 run、uncertainty 出現在每個時序步驟與 signoff corner、corner 齊全、repo 的 checker 都跑了。`pnr/soc_top/run.sh` 每次都跑它，LibreLane FAIL 也照跑；harden 要 PASS，它也必須 PASS。
     - 第二部分由 Claude 依 skill 判讀 criteria 合不合理，寫 `runs/<tag>_signoff/criteria_review.md`（有沒有被執行、合不合理、學習三節）。專案的 Stop hook（`.claude/hooks/require_criteria_review.py`）沒看到就不讓 Claude 回報。
     - golden 比對 FAIL 時，先找出和 golden run 第一個分歧的步驟，判斷是設計或設定改變，還是 flow 不可重現（同一份輸入單步重跑量頻率）；後者交給 signoff-checker-qualification，不直接放寬誤差。
-    - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；出處要在下一次 harden 之後還找得到：不能引用 `runs/<tag>/`、`runs/<tag>_signoff/`、`.prev`、scratchpad，先複製到 `runs/<實驗名>_signoff/` 或 `docs/notes/` 再引用（沒有自動防護）。依據不成立的 criterion 提給使用者決定，不自己改。
+    - 學到的數字寫進依製程分類的 knowledge 檔（`knowledge/sky130A_sky130_fd_sc_hd.md`）；出處要在下一次 harden 之後還找得到：不能引用 `runs/<tag>/`、`runs/<tag>_signoff/`、`.prev`、scratchpad，先複製到 `runs/<實驗名>_signoff/` 或 `docs/notes/` 再引用（`runs/` 裡的在清理前由 `make collect-evidence` 收進 `docs/evidence/`；沒有自動防護）。依據不成立的 criterion 提給使用者決定，不自己改。
   - 製程專屬的事實（sky130 的預設值、.lib 範圍、DRC deck、latch-up、density、antenna、EM 電流密度與片電阻）放在 knowledge 檔，編號 S2、S10 等沿用原規則編號；SKILL.md 本文只放和製程無關的方法，本設計的 mW／mV 數字在 knowledge 檔「實測校準資料」與 ADR。「已驗證的工具行為」編號 20–29 已由 knowledge 的 S20–S29 使用，新的工具行為從 30 起。
   - 第一部分新增 `uncertainty_applied`（逐條路徑核對 STA 實際套用的 uncertainty），`checkers_ran` 加 `ir_worst.py`（兩個慢 corner 的 IR，預設切換率），`harden-core` 也跑（`--design picorv32_core`）。判斷原則補：criterion 的依據是在哪個設計量的，換設計就要重量（Phase 5 的 IR）。sky130 的 knowledge 檔補了 Phase 5 確認的製程事實 S20–S24：推不動負載的弱 cell、`dlygate` 被當成 buffer、`clkbuf_16` 下降緣較慢、預設 PDN（via4 只有 1 個 cut）與最壞組合 IR 約是 nom_tt 的 1.4 倍、SRAM 內的 Magic DRC 計數隨上方金屬改變。
   - 提早檢查（流程回顧，ADR-0020，「提早檢查」一節）：A1 寫計畫時的操作範圍對照表（VDD、Tj 由使用者決定，corner 清單由它推出，對照 macro 與 library 已驗證的範圍；macro 在某個 corner 不能動時不拿掉 corner）；A3 第一份網表後的 corner 代價 what-if；C1 任何 harden 之前（含子區塊與探索 run）limits 每列有出處、IR 判法一次定清楚；E1 放寬與補償登記表（`docs/relaxation_register.md`）。每次 harden 後的「合不合理」多兩列：最差 corner 在不在 resizer 的清單、登記表。C1 與 E1 的自動檢查留到下一個專案。
@@ -590,7 +590,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 長 regression 之前，先用 `make py-check` 和 dev fixture 預跑，提早抓到會在中途才出錯的問題（未定義的名稱、寫檔前先清空了要讀的檔案；改過的 negative test 也要先單獨跑過）。
   - 規則 11，幾個設計變體共用 flow 設定、plugin 或 SDC 時，為其中一個改的設定，改完就在每個變體上各 harden 一次，不要等結案 regression（Phase 5 為 Hazard3 改的設定讓 PicoRV32 setup FAIL）。
   - 規則 12，GDS 的 sha256 每次不同不代表不可重現：差在 BGNLIB／BGNSTR 的日期記錄；網表、DEF 比 sha256，GDS 用 KLayout XOR 或清掉日期再比。
-  - 資源與長時間工作（規則 13–17）：同時跑幾條依記憶體決定（目前沒有自動防護）；開跑前看磁碟，`scripts/regress.py` 在剩餘空間少於 `REGRESS_MIN_FREE_GB`（預設 100 GiB）時第一個 target 前就 FAIL；每個 target 有逾時（參考時間 × 3、至少 30 分鐘，`REGRESS_TIMEOUT_SCALE`），逾時砍整個程序群組、判 FAIL，log 有 `regress: TIMEOUT`（negative test `make neg-regress` 的 `low_disk`、`timeout`）；卡住要三項一起看（耗時、工具程序的 CPU、log 修改時間）；結案後清理舊 worktree 與 negative test 中間產物（先複製要引用的證據，刪前請使用者確認）；`runs/` 與 worktree 排除在 Spotlight 索引外（使用者操作）。
+  - 資源與長時間工作（規則 13–17）：同時跑幾條依記憶體決定（目前沒有自動防護）；開跑前看磁碟，`scripts/regress.py` 在剩餘空間少於 `REGRESS_MIN_FREE_GB`（預設 100 GiB）時第一個 target 前就 FAIL；每個 target 有逾時（參考時間 × 3、至少 30 分鐘，`REGRESS_TIMEOUT_SCALE`），逾時砍整個程序群組、判 FAIL，log 有 `regress: TIMEOUT`（negative test `make neg-regress` 的 `low_disk`、`timeout`）；卡住要三項一起看（耗時、工具程序的 CPU、log 修改時間）；結案後清理舊 worktree 與 negative test 中間產物（先複製要引用的證據，刪前請使用者確認）；專案結束清掉 `runs/` 與所有 worktree 前，`make collect-evidence` 把文件引用的報告、每次 harden 的判定與 criteria review、regression 摘要收進 `docs/evidence/`（保留路徑，`references.md` 列出每個引用是否收錄），GDS、網表、整個 run 目錄不收（規則 16，ADR-0021 決定 7）；`runs/` 與 worktree 排除在 Spotlight 索引外（使用者操作）。
 - **本 repo 實例**：`scripts/regress.py`、`signoff/scripts/provenance.py`、`run_guard.py`。negative test：`neg_regress.py`（10 個案例）、`neg_provenance.py`、`neg_run_guard.py`（下游步驟清單是 `STEPS`，目前 65 個案例，以 `neg-run-guard: PASS <n>/<n>` 為準）。
 
 #### multicorner-sta：多 corner STA
@@ -630,9 +630,9 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 收尾時分析本階段的重大任務是否需要新 skill，並逐一對照每個 skill、README 與 `description` 有沒有寫回。
   - 規則 1 補：再前一個階段沒結的限制也要延續；「沒變」要在新設計上重新量過才算（Phase 5 的 IR 原本寫沒變，實際超過上限）。延後的項目要追到結：收尾時 grep 本階段改過的筆記、ADR、skill 裡「Phase N 才能處理」「之後會加」這類句子逐條對照（latch-up 標記 81/14 就是這樣漏掉的），決定當下寫進 `runs/todo.md`。
   - 規則 2 補：不在 regression 裡的 negative test（例如 `neg-char`）列出最後一次跑的 commit 與環境，被測程式改過就在乾淨 checkout 補跑（目前沒有自動防護）。
-  - 規則 3 補：證據在做的當下存到不會被覆蓋或消失的地方（`docs/notes/<主題>/` 或主目錄 `runs/<實驗名>/`），不能引用 scratchpad、會被下一次 harden 覆蓋的 `runs/<tag>_signoff/`、之後會刪的 worktree、只在終端機看到的輸出。
+  - 規則 3 補：證據在做的當下存到不會被覆蓋或消失的地方（`docs/notes/<主題>/` 或主目錄 `runs/<實驗名>/`；`runs/` 不進版控，清理前用 `make collect-evidence` 收進 `docs/evidence/`），不能引用 scratchpad、會被下一次 harden 覆蓋的 `runs/<tag>_signoff/`、之後會刪的 worktree、只在終端機看到的輸出。
   - 規則 4：章節以 `phase7.md` 為準；與計畫不同的地方，每一項寫原本保護什麼、現在由誰保護，沒有替代的列入已知限制與登記表。
-  - 規則 9 收尾清單：README、skill 與 `description`（`make skill-check`）、流程文件與 `AGENTS.md` 同步、規則 10 稽核、清空 `runs/todo.md`、清理舊 worktree、推送只在使用者要求時做。
+  - 規則 9 收尾清單：README、skill 與 `description`（`make skill-check`）、流程文件與 `AGENTS.md` 同步、規則 10 稽核、清空 `runs/todo.md`、清理舊 worktree（專案結束先 `make collect-evidence`）、推送只在使用者要求時做。
   - 規則 11：新決定取代舊決定時同一個 commit 同步前文；比較數字要寫明兩邊的條件；skill 與流程文件不寫會隨程式變的案例數，改指向腳本或總結行。
   - 規則 12，收尾的順序與時程：最後改過的 checker 先在現有 run 上跑 positive control → 開結案 regress → regress 期間做獨立審查 → 修正 → 下一輪；至少預留兩輪乾淨 regress 再加一輪修正。
   - 提早檢查（流程回顧，ADR-0020）：規則 10，收尾時找 checker 漏洞的審查只審本 Phase 最後改過的 checker（其他在寫完時就審過）；已知限制裡的放寬引用放寬與補償登記表，並核對依據的設計是不是本 Phase 的設計。

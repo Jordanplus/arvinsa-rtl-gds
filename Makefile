@@ -21,7 +21,7 @@ DRY_RUN ?= 0
 .PHONY: help nix-install flow-setup pdk-fetch xpack-fetch core-hazard3 ci-sram-ref env-check env-check-flow lint synth-check fw sim regress-rtl regress-rtl-smoke regress-rtl-caravel neg-rtl-caravel eqy-caravel gl-caravel ir-caravel \
         neg-rtl core-stock smoke phase1 harden-core gl-core neg-gl-core soc-area phase2 \
         eqy-core neg-eqy-core harden-soc eqy-soc neg-eqy-soc gl-soc neg-gl-soc neg-pnr neg-provenance test-flow-retry phase3 \
-        neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check neg-regress test-review-hook clean \
+        neg-run-guard gl-soc-powered provenance-final harden regress regress-picorv32 py-check skill-check collect-evidence neg-regress test-review-hook clean \
         sram-lib sram-confirm sram-char sram-extract neg-char openram-setup openram-macro neg-openram \
         openram-lib-template openram-char openram-power openram-lib openram-confirm openram-check-lib macro-views neg-macro-views \
         pin-plan neg-pin-plan precheck-deck precheck-sram-ref precheck-check neg-precheck precheck-caravel ir-soc neg-ir-soc neg-ir-caravel harden-caravel neg-eqy-caravel neg-gl-caravel neg-pnr-caravel regress-caravel
@@ -99,6 +99,7 @@ help:
 	@echo "                            (hazard3: harden-soc; caravel: harden-caravel; picorv32: harden-soc and harden-core)"
 	@echo "  make py-check             every name a tracked Python file reads is defined in that file, no file emptied before it is read (seconds)"
 	@echo "  make skill-check          every .claude/skills/*/SKILL.md has a valid header and is listed in README.md"
+	@echo "  make collect-evidence     before removing runs/ and the worktrees: copy the cited reports, verdicts and summaries to docs/evidence/"
 	@echo "  make neg-regress          make regress must refuse a dirty tree, make -i, a HEAD that changes, too little free disk, a target past its time limit, and stop at a FAIL"
 	@echo "  make harden D=soc_top|soc_top_hazard3|user_project_wrapper|picorv32_core   harden-soc CPU=picorv32 / hazard3 / caravel, or harden-core"
 	@echo ""
@@ -455,6 +456,12 @@ py-check:
 
 skill-check:
 	$(PY) scripts/check_skills.py
+
+# The evidence reports the documents cite, out of runs/ (not version-controlled) and the worktrees, before they are
+# removed (skill flow-regression-reproducibility rule 16, ADR-0021 decision 7). The precheck work directory's PDK
+# and example project are the environment, not results.
+collect-evidence:
+	$(PY) scripts/collect_evidence.py --extra $(PRECHECK_WORK) --skip pdks --skip cup_example --copy
 
 neg-regress:
 	$(PY) scripts/neg_regress.py

@@ -1,0 +1,7 @@
+{
+  "cpu": "picorv32",
+  "netlist": "~/claude_prjs/arvinsa-rtl-gds/runs/soc_top/final/nl/soc_top.nl.v",
+  "tests": 15,
+  "failed": 0,
+  "wall_time_s": 521.2
+}

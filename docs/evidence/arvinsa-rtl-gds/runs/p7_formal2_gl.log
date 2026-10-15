@@ -1,0 +1,25 @@
+/Library/Developer/CommandLineTools/usr/bin/make -C fw CPU=hazard3 all check-bootrom
+python3 ../rtl/bootrom/gen_bootrom.py --hex build_hazard3/bootrom.hex --out build_hazard3/bootrom_check.v
+check-bootrom: PASS: ../rtl/bootrom/bootrom.v matches the boot ROM image
+python3 dv/gl_soc/run_gl_soc.py --cpu caravel
+[gl-soc] cpu caravel, netlist ~/claude_prjs/arvinsa-rtl-gds/runs/user_project_wrapper/final/nl/user_project_wrapper.nl.v
+[gl-soc] compile tb_soc with the RTL and gate-level SoC (Icarus, -DGL_LOCKSTEP -DFUNCTIONAL -DUNIT_DELAY=#1)
+[gl-soc] run 16 tests, 8 in parallel
+  [PASS] hello: 2377 cycles, 2377 RTL/GL comparisons, 18.7 s
+  [PASS] memtest: 424004 cycles, 424004 RTL/GL comparisons, 614.25 s
+  [PASS] irq: 5082 cycles, 5082 RTL/GL comparisons, 30.08 s
+  [PASS] muldiv: 10987 cycles, 10987 RTL/GL comparisons, 39.18 s
+  [PASS] uart_echo: 4468 cycles, 4468 RTL/GL comparisons, 28.51 s
+  [PASS] bootrom_march: 63028 cycles, 63028 RTL/GL comparisons, 173.28 s
+  [PASS] boot_uart_hello: 95341 cycles, 95341 RTL/GL comparisons, 274.4 s
+  [PASS] boot_host_hello: 3546 cycles, 3546 RTL/GL comparisons, 22.52 s
+  [PASS] boot_uart_max: 361743 cycles, 361743 RTL/GL comparisons, 729.78 s
+  [PASS] regs: 11521 cycles, 11521 RTL/GL comparisons, 41.23 s
+  [PASS] unmapped: 6543 cycles, 6543 RTL/GL comparisons, 29.64 s
+  [PASS] uart_burst: 33218 cycles, 33218 RTL/GL comparisons, 67.9 s
+  [PASS] reset_store: 5270 cycles, 5270 RTL/GL comparisons, 25.89 s
+  [PASS] counters: 5187 cycles, 5187 RTL/GL comparisons, 26.09 s
+  [PASS] exc: 4067 cycles, 4067 RTL/GL comparisons, 22.25 s
+  [PASS] maxpower: 20648 cycles, 20648 RTL/GL comparisons, 50.11 s
+gl-soc: PASS 16/16 tests passed (758.5 s)
+rc=0

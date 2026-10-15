@@ -1,0 +1,626 @@
+error:
+       … while calling the 'import' builtin
+         at «string»:1:2:
+            1| (import <nixpkgs> {}).bashInteractive
+             |  ^
+
+       … while realising the context of a path
+
+       … while calling the 'findFile' builtin
+         at «string»:1:9:
+            1| (import <nixpkgs> {}).bashInteractive
+             |         ^
+
+       error: file 'nixpkgs' was not found in the Nix search path (add it using $NIX_PATH or -I)
+uses bash from your environment
+[11:37:23] [I] Starting a new run of the 'Classic'' flow with the    flow.py:654
+               tag 'p7_harden1'.                                                
+[11:37:23] [I] Starting…                                       sequential.py:339
+[11:37:23] [V] Running 'Verilator.Lint' at                          step.py:1138
+               '../../runs/p7_harden1/01-verilator-lint'…                       
+[11:37:23] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/01-verilator-lint/verilator-l             
+               int.log'…                                                        
+[11:37:23] [V] Running 'Checker.LintTimingConstructs' at            step.py:1138
+               '../../runs/p7_harden1/02-checker-linttimingconstruc             
+               ts'…                                                             
+[11:37:23] [I] Check for Lint Timing Errors clear.                checker.py:412
+[11:37:23] [V] Running 'Checker.LintErrors' at                      step.py:1138
+               '../../runs/p7_harden1/03-checker-linterrors'…                   
+[11:37:23] [I] Check for Lint errors clear.                       checker.py:131
+[11:37:23] [V] Running 'Checker.LintWarnings' at                    step.py:1138
+               '../../runs/p7_harden1/04-checker-lintwarnings'…                 
+[11:37:23] [W] 653 Lint warnings found.                           checker.py:122
+[11:37:23] [V] Running 'Yosys.JsonHeader' at                        step.py:1138
+               '../../runs/p7_harden1/05-yosys-jsonheader'…                     
+[11:37:23] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/05-yosys-jsonheader/yosys-jso             
+               nheader.log'…                                                    
+[11:37:46] [V] Running 'Yosys.Synthesis' at                         step.py:1138
+               '../../runs/p7_harden1/06-yosys-synthesis'…                      
+[11:37:46] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/06-yosys-synthesis/yosys-synt             
+               hesis.log'…                                                      
+[11:38:27] [V] Parsing synthesis checks…                            pyosys.py:59
+[11:38:27] [V] Parsing synthesis checks…                            pyosys.py:59
+[11:38:27] [V] Running 'Checker.YosysUnmappedCells' at              step.py:1138
+               '../../runs/p7_harden1/07-checker-yosysunmappedcells             
+               '…                                                               
+[11:38:27] [I] Check for Unmapped Yosys instances clear.          checker.py:131
+[11:38:27] [V] Running 'Checker.YosysSynthChecks' at                step.py:1138
+               '../../runs/p7_harden1/08-checker-yosyssynthchecks'…             
+[11:38:27] [I] Check for Yosys check errors clear.                checker.py:131
+[11:38:27] [V] Running 'Checker.NetlistAssignStatements' at         step.py:1138
+               '../../runs/p7_harden1/09-checker-netlistassignstate             
+               ments'…                                                          
+[11:38:27] [V] Running 'OpenROAD.CheckSDCFiles' at                  step.py:1138
+               '../../runs/p7_harden1/10-openroad-checksdcfiles'…               
+[11:38:27] [V] Running 'OpenROAD.CheckMacroInstances' at            step.py:1138
+               '../../runs/p7_harden1/11-openroad-checkmacroinstanc             
+               es'…                                                             
+[11:38:27] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/11-openroad-checkmacroinstanc             
+               es/openroad-checkmacroinstances.log'…                            
+[11:38:27] [V] Running 'OpenROAD.STAPrePNR' at                      step.py:1138
+               '../../runs/p7_harden1/12-openroad-staprepnr'…                   
+[11:38:27] [I] Starting STA for the nom_tt_025C_1v80 timing      openroad.py:749
+               corner…                                                          
+[11:38:27] [I] Starting STA for the nom_ss_100C_1v60 timing      openroad.py:749
+               corner…                                                          
+[11:38:27] [I] Starting STA for the nom_ff_n40C_1v95 timing      openroad.py:749
+               corner…                                                          
+[11:38:27] [I] Starting STA for the nom_ss_n40C_1v60 timing      openroad.py:749
+               corner…                                                          
+[11:38:27] [I] Starting STA for the nom_ff_100C_1v95 timing      openroad.py:749
+               corner…                                                          
+[11:38:27] [I] Skipping corner min_tt_025C_1v80 for STA          openroad.py:787
+               (identical to nom_tt_025C_1v80 at this stage)…                   
+[11:38:27] [I] Skipping corner min_ss_100C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_100C_1v60 at this stage)…                   
+[11:38:27] [I] Skipping corner min_ff_n40C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_n40C_1v95 at this stage)…                   
+[11:38:27] [I] Skipping corner min_ss_n40C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_n40C_1v60 at this stage)…                   
+[11:38:27] [I] Skipping corner min_ff_100C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_100C_1v95 at this stage)…                   
+[11:38:27] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/12-openroad-staprepnr/nom_ss_             
+               100C_1v60/sta.log'…                                              
+[11:38:27] [I] Skipping corner max_tt_025C_1v80 for STA          openroad.py:787
+               (identical to nom_tt_025C_1v80 at this stage)…                   
+[11:38:27] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/12-openroad-staprepnr/nom_tt_             
+               025C_1v80/sta.log'…                                              
+[11:38:27] [I] Skipping corner max_ss_100C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_100C_1v60 at this stage)…                   
+[11:38:27] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/12-openroad-staprepnr/nom_ff_             
+               n40C_1v95/sta.log'…                                              
+[11:38:27] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/12-openroad-staprepnr/nom_ff_             
+               100C_1v95/sta.log'…                                              
+[11:38:27] [I] Skipping corner max_ff_n40C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_n40C_1v95 at this stage)…                   
+[11:38:27] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/12-openroad-staprepnr/nom_ss_             
+               n40C_1v60/sta.log'…                                              
+[11:38:27] [I] Skipping corner max_ss_n40C_1v60 for STA          openroad.py:787
+               (identical to nom_ss_n40C_1v60 at this stage)…                   
+[11:38:27] [I] Skipping corner max_ff_100C_1v95 for STA          openroad.py:787
+               (identical to nom_ff_100C_1v95 at this stage)…                   
+[11:38:34] [I] Finished STA for the nom_ff_100C_1v95 timing      openroad.py:764
+               corner.                                                          
+[11:38:34] [I] Finished STA for the nom_ss_100C_1v60 timing      openroad.py:764
+               corner.                                                          
+[11:38:35] [I] Finished STA for the nom_ff_n40C_1v95 timing      openroad.py:764
+               corner.                                                          
+[11:38:35] [I] Finished STA for the nom_ss_n40C_1v60 timing      openroad.py:764
+               corner.                                                          
+[11:38:35] [I] Finished STA for the nom_tt_025C_1v80 timing      openroad.py:764
+               corner.                                                          
+[11:38:35] [V] Running 'OpenROAD.Floorplan' at                      step.py:1138
+               '../../runs/p7_harden1/13-openroad-floorplan'…                   
+[11:38:35] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/13-openroad-floorplan/openroa             
+               d-floorplan.log'…                                                
+[11:38:35] [V] Running 'OpenROAD.DumpRCValues' at                   step.py:1138
+               '../../runs/p7_harden1/14-openroad-dumprcvalues'…                
+[11:38:35] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/14-openroad-dumprcvalues/open             
+               road-dumprcvalues.log'…                                          
+[11:38:36] [V] Running 'Odb.CheckMacroAntennaProperties' at         step.py:1138
+               '../../runs/p7_harden1/15-odb-checkmacroantennaprope             
+               rties'…                                                          
+[11:38:36] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/15-odb-checkmacroantennaprope             
+               rties/odb-checkmacroantennaproperties.log'…                      
+[11:38:36] [W] Cell 'arv_sram_2kbyte_1rw1r_32x512_8' has (64) output   odb.py:71
+               pin(s) without antenna diffusion information. They               
+               might not be driven.                                             
+[11:38:36] [V] Running 'Odb.SetPowerConnections' at                 step.py:1138
+               '../../runs/p7_harden1/16-odb-setpowerconnections'…              
+[11:38:36] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/16-odb-setpowerconnections/od             
+               b-setpowerconnections.log'…                                      
+[11:38:37] [V] Running 'Odb.ManualMacroPlacement' at                step.py:1138
+               '../../runs/p7_harden1/17-odb-manualmacroplacement'…             
+[11:38:37] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/17-odb-manualmacroplacement/o             
+               db-manualmacroplacement.log'…                                    
+[11:38:37] [V] Running 'OpenROAD.CutRows' at                        step.py:1138
+               '../../runs/p7_harden1/18-openroad-cutrows'…                     
+[11:38:37] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/18-openroad-cutrows/openroad-             
+               cutrows.log'…                                                    
+[11:38:38] [V] Running 'OpenROAD.TapEndcapInsertion' at             step.py:1138
+               '../../runs/p7_harden1/19-openroad-tapendcapinsertio             
+               n'…                                                              
+[11:38:38] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/19-openroad-tapendcapinsertio             
+               n/openroad-tapendcapinsertion.log'…                              
+[11:38:40] [V] Running 'Odb.AddPDNObstructions' at                  step.py:1138
+               '../../runs/p7_harden1/20-odb-addpdnobstructions'…               
+[11:38:40] [I] 'PDN_OBSTRUCTIONS' is not defined. Skipping            odb.py:589
+               'Odb.AddPDNObstructions'…                                        
+[11:38:40] [V] Running 'OpenROAD.GeneratePDN' at                    step.py:1138
+               '../../runs/p7_harden1/21-openroad-generatepdn'…                 
+[11:38:40] [I] 'PDN_CFG' not explicitly set, setting it to      openroad.py:1483
+               ~/claude_prjs/arvinsa-rtl-gds/.t                 
+               ools/librelane/librelane/scripts/openroad/common                 
+               /pdn_cfg.tcl…                                                    
+[11:38:40] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/21-openroad-generatepdn/openr             
+               oad-generatepdn.log'…                                            
+[11:38:41] [W] [PDN-0239] Ring shape falls outside the die       openroad.py:314
+               bounds.                                                          
+[11:38:47] [V] Running 'Odb.RemovePDNObstructions' at               step.py:1138
+               '../../runs/p7_harden1/22-odb-removepdnobstructions'             
+               …                                                                
+[11:38:47] [I] 'PDN_OBSTRUCTIONS' is not defined. Skipping            odb.py:589
+               'Odb.RemovePDNObstructions'…                                     
+[11:38:47] [V] Running 'Odb.AddRoutingObstructions' at              step.py:1138
+               '../../runs/p7_harden1/23-odb-addroutingobstructions             
+               '…                                                               
+[11:38:47] [I] 'ROUTING_OBSTRUCTIONS' is not defined. Skipping        odb.py:589
+               'Odb.AddRoutingObstructions'…                                    
+[11:38:47] [V] Running 'OpenROAD.GlobalPlacementSkipIO' at          step.py:1138
+               '../../runs/p7_harden1/24-openroad-globalplacementsk             
+               ipio'…                                                           
+[11:38:47] [I] I/O pins were loaded from                        openroad.py:1662
+               ~/claude_prjs/arvinsa-rtl-gds/pn                 
+               r/user_project_wrapper/fixed_dont_change/user_pr                 
+               oject_wrapper.def. Returning state unaltered…                    
+[11:38:47] [V] Running 'OpenROAD.IOPlacement' at                    step.py:1138
+               '../../runs/p7_harden1/25-openroad-ioplacement'…                 
+[11:38:47] [I] I/O pins were loaded from                        openroad.py:1360
+               ~/claude_prjs/arvinsa-rtl-gds/pn                 
+               r/user_project_wrapper/fixed_dont_change/user_pr                 
+               oject_wrapper.def. Skipping                                      
+               OpenROAD.IOPlacement…                                            
+[11:38:47] [V] Running 'Odb.CustomIOPlacement' at                   step.py:1138
+               '../../runs/p7_harden1/26-odb-customioplacement'…                
+[11:38:47] [I] No custom I/O placement file configured, skipping      odb.py:718
+               'Odb.CustomIOPlacement'…                                         
+[11:38:47] [V] Running 'Odb.ApplyDEFTemplate' at                    step.py:1138
+               '../../runs/p7_harden1/27-odb-applydeftemplate'…                 
+[11:38:47] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/27-odb-applydeftemplate/odb-a             
+               pplydeftemplate.log'…                                            
+[11:38:47] [W] Bterm vssa2 is declared as a 'GROUND' pin. It will be   odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vdda2 is declared as a 'POWER' pin. It will be    odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vssa1 is declared as a 'GROUND' pin. It will be   odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vdda1 is declared as a 'POWER' pin. It will be    odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vssd2 is declared as a 'GROUND' pin. It will be   odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vccd2 is declared as a 'POWER' pin. It will be    odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vssd1 is declared as a 'GROUND' pin. It will be   odb.py:71
+               ignored.                                                         
+[11:38:47] [W] Bterm vccd1 is declared as a 'POWER' pin. It will be    odb.py:71
+               ignored.                                                         
+[11:38:47] [V] Running 'OpenROAD.GlobalPlacement' at                step.py:1138
+               '../../runs/p7_harden1/28-openroad-globalplacement'…             
+[11:38:47] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/28-openroad-globalplacement/o             
+               penroad-globalplacement.log'…                                    
+[11:39:13] [W] [GRT-0281] Net wb_clk_i has a large fanout of     openroad.py:314
+               2241 terminals.                                                  
+[11:39:42] [V] Running 'Odb.WriteVerilogHeader' at                  step.py:1138
+               '../../runs/p7_harden1/29-odb-writeverilogheader'…               
+[11:39:42] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/29-odb-writeverilogheader/odb             
+               -writeverilogheader.log'…                                        
+[11:39:42] [V] Running 'Checker.PowerGridViolations' at             step.py:1138
+               '../../runs/p7_harden1/30-checker-powergridviolation             
+               s'…                                                              
+[11:39:42] [I] Check for power grid violations (as reported by    checker.py:131
+               OpenROAD PSM- you may ignore these if LVS passes)                
+               clear.                                                           
+[11:39:42] [V] Running 'OpenROAD.STAMidPNR' at                      step.py:1138
+               '../../runs/p7_harden1/31-openroad-stamidpnr'…                   
+[11:39:42] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/31-openroad-stamidpnr/openroa             
+               d-stamidpnr.log'…                                                
+[11:39:52] [V] Running 'OpenROAD.RepairDesignPostGPL' at            step.py:1138
+               '../../runs/p7_harden1/32-openroad-repairdesignpostg             
+               pl'…                                                             
+[11:39:52] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/32-openroad-repairdesignpostg             
+               pl/openroad-repairdesignpostgpl.log'…                            
+[11:39:52] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_100C_1v60 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_n40C_1v60 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C                
+               _1v80.lib line 1, library                                        
+               sky130_fd_sc_hd__tt_025C_1v80 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_n40C_1v95 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_100C_1v60 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_n40C_1v60 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C                
+               _1v80.lib line 1, library                                        
+               sky130_fd_sc_hd__tt_025C_1v80 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80                     
+               already exists.                                                  
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_n40C_1v95 already exists.                    
+[11:39:53] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95                     
+               already exists.                                                  
+[11:39:57] [W] [RSZ-0065] max wire length less than 3547u        openroad.py:314
+               increases wire delays.                                           
+[11:40:47] [W] [RSZ-0020] found 2 floating nets.                 openroad.py:314
+[11:40:52] [V] Running 'Odb.ManualGlobalPlacement' at               step.py:1138
+               '../../runs/p7_harden1/33-odb-manualglobalplacement'             
+               …                                                                
+[11:40:52] [I] 'MANUAL_GLOBAL_PLACEMENTS' not set. Skipping          odb.py:1033
+               'Odb.ManualGlobalPlacement'…                                     
+[11:40:52] [V] Running 'OpenROAD.DetailedPlacement' at              step.py:1138
+               '../../runs/p7_harden1/34-openroad-detailedplacement             
+               '…                                                               
+[11:40:52] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/34-openroad-detailedplacement             
+               /openroad-detailedplacement.log'…                                
+[11:40:56] [V] Running 'Arvinsa.CTSNoInsertionDelay' at             step.py:1138
+               '../../runs/p7_harden1/35-arvinsa-ctsnoinsertiondela             
+               y'…                                                              
+[11:40:56] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/35-arvinsa-ctsnoinsertiondela             
+               y/arvinsa-ctsnoinsertiondelay.log'…                              
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_100C_1v60 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_n40C_1v60 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_100C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_100C_1v95 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C                
+               _1v80.lib line 1, library                                        
+               sky130_fd_sc_hd__tt_025C_1v80 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_n40C_1v95 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_100C_1v60 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_n40C_1v60 already exists.                    
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60                     
+               already exists.                                                  
+[11:40:57] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C                
+               _1v80.lib line 1, library                                        
+               sky130_fd_sc_hd__tt_025C_1v80 already exists.                    
+[11:40:58] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80                     
+               already exists.                                                  
+[11:40:58] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_100C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_100C_1v95 already exists.                    
+[11:40:58] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_100C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_100C_1v95                     
+               already exists.                                                  
+[11:40:58] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_n40C_1v95 already exists.                    
+[11:40:58] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95                     
+               already exists.                                                  
+[11:41:11] [W] [RSZ-0065] max wire length less than 3549u        openroad.py:314
+               increases wire delays.                                           
+[11:41:25] [V] Running 'OpenROAD.STAMidPNR-1' at                    step.py:1138
+               '../../runs/p7_harden1/36-openroad-stamidpnr-1'…                 
+[11:41:25] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/36-openroad-stamidpnr-1/openr             
+               oad-stamidpnr-1.log'…                                            
+[11:41:35] [V] Running 'OpenROAD.ResizerTimingPostCTS' at           step.py:1138
+               '../../runs/p7_harden1/37-openroad-resizertimingpost             
+               cts'…                                                            
+[11:41:35] [I] Logging subprocess to                                step.py:1336
+               '../../runs/p7_harden1/37-openroad-resizertimingpost             
+               cts/openroad-resizertimingpostcts.log'…                          
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_100C_1v60 already exists.                    
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60                     
+               already exists.                                                  
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_n40C_1v60 already exists.                    
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60                     
+               already exists.                                                  
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C                
+               _1v80.lib line 1, library                                        
+               sky130_fd_sc_hd__tt_025C_1v80 already exists.                    
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80                     
+               already exists.                                                  
+[11:41:36] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_n40C_1v95 already exists.                    
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95                     
+               already exists.                                                  
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_100C_1v60 already exists.                    
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60                     
+               already exists.                                                  
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_n40C                
+               _1v60.lib line 1, library                                        
+               sky130_fd_sc_hd__ss_n40C_1v60 already exists.                    
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ss_n40C_1v60.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ss_n40C_1v60                     
+               already exists.                                                  
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C                
+               _1v80.lib line 1, library                                        
+               sky130_fd_sc_hd__tt_025C_1v80 already exists.                    
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__tt_025C_1v80.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__tt_025C_1v80                     
+               already exists.                                                  
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/.ciel/ciel/sky130/versions/8afc                
+               8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs                
+               .ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C                
+               _1v95.lib line 1, library                                        
+               sky130_fd_sc_hd__ff_n40C_1v95 already exists.                    
+[11:41:37] [W] [STA-1140]                                        openroad.py:314
+               ~/claude_prjs/arvinsa-rtl-gds/ip/                
+               sram/arv_sram_2kbyte_1rw1r_32x512_8/char/arv_sram                
+               _2kbyte_1rw1r_32x512_8__ff_n40C_1v95.lib line 13,                
+               library                                                          
+               arv_sram_2kbyte_1rw1r_32x512_8__ff_n40C_1v95                     
+               already exists.                                                  
+[12:00:47] [W] [RSZ-0062] Unable to repair all setup violations. openroad.py:314
+<tmp>/nix-shell-98047-3710793448/rc: line 3: 98061 Terminated: 15          PYTHONPATH='~/claude_prjs/arvinsa-rtl-gds/pnr' python3 -m librelane --run-tag 'p7_harden1' --design-dir '~/claude_prjs/arvinsa-rtl-gds' --pdk 'sky130A' --scl 'sky130_fd_sc_hd' --condensed '~/claude_prjs/arvinsa-rtl-gds/pnr/user_project_wrapper/config.json'

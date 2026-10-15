@@ -1,0 +1,160 @@
+start 23:22:14
+bash env/check_env.sh --flow
+== Local tools (Phase 1) ==
+  [OK]      verilator: Verilator 5.050 2026-07-01 rev vUNKNOWN-built20260701 (>= 5.050)
+  [OK]      iverilog: 13.0 (>= 13.0)
+  [OK]      yosys: 0.69 (>= 0.69)
+  [OK]      riscv64-elf-gcc: 16.1.0 (>= 16.1)
+  [OK]      python3: 3.14.6 (>= 3.11)
+  [OK]      c++ (for Verilator --binary): Apple clang version 21.0.0 (clang-2100.3.34.2)
+  [OK]      python3 tomllib
+  [OK]      riscv gcc multilib rv32im/ilp32
+== Pinned IP ==
+  [OK]      picorv32 submodule @ ef203c2b0a3f
+  [OK]      SRAM model sha256 matches
+  [OK]      SRAM sim model regenerates identically
+== toolchain.md ==
+toolchain.md 一致：10 個本機工具、19 個釘版值
+== RTL-to-GDS flow (Phase 0, needs Nix) ==
+  [OK]      nix: nix (Nix) 2.35.2
+  [OK]      LibreLane 3.0.14 clone at ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane (tools run inside its nix-shell)
+  [OK]      librelane --version in nix-shell: LibreLane v3.0.14
+  [OK]      PDK dir: ~/.ciel/sky130A
+  [OK]      PDK version 8afc8346a57f
+  [OK]      PDK SRAM LEF has FOREIGN
+  [OK]      PDK SRAM model == pinned ip/sram copy
+
+env-check: PASS
+python3 signoff/scripts/neg_provenance.py
+  [PASS] clean: expected PASS
+  [PASS] clean_verify: expected PASS
+  [PASS] untracked: expected FAIL at uncommitted
+  [PASS] modified: expected FAIL at uncommitted
+  [PASS] no_submodule: expected FAIL at submodules
+  [PASS] librelane: expected FAIL at librelane
+  [PASS] pdk: expected FAIL at pdk
+  [PASS] head_changed: expected FAIL at same_head
+  [PASS] resolved_pdk: expected FAIL at resolved_pdk
+  [PASS] resolved_ll: expected FAIL at resolved_librelane
+  [PASS] no_record: expected FAIL at record
+neg-provenance: PASS 11/11
+bash pnr/test_librelane_flow.sh
+  [PASS] 'ok': rc=0 attempts=1 retries=0 (want rc=0 attempts=1 retries=0)
+  [PASS] 'grt ok': rc=0 attempts=2 retries=1 (want rc=0 attempts=2 retries=1)
+  [PASS] 'grt grt ok': rc=0 attempts=3 retries=2 (want rc=0 attempts=3 retries=2)
+  [PASS] 'grt grt grt': rc=2 attempts=3 retries=2 (want rc=fail attempts=3 retries=2)
+  [PASS] 'other': rc=2 attempts=1 retries=0 (want rc=fail attempts=1 retries=0)
+  [PASS] 'grtother': rc=2 attempts=1 retries=0 (want rc=fail attempts=1 retries=0)
+  [PASS] 'grt other': rc=2 attempts=2 retries=1 (want rc=fail attempts=2 retries=1)
+test-flow-retry: PASS 7/7
+bash pnr/soc_top/run.sh
+harden-soc: source tracking (committed working tree, pinned LibreLane and PDK)
+  [PASS] repo_head: 658b6dd5f89a2cf372d929adbe163a3a1f204071
+  [PASS] uncommitted: working tree clean
+  [PASS] submodules: 1 at the recorded commit
+  [PASS] librelane: ~/claude_prjs/arvinsa-rtl-gds/.tools/librelane at f24e0ea5db2260719e9a0c7d51d07db74a87fa23, pinned f24e0ea5db2260719e9a0c7d51d07db74a87fa23
+  [PASS] pdk: ~/.ciel/sky130A -> ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A, pinned 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+provenance: PASS
+harden-soc: inputs (config.json vs rtl/rtl.f, padded.lib vs the PDK .lib)
+  [PASS] rtl_files: 8 files and 1 include dir(s) in config.json vs 8 and 1 in rtl/rtl.f
+  [PASS] padded_lib: gen_padded_lib: ~/claude_prjs/arvinsa-rtl-gds-phase3b/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/padded.lib is up to date
+  [PASS] antenna_lef: gen_antenna_lef: ~/claude_prjs/arvinsa-rtl-gds-phase3b/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef is up to date
+  [PASS] macro_lib: MACROS sky130_sram_2kbyte_1rw1r_32x512_8 lib = {'*': ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/padded.lib']}, lef = ['dir::ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/sky130_sram_2kbyte_1rw1r_32x512_8.lef']
+soc-inputs: PASS
+harden-soc: running LibreLane Classic flow on soc_top (about 20-30 minutes on this machine); full log: ~/claude_prjs/arvinsa-rtl-gds-phase3b/runs/soc_top/flow.log
+  [PASS] equal  flow__errors__count: run=0 expected=== 0
+  [PASS] equal  design__lint_error__count: run=0 expected=== 0
+  [PASS] equal  synthesis__check_error__count: run=0 expected=== 0
+  [PASS] equal  design__instance_unmapped__count: run=0 expected=== 0
+  [PASS] equal  design__instance__count__macros: run=1 expected=== 1
+  [PASS] equal  design__power_grid_violation__count: run=0 expected=== 0
+  [PASS] equal  design__disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  design__critical_disconnected_pin__count: run=0 expected=== 0
+  [PASS] equal  route__drc_errors: run=0 expected=== 0
+  [PASS] equal  antenna__violating__nets: run=0 expected=== 0
+  [PASS] equal  antenna__violating__pins: run=0 expected=== 0
+  [PASS] equal  route__antenna_violation__count: run=0 expected=== 0
+  [PASS] equal  klayout__drc_error__count: run=0 expected=== 0
+  [PASS] equal  magic__illegal_overlap__count: run=0 expected=== 0
+  [PASS] equal  design__xor_difference__count: run=0 expected=== 0
+  [PASS] equal  design__lvs_error__count: run=0 expected=== 0
+  [PASS] equal  timing__setup_vio__count: run=0 expected=== 0
+  [PASS] equal  timing__hold_vio__count: run=0 expected=== 0
+  [PASS] equal  design__max_slew_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_cap_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_fanout_violation__count: run=0 expected=== 0
+  [PASS] equal  timing__unannotated_net__count: run=134 expected=== 134
+  [PASS] equal  timing__unannotated_net_filtered__count: run=0 expected=== 0
+  [PASS] min    timing__setup__ws__corner:nom_tt_025C_1v80: run=8.670362451190432 expected=>= 4.0
+  [PASS] max    ir__drop__worst: run=0.000306 expected=<= 0.09
+  [PASS] corner timing__setup__ws__corner:nom_tt_025C_1v80: run=8.670362451190432 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:nom_ss_100C_1v60: run=3.5782791076337936 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_n40C_1v95: run=8.87386900189504 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:min_tt_025C_1v80: run=8.65772189556376 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:min_ss_100C_1v60: run=3.552926942104865 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:min_ff_n40C_1v95: run=8.865704865630258 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:max_tt_025C_1v80: run=8.694744725857618 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:max_ss_100C_1v60: run=3.6296655597372722 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__setup__ws__corner:max_ff_n40C_1v95: run=8.892097976296515 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:nom_tt_025C_1v80: run=0.20447599747712913 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_100C_1v60: run=0.7022065350171568 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:nom_ff_n40C_1v95: run=0.033710035716985935 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:min_tt_025C_1v80: run=0.2028972602914624 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:min_ss_100C_1v60: run=0.6997680410969048 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:min_ff_n40C_1v95: run=0.03246480953734896 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:max_tt_025C_1v80: run=0.20631474890251675 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:max_ss_100C_1v60: run=0.7054377281994103 expected=>= 0.0 and < 40.0
+  [PASS] corner timing__hold__ws__corner:max_ff_n40C_1v95: run=0.035139669946228566 expected=>= 0.0 and < 40.0
+  [PASS] golden 320 metrics: run=320 identical, 0 within tolerance expected=golden/soc_top/metrics.json
+  [INFO] info   magic__drc_error__count: run=4665810 expected=-
+  [INFO] info   design__instance__count: run=96838 expected=-
+  [INFO] info   design__instance__area__stdcell: run=227740 expected=-
+  [INFO] info   design__instance__utilization: run=0.666157 expected=-
+  [INFO] info   timing__setup__ws: run=3.552926942104865 expected=-
+  [INFO] info   timing__hold__ws: run=0.03246480953734896 expected=-
+  [INFO] info   ir__drop__worst: run=0.000306 expected=-
+  [INFO] info   power__total: run=0.009030875749886036 expected=-
+signoff: PASS
+  [PASS] macro: sky130_sram_2kbyte_1rw1r_32x512_8 instances in the final netlist: ['sram0']
+  [PASS] placement: sram0 FIXED (301.76, 364.48) N; config.json (301.76, 364.48) N
+  [PASS] port1_tieoff: csb1 tie-high, clk1 and addr1[8:0] tie-low
+  [PASS] disconnected: Odb.ReportDisconnectedPins: [('0', '0')]
+  [PASS] sta_setup: check_setup in 9 corners: only the expected unclocked sram0/clk1
+  [PASS] magic_drc: 0 violations outside the SRAM outline; inside 4665810 in 30 rule types, all also violated by the SRAM alone
+soc-checks: PASS
+soc-inputs: PASS
+provenance: PASS
+harden-soc: PASS
+python3 signoff/eqy/run_eqy.py --design soc_top
+[eqy] soc_top: gold runs/soc_top/06-yosys-synthesis/soc_top.nl.v
+[eqy] soc_top: gate runs/soc_top/final/nl/soc_top.nl.v
+[eqy] soc_top: running EQY (10 jobs; log runs/eqy_soc_top/eqy_run.log)
+  [PASS] soc_top: 18100/18100 partitions proved equivalent, 90142 matched names, 299.6 s
+eqy: PASS
+python3 signoff/eqy/neg_eqy.py --design soc_top
+  [PASS] din5_stuck0: eqy FAIL as expected (1/18100 partitions not proved; 1 bit(s) mapped to a constant)
+  [PASS] csb0_inverted: eqy FAIL as expected (partition step refused: conflicting name matches)
+  [PASS] host_rdata7_inverted: eqy FAIL as expected (partition step refused: conflicting name matches)
+  [PASS] mux_swap: eqy FAIL as expected (partition step refused: conflicting name matches)
+neg-eqy: PASS 4/4 caught (435 s)
+python3 dv/gl_soc/run_gl_soc.py
+[gl-soc] netlist ~/claude_prjs/arvinsa-rtl-gds-phase3b/runs/soc_top/final/nl/soc_top.nl.v
+[gl-soc] compile tb_soc with the RTL and gate-level SoC (Icarus)
+[gl-soc] run 13 tests, 8 in parallel
+  [FAIL] hello: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/hello.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] memtest: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/memtest.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] irq: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/irq.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] muldiv: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/muldiv.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] uart_echo: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/uart_echo.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [PASS] bootrom_march: 112280 cycles, 112280 RTL/GL comparisons, 51.95 s
+  [FAIL] boot_uart_hello: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/boot_uart_hello.bin not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] boot_host_hello: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/boot_host_hello.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] boot_uart_max: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/boot_uart_hello.bin not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] regs: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/regs.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] unmapped: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/unmapped.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] uart_burst: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/uart_burst.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+  [FAIL] reset_store: failing checkers: sim_error; [CHK:sim_error] FAIL firmware image fw/build/reset_store.hex not found (build it with 'make fw'); fail.gl_lockstep=None; gl_compares=None (the RTL/GL comparison did not run)
+gl-soc: FAIL 1/13 tests (53.2 s)
+make: *** [gl-soc] Error 1
+phase3 rc=2 (2270 s)
+end 00:00:04

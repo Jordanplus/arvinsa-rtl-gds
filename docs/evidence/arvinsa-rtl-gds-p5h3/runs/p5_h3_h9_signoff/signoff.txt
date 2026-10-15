@@ -1,0 +1,391 @@
+  [PASS] equal  flow__errors__count: run=0 expected=== 0
+  [PASS] equal  design__lint_error__count: run=0 expected=== 0
+  [PASS] equal  synthesis__check_error__count: run=0 expected=== 0
+  [PASS] equal  design__instance_unmapped__count: run=0 expected=== 0
+  [PASS] equal  design__instance__count__macros: run=1 expected=== 1
+  [PASS] equal  design__power_grid_violation__count: run=0 expected=== 0
+  [FAIL] equal  design__disconnected_pin__count: run=<missing> expected=== 0
+  [FAIL] equal  design__critical_disconnected_pin__count: run=<missing> expected=== 0
+  [FAIL] equal  route__drc_errors: run=<missing> expected=== 0
+  [PASS] equal  antenna__violating__nets: run=0 expected=== 0
+  [PASS] equal  antenna__violating__pins: run=0 expected=== 0
+  [PASS] equal  route__antenna_violation__count: run=0 expected=== 0
+  [FAIL] equal  klayout__drc_error__count: run=<missing> expected=== 0
+  [FAIL] equal  magic__illegal_overlap__count: run=<missing> expected=== 0
+  [FAIL] equal  design__xor_difference__count: run=<missing> expected=== 0
+  [FAIL] equal  design__lvs_error__count: run=<missing> expected=== 0
+  [PASS] equal  timing__setup_vio__count: run=0 expected=== 0
+  [PASS] equal  timing__hold_vio__count: run=0 expected=== 0
+  [PASS] equal  design__max_slew_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_cap_violation__count: run=0 expected=== 0
+  [PASS] equal  design__max_fanout_violation__count: run=0 expected=== 0
+  [FAIL] equal  timing__unannotated_net__count: run=<missing> expected=== 125
+  [FAIL] equal  timing__unannotated_net_filtered__count: run=<missing> expected=== 0
+  [FAIL] max    ir_vdd_drop_plus_gnd_rise (sum of design_powergrid__drop__worst__net:vccd1, design_powergrid__drop__worst__net:vssd1): run=<missing> expected=<= 0.02, each >= 0
+  [PASS] corner timing__setup__ws__corner:nom_tt_025C_1v80: run=7.91229 expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:nom_ss_100C_1v60: run=-6.5798071076258005 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_n40C_1v95: run=8.687188103649092 expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:nom_ss_n40C_1v60: run=-18.80918585233878 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__setup__ws__corner:nom_ff_100C_1v95: run=8.710788781284837 expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:min_tt_025C_1v80: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:min_ss_100C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:min_ff_n40C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:min_ss_n40C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:min_ff_100C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:max_tt_025C_1v80: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:max_ss_100C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:max_ff_n40C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:max_ss_n40C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__setup__ws__corner:max_ff_100C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_tt_025C_1v80: run=0.595391 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_100C_1v60: run=0.17637203308153845 expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:nom_ff_n40C_1v95: run=-0.4415531676384634 expected=>= 0.0 and < 44.0
+  [PASS] corner timing__hold__ws__corner:nom_ss_n40C_1v60: run=0.23813940382576204 expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:nom_ff_100C_1v95: run=-0.4298821975621944 expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:min_tt_025C_1v80: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:min_ss_100C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:min_ff_n40C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:min_ss_n40C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:min_ff_100C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:max_tt_025C_1v80: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:max_ss_100C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:max_ff_n40C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:max_ss_n40C_1v60: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner timing__hold__ws__corner:max_ff_100C_1v95: run=<missing> expected=>= 0.0 and < 44.0
+  [FAIL] corner names: run=['nom_tt_025C_1v80', 'nom_ss_100C_1v60', 'nom_ff_n40C_1v95', 'nom_ss_n40C_1v60', 'nom_ff_100C_1v95', 'min_tt_025C_1v80', 'min_ss_100C_1v60', 'min_ff_n40C_1v95', 'min_ss_n40C_1v60', 'min_ff_100C_1v95', 'max_tt_025C_1v80', 'max_ss_100C_1v60', 'max_ff_n40C_1v95', 'max_ss_n40C_1v60', 'max_ff_100C_1v95'] expected=unique and equal to the corners in the metrics ['nom_ff_100C_1v95', 'nom_ff_n40C_1v95', 'nom_ss_100C_1v60', 'nom_ss_n40C_1v60', 'nom_tt_025C_1v80']
+  [FAIL] golden antenna_diodes_count: run=17 expected=100 (antenna_diodes_count: {'abs': 55})
+  [FAIL] golden clock__skew__worst_hold__corner:max_ff_100C_1v95: run=<missing> expected=-0.6140517157442619
+  [FAIL] golden clock__skew__worst_hold__corner:max_ff_n40C_1v95: run=<missing> expected=-0.6021329161263118
+  [FAIL] golden clock__skew__worst_hold__corner:max_ss_100C_1v60: run=<missing> expected=-1.178111419543412
+  [FAIL] golden clock__skew__worst_hold__corner:max_ss_n40C_1v60: run=<missing> expected=-1.2834595971511231
+  [FAIL] golden clock__skew__worst_hold__corner:max_tt_025C_1v80: run=<missing> expected=-0.769295871002739
+  [FAIL] golden clock__skew__worst_hold__corner:min_ff_100C_1v95: run=<missing> expected=-0.5935395676280717
+  [FAIL] golden clock__skew__worst_hold__corner:min_ff_n40C_1v95: run=<missing> expected=-0.5801189692822375
+  [FAIL] golden clock__skew__worst_hold__corner:min_ss_100C_1v60: run=<missing> expected=-1.1270633634274096
+  [FAIL] golden clock__skew__worst_hold__corner:min_ss_n40C_1v60: run=<missing> expected=-1.2119126045732975
+  [FAIL] golden clock__skew__worst_hold__corner:min_tt_025C_1v80: run=<missing> expected=-0.738310877776765
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ff_100C_1v95: run=-4.6657115047641335 expected=-0.6027231107028944 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ff_n40C_1v95: run=-6.600488342713423 expected=-0.5900385902432044 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ss_100C_1v60: run=-9.893383281528475 expected=-1.150960914708335 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_hold__corner:nom_ss_n40C_1v60: run=-17.420692936838634 expected=-1.2490138166149098 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_setup__corner:max_ff_100C_1v95: run=<missing> expected=0.5647962257745166
+  [FAIL] golden clock__skew__worst_setup__corner:max_ff_n40C_1v95: run=<missing> expected=0.5695598598410005
+  [FAIL] golden clock__skew__worst_setup__corner:max_ss_100C_1v60: run=<missing> expected=1.130246817018254
+  [FAIL] golden clock__skew__worst_setup__corner:max_ss_n40C_1v60: run=<missing> expected=1.3346897298483136
+  [FAIL] golden clock__skew__worst_setup__corner:max_tt_025C_1v80: run=<missing> expected=0.7312008983036791
+  [FAIL] golden clock__skew__worst_setup__corner:min_ff_100C_1v95: run=<missing> expected=0.5265283358344809
+  [FAIL] golden clock__skew__worst_setup__corner:min_ff_n40C_1v95: run=<missing> expected=0.5277066710749924
+  [FAIL] golden clock__skew__worst_setup__corner:min_ss_100C_1v60: run=<missing> expected=1.0235719228585936
+  [FAIL] golden clock__skew__worst_setup__corner:min_ss_n40C_1v60: run=<missing> expected=1.1863247386895748
+  [FAIL] golden clock__skew__worst_setup__corner:min_tt_025C_1v80: run=<missing> expected=0.6705810541101623
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ff_100C_1v95: run=-2.6939935489379105 expected=0.5478997410848812 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ff_n40C_1v95: run=-4.694767374407959 expected=0.550591254839601 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ss_100C_1v60: run=-6.502071065599861 expected=1.0811940537785387 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden clock__skew__worst_setup__corner:nom_ss_n40C_1v60: run=-13.892177579289633 expected=1.264937745907468 (clock__skew__*: {'abs': 0.25})
+  [FAIL] golden design__critical_disconnected_pin__count: run=<missing> expected=0
+  [FAIL] golden design__disconnected_pin__count: run=<missing> expected=0
+  [FAIL] golden design__instance__area: run=525440 expected=747850
+  [FAIL] golden design__instance__area__class:antenna_cell: run=42.5408 expected=305.293 (design__instance__area__class:antenna_cell: {'abs': 165})
+  [FAIL] golden design__instance__area__class:clock_buffer: run=6114.61 expected=6431.17
+  [FAIL] golden design__instance__area__class:clock_inverter: run=322.81 expected=290.278
+  [FAIL] golden design__instance__area__class:fill_cell: run=2147.06 expected=223735 (design__instance__area__class:fill_cell: {'abs': 210})
+  [FAIL] golden design__instance__area__class:sequential_cell: run=49545 expected=49547.5
+  [FAIL] golden design__instance__area__class:timing_repair_buffer: run=73730.7 expected=74006 (design__instance__area__class:timing_repair_buffer: {'abs': 150})
+  [FAIL] golden design__instance__area__stdcell: run=238754 expected=239577 (design__instance__area__stdcell: {'abs': 210})
+  [FAIL] golden design__instance__count: run=30917 expected=96042 (design__instance__count: {'abs': 30})
+  [FAIL] golden design__instance__count__class:antenna_cell: run=17 expected=122 (design__instance__count__class:antenna_cell: {'abs': 65})
+  [FAIL] golden design__instance__count__class:clock_buffer: run=445 expected=458
+  [FAIL] golden design__instance__count__class:clock_inverter: run=56 expected=54
+  [FAIL] golden design__instance__count__class:fill_cell: run=572 expected=65567 (design__instance__count__class:fill_cell: {'abs': 85})
+  [FAIL] golden design__instance__count__hold_buffer: run=10 expected=0
+  [FAIL] golden design__instance__count__stdcell: run=30344 expected=30474 (design__instance__count__stdcell: {'abs': 70})
+  [FAIL] golden design__instance__displacement__mean: run=0.329 expected=0.008 (design__instance__displacement__*: {'rel': 0.7})
+  [FAIL] golden design__instance__displacement__total: run=10185.2 expected=261.78 (design__instance__displacement__*: {'rel': 0.7})
+  [FAIL] golden design__instance__utilization: run=0.68048 expected=0.68155 (design__instance__utilization: {'abs': 0.0003})
+  [FAIL] golden design__instance__utilization__stdcell: run=0.492818 expected=0.494518 (design__instance__utilization__stdcell: {'abs': 0.00045})
+  [FAIL] golden design__lvs_device_difference__count: run=<missing> expected=0
+  [FAIL] golden design__lvs_error__count: run=<missing> expected=0
+  [FAIL] golden design__lvs_net_difference__count: run=<missing> expected=0
+  [FAIL] golden design__lvs_property_fail__count: run=<missing> expected=0
+  [FAIL] golden design__lvs_unmatched_device__count: run=<missing> expected=0
+  [FAIL] golden design__lvs_unmatched_net__count: run=<missing> expected=0
+  [FAIL] golden design__lvs_unmatched_pin__count: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:nom_ff_100C_1v95: run=16 expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:nom_ff_n40C_1v95: run=13 expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:nom_ss_100C_1v60: run=49 expected=0
+  [FAIL] golden design__max_cap_violation__count__corner:nom_ss_n40C_1v60: run=66 expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:nom_ff_100C_1v95: run=367 expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:nom_ff_n40C_1v95: run=367 expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:nom_ss_100C_1v60: run=367 expected=0
+  [FAIL] golden design__max_fanout_violation__count__corner:nom_ss_n40C_1v60: run=367 expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:nom_ff_100C_1v95: run=3987 expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:nom_ff_n40C_1v95: run=4173 expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:nom_ss_100C_1v60: run=7629 expected=0
+  [FAIL] golden design__max_slew_violation__count__corner:nom_ss_n40C_1v60: run=8611 expected=0
+  [FAIL] golden design__xor_difference__count: run=<missing> expected=0
+  [FAIL] golden design_powergrid__drop__average__net:vccd1__corner:nom_tt_025C_1v80: run=<missing> expected=1.79499
+  [FAIL] golden design_powergrid__drop__average__net:vssd1__corner:nom_tt_025C_1v80: run=<missing> expected=0.00499492
+  [FAIL] golden design_powergrid__drop__worst: run=<missing> expected=0.0092238
+  [FAIL] golden design_powergrid__drop__worst__net:vccd1: run=<missing> expected=0.0092238
+  [FAIL] golden design_powergrid__drop__worst__net:vccd1__corner:nom_tt_025C_1v80: run=<missing> expected=0.0092238
+  [FAIL] golden design_powergrid__drop__worst__net:vssd1: run=<missing> expected=0.00913228
+  [FAIL] golden design_powergrid__drop__worst__net:vssd1__corner:nom_tt_025C_1v80: run=<missing> expected=0.00913228
+  [FAIL] golden design_powergrid__voltage__worst: run=<missing> expected=0.00913228
+  [FAIL] golden design_powergrid__voltage__worst__net:vccd1: run=<missing> expected=1.79078
+  [FAIL] golden design_powergrid__voltage__worst__net:vccd1__corner:nom_tt_025C_1v80: run=<missing> expected=1.79078
+  [FAIL] golden design_powergrid__voltage__worst__net:vssd1: run=<missing> expected=0.00913228
+  [FAIL] golden design_powergrid__voltage__worst__net:vssd1__corner:nom_tt_025C_1v80: run=<missing> expected=0.00913228
+  [FAIL] golden flow__warnings__count: run=0 expected=1
+  [FAIL] golden flow__warnings__count:DRT-0349: run=<missing> expected=10
+  [FAIL] golden flow__warnings__type_count: run=0 expected=1
+  [FAIL] golden global_route__vias: run=47240 expected=72 (global_route__vias: {'abs': 320})
+  [FAIL] golden ir__drop__avg: run=<missing> expected=0.00501
+  [FAIL] golden ir__drop__worst: run=<missing> expected=0.00922
+  [FAIL] golden ir__voltage__worst: run=<missing> expected=1.79
+  [FAIL] golden klayout__drc_error__count: run=<missing> expected=0
+  [FAIL] golden magic__drc_error__count: run=<missing> expected=4665810
+  [FAIL] golden magic__illegal_overlap__count: run=<missing> expected=0
+  [FAIL] golden power__internal__total: run=0.00834009 expected=0.01065832655876875 (power__*: {'rel': 0.0031})
+  [FAIL] golden power__leakage__total: run=1.78463e-05 expected=0.000334099488100037 (power__*: {'rel': 0.0031})
+  [FAIL] golden power__switching__total: run=0.00615236 expected=0.008433488197624683 (power__*: {'rel': 0.0031})
+  [FAIL] golden power__total: run=0.0145103 expected=0.01942591369152069 (power__*: {'rel': 0.0031})
+  [FAIL] golden route__drc_errors: run=<missing> expected=0
+  [FAIL] golden route__net: run=<missing> expected=23753
+  [FAIL] golden route__net__special: run=<missing> expected=2
+  [FAIL] golden route__vias: run=<missing> expected=157447
+  [FAIL] golden route__vias__multicut: run=<missing> expected=0
+  [FAIL] golden route__vias__singlecut: run=<missing> expected=157447
+  [FAIL] golden route__wirelength: run=<missing> expected=798897
+  [FAIL] golden route__wirelength__estimated: run=770812 expected=772922 (route__wirelength__estimated: {'rel': 0.0025})
+  [FAIL] golden route__wirelength__max: run=<missing> expected=618.61
+  [FAIL] golden timing__hold__tns__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold__tns__corner:nom_ff_100C_1v95: run=-10.341222393332266 expected=0
+  [FAIL] golden timing__hold__tns__corner:nom_ff_n40C_1v95: run=-11.615058577033771 expected=0
+  [FAIL] golden timing__hold__wns__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold__wns__corner:nom_ff_100C_1v95: run=-0.4298821975621944 expected=0
+  [FAIL] golden timing__hold__wns__corner:nom_ff_n40C_1v95: run=-0.4415531676384634 expected=0
+  [FAIL] golden timing__hold__ws: run=0.595391 expected=0.10666912099976919 (timing__hold__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold__ws__corner:max_ff_100C_1v95: run=<missing> expected=0.1299124178337794
+  [FAIL] golden timing__hold__ws__corner:max_ff_n40C_1v95: run=<missing> expected=0.11643664140206073
+  [FAIL] golden timing__hold__ws__corner:max_ss_100C_1v60: run=<missing> expected=0.8914504942102423
+  [FAIL] golden timing__hold__ws__corner:max_ss_n40C_1v60: run=<missing> expected=0.7907519307611611
+  [FAIL] golden timing__hold__ws__corner:max_tt_025C_1v80: run=<missing> expected=0.33694115118362544
+  [FAIL] golden timing__hold__ws__corner:min_ff_100C_1v95: run=<missing> expected=0.1208241318971636
+  [FAIL] golden timing__hold__ws__corner:min_ff_n40C_1v95: run=<missing> expected=0.10666912099976919
+  [FAIL] golden timing__hold__ws__corner:min_ss_100C_1v60: run=<missing> expected=0.8746135174764097
+  [FAIL] golden timing__hold__ws__corner:min_ss_n40C_1v60: run=<missing> expected=0.8951679650910344
+  [FAIL] golden timing__hold__ws__corner:min_tt_025C_1v80: run=<missing> expected=0.3222624480707043
+  [FAIL] golden timing__hold__ws__corner:nom_ff_100C_1v95: run=-0.4298821975621944 expected=0.12514345469662655 (timing__hold__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold__ws__corner:nom_ff_n40C_1v95: run=-0.4415531676384634 expected=0.11135503945233141 (timing__hold__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold__ws__corner:nom_ss_100C_1v60: run=0.17637203308153845 expected=0.8845622262814444 (timing__hold__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold__ws__corner:nom_ss_n40C_1v60: run=0.23813940382576204 expected=0.8342677895758714 (timing__hold__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold_r2r__ws: run=0.595391 expected=0.106669 (timing__hold_r2r__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold_r2r__ws__corner:max_ff_100C_1v95: run=<missing> expected=0.129912
+  [FAIL] golden timing__hold_r2r__ws__corner:max_ff_n40C_1v95: run=<missing> expected=0.116437
+  [FAIL] golden timing__hold_r2r__ws__corner:max_ss_100C_1v60: run=<missing> expected=0.89145
+  [FAIL] golden timing__hold_r2r__ws__corner:max_ss_n40C_1v60: run=<missing> expected=0.790752
+  [FAIL] golden timing__hold_r2r__ws__corner:max_tt_025C_1v80: run=<missing> expected=0.336941
+  [FAIL] golden timing__hold_r2r__ws__corner:min_ff_100C_1v95: run=<missing> expected=0.120824
+  [FAIL] golden timing__hold_r2r__ws__corner:min_ff_n40C_1v95: run=<missing> expected=0.106669
+  [FAIL] golden timing__hold_r2r__ws__corner:min_ss_100C_1v60: run=<missing> expected=0.874614
+  [FAIL] golden timing__hold_r2r__ws__corner:min_ss_n40C_1v60: run=<missing> expected=0.895168
+  [FAIL] golden timing__hold_r2r__ws__corner:min_tt_025C_1v80: run=<missing> expected=0.322262
+  [FAIL] golden timing__hold_r2r__ws__corner:nom_ff_100C_1v95: run=-0.429882 expected=0.125143 (timing__hold_r2r__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold_r2r__ws__corner:nom_ff_n40C_1v95: run=-0.441553 expected=0.111355 (timing__hold_r2r__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold_r2r__ws__corner:nom_ss_100C_1v60: run=0.176372 expected=0.884562 (timing__hold_r2r__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold_r2r__ws__corner:nom_ss_n40C_1v60: run=0.238139 expected=0.834268 (timing__hold_r2r__ws*: {'abs': 0.32})
+  [FAIL] golden timing__hold_r2r_vio__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:nom_ff_100C_1v95: run=47 expected=0
+  [FAIL] golden timing__hold_r2r_vio__count__corner:nom_ff_n40C_1v95: run=48 expected=0
+  [FAIL] golden timing__hold_vio__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__hold_vio__count__corner:nom_ff_100C_1v95: run=47 expected=0
+  [FAIL] golden timing__hold_vio__count__corner:nom_ff_n40C_1v95: run=48 expected=0
+  [FAIL] golden timing__setup__tns__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup__tns__corner:nom_ss_100C_1v60: run=-209.47110239265282 expected=0
+  [FAIL] golden timing__setup__tns__corner:nom_ss_n40C_1v60: run=-1081.9689201937251 expected=0
+  [FAIL] golden timing__setup__wns__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup__wns__corner:nom_ss_100C_1v60: run=-6.5798071076258005 expected=0
+  [FAIL] golden timing__setup__wns__corner:nom_ss_n40C_1v60: run=-18.80918585233878 expected=0
+  [FAIL] golden timing__setup__ws: run=7.91229 expected=0.529645675642339 (timing__setup__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup__ws__corner:max_ff_100C_1v95: run=<missing> expected=8.237293746923989
+  [FAIL] golden timing__setup__ws__corner:max_ff_n40C_1v95: run=<missing> expected=8.186866527540914
+  [FAIL] golden timing__setup__ws__corner:max_ss_100C_1v60: run=<missing> expected=1.1591865573304199
+  [FAIL] golden timing__setup__ws__corner:max_ss_n40C_1v60: run=<missing> expected=0.6361062967521868
+  [FAIL] golden timing__setup__ws__corner:max_tt_025C_1v80: run=<missing> expected=7.7214858914519375
+  [FAIL] golden timing__setup__ws__corner:min_ff_100C_1v95: run=<missing> expected=8.230209635648107
+  [FAIL] golden timing__setup__ws__corner:min_ff_n40C_1v95: run=<missing> expected=8.173909780387888
+  [FAIL] golden timing__setup__ws__corner:min_ss_100C_1v60: run=<missing> expected=1.1131540448923134
+  [FAIL] golden timing__setup__ws__corner:min_ss_n40C_1v60: run=<missing> expected=0.529645675642339
+  [FAIL] golden timing__setup__ws__corner:min_tt_025C_1v80: run=<missing> expected=7.698869315533053
+  [FAIL] golden timing__setup__ws__corner:nom_ff_100C_1v95: run=8.710788781284837 expected=8.234735793002908 (timing__setup__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup__ws__corner:nom_ff_n40C_1v95: run=8.687188103649092 expected=8.181754172412534 (timing__setup__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup__ws__corner:nom_ss_100C_1v60: run=-6.5798071076258005 expected=1.1359482565001617 (timing__setup__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup__ws__corner:nom_ss_n40C_1v60: run=-18.80918585233878 expected=0.5841904902955958 (timing__setup__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup__ws__corner:nom_tt_025C_1v80: run=7.91229 expected=7.711122625357783 (timing__setup__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r__ws: run=7.91229 expected=0.529646 (timing__setup_r2r__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r__ws__corner:max_ff_100C_1v95: run=<missing> expected=8.237294
+  [FAIL] golden timing__setup_r2r__ws__corner:max_ff_n40C_1v95: run=<missing> expected=8.186867
+  [FAIL] golden timing__setup_r2r__ws__corner:max_ss_100C_1v60: run=<missing> expected=1.159187
+  [FAIL] golden timing__setup_r2r__ws__corner:max_ss_n40C_1v60: run=<missing> expected=0.636106
+  [FAIL] golden timing__setup_r2r__ws__corner:max_tt_025C_1v80: run=<missing> expected=7.721486
+  [FAIL] golden timing__setup_r2r__ws__corner:min_ff_100C_1v95: run=<missing> expected=8.230209
+  [FAIL] golden timing__setup_r2r__ws__corner:min_ff_n40C_1v95: run=<missing> expected=8.17391
+  [FAIL] golden timing__setup_r2r__ws__corner:min_ss_100C_1v60: run=<missing> expected=1.113154
+  [FAIL] golden timing__setup_r2r__ws__corner:min_ss_n40C_1v60: run=<missing> expected=0.529646
+  [FAIL] golden timing__setup_r2r__ws__corner:min_tt_025C_1v80: run=<missing> expected=7.698869
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_ff_100C_1v95: run=8.710789 expected=8.234735 (timing__setup_r2r__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_ff_n40C_1v95: run=8.687188 expected=8.181754 (timing__setup_r2r__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_ss_100C_1v60: run=-6.579807 expected=1.135948 (timing__setup_r2r__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_ss_n40C_1v60: run=-18.809185 expected=0.58419 (timing__setup_r2r__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r__ws__corner:nom_tt_025C_1v80: run=7.91229 expected=7.711123 (timing__setup_r2r__ws*: {'abs': 0.2})
+  [FAIL] golden timing__setup_r2r_vio__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:nom_ss_100C_1v60: run=32 expected=0
+  [FAIL] golden timing__setup_r2r_vio__count__corner:nom_ss_n40C_1v60: run=64 expected=0
+  [FAIL] golden timing__setup_vio__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__setup_vio__count__corner:nom_ss_100C_1v60: run=32 expected=0
+  [FAIL] golden timing__setup_vio__count__corner:nom_ss_n40C_1v60: run=64 expected=0
+  [FAIL] golden timing__unannotated_net__count: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:max_ff_100C_1v95: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:max_ff_n40C_1v95: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:max_ss_100C_1v60: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:max_ss_n40C_1v60: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:max_tt_025C_1v80: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:min_ff_100C_1v95: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:min_ff_n40C_1v95: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:min_ss_100C_1v60: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:min_ss_n40C_1v60: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:min_tt_025C_1v80: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ff_100C_1v95: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ff_n40C_1v95: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ss_100C_1v60: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:nom_ss_n40C_1v60: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net__count__corner:nom_tt_025C_1v80: run=<missing> expected=125
+  [FAIL] golden timing__unannotated_net_filtered__count: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:max_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:max_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:max_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:max_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:max_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:min_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:min_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:min_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:min_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:min_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:nom_ff_100C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:nom_ff_n40C_1v95: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:nom_ss_100C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:nom_ss_n40C_1v60: run=<missing> expected=0
+  [FAIL] golden timing__unannotated_net_filtered__count__corner:nom_tt_025C_1v80: run=<missing> expected=0
+  [FAIL] golden 441 metrics: run=87 identical, 11 within tolerance, 18 optional key(s) in one side only, 325 different expected=golden/soc_top_hazard3/metrics.json
+  [INFO] info   timing__setup__ws__corner:nom_tt_025C_1v80: run=7.91229 expected=-
+  [INFO] info   magic__drc_error__count: run=<missing> expected=-
+  [INFO] info   design__instance__count: run=30917 expected=-
+  [INFO] info   design__instance__area__stdcell: run=238754 expected=-
+  [INFO] info   design__instance__utilization: run=0.68048 expected=-
+  [INFO] info   timing__setup__ws: run=7.91229 expected=-
+  [INFO] info   timing__hold__ws: run=0.595391 expected=-
+  [INFO] info   ir__drop__worst: run=<missing> expected=-
+  [INFO] info   power__total: run=0.0145103 expected=-
+signoff: FAIL (361 rows)

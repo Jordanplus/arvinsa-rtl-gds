@@ -1,0 +1,21 @@
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/soc_top/final/nl/soc_top.nl.v line 22708, module sky130_fd_sc_hd__fill_1 not found. Creating black box for FILLER_0_1035.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/soc_top/final/nl/soc_top.nl.v line 22716, module sky130_fd_sc_hd__fill_2 not found. Creating black box for FILLER_0_1071.
+Warning: ~/claude_prjs/arvinsa-rtl-gds/runs/soc_top/final/nl/soc_top.nl.v line 88985, module sky130_fd_sc_hd__tapvpwrvgnd_1 not found. Creating black box for TAP_TAPCELL_ROW_0_572.
+== ~/claude_prjs/arvinsa-rtl-gds/ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/char/sky130_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60.lib
+max_delay/setup group clk
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+_21833_/D (sky130_fd_sc_hd__dfxtp_2)   43.73   42.81    0.92 (MET)
+
+Warning: ~/.ciel/ciel/sky130/versions/8afc8346a57fe1ab7934ba5a6056ea8b43078e71/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib line 1, library sky130_fd_sc_hd__ss_100C_1v60 already exists.
+Warning: <claude-session-tmp>/scratchpad/slew_ss100.lib line 10, library sky130_sram_2kbyte_1rw1r_32x512_8__ss_100C_1v60 already exists.
+== <claude-session-tmp>/scratchpad/slew_ss100.lib
+max_delay/setup group clk
+
+                                     Required  Actual
+Endpoint                               Delay   Delay   Slack
+------------------------------------------------------------
+_21838_/D (sky130_fd_sc_hd__dfxtp_2)   43.49   43.32    0.17 (MET)
+
