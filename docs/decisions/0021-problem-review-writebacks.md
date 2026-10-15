@@ -77,7 +77,12 @@
 
 ## 後果
 
-- 改了 `scripts/regress.py`，依 `phase-exit-review` 規則 2，要在乾淨 worktree 重跑受影響的 regression 才算完成。
+- 改了 `scripts/regress.py`，依 `phase-exit-review` 規則 2，在 `f02a1a0` 的乾淨 worktree 重跑了三條 regression（2026-10-15，兩條同時跑），全部 PASS：
+  - Hazard3 `make regress` 30/30（174 分鐘，worktree `p8wb_h3`）；
+  - PicoRV32 `make regress-picorv32` 31/31（223 分鐘，`p8wb_pico`）；
+  - wrapper `make regress-caravel` 18/18，含 ChipFoundry precheck（428 分鐘，`p8wb_caravel`）。
+
+  四次 harden 的 metrics 都和 golden 逐值相同（soc_top_hazard3 441、soc_top 435、picorv32_core 325、wrapper 455），criteria review 除了路徑與 Phase 7 結案逐字相同，所以這次的寫回沒有改到 flow 的輸出。三條都通過開跑前的磁碟檢查（開跑時剩約 551 GiB，跑完剩 364 GiB），沒有一項逾時：實際耗時最多是逾時上限的 35%（`neg-gl-soc` 10.6／30 分、`neg-eqy-core` 50.0／144 分）。跑完後三個 worktree 的 `runs/` 分別是 52、68、28 GB，在 `flow-regression-reproducibility` 規則 14 估計的範圍內。console 在主目錄 `runs/p8wb_regress_*.console`，每次 harden 的 criteria review 在各 worktree 的 `runs/*_signoff/criteria_review.md`。
 - **latch-up 的量測結果**（2026-10-15，`docs/notes/latchup/`）：
   - 照 15 µm 規則（有 81/14 時），soc_top 與 wrapper 都是 0；
   - 照預設的 6 µm 規則，SRAM 外約 7% 的 diffusion 面積離同型 tap 太遠：wrapper 有 113,280 µm² NMOS、178,820 µm² PMOS，幾乎全在標準元件與 decap 區；

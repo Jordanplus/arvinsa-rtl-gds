@@ -618,7 +618,7 @@ A fifth agent verified the four reports' 58 recommendations: 45 confirmed, 13 pa
 - **Done**: every maintenance write-back (A3–A5, A6 text, B3, B4 text, B5 text, B8, B10, B12, C1–C6). Five agents edited 20 skills; the flow document and README were synchronised; `make skill-check` PASS.
 - **Implemented checkers**:
   - **A1** `scripts/check_skills.py`: each description ≤ 1,024 characters, the listed descriptions together ≤ 8,000, with an injected over-long case.
-  - **B1** `scripts/regress.py`: refuses to start below `REGRESS_MIN_FREE_GB` (100 GiB); every target times out at 3 × its reference time (at least 30 min) and its whole process group is killed. `make neg-regress` adds `low_disk` and `timeout`, now 10/10.
+  - **B1** `scripts/regress.py`: refuses to start below `REGRESS_MIN_FREE_GB` (100 GiB); every target times out at 3 × its reference time (at least 30 min) and its whole process group is killed. `make neg-regress` adds `low_disk` and `timeout`, now 10/10. Confirmed on real regressions at `f02a1a0` in clean worktrees: Hazard3 30/30, PicoRV32 31/31, the wrapper 18/18 including the ChipFoundry precheck; every harden matched its golden value for value, no target took more than 35 % of its time limit, and all three passed the disk check.
 - **A2 (latch-up)**: measured (§9.1 item 7), recorded, and added to the ChipFoundry question draft; the design is unchanged.
 - **Deferred to the next project** (ADR-0020 decision 2 style, "no automatic guard yet" written in the skills): A6 checker rows, A7 EM, B2 runaway stop, B6, B7, B9, B11; C7 and C8 not taken up.
 

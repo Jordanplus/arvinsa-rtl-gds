@@ -707,7 +707,7 @@ Phase 7 結束時，23 個 skill 共有 260 列經驗紀錄。`SKILL.md` 改動�
 - **已完成**：所有維護類寫回（A3–A5、A6 文字、B3、B4 文字、B5 文字、B8、B10、B12、C1–C6）。由五個 agent 改了 20 個 skill，流程文件與 README 都已同步，`make skill-check` PASS。
 - **已實作的 checker**：
   - **A1** `scripts/check_skills.py`：單份 description ≤ 1,024 字元、清單上保留描述的合計 ≤ 8,000，並有超長的植入錯誤。
-  - **B1** `scripts/regress.py`：磁碟剩餘不到 `REGRESS_MIN_FREE_GB`（100 GiB）就拒絕開跑；每個 target 超過參考時間 3 倍（至少 30 分鐘）就逾時，整個程序群組都砍掉。`make neg-regress` 加 `low_disk`、`timeout` 兩案，現在 10/10。
+  - **B1** `scripts/regress.py`：磁碟剩餘不到 `REGRESS_MIN_FREE_GB`（100 GiB）就拒絕開跑；每個 target 超過參考時間 3 倍（至少 30 分鐘）就逾時，整個程序群組都砍掉。`make neg-regress` 加 `low_disk`、`timeout` 兩案，現在 10/10。已在 `f02a1a0` 的乾淨 worktree 用真實 regression 確認：Hazard3 30/30、PicoRV32 31/31、wrapper 18/18（含 ChipFoundry precheck）；每次 harden 都和 golden 逐值相同，沒有任何一項超過逾時上限的 35%，三條都通過磁碟檢查。
 - **A2（latch-up）**：已量測（§9.1 第 7 項）、記錄，並併進 ChipFoundry 問題草稿；不改設計。
 - **延到下一個專案**（照 ADR-0020 決定 2 的做法，skill 裡寫明「目前沒有自動防護」）：A6 的 checker 列、A7 EM、B2 失控自動停、B6、B7、B9、B11；C7、C8 不做。
 
