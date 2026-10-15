@@ -1,0 +1,165 @@
+{
+ "_note": "docs/spec/soc_spec.md §2、§4；ADR-0011 決定 1；ADR-0019 決定 8–10、12；rtl/caravel/",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "Hazard3 SoC inside the Caravel user_project_wrapper",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "mgmt",
+   "label": "Caravel management SoC (fixed)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "wrap",
+   "label": "user_project_wrapper (2920 x 3520 um)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "soc",
+   "label": "soc_top (u_soc), flat in the wrapper, lower-left corner",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "wb",
+   "label": "Wishbone master\nwb_clk_i / wb_rst_i",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "la",
+   "label": "Logic analyzer\nla_data_out[13:0]",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "bridge",
+   "label": "wb_host_bridge\n0x3000_0000 host_en (reset 1)\n0x3000_1000 SRAM window",
+   "layer": 2,
+   "parent": "wrap",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "cpu",
+   "label": "Hazard3\nhazard3_cpu_1port (AHB5)",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "adapter",
+   "label": "AHB -> native bus\nadapter",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "bus",
+   "label": "soc_bus\naddress decode",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "sram",
+   "label": "SRAM 2 KB\narv_sram_2kbyte_1rw1r_32x512_8\n0x0000_0000",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "rom",
+   "label": "Boot ROM\n0x0001_0000",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "uart",
+   "label": "UART\n0x0200_0000\nGPIO 37 tx / 36 rx",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "gpio",
+   "label": "GPIO\n0x0300_0000\nout via LA only",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "test",
+   "label": "TEST_CTRL\n0x0400_0000\ntrap -> GPIO 35",
+   "layer": 2,
+   "parent": "soc",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  }
+ ],
+ "links": [
+  {
+   "source": "wb",
+   "target": "bridge"
+  },
+  {
+   "source": "bridge",
+   "target": "sram"
+  },
+  {
+   "source": "cpu",
+   "target": "adapter"
+  },
+  {
+   "source": "adapter",
+   "target": "bus"
+  },
+  {
+   "source": "bus",
+   "target": "sram"
+  },
+  {
+   "source": "bus",
+   "target": "rom"
+  },
+  {
+   "source": "bus",
+   "target": "uart"
+  },
+  {
+   "source": "bus",
+   "target": "gpio"
+  },
+  {
+   "source": "bus",
+   "target": "test"
+  },
+  {
+   "source": "gpio",
+   "target": "la"
+  }
+ ]
+}

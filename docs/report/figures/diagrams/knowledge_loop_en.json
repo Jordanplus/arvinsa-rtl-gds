@@ -1,0 +1,101 @@
+{
+ "_note": "CLAUDE.md 規則 2、3、5、8、10、13；phase-exit-review skill；ADR-0020",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "From a problem to a rule, a checker and a flow step",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "prob",
+   "label": "1  Problem seen\n(log message, FAIL, review)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "cause",
+   "label": "2  Root cause\nverified (experiment) or\nmarked as speculation",
+   "layer": 1,
+   "parent": "root",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "exp",
+   "label": "3  Skill experience record\ndate, run, message,\ncause, fix, evidence",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "rule",
+   "label": "4  Skill rule\n(seen twice or verified)\nsymptom also in description",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "guard",
+   "label": "5  Guard\nchecker + negative test\nor 'no automatic guard' + why",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "flow",
+   "label": "6  Flow document step\narvinsa-rtl-gds-flow.md\n(reused by new projects)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "adr",
+   "label": "Any choice: decision (ADR)\noptions + user's own words",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "review",
+   "label": "End of phase: exit review\nclean-worktree regression\nindependent agent review",
+   "layer": 1,
+   "parent": "root",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  }
+ ],
+ "links": [
+  {
+   "source": "prob",
+   "target": "cause"
+  },
+  {
+   "source": "cause",
+   "target": "exp"
+  },
+  {
+   "source": "exp",
+   "target": "rule"
+  },
+  {
+   "source": "rule",
+   "target": "guard"
+  },
+  {
+   "source": "guard",
+   "target": "flow"
+  },
+  {
+   "source": "adr",
+   "target": "review"
+  }
+ ]
+}

@@ -1,0 +1,109 @@
+{
+ "_note": "arvinsa-rtl-gds-flow.md §3、§4；Makefile；scripts/regress.py",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "RTL-to-GDS flow and checkers",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "spec",
+   "label": "1  Spec & plan\noperating range, corners\nplatform worksheet\npad / block / pin plan (approved)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "rtl",
+   "label": "2  RTL & DV\nVerilator lint, Yosys synth check\nIcarus + Verilator regression\ninjected-bug negative tests",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "macro",
+   "label": "3  SRAM macro\nOpenRAM generate + patches\nngspice characterization -> .lib\nview QA, macro DRC",
+   "layer": 1,
+   "parent": "root",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "cons",
+   "label": "4  Constraints & criteria\nSDC, 15 signoff corners\nlimits derived per design\n(signoff/limits/*.toml)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "harden",
+   "label": "5  Harden (LibreLane)\nfloorplan, PDN, placement\nCTS, routing, fill\nOpenROAD / Magic / KLayout",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "signoff",
+   "label": "6  Signoff checkers\nSTA 15 corners, DRC, LVS, XOR\nantenna, IR (max-power pattern)\ngolden compare, criteria review",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "netlist",
+   "label": "7  Netlist verification\nEQY equivalence\ngate-level lockstep sim\n(powered netlist too)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "regress",
+   "label": "8  One-command regression\nmake regress / -picorv32 / -caravel\nrun guard + provenance\nclean worktree only",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "precheck",
+   "label": "9  Tapeout precheck\nChipFoundry cf-precheck 1.3.7\nofficial image in lima VM\nmake precheck-caravel",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  }
+ ],
+ "links": [
+  {
+   "source": "spec",
+   "target": "rtl"
+  },
+  {
+   "source": "rtl",
+   "target": "macro"
+  },
+  {
+   "source": "cons",
+   "target": "harden"
+  },
+  {
+   "source": "harden",
+   "target": "signoff"
+  },
+  {
+   "source": "netlist",
+   "target": "regress"
+  },
+  {
+   "source": "regress",
+   "target": "precheck"
+  }
+ ]
+}

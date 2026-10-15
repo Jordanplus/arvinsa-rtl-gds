@@ -1,0 +1,133 @@
+{
+ "_note": "signoff/scripts/check_signoff.py；pnr/soc_top/check_soc.py；signoff/scripts/review_criteria.py；signoff/scripts/provenance.py、run_guard.py；neg_*.py；signoff-checker-qualification skill",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "signoff 判定與 checker qualification",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "run",
+   "label": "harden 的 run\nfinal/metrics.json、報表\nGDS、網表",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "limits",
+   "label": "上限檔\nsignoff/limits/<design>.toml\n每個設計自己推導的上限",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "golden",
+   "label": "golden metrics\nsignoff/golden/<design>/\n＋誤差表",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "cs",
+   "label": "check_signoff.py\n上限＋golden 比對",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "csoc",
+   "label": "check_soc.py\nslew、Magic DRC 對 SRAM 單獨檢查\n供電點、disconnected",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "crit",
+   "label": "review_criteria.py\n設定真的生效？\n＋人工 review（.md）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "prov",
+   "label": "來源追溯／run guard\ncommit = HEAD、工作樹乾淨",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "verdict",
+   "label": "harden-soc：PASS／FAIL",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "neg",
+   "label": "negative test（植入錯誤）\nneg-pnr 82、neg-precheck 31、neg-ir 12 …\n每個植入錯誤都必須 FAIL",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  }
+ ],
+ "links": [
+  {
+   "source": "run",
+   "target": "cs"
+  },
+  {
+   "source": "limits",
+   "target": "cs"
+  },
+  {
+   "source": "golden",
+   "target": "cs"
+  },
+  {
+   "source": "run",
+   "target": "csoc"
+  },
+  {
+   "source": "run",
+   "target": "crit"
+  },
+  {
+   "source": "run",
+   "target": "prov"
+  },
+  {
+   "source": "cs",
+   "target": "verdict"
+  },
+  {
+   "source": "csoc",
+   "target": "verdict"
+  },
+  {
+   "source": "crit",
+   "target": "verdict"
+  },
+  {
+   "source": "prov",
+   "target": "verdict"
+  },
+  {
+   "source": "neg",
+   "target": "cs"
+  },
+  {
+   "source": "neg",
+   "target": "csoc"
+  }
+ ]
+}

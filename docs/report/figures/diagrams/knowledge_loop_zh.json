@@ -1,0 +1,101 @@
+{
+ "_note": "CLAUDE.md 規則 2、3、5、8、10、13；phase-exit-review skill；ADR-0020",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "從問題到規則、checker 與流程步驟",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "prob",
+   "label": "1  遇到問題\n（log 訊息、FAIL、審查）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "cause",
+   "label": "2  找根因\n已驗證（實驗）或\n標明推測",
+   "layer": 1,
+   "parent": "root",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "exp",
+   "label": "3  skill 經驗紀錄\n日期、run、原文訊息、\n根因、處理、證據",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "rule",
+   "label": "4  skill 規則\n（出現兩次或已驗證）\n症狀也寫進 description",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "guard",
+   "label": "5  防護\nchecker＋negative test\n或寫明「沒有自動防護」與原因",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "flow",
+   "label": "6  流程文件步驟\narvinsa-rtl-gds-flow.md\n（新專案沿用）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "adr",
+   "label": "每個選擇：決定（ADR）\n選項＋使用者原話",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "review",
+   "label": "每個 Phase 收尾：exit review\n乾淨 worktree regression\n獨立 agent 審查",
+   "layer": 1,
+   "parent": "root",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  }
+ ],
+ "links": [
+  {
+   "source": "prob",
+   "target": "cause"
+  },
+  {
+   "source": "cause",
+   "target": "exp"
+  },
+  {
+   "source": "exp",
+   "target": "rule"
+  },
+  {
+   "source": "rule",
+   "target": "guard"
+  },
+  {
+   "source": "guard",
+   "target": "flow"
+  },
+  {
+   "source": "adr",
+   "target": "review"
+  }
+ ]
+}

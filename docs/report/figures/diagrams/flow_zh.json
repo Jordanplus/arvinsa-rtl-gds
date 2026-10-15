@@ -1,0 +1,109 @@
+{
+ "_note": "arvinsa-rtl-gds-flow.md §3、§4；Makefile；scripts/regress.py",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "RTL-to-GDS 流程與 checker",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "spec",
+   "label": "1  規格與計畫\n操作範圍、corner\n平台試算表\npad／block／pin 規劃（核准）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "rtl",
+   "label": "2  RTL 與驗證\nVerilator lint、Yosys 合成檢查\nIcarus＋Verilator regression\n植入錯誤的 negative test",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "macro",
+   "label": "3  SRAM macro\nOpenRAM 產生＋patch\nngspice 特性化 → .lib\nview QA、macro DRC",
+   "layer": 1,
+   "parent": "root",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "cons",
+   "label": "4  約束與 signoff 條件\nSDC、15 個 signoff corner\n每個設計自己推導的上限\n（signoff/limits/*.toml）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "harden",
+   "label": "5  harden（LibreLane）\nfloorplan、PDN、placement\nCTS、routing、fill\nOpenROAD／Magic／KLayout",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "signoff",
+   "label": "6  signoff checker\n15 corner STA、DRC、LVS、XOR\nantenna、IR（max power pattern）\ngolden 比對、criteria review",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "netlist",
+   "label": "7  網表驗證\nEQY 等價證明\ngate-level lockstep 模擬\n（含電源接腳網表）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "regress",
+   "label": "8  一鍵 regression\nmake regress／-picorv32／-caravel\nrun guard＋來源追溯\n只認乾淨 worktree",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "precheck",
+   "label": "9  下線預檢\nChipFoundry cf-precheck 1.3.7\n官方 image 跑在 lima VM\nmake precheck-caravel",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  }
+ ],
+ "links": [
+  {
+   "source": "spec",
+   "target": "rtl"
+  },
+  {
+   "source": "rtl",
+   "target": "macro"
+  },
+  {
+   "source": "cons",
+   "target": "harden"
+  },
+  {
+   "source": "harden",
+   "target": "signoff"
+  },
+  {
+   "source": "netlist",
+   "target": "regress"
+  },
+  {
+   "source": "regress",
+   "target": "precheck"
+  }
+ ]
+}

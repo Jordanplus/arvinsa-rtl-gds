@@ -1,0 +1,109 @@
+{
+ "_note": "README.md 專案狀態與階段路線圖；docs/phase_exit/phase*.md",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "arvinsa-rtl-gds: Phase 0-7 roadmap",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "p0",
+   "label": "Phase 0 (10-03)\nEnvironment\nNix, LibreLane 3.0.14, sky130A\nreference SRAM design re-run: signoff PASS",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "p1",
+   "label": "Phase 1 (10-03)\nPicoRV32 SoC RTL + firmware\nRTL regression 26/26\n33 injected bugs caught",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "p2",
+   "label": "Phase 2 (10-03)\nPicoRV32 core hardened alone\n40 ns, 9 corners\nDRC / LVS 0",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "p3",
+   "label": "Phase 3 (10-04)\nSoC + prebuilt 2 KB SRAM macro\n1000 x 800 um, 40 ns\nEQY + gate-level sim",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "p4",
+   "label": "Phase 4 (10-04)\nSignoff closure, one-command regression\n42 ns, 15 corners\nmake regress 25/25",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "p35",
+   "label": "Phase 3.5 (10-05)\nSRAM timing by SPICE (ngspice)\n43 ns\nfound: read failure at ss, low temp",
+   "layer": 1,
+   "parent": "root",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "p5",
+   "label": "Phase 5 (10-08)\nCPU swapped to Hazard3\n44 ns, riscv-tests 65/65\nflow reused; 4 settings changed",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "p6",
+   "label": "Phase 6 (10-11)\nSelf-generated OpenRAM SRAM\nread failure fixed\n7 PVT read OK",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "p7",
+   "label": "Phase 7 (10-15)\nHazard3 SoC in Caravel wrapper\nChipFoundry precheck PASS\n(not taped out)",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  }
+ ],
+ "links": [
+  {
+   "source": "p0",
+   "target": "p1"
+  },
+  {
+   "source": "p1",
+   "target": "p2"
+  },
+  {
+   "source": "p3",
+   "target": "p4"
+  },
+  {
+   "source": "p4",
+   "target": "p35"
+  },
+  {
+   "source": "p5",
+   "target": "p6"
+  },
+  {
+   "source": "p6",
+   "target": "p7"
+  }
+ ]
+}
