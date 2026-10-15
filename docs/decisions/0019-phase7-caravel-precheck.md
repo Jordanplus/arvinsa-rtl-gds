@@ -1,6 +1,6 @@
 # ADR-0019：Phase 7 把 Hazard3 SoC 扁平放進 Caravel `user_project_wrapper`，目標是 ChipFoundry precheck PASS（不下線）
 
-- 狀態：已採用（2026-10-12）。決定 1–3 由使用者在同一輪選擇（全部採建議），決定 4–5 在查證後的第二、三輪。
+- 狀態：已採用（2026-10-12）。決定 1–3 由使用者在同一輪選擇（全部採建議），決定 4–5 在查證後的第二、三輪。Phase 7 結案：2026-10-15（`docs/phase_exit/phase7.md`，結案證據是 `2b04451` 的三條乾淨 worktree regress）。
 - 範圍：`project-plan.md` §5.5、§8 Phase 7。exit 條件原文：「ChipFoundry 收件前的自動檢查（precheck）PASS」；決定 4 調整了其中兩項的判定方式。
 - skill：`tapeout-precheck-caravel`（CLAUDE.md 規則 7，Phase 7 開始時建立）。
 - 查證：`docs/notes/caravel_precheck_phase7.md`（cf-precheck `6c401ed5`、cf-cli `88025a8f`、caravel_user_project `b510613c`、caravel_user_sram `adf59a8f`）。
@@ -221,6 +221,7 @@
       - slew 缺口 `check_soc.py max_slew`：外部 transition 高於 slew 上限的腳位，每個 bit 在每個 corner 都要以違規出現、slew 等於 SDC 的值（±0.05 ns）；wrapper 每個 corner 320 個 bit、15 個 corner 共 4,800 個。`neg_pnr.py --cpu caravel` C80d。低於上限的腳位不在報表裡，仍沒有自動防護（`timing-constraints-sdc` 規則 14）。
       - G1（pin-plan 只比 localparam 的值、不查 RTL 有沒有用它）：審查判為覆蓋缺口而非漏洞，testbench 寫死的 GPIO 會在 RTL 模擬抓到；沒有修，列為 Phase 7 已知限制。
       - 漏洞類型寫進 `signoff-checker-qualification` 的表（7 類），NaN 那一類補上 `max()` 的例子。
+    - fill 試跑的結果（2026-10-15，第二輪 regress 的 wrapper GDS，約 91 分鐘，`runs/p7_review/fill_trial/README.md`）：照 `generate_fill.py` 的 `wafflefill(tiled)` 單獨補 wrapper，照 `check_density.py` 的 700 µm 視窗量。li1、met1–5 除了 met2 的 (0, 0) 視窗 34.5% 以外都到下限以上；FOM 有 15 個視窗低於 33%（最低 31.5%），都在左下角 SoC 與 SRAM 一帶。met4 最高視窗 59.7%，貼近上限 60%。fill 區塊分開量再逐格相加，相加的值最多比實量高 0.33 個百分點（`fill_0_0` 實量驗證）。die 右緣與上緣、ChipFoundry 實際的 fill 參數判斷不了。依使用者的選擇不自己加 fill，結果列進 Phase 7 已知限制 3 與下線前的書面確認。
 
 ## 後果
 

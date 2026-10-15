@@ -8,7 +8,7 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
 
 ## 專案狀態
 
-**實作中（2026-10-11）：Phase 0–6 與 Phase 3.5 完成。** 完整規劃見 [project-plan.md](project-plan.md)。
+**2026-10-15：Phase 0–7 與 Phase 3.5 完成（Phase 7 只做到 ChipFoundry precheck PASS，不下線）。** 完整規劃見 [project-plan.md](project-plan.md)。
 
 - Phase 0：Nix、LibreLane 3.0.14、sky130A PDK 已安裝；LibreLane 官方的 SRAM 參考設計在本機重跑，signoff 全 PASS。紀錄見 [docs/phase_exit/phase0.md](docs/phase_exit/phase0.md)。
 - Phase 1：PicoRV32 SoC 的 RTL、firmware、RTL 模擬 regression 完成。正向測試 26/26 PASS（Icarus、Verilator），33 項植入錯誤都在預期的 checker FAIL；經兩輪獨立 testbench qualification review。紀錄見 [docs/phase_exit/phase1.md](docs/phase_exit/phase1.md)。
@@ -51,6 +51,14 @@ with RISC-V cores (PicoRV32, then Hazard3) as test vehicles. Documentation is wr
   - 獨立審查找到 7 個 checker 漏洞，全部修正後重跑；第一次結案 regress 抓到修正時弄壞的一支 checker，修正後重跑。
   - 結案證據：commit `85bfa75` 的乾淨 worktree，`make regress` 23/23（126 分鐘）、`make regress-picorv32` 28/28（196 分鐘），三次 harden 都與 golden 逐項相同。
   - 紀錄見 [docs/phase_exit/phase6.md](docs/phase_exit/phase6.md)。
+- Phase 7：Hazard3 SoC 與自產 SRAM 用扁平放法放進 ChipFoundry Caravel 的 `user_project_wrapper`，只做到 precheck PASS，不下線（ADR-0019）。
+  - 官方 precheck image 13 項中 11 項 PASS；`klayout_feol`／`klayout_beol` 只剩 OpenRAM bitcell 的兩條規則，每個違規位置都和 PDK 預建 SRAM 單獨檢查時相同（決定 5 的判法，ChipFoundry 收不收不知道）。
+  - wrapper 完成和 soc_top 同一套 signoff：15 個 corner 的 setup／hold +0.548／+0.187 ns，EQY 16149/16149，gate-level 模擬 16/16。IR 從 Caravel 的 pad 起算、用 CPU max power pattern 的切換活動判，19.56 mV（上限 20 mV）。
+  - 流程新增「先規劃 pad、block 位置與 pin，經使用者核准才寫 RTL 與 harden」，用 checker、hook、skill、流程文件強制（CLAUDE.md 規則 14）。
+  - 獨立審查找到 8 個 checker 漏洞與 1 個防護缺口，全部修正後重跑；流程回顧整理出 19 條該提早做的檢查（ADR-0020），放寬項目登記在 `docs/relaxation_register.md`。
+  - 下線前要處理：precheck 判法要 ChipFoundry 確認、SRAM .lib 沒有走線寄生（dout0 改成量到的值後 setup 剩 +0.151 ns）、金屬密度低於 tapeout 的下限、EM 沒檢查、IR 餘量只有 0.44 mV。
+  - 結案證據：commit `2b04451` 的三個乾淨 worktree，`make regress-caravel` 18/18（476 分鐘）、`make regress-picorv32` 31/31（248 分鐘）、`make regress` 30/30（211 分鐘）；四次 harden 都與 golden 逐項相同。
+  - 紀錄見 [docs/phase_exit/phase7.md](docs/phase_exit/phase7.md)。
 
 ## 快速開始
 
@@ -63,9 +71,10 @@ make phase2        # Phase 2 完整檢查：LibreLane harden + GL regression（�
 make phase3        # Phase 3 完整檢查：SoC 與 core 的 harden、EQY、GL 模擬與全部植入錯誤（約 91 分鐘，需要 flow 環境）
 make regress       # Hazard3 版 SoC 的全部檢查一次跑完（Phase 5 起的主要設計；依序執行、第一個 FAIL 就停；需要 flow 環境）
 make regress-picorv32  # PicoRV32 版 SoC 的全部檢查（Phase 1–4 的 make regress，約 2–2.5 小時）
+make regress-caravel   # Caravel wrapper 的全部檢查，含官方 precheck（約 6–8 小時，需要 lima VM）
 ```
 
-`make regress` 的結果在 `runs/regress/`（`make regress-picorv32` 在 `runs/regress_picorv32/`）：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
+`make regress` 的結果在 `runs/regress/`（`make regress-picorv32` 在 `runs/regress_picorv32/`，`make regress-caravel` 在 `runs/regress_caravel/`）：`summary.md`（每個 target 的 PASS／FAIL 與時間）、`junit.xml`、每個 target 的 log。
 個別 target 用 `CPU=picorv32`（預設）或 `CPU=hazard3` 選 SoC 的 CPU，例如 `make harden-soc CPU=hazard3`（run 在 `runs/soc_top_hazard3/`）。
 Phase 7 的 Caravel wrapper 用 `make harden D=user_project_wrapper`（等於 `make harden-soc CPU=caravel`，run 在 `runs/user_project_wrapper/`）。
 它會先刪掉自己的結果目錄，並由每個 harden 步驟重新產生自己的 run；下游步驟只接受同一個 commit 產生、且 PASS 的 run。
@@ -107,7 +116,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
 | 4 | Signoff 收斂、單一指令跑完整 regression、補齊文件 | 完成（2026-10-04） |
 | 5 | 換成 Hazard3 | 完成（2026-10-08） |
 | 6 | 用 OpenRAM 自產的 SRAM 取代預建 macro | 完成（2026-10-11，ADR-0018） |
-| 7 | （可選）chip-level 整合，例如 ChipFoundry Caravel | 未開始 |
+| 7 | （可選）chip-level 整合：Hazard3 SoC 放進 ChipFoundry Caravel，做到 precheck PASS、不下線 | 完成（2026-10-15，ADR-0019） |
 
 各階段的 exit criteria 與工時估計見 project-plan.md 第 8 章。
 
@@ -263,7 +272,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 附一張已知 checker 漏洞類型表，例如工具靜默略過、檢查範圍比名稱小、植入沒生效、只看有沒有不看大小或位置、產生器的公式沒有獨立驗證、斷言分不出 FAIL 的原因、checker 綁死 step 名稱（flow 換掉或多開 step 就靜默失效）、重試留下的中止目錄頂替完成的那次。新 checker 要逐條對照。
   - Phase 5 獨立審查的 9 種新漏洞類型：只證明設定被讀到、沒證明生效；靠名稱辨識工具產生的結構；誤差表的保護字與萬用字元；強制機制的觸發條件比規則小；抓到的機制和宣稱的不同；守門條件本身沒測試；只看版本字串；暫用另一個設計的誤差；比對到資料而不是指令。規則 7 補兩條：斷言抓到它的機制、每道守門條件都要有「拿掉就 FAIL」的情境。
   - Phase 6 獨立審查的 5 種新漏洞類型：black box 看不到的一致性沒有別處在比（LEF 腳位 RECT 對調，LVS 照樣 PASS）；指紋不精確卻自稱內容相同；只讀表格的第一個數字；把工具的特例清單抄一份寫死；產生鏈的中間檔沒有來源追溯。另外 `abs(x - y) > tol` 對 NaN 永遠不成立，要寫成 `not abs(x - y) <= tol`。
-  - Phase 7 獨立審查的 7 種新漏洞類型：核准紀錄只存在被檢查的檔案裡、自己算得出來；判定只看結果、不核對輸入的產生條件與來源；例外欄位接受任何字串；時間比較丟掉時區；查證用的結果被當成正式結果；向量只檢查一個 bit；例外只放寬、不要求被例外的東西存在。`max()` 遇到 NaN 也會略過它。
+  - Phase 7 獨立審查的 7 種新漏洞類型：核准紀錄只存在被檢查的檔案裡、自己算得出來；判定只看結果、不核對輸入的產生條件與來源；例外欄位接受任何字串；時間比較丟掉時區；查證用的結果被當成正式結果；向量只檢查一個 bit；例外只放寬、不要求被例外的東西存在。`max()` 遇到 NaN 也會略過它。規則 13：改 checker 時新變數不能和同一個函式裡既有的名稱重複（Phase 6 `files`、Phase 7 `defines`，都讓 `resolved` 列對每個 run FAIL，靠 P00 這類在真 run 上的 positive control 抓到）。
   - Phase 6 結案 regress 抓到的一類：checker 的某個模式（`check_inputs.py --resolved`）只有植入錯誤的案例在跑，checker 改壞成永遠 FAIL 時這些案例照樣「抓到」。每個模式都要有沒植入時必須 PASS 的對照（neg-pnr P00）。
   - 提早檢查（流程回顧，ADR-0020）：規則 11，golden 的誤差每個設計至少用 4 個同設定的樣本（含一次乾淨 checkout）定，記下樣本數，不暫用別的設計的誤差；規則 12，新 checker 寫完就請沒寫它的 agent 做漏洞審查，不等 Phase 收尾（Phase 4–7 每次收尾都找到 7–12 個漏洞，修完整套 regression 重跑）。
 - **本 repo 實例**：`signoff/scripts/check_signoff.py`、`signoff/limits/`、`signoff/golden/*/README.md`、`pnr/soc_top/check_soc.py`、各 `neg_*.py`。
@@ -398,7 +407,7 @@ OpenRAM、LibreLane、OpenROAD 也都不支援這個製程。
   - 沒給供電點（`VSRC_LOC_FILES`）時，所有 PDN pin 都被當成理想電源，結果樂觀到不能用。供電點模型要寫明假設，checker 也要擋住比假設樂觀的設定。
   - 最大電流（ff）與最大電阻（ss）不在同一個 corner。EM 要自己開 PSM 的選項，再和 tech LEF 的電流密度上限比對。
   - metric 陷阱：`design_powergrid__drop__average__*` 存的是平均電壓，不是壓降。
-  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`、soc_top 的 `make ir-soc`，ADR-0019 決定 20、25；negative test `make neg-ir-soc`／`neg-ir-caravel`；判定前先核對 run guard、window 齊全、VCD 的時脈週期等於 `CLOCK_PERIOD`；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估約 9 倍）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。
+  - 規則 12：判定值是 CPU max power pattern 的 IR（`fw/tests/maxpower` 在最終網表 gate-level 模擬錄的切換活動，`make ir-caravel`、soc_top 的 `make ir-soc`，ADR-0019 決定 20、25；negative test `make neg-ir-soc`／`neg-ir-caravel`；判定前先核對 run guard、window 齊全、VCD 的時脈週期等於 `CLOCK_PERIOD`；OpenSTA 預設切換率在 Phase 7 高估約 2.2 倍）。harden 內每次也在預算所保護的兩個慢 corner 判預設切換率（該 corner 的電流、1.60 V、ss 金屬電阻，`ir_worst.py`），不能只判 nom_tt；「ff 電流＋ss 電阻」的最壞組合只列為參考（Phase 5 起判它，Phase 7 發現它拿 ff 的電流比慢 corner 的預算，改掉，ADR-0019 決定 19）。macro 不在 .lib 裡的電流（OpenRAM SRAM 未用 port 的浮接電流）依 PVT 加在 macro 上。供電點要從外殼的真實 pad 起算（Caravel 只有一顆 vccd1 pad，只用 wrapper ring 會低估約 9 倍）。規則 13：改 PDN 前先在完成的版圖上 what-if（重產 PDN、只跑 IR，約 25 秒），同樣金屬量下加寬 strap 比加密有效（Phase 5，ADR-0017）。經驗紀錄：供電點放在外殼跨接線的位置時 PSM 會 Signal 11（Phase 7，根因沒查），改放在 ring 與 strap 的交點。
   - 提早檢查（流程回顧，ADR-0020）：規則 14，定 die 的 floorplan 試跑時 IR 就要成立（真實 pad、慢 corner，gate-level 模擬能跑之後用 max power pattern）；結果比預算小 100 倍以上先查供電模型（本 repo 的 IR 模型分四個 Phase 才修完）。
 - **本 repo 實例**：`docs/notes/ir_worst_case_soc_top.md`、`pnr/soc_top/vsrc/`。negative test：P07、P26–P29、P61、P62、P77、P78。
 

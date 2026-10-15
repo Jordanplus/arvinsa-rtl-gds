@@ -113,8 +113,11 @@ hold_ws_min = 0.0
 slack_max = 44.0
 
 [golden_tolerance]
-# wrapper: the tolerances below were measured on soc_top_hazard3, not on the wrapper (its repeatability
-# is not measured yet); see signoff/golden/user_project_wrapper/README.md.
+# wrapper: the tolerances below were measured on soc_top_hazard3, not on the wrapper, and are kept on
+# purpose (ADR-0019 decision 26, user 2026-10-14): every wrapper comparison so far is identical value by
+# value, so there is no wrapper data to size them; the non-repeatable steps they cover belong to the
+# shared flow (picorv32_core, identical since Phase 5, had 29 in-tolerance metrics in the 84fe505 run);
+# all samples are from one machine. signoff/golden/user_project_wrapper/README.md.
 # ADR-0015 (user decision 2026-10-07). The Hazard3 flow has two steps that are not repeatable: the
 # last global_route of OpenROAD.RepairDesignPostGRT (step 41; 5 of 27 runs of the same input differ)
 # and the multi-threaded detailed router (its antenna repair can run one more round). Measured on the

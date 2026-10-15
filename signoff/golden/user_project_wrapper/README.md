@@ -2,7 +2,10 @@
 
 `make harden D=user_project_wrapper` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：key 必須完全一樣，值必須相同，只有 `signoff/limits/user_project_wrapper.toml` 的 `[golden_tolerance]`（連續量）與 `[golden_layout_tolerance]`（會隨繞線變的數量與面積）列出的族群可以有誤差，`[golden_optional]` 列出的 key 可以只出現在一邊；違規數一律相同。signoff 門檻用的是這次 run 自己的值，不受誤差規則影響。
 
-**誤差還不是 wrapper 自己量的**：目前的誤差照抄 `soc_top_hazard3`（ADR-0015，`signoff/golden/soc_top_hazard3/README.md`「可重現性」）。使用者 2026-10-13 的選擇（ADR-0019 決定 22）：Phase 7 步驟 8 的乾淨 worktree regress 跑完後修正誤差；決定 25 改成一條 `make regress-caravel`，加上先前同機的 run 一起判斷。結果見「可重現性」。
+**誤差沿用 `soc_top_hazard3` 的值**（ADR-0015，`signoff/golden/soc_top_hazard3/README.md`「可重現性」），不改成逐值相同。使用者 2026-10-14 選「維持 hazard3 的值，寫明理由 (建議)」（ADR-0019 決定 26），理由：
+- wrapper 的比較（見「可重現性」）全部逐值相同，量不出誤差該多大；
+- 誤差要涵蓋的不可重現步驟（GRT 後的重新 global routing、多執行緒 detailed routing）是同一套 flow 的，wrapper 也有；第一輪結案 regress（`84fe505`）中 `picorv32_core` 從 Phase 5 起一直逐值相同，第一次有 29 個 metrics 落在誤差內（detailed routing 繞線 +2 µm），所以「到目前都逐值相同」不代表以後不會差；
+- 樣本全在同一台 Apple Silicon Mac，換機器要重量（登記表 G05、G06）。
 
 ## 出處
 
@@ -40,6 +43,8 @@
 | 確認 harden（commit `f4ea9de`，只改了 golden 與 EQY 腳本，flow 的輸入相同；`runs/p7_harden_confirm.log`，signoff 目錄另存 `runs/p7_confirm_signoff`） | 455 個全部逐值相同，`harden-soc: PASS` |
 | decap 改版後的確認 harden（commit `550869c`，`runs/p7_harden_decap_confirm.log`，signoff 目錄另存 `runs/p7_decap_confirm_signoff`） | 455 個全部逐值相同，`harden-soc: PASS` |
 | decap 改 `ef_decap_12` 的 harden（commit `7eff65a`） | 本檔現在的來源；與建立時的版本 440 個逐值相同、10 個在誤差內、5 個不同，全部是 decap／fill 改變的結果 |
+| 結案 regress 第一輪（commit `84fe505`，乾淨 worktree `p7close_caravel`，與另外兩條 regress 同時跑；審查後修了 checker，不當正式證據） | 455 個全部逐值相同，`harden-soc: PASS` |
+| 結案 regress 第二輪（commit `2b04451`，乾淨 worktree `p7close2_caravel`，與另外兩條 regress 同時跑，期間磁碟一度只剩 0.8 GiB；Phase 7 的正式證據） | 455 個全部逐值相同，`harden-soc: PASS`（286.6 分鐘） |
 | `p7_exp_pl_dens`（`p7_harden5` 的設定 + density 50，從 global placement 重跑到 `STAPostPNR`；ADR-0019 決定 21） | 對建立時的版本：共有的 429 個逐值相同（本檔多 26 個是它沒跑的 IR、DRC、LVS、XOR 步驟）。對現在的版本（`ef_decap_12`）：425 個相同，4 個不同（fill 與 instance 數、leakage、power），都是 decap 改變的結果 |
 
 ## 何時更新
