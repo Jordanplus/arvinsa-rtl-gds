@@ -9,7 +9,7 @@
   },
   {
    "id": "mgmt",
-   "label": "Caravel 管理用 SoC（固定）",
+   "label": "Caravel management SoC（固定）",
    "layer": 1,
    "parent": "root",
    "border": "#7F8C8D",
@@ -25,7 +25,7 @@
   },
   {
    "id": "soc",
-   "label": "soc_top（u_soc），扁平放在 wrapper 左下角",
+   "label": "soc_top（u_soc），以 flat 方式放在 wrapper 左下角",
    "layer": 1,
    "parent": "root",
    "border": "#27AE60",
@@ -49,7 +49,7 @@
   },
   {
    "id": "bridge",
-   "label": "wb_host_bridge\n0x3000_0000 host_en（reset 1）\n0x3000_1000 SRAM 視窗",
+   "label": "wb_host_bridge\n0x3000_0000 host_en（reset 1）\n0x3000_1000 SRAM 位址區",
    "layer": 2,
    "parent": "wrap",
    "border": "#2980B9",
@@ -65,7 +65,7 @@
   },
   {
    "id": "adapter",
-   "label": "AHB 轉 native bus\n轉接器",
+   "label": "AHB 轉 native bus\nbridge",
    "layer": 2,
    "parent": "soc",
    "border": "#27AE60",

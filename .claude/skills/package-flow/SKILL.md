@@ -1,18 +1,18 @@
 ---
 name: package-flow
-description: Package（晶片層級整合、外殼與下線）的入口，先讀這份再找細部 skill。用在開新的頂層或外殼設計、決定用哪幾支 pad／GPIO、搬動 macro 或 block（pad、block、pin 要先規劃並經使用者核准，`CLAUDE.md` 規則 14；hook 擋下「這份 pad／block／pin 規劃還沒經使用者核准」、`plan_sha256 differs`）、放進 ChipFoundry Caravel 的 user_project_wrapper（`FP_DEF_TEMPLATE`、`PDN-0239`、`GRT-0036`、`li1.pd.1d`、vccd1 只有一顆 pad、fill 與密度下限、邊界 SDC、平台試算表），以及跑與判定 ChipFoundry precheck（`cf-precheck`、`MR_mcon.CON.10`、`MR_licon.SP.6`、`stat=-9` OOM、`the results directory checked this GDS`、lima VM）。本文是情況與錯誤訊息對照到細部 skill 檔案的表。RTL、SDC、macro 準備看 middle-end-flow，PnR 與實體 signoff 看 backend-flow。Use as the entry point for chip-level work (pad/block/pin planning and approval, Caravel wrapper integration, ChipFoundry precheck).
+description: Package（晶片層級整合、wrapper 與下線）的入口，先讀這份再找細部 skill。用在開新的頂層或 wrapper 設計、決定用哪幾支 pad／GPIO、搬動 macro 或 block（pad、block、pin 要先規劃並經使用者核准，`CLAUDE.md` 規則 14；hook 擋下「這份 pad／block／pin 規劃還沒經使用者核准」、`plan_sha256 differs`）、放進 ChipFoundry Caravel 的 user_project_wrapper（`FP_DEF_TEMPLATE`、`PDN-0239`、`GRT-0036`、`li1.pd.1d`、vccd1 只有一顆 pad、fill 與密度下限、wrapper 的 IO constraint、下線規定對照表、韌體做 GPIO 設定傳送後 user 輸出腳沒訊號），以及 ChipFoundry precheck 怎麼跑、結果怎麼看（`cf-precheck`、`MR_mcon.CON.10`、`MR_licon.SP.6`、`stat=-9` OOM、`the results directory checked this GDS`、lima VM）。這份 skill 是情況與錯誤訊息對照到細部 skill 檔案的表。RTL、SDC、macro 準備看 middle-end-flow，PnR 與實體 signoff 看 backend-flow。Use as the entry point for chip-level work (pad/block/pin planning and approval, Caravel wrapper integration, ChipFoundry precheck).
 ---
 
 # Package 入口
 
-**這份 skill 只做導覽。** 依下表找到情況，用 Read 讀對應的 `SKILL.md`，照裡面的規則與已知陷阱做。細部 skill 在 skill 清單裡只列名稱（專案 `.claude/settings.json` 的 `skillOverrides`，ADR-0021 決定 6），所以要從這裡進去。
+**這份 skill 只是索引。** 依下表找到情況，用 Read 讀對應的 `SKILL.md`，照裡面的規則與已知陷阱做。細部 skill 在 skill 清單裡只列名稱（專案 `.claude/settings.json` 的 `skillOverrides`，ADR-0021 決定 6），所以要從這裡進去。
 
 範圍：晶片層級與下線：
 - pad（含電源進入點）、block 位置、pin 的規劃與核准；
-- 放進外殼（本 repo 是 ChipFoundry Caravel）；
-- 下線平台的收件檢查（precheck）。
+- 放進 wrapper（本 repo 是 ChipFoundry Caravel 的 user_project_wrapper）；
+- 下線服務商的 precheck（送 GDS 前要過的自動檢查）。
 
-對應流程文件 `arvinsa-rtl-gds-flow.md` 4.1 的平台試算表與 pad／block／pin 規劃、4.6 的外殼相關檢查（li1、fill）、4.7 的下線預檢。
+對應流程文件 `arvinsa-rtl-gds-flow.md` 4.1 的下線規定對照表與 pad／block／pin 規劃、4.6 的 wrapper 相關檢查（li1、fill）、4.7 的 precheck。
 
 **順序**：pad（含電源 pad 與電源進入點）→ block 位置 → pin 指定 → RTL → harden（`CLAUDE.md` 規則 14）。
 
@@ -20,9 +20,9 @@ description: Package（晶片層級整合、外殼與下線）的入口，先讀
 
 | 情況、錯誤訊息 | 細部 skill |
 |---|---|
-| 開新的頂層或外殼設計、選 pad／GPIO、搬動 macro 或 block、改 `FP_DEF_TEMPLATE`／`MACROS` 位置；hook `require_pin_plan.py` 或 `make pin-plan` 擋下（`no approval`、`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`、ADR `has no line with the quote`）；floorplan 圖 | `.claude/skills/chip-floorplan-pin-planning/SKILL.md` |
-| 放進 Caravel user_project_wrapper：`PDN-0239 Ring shape falls outside the die bounds`、`GRT-0036 Pin ... is outside die area`、`li1.pd.1d`（`decap_3` 填滿）、`gpio_defines` 全是 `GPIO_MODE_INVALID`、GPIO 位置、`wb_clk_i`、vccd1／vssd1 只有一顆右側 pad、fill 與 `check_density.py` 下限、邊界 SDC 試算、平台試算表 | `.claude/skills/caravel-user-project-integration/SKILL.md` |
-| 跑與判定 ChipFoundry precheck：`MR_mcon.CON.10`、`MR_licon.SP.6`、`klayout_beol failed (stat=-9)`、`extraction did not complete successfully`、`OEB FAILED (stat=5)`、`possible errors SOFT ... CVC`、`the results directory checked this GDS`、flow DRC 0 而 precheck FAIL、Apple Silicon 用 lima VM、`EXTRACT_ABSTRACT` | `.claude/skills/tapeout-precheck-caravel/SKILL.md` |
+| 開新的頂層或 wrapper 設計、選 pad／GPIO、搬動 macro 或 block、改 `FP_DEF_TEMPLATE`／`MACROS` 位置；hook `require_pin_plan.py` 或 `make pin-plan` 擋下（`no approval`、`plan_sha256 differs`、`no pnr/<design>/pin_plan.toml`、ADR `has no line with the quote`）；floorplan 圖 | `.claude/skills/chip-floorplan-pin-planning/SKILL.md` |
+| 放進 Caravel user_project_wrapper：`PDN-0239 Ring shape falls outside the die bounds`、`GRT-0036 Pin ... is outside die area`、`li1.pd.1d`（`decap_3` 填滿）、`gpio_defines` 全是 `GPIO_MODE_INVALID`、GPIO 位置、`wb_clk_i`、vccd1／vssd1 只有一顆右側 pad、fill 與 `check_density.py` 下限、wrapper 的 IO constraint 試算、下線規定對照表；management SoC 的韌體寫 `reg_mprj_xfer`（GPIO 設定傳送）後 user mode 的輸出腳沒訊號、輸入腳的下拉消失、拉 `resetb` 恢復不了；`wb_rst_i` 怎麼產生（拉起是非同步的） | `.claude/skills/caravel-user-project-integration/SKILL.md` |
+| ChipFoundry precheck 怎麼跑、結果怎麼看：`MR_mcon.CON.10`、`MR_licon.SP.6`、`klayout_beol failed (stat=-9)`、`extraction did not complete successfully`、`OEB FAILED (stat=5)`、`possible errors SOFT ... CVC`、`the results directory checked this GDS`、flow DRC 0 而 precheck FAIL、Apple Silicon 用 lima VM、`EXTRACT_ABSTRACT` | `.claude/skills/tapeout-precheck-caravel/SKILL.md` |
 
 ## 跨段共用（照舊列在清單上）
 
@@ -30,10 +30,10 @@ description: Package（晶片層級整合、外殼與下線）的入口，先讀
 - 一鍵 regression（`make regress-caravel` 含 precheck）、機器資源與逾時：`flow-regression-reproducibility`。
 - Phase 收尾：`phase-exit-review`。
 
-## 交界
+## 與其他段的分工
 
-- die 內的擺放細節、壅塞、PDN／IR、DRC／LVS：`backend-flow`。
-- 外殼頂層的 latch-up 標記（81/14）：`backend-flow` → `drc-signoff` 規則 7（ADR-0021 決定 2：記錄並問平台）。
+- die 內的 placement 細節、壅塞、PDN／IR、DRC／LVS：`backend-flow`。
+- wrapper 頂層的 latch-up 標記（81/14）：`backend-flow` → `drc-signoff` 規則 7（ADR-0021 決定 2：記錄下來並詢問下線服務商）。
 
 ## 維護
 

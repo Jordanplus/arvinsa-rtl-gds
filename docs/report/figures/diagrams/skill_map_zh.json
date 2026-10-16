@@ -9,7 +9,7 @@
   },
   {
    "id": "mid",
-   "label": "middle-end-flow（入口）：RTL 到網表、SDC、macro 準備、EQY",
+   "label": "middle-end-flow（入口）：RTL 到 netlist、SDC、macro 準備、EQY",
    "layer": 1,
    "parent": "root",
    "border": "#2980B9",

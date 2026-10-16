@@ -17,7 +17,7 @@
   },
   {
    "id": "cause",
-   "label": "2  找根因\n已驗證（實驗）或\n標明推測",
+   "label": "2  找出原因\n已驗證（實驗）或\n標明推測",
    "layer": 1,
    "parent": "root",
    "border": "#E67E22",
@@ -25,7 +25,7 @@
   },
   {
    "id": "exp",
-   "label": "3  skill 經驗紀錄\n日期、run、原文訊息、\n根因、處理、證據",
+   "label": "3  skill 經驗紀錄\n日期、run、原文訊息、\n原因、處理、證據",
    "layer": 1,
    "parent": "root",
    "border": "#7F8C8D",
@@ -41,7 +41,7 @@
   },
   {
    "id": "guard",
-   "label": "5  防護\nchecker＋negative test\n或寫明「沒有自動防護」與原因",
+   "label": "5  自動檢查\nchecker＋negative test\n或寫明「沒有自動檢查」與原因",
    "layer": 1,
    "parent": "root",
    "border": "#8E44AD",

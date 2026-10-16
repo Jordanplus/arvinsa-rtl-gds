@@ -12,7 +12,7 @@ warnings allowed and the static IR supply model of ir_sources.
 Checks (each prints a PASS/FAIL row):
   macro        the final netlist has exactly one SRAM macro instance, named sram0
   placement    sram0 in the final DEF is FIXED at the location and orientation of config.json
-               MACROS (§7.2 "擺放": the macro must not drift)
+               MACROS (§7.2 "placement": the macro must not drift)
   ir_sources   soc_top: the static IR supply model (config VSRC_LOC_FILES, one side only): every source point
                of a net lies on a met5 stripe of that net in the final DEF, every met5 stripe of the
                net has exactly one point, and the voltage column is > 0 for VDD_NETS and 0 for

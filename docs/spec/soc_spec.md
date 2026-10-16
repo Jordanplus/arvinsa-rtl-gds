@@ -110,8 +110,8 @@ Phase 2 單獨 harden 的 PicoRV32 用 `pnr/picorv32_core/config.json` 的 `SYNT
 - 解碼：完整比對位址視窗（見 §2），不做 partial decode。
 - 回應：所有存取都必須在有限 cycle 內回 `mem_ready`，包括 unmapped（回 `mem_rdata=0`、寫入忽略）。
 - `mem_ready` 為 registered 輸出，每筆交易只拉高一個 cycle；`mem_valid` 在 handshake 後由 CPU 拉低。
-- 周邊（UART、GPIO、TEST_CTRL）只支援 32-bit 存取；sub-word 寫入由 testbench 判定為違規（firmware 不得做）。
-- 非 SRAM 讀取：選中後下一個 cycle 回 `mem_ready`，`mem_rdata` 為 registered。UART DATA 寫入在 `reg_dat_wait=1` 期間不得回 `mem_ready`。UART DATA 讀取時，`reg_dat_re` 每筆交易**只能拉高一個 cycle**，且與取用的資料同一筆。
+- 周邊（UART、GPIO、TEST_CTRL）只支援 32-bit 存取；sub-word 寫入由 testbench 視為違規（firmware 不得做）。
+- 非 SRAM 讀取：被選取後下一個 cycle 回 `mem_ready`，`mem_rdata` 為 registered。UART DATA 寫入在 `reg_dat_wait=1` 期間不得回 `mem_ready`。UART DATA 讀取時，`reg_dat_re` 每筆交易**只能拉高一個 cycle**，且與取用的資料同一筆。
 - Datapath register（例如 `mem_rdata` 暫存、SRAM 讀出 register）**不做 reset**；控制用 FSM 與 valid/ready 要 reset。
 
 ### 4.3 SRAM port 0 時序（`sram0`）
@@ -158,7 +158,7 @@ module bootrom (
 
 - SIG、DONE、IRQ_TRIG 三個 32-bit 暫存器，reset 為 0。
 - `done_strobe`：DONE 被寫入的那個 cycle 為 1（與寫入同一個上升緣後的 cycle，一次寫入只產生一個 cycle）。
-- IRQ_TRIG bit0 → `irq[SOC_IRQ_TEST]`（PicoRV32 預設 latched IRQ）。因為是 latched，handler 清掉 IRQ_TRIG 之前 IRQ 已再次被鎖存，所以每寫一次 IRQ_TRIG，handler 會進入 **恰好 2 次**（Phase 1 實測，兩次記錄的 pending mask 都是 `1<<4`）。
+- IRQ_TRIG bit0 → `irq[SOC_IRQ_TEST]`（PicoRV32 預設 latched IRQ）。因為是 latched，handler 清掉 IRQ_TRIG 之前 IRQ 已再次被 latch 住，所以每寫一次 IRQ_TRIG，handler 會進入 **恰好 2 次**（Phase 1 RTL 模擬量到，兩次記錄的 pending mask 都是 `1<<4`）。
 - `irq[SOC_IRQ_TEST]` 每個 cycle 都等於 IRQ_TRIG[0]（位準訊號，不是脈衝，清掉後不得延遲放掉）。
 
 ### 4.9 Reset
@@ -166,6 +166,8 @@ module bootrom (
 同步、低電位有效 `resetn`。`resetn=0` 至少 10 個 cycle。
 
 - `resetn=0` 被取樣的那個上升緣上，CPU 送出的 SRAM 寫入**丟棄**，與同一個邊緣上的周邊暫存器寫入被 reset 蓋掉的行為一致（Phase 1 review RTL-RST-01）。
+
+> 註記（2026-10-16，Caravel 版）：放進 Caravel 時 `resetn = ~wb_rst_i`（`rtl/caravel/user_project_wrapper.v` 第 129 行）。`wb_rst_i` 來自 Caravel `caravel_clocking` 的 reset synchronizer：POR、`resetb` pad、housekeeping 的 reset（reset 暫存器或 SPI pass-through）任一個有效就立刻拉起，拉起是非同步的；全部放開後，在 `wb_clk_i` 的第 3 個下降緣才放開（synchronizer 用的核心時脈經 `mgmt_protect` 送進 wrapper，就是 `wb_clk_i`）。出處：caravel-lite `verilog/rtl/caravel_clocking.v` 第 51、101–112 行，`housekeeping.v` 第 254 行，`caravel_core.v` 第 523、528、531–534 行（`caravel_clocking` 的接線）、384、386、408、410 行（`mgmt_protect` 的接線）、443–444 行（接到 wrapper），`mgmt_protect.v` 第 232–233 行。所以上面第一句的「同步」在 Caravel 版只對放開成立，RTL-RST-01 只在 reset 同步拉起時成立；「`resetn=0` 至少 10 個 cycle」要看 reset 來源拉多久，synchronizer 只保證來源放開後再拉到第 3 個下降緣。RTL 模擬的 testbench 拉起與放開 `resetn` 都和時脈同步（開機時從時間 0 拉住，中途的 reset 在下降緣拉起，放開都在下降緣；Caravel 版的 `wb_rst_i` 就是 `~resetn`；`dv/tb/tb_soc.v` 第 69、120、940–943、1001–1007 行），結果不受影響；晶片上 `resetn` 還經組合邏輯接到 SRAM 的 `csb0`（`rtl/bus/soc_bus.v` 第 229、241 行），RTL-RST-01 不保證。晶片上的影響與建議見 `docs/notes/caravel_reset_and_mgmt_clock.md` 與 ADR-0022。
 
 ---
 
@@ -197,9 +199,9 @@ module bootrom (
 | R13 | `BUG_R13` | host port 忽略 `host_wmask` | `boot_host_hello` | `sim_error`，`(?i)host port partial-wmask write mismatch`（§7.2 沒有觀察 host port 的 checker，testbench 直接中止） |
 | R14 | `BUG_R14` | IRQ_TRIG bit0 清掉後，`irq[4]` 仍多拉 200 cycle（handler 進入 4 次） | `irq` | `test_ctrl`，`(?i)0xbad00020` |
 | R15 | `BUG_R15` | DONE 讀回 0 | `regs` | `test_ctrl`，`(?i)0xbad00240` |
-| L01 | （無，激勵） | Boot ROM loader 收到 checksum 錯誤的封包 | `boot_uart_badck` | 只有 `test_ctrl` FAIL（`exclusive`），`(?i)0xbad00b00`，GPIO `B2→EE` |
-| L02 | （無，激勵） | loader 收到 N = 0 | `boot_uart_n0` | 同 L01 |
-| L03 | （無，激勵） | loader 收到 N = 449 | `boot_uart_n449` | 同 L01 |
+| L01 | （無，錯誤的輸入） | Boot ROM loader 收到 checksum 錯誤的封包 | `boot_uart_badck` | 只有 `test_ctrl` FAIL（`exclusive`），`(?i)0xbad00b00`，GPIO `B2→EE` |
+| L02 | （無，錯誤的輸入） | loader 收到 N = 0 | `boot_uart_n0` | 同 L01 |
+| L03 | （無，錯誤的輸入） | loader 收到 N = 449 | `boot_uart_n449` | 同 L01 |
 
 L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot ROM 必須拒收。若 Boot ROM 不驗 checksum 或不檢查 N 範圍，這三條會變成「沒抓到」，`make neg-rtl` 隨之 FAIL。
 
@@ -229,10 +231,10 @@ L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot RO
 
 ### 6.1 Toolchain 與產出
 
-- 前綴 `riscv64-elf-`。SoC 測試：`-march=rv32imc`（必要時加 `_zicsr` 等擴充名稱），`-mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles`，連結 `-lgcc`。
+- prefix `riscv64-elf-`。SoC 測試：`-march=rv32imc`（必要時加 `_zicsr` 等擴充名稱），`-mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles`，連結 `-lgcc`。
 - 每個測試產出：`fw/build/<name>.elf`、`.bin`（從 0x0 起的平面映像）、`.hex`（`$readmemh` 格式，每行一個 32-bit word，第一行對應 SRAM word 0，little-endian 組字）、`.lst`（反組譯）。
 - `fw/build/size_report.txt`：每個測試的 text/data/bss 與剩餘空間。
-- `make -C fw all`：建所有測試＋Boot ROM；`make -C fw <name>`：單一測試；`make -C fw bootrom`：重產 `rtl/bootrom/bootrom.v`；`make -C fw check-bootrom`：重產到暫存位置並與已 commit 的 `rtl/bootrom/bootrom.v` 比對，不同即 FAIL。
+- `make -C fw all`：建所有測試＋Boot ROM；`make -C fw <name>`：單一測試；`make -C fw bootrom`：重新產生 `rtl/bootrom/bootrom.v`；`make -C fw check-bootrom`：重新產生到暫存位置並與已 commit 的 `rtl/bootrom/bootrom.v` 比對，不同即 FAIL。
 - `soc.h` 由 `memmap.vh` 產生到 `fw/build/`，不手寫位址。
 
 ### 6.2 記憶體配置與 size checker
@@ -269,20 +271,20 @@ L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot RO
 | `uart_burst` | backdoor | 0 | 用 `uart_puts_burst()` 連續送 81 個 byte；tests.toml `min_uart_stalls = 80`：至少 80 筆 DATA 寫入被 transmitter 忙碌擋住（§4.2 的 stall 路徑） | `uart_burst 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz PASS\n` | `uart_crc32` |
 | `reset_store` | backdoor | 0 | testbench 在 CPU 第一次 store 到 `rst_victim` 時拉 reset 16 cycle（`+reset_on_store`）；第二次開機檢查該 word 沒被改（§4.9）。GPIO `B0→00→B0`；fail code `0x01`／`0x02`／`0x03` | `reset_store PASS\n` | `uart_crc32` |
 | `counters` | backdoor | 0 | 讀 64-bit 計數器：`rdcycleh`、`rdinstreth` 在一段 100 次的迴圈前後都必須是 0（測試遠少於 2^32 cycle）；`rdcycle`、`rdinstret` 要遞增，instret 至少增加 100，且 instret ≤ cycle。fail code `0x10` cycleh、`0x20` instreth、`0x30` cycle 沒增加、`0x40` instret 增加不足、`0x50` instret > cycle（Phase 4，補 Phase 2 已知限制 7） | `counters PASS\n` | `uart_crc32` |
-| `buserr` | backdoor | 0 | 打開 `irq[2]`，各做一次非對齊 `lw`、`sw`（inline assembly）。PicoRV32 只把 `irq[2]` 設成 pending，存取照樣以清掉 bit 1:0 的 word 位址送上 bus（`picorv32.v` 382、403–406、1922–1935）：每次必須恰好多一次 IRQ、pending mask 為 `1<<2`；`lw` 讀到對齊的 word，`sw` 寫入對齊的 word 且不動到下一個 word。fail code `0x10`–`0x12`（lw）、`0x20`–`0x22`（sw）（Phase 4，補 Phase 2 已知限制 7） | `buserr PASS\n` | `uart_crc32` |
+| `buserr` | backdoor | 0 | 打開 `irq[2]`，各做一次未對齊的 `lw`、`sw`（inline assembly）。PicoRV32 只把 `irq[2]` 設成 pending，存取照樣以清掉 bit 1:0 的 word 位址送上 bus（`picorv32.v` 382、403–406、1922–1935）：每次必須恰好多一次 IRQ、pending mask 為 `1<<2`；`lw` 讀到對齊的 word，`sw` 寫入對齊的 word 且不動到下一個 word。fail code `0x10`–`0x12`（lw）、`0x20`–`0x22`（sw）（Phase 4，補 Phase 2 已知限制 7） | `buserr PASS\n` | `uart_crc32` |
 | `neg_fw_hang` | backdoor | 0 | 只做 negative test：印字後無窮迴圈、永不寫 DONE | （任意） | — |
 | `neg_fw_illegal` | backdoor | 0 | 只做 negative test：執行非法指令 | （任意） | — |
 | `boot_uart_badck`／`boot_uart_n0`／`boot_uart_n449` | UART（Boot ROM loader） | 2 | 只做 negative test（L01–L03）：送出 checksum 錯誤／N=0／N=449 的封包，正確的 Boot ROM 必須拒收 | （無） | — |
 
-`memtest`、`bootrom_march` 另設 SRAM 存取 coverage 規則（tests.toml `sram_cov`，由 `coverage` checker 判定）：memtest 測試區 `[_free_start, 0x700)` 每個 word 恰好 88 次讀、22 次寫、0 次取指令，且 byte strobe `1/2/4/8/3/C/F` 都出現；bootrom_march 全部 512 個 word 恰好 6 讀 6 寫、全 32-bit、0 次取指令。這些次數由程式推導並實測，改動測試的任何階段都要同步更新。
+`memtest`、`bootrom_march` 另設 SRAM 存取 coverage 規則（tests.toml `sram_cov`，由 `coverage` checker 檢查）：memtest 測試區 `[_free_start, 0x700)` 每個 word 恰好 88 次讀、22 次寫、0 次指令擷取，且 byte strobe `1/2/4/8/3/C/F` 都出現；bootrom_march 全部 512 個 word 恰好 6 讀 6 寫、全 32-bit、0 次指令擷取。這些次數由程式推導，並用 RTL 模擬確認，改動測試的任何階段都要同步更新。
 
-`memtest`、`muldiv`、`bootrom_march` 另在 `dv/tests.toml` 設 `min_cycles`（Phase 1 實測 DONE cycle 的約 90%）：DONE=PASS 寫得比這更早，代表測試主體被跳過或縮小，由 `test_ctrl` 判 FAIL。刻意改 RTL 時序讓測試變快時，要重新量測並更新。
+`memtest`、`muldiv`、`bootrom_march` 另在 `dv/tests.toml` 設 `min_cycles`（Phase 1 RTL 模擬量到的 DONE cycle 的約 90%）：DONE=PASS 寫得比這更早，代表測試主體被跳過或縮小，由 `test_ctrl` 判 FAIL。刻意改 RTL 時序讓測試變快時，要重新量測並更新。
 
 ### 6.5 Boot ROM 程式（`fw/bootrom/`，連結位址 `0x0001_0000`，≤ 128 words，建議 `-march=rv32i`）
 
-1. 寫 UART DIV = `SOC_UART_DIV`；讀 GPIO_IN 得 `mode`；寫 GPIO_OUT = `0xB0 | mode`。DIV 必須在第一次存取 UART DATA、第一次離開 Boot ROM 取指令、第一次寫 DONE 之前寫好（`uart_div` checker）。
+1. 寫 UART DIV = `SOC_UART_DIV`；讀 GPIO_IN 得 `mode`；寫 GPIO_OUT = `0xB0 | mode`。DIV 必須在第一次存取 UART DATA、第一次離開 Boot ROM 擷取指令、第一次寫 DONE 之前寫好（`uart_div` checker）。
 2. `mode=0` 或 `3`：跳到 `0x0000_0000`。
-3. `mode=1`：全部 512 words 做 march C−（pattern 0 與全 1），再做 address-in-address（每個 word 寫入自身位址後全部讀回）。PASS：GPIO_OUT=`0xA5`、SIG=`0x4D41_5243`、DONE=PASS；FAIL：GPIO_OUT=`0xE1`、DONE=`0xBAD0_0E10`。之後無窮迴圈。不使用 SRAM 當 stack。每個 word 恰好寫 6 次（M0–M4、address-in-address）、讀 6 次（M1–M5、address-in-address），全部 32-bit 存取，不從 SRAM 取指令。
+3. `mode=1`：全部 512 words 做 march C−（pattern 0 與全 1），再做 address-in-address（每個 word 寫入自身位址後全部讀回）。PASS：GPIO_OUT=`0xA5`、SIG=`0x4D41_5243`、DONE=PASS；FAIL：GPIO_OUT=`0xE1`、DONE=`0xBAD0_0E10`。之後無窮迴圈。不使用 SRAM 當 stack。每個 word 恰好寫 6 次（M0–M4、address-in-address）、讀 6 次（M1–M5、address-in-address），全部 32-bit 存取，不從 SRAM 擷取指令。
 4. `mode=2`：UART loader。接收格式：`N`（2 bytes，little-endian，word 數，1 ≤ N ≤ 448）、`N×4` bytes 映像（little-endian word，寫到 SRAM word 0..N−1）、1 byte checksum（映像所有 byte 加總 mod 256）。正確：GPIO_OUT=`0xB8` 後跳到 0；錯誤：GPIO_OUT=`0xEE`、DONE=`0xBAD0_0B00`、無窮迴圈。
 
 ---
@@ -293,13 +295,13 @@ L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot RO
 
 - 頂層模組 `tb_soc`，DUT instance 名稱 `dut`。同一份 testbench 給 Icarus 與 Verilator（`--binary --timing`）用；Icarus 專屬的 X 檢查放在 `` `ifndef VERILATOR ``。
 - Plusargs：`+fw=<hex>`（backdoor 預載到 `dut.sram0.mem`）、`+boot_mode=<n>`、`+load=backdoor|host|uart|none`、`+max_cycles=<n>`、`+uart_in=<hex 每行一 byte>`、`+uart_in_len=<n>`、`+uart_in_delay=<cycles>`、`+out_dir=<dir>`、`+trace`、`+vcd`、`+allow_unmapped`、`+reset_on_store=<hex addr>`（CPU 第一次 store 到該位址時拉 reset 16 cycle）。
-- Testbench 只判斷它看得到的 checker；最終 PASS/FAIL 由 `run_sim.py` 綜合判定（§7.4）。
+- Testbench 只判斷它看得到的 checker；最終 PASS/FAIL 由 `run_sim.py` 綜合各項結果決定（§7.4）。
 
 ### 7.2 Checker 清單與訊息格式
 
 每個 checker 失敗時印一行：`[CHK:<name>] FAIL <訊息>`。名稱固定如下（negative test 以此比對）：
 
-| 名稱 | 位置 | 判定 |
+| 名稱 | 位置 | FAIL 條件 |
 |---|---|---|
 | `test_ctrl` | TB＋run_sim.py | DONE 值不是 PASS magic、或 DONE 被寫兩次以上；或 DONE=PASS 寫入時 cycle 小於 tests.toml 的 `min_cycles` |
 | `signature` | run_sim.py | SIG 不符合 tests.toml 的 signature 規則；有 DONE 時比對 DONE 寫入那個 cycle 的 SIG |
@@ -313,15 +315,15 @@ L01–L03 的 RTL 是正確的，植入的是錯誤的輸入；正確的 Boot RO
 | `sram_port` | TB | SRAM port 0 腳位協定：CPU 路徑每筆 SRAM 交易恰好一次存取且在 T0，addr0／web0／wmask0／din0 與交易一致，讀在 T2、寫在 T1 handshake；非 SRAM 交易或閒置時不得存取；取樣到 `resetn=0` 的上升緣不得存取；host 路徑 `csb0 = ~host_cs` 且其餘腳位等於 host 訊號 |
 | `irq_line` | TB | `u_cpu.irq[4]` 每個 cycle 等於 IRQ_TRIG[0]（由 CPU 寫入推算；寫入交易進行中新舊值都接受） |
 | `uart_div` | TB | reset 釋放時 simpleuart 除數 = `SOC_UART_DIV`，之後等於最後寫入 DIV 的值；每次 reset 後，第一次存取 UART DATA、第一次離開 Boot ROM、第一次寫 DONE 之前必須已寫 DIV = `SOC_UART_DIV` |
-| `coverage` | run_sim.py | tests.toml 的 `sram_cov`（每個 word 的讀／寫／取指令次數與 byte strobe）、`min_uart_stalls`（被 stall 的 DATA 寫入數下限）、`reset_on_store` 時 mid-run reset 必須恰好 1 次 |
+| `coverage` | run_sim.py | tests.toml 的 `sram_cov`（每個 word 的讀／寫／指令擷取次數與 byte strobe）、`min_uart_stalls`（被 stall 的 DATA 寫入數下限）、`reset_on_store` 時 mid-run reset 必須恰好 1 次 |
 | `log_scan` | run_sim.py | log 出現 ERROR、FATAL、`Writing and reading`、模擬器 warning 等（白名單：`dv/log_whitelist.txt`） |
 | `sim_error` | run_sim.py | 編譯失敗、模擬異常結束、找不到結果、`tb_result.txt` 缺任何欄位；testbench 自行中止（例如 host port 讀回或 byte mask 檢查不符） |
 
-- **unmapped 例外**：§4.2 要求 unmapped 存取要回應、讀回 0、寫入忽略，但 `bus_assert` 對 unmapped 存取一律 FAIL，正向測試就驗證不了 §4.2。因此只有 tests.toml 設了 `expect_unmapped` 的測試（目前只有 `unmapped`，值 87），run_sim.py 才傳 `+allow_unmapped`：unmapped **資料**存取改成計數，次數必須完全相符；從 unmapped 位址取指令、decode mismatch、1000 cycle 上限照常 FAIL。
+- **unmapped 例外**：§4.2 要求 unmapped 存取要回應、讀回 0、寫入忽略，但 `bus_assert` 對 unmapped 存取一律 FAIL，正向測試就驗證不了 §4.2。因此只有 tests.toml 設了 `expect_unmapped` 的測試（目前只有 `unmapped`，值 87），run_sim.py 才傳 `+allow_unmapped`：unmapped **資料**存取改成計數，次數必須完全相符；從 unmapped 位址擷取指令、decode mismatch、1000 cycle 上限照常 FAIL。
 - host port 目前沒有獨立的 checker，錯誤由 testbench 中止並以 `sim_error` 回報（R13）。之後若新增 `host_port` checker，R13 改以它為預期。
 
 - DONE 之後 testbench 繼續跑到 UART 閒置（至少 2 個 frame 時間）再結束，確保最後的 byte 被解碼。
-- Testbench 輸出：`<out_dir>/uart.txt`（解碼 bytes）、`<out_dir>/gpio.txt`（每行一個 `gpio_out` 新值，十六進位）、`<out_dir>/tb_result.txt`（DONE 值、SIG 值、cycle 數）、`+trace` 時 `<out_dir>/trace.log`（每筆 handshake：cycle、addr、wdata、wstrb、rdata）、`<out_dir>/sram_cov.txt`（每個 SRAM word 的讀／取指令／寫次數與 strobe）。`tb_result.txt` 另含 `sig_at_done`、`uart_wr`、`uart_wr_stalled`、`uart_wr_stall_cycles`、`sram_port_accesses`、`mid_resets` 與各 TB checker 的 `fail.<name>`。
+- Testbench 輸出：`<out_dir>/uart.txt`（解碼 bytes）、`<out_dir>/gpio.txt`（每行一個 `gpio_out` 新值，十六進位）、`<out_dir>/tb_result.txt`（DONE 值、SIG 值、cycle 數）、`+trace` 時 `<out_dir>/trace.log`（每筆 handshake：cycle、addr、wdata、wstrb、rdata）、`<out_dir>/sram_cov.txt`（每個 SRAM word 的讀／指令擷取／寫次數與 strobe）。`tb_result.txt` 另含 `sig_at_done`、`uart_wr`、`uart_wr_stalled`、`uart_wr_stall_cycles`、`sram_port_accesses`、`mid_resets` 與各 TB checker 的 `fail.<name>`。
 
 ### 7.3 `dv/tests.toml` 與 `dv/bugs.toml`
 
@@ -348,7 +350,7 @@ min_uart_stalls = 80      # 被 transmitter 忙碌擋住的 UART DATA 寫入數�
 reset_on_store = "rst_victim"  # mid-run reset 的觸發位址（ELF symbol 或數值）
 ```
 
-正向測試（`negative_only = false`）必須同時比對 `expect_uart`、`expect_gpio` 與 `sig_rule`（不可為 `none`），否則載入設定檔時即報錯。
+正向測試（`negative_only = false`）必須同時比對 `expect_uart`、`expect_gpio` 與 `sig_rule`（不可為 `none`），否則載入設定檔時就會回報錯誤。
 
 ```toml
 [[bug]]
@@ -396,7 +398,7 @@ bootrom = "skip_last_word" # 選填；改用 Boot ROM 錯誤變體 fw/build/boot
 ## 9. Phase 1 exit criteria
 
 1. `make lint`、`make synth-check`、`make fw` PASS。
-2. `make core-stock` PASS（若某個上游 target 因外部依賴無法執行，需在 `docs/notes/core_stock.md` 說明原因與替代方式）。
+2. `make core-stock` PASS（若某個上游 target 因外部相依項目無法執行，需在 `docs/notes/core_stock.md` 說明原因與替代方式）。
 3. `make regress-rtl`：所有正向測試在 Icarus 與 Verilator 都 PASS。
 4. `make neg-rtl`：`dv/bugs.toml` 的全部條目（§5，目前 33 項）都在預期的 checker FAIL。
 5. `make smoke` < 5 分鐘。

@@ -1,0 +1,18 @@
+case 2
+after POR       GPIO33: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after POR       GPIO34: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after POR       GPIO35: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after POR       GPIO36: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=1
+after POR       GPIO37: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after POR       hk_cfg 33..37 = 0403 0403 0403 1803 1803
+after POR       user uart_tx/trap reach pads 37/35 (out follows and oeb=0): NO
+after POR       pad inputs 33/34/36 reach the wrapper io_in: YES
+after resetb    GPIO33: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after resetb    GPIO34: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after resetb    GPIO35: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after resetb    GPIO36: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=1
+after resetb    GPIO37: dm=001 oeb(pad)=1 out(pad)=0 inp_dis=0 user_io_in=0
+after resetb    hk_cfg 33..37 = 0403 0403 0403 1803 1803
+after resetb    user uart_tx/trap reach pads 37/35 (out follows and oeb=0): NO
+after resetb    pad inputs 33/34/36 reach the wrapper io_in: YES
+tb_gpio_xfer.v:145: $finish called at 11000000 (1ps)

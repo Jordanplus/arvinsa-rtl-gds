@@ -1,0 +1,293 @@
+{
+ "_note": "Steps and order: arvinsa-rtl-gds-flow.md §3 (tree) and §4.0-4.8. LibreLane steps: .tools/librelane/librelane/flows/classic.py Steps (lines 40-121); Yosys.EQY is in the list but RUN_EQY defaults to False (line 255), so EQY runs as the repo's make eqy-soc / eqy-caravel. pnr/user_project_wrapper/config.json and pnr/soc_top/config*.json: meta.flow = Classic, substituting_steps OpenROAD.CTS -> Arvinsa.CTSNoInsertionDelay (pnr/librelane_plugin_arvinsa/__init__.py, ADR-0016); STA_CORNERS = 5 PVT x nom/min/max RC = 15; PRIMARY_GDSII_STREAMOUT_TOOL klayout. OpenROAD.RCX writes one SPEF per RCX_RULESETS corner (librelane/steps/openroad.py class RCX); OpenROAD.STAPostPNR writes SDF, no SDF timing simulation was done (report Phase 4, plan L5). Fill = fill/decap cells (OpenROAD.FillInsertion); no metal fill (README Phase 7). Repo checkers after LibreLane: pnr/soc_top/run.sh -> check_signoff.py, check_soc.py, check_inputs.py --resolved, ir_worst.py, provenance.py --verify, review_criteria.py (flow doc §4.6); check_inputs.py before LibreLane (flow doc §4.6). EQY / gate-level / IR from the pads: Makefile eqy-caravel, gl-caravel, ir-caravel (lines 192-212), flow doc §4.7; IR limit 20 mV (README Phase 7). Regressions: scripts/regress.py TARGET_LISTS, flow doc §4.8. Precheck: Makefile precheck-caravel (line 259), report §2 (cf-precheck 1.3.7, lima VM), README Phase 7 (PASS). Not taped out: ADR-0019 decision 1. SRAM: flow doc §4.3, ADR-0018, CLAUDE.md rule 12 (view QA). pad / block / pin plan: CLAUDE.md rule 14, make pin-plan (Makefile line 473).",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "arvinsa-rtl-gds：完整 RTL-to-GDS 流程（工具與檔案）",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "inp",
+   "label": "輸入",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "ll",
+   "label": "LibreLane 3.0.14 Classic flow（make harden）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "so",
+   "label": "repo 自己的 signoff 與 netlist 驗證",
+   "layer": 1,
+   "parent": "root",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  },
+  {
+   "id": "chip",
+   "label": "晶片層級與下線",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "rtl",
+   "label": "RTL 與 firmware\nHazard3／PicoRV32 SoC\nfw：gcc → boot ROM、測試",
+   "layer": 2,
+   "parent": "inp",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "pin",
+   "label": "pad／block／pin 規劃\npin_plan.toml\n使用者核准",
+   "layer": 2,
+   "parent": "inp",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "pdk",
+   "label": "PDK sky130A\nsky130_fd_sc_hd 標準元件\n.lib、LEF、GDS、規則 deck",
+   "layer": 2,
+   "parent": "inp",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "spec",
+   "label": "規格與 constraint\nproject-plan.md、ADR\nSDC、signoff 門檻",
+   "layer": 2,
+   "parent": "inp",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "sram",
+   "label": "SRAM macro：OpenRAM → GDS、LEF\nngspice characterization → 5 個 PVT 的 .lib\nview QA（check_macro_views.py）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "rtlv",
+   "label": "RTL 驗證：Verilator lint、Yosys 合成檢查\nIcarus＋Verilator self-checking 測試\n植入的錯誤都必須 FAIL",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "synth",
+   "label": "1 合成（Yosys）\n→ 合成 netlist .v",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "fp",
+   "label": "2 floorplan、macro placement、PDN\nOpenROAD → ODB／DEF",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "pl",
+   "label": "3 placement＋resizer\nOpenROAD，修 slew／cap",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "cts",
+   "label": "4 CTS（repo 的 plugin）＋時序修復\nArvinsa.CTSNoInsertionDelay",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "rt",
+   "label": "5 global／detailed routing\nantenna 修補、fill cell\n→ ODB／DEF、最終 netlist",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "rcx",
+   "label": "6 RC 萃取（OpenRCX）\n→ SPEF（3 種 RC）",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "sta",
+   "label": "7 STA：15 個 corner\nOpenSTA；IR：PSM\n→ 時序報表、SDF",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "gds",
+   "label": "8 GDS 輸出\nMagic、KLayout → GDS、LEF\nDRC、XOR、LVS（Netgen）",
+   "layer": 2,
+   "parent": "ll",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "chk",
+   "label": "check_signoff.py：limits 檔、golden\ncheck_soc.py、run guard\nreview_criteria.py",
+   "layer": 2,
+   "parent": "so",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  },
+  {
+   "id": "eqy",
+   "label": "EQY 等價證明\n合成 netlist ≡ 最終 netlist\n（make eqy-soc）",
+   "layer": 2,
+   "parent": "so",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  },
+  {
+   "id": "gl",
+   "label": "gate-level 模擬：RTL 與\n最終 netlist 每個 cycle 比對\n也跑 PG netlist",
+   "layer": 2,
+   "parent": "so",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  },
+  {
+   "id": "ir",
+   "label": "IR：max power pattern\nwrapper 從 Caravel pad 起算\n上限 20 mV",
+   "layer": 2,
+   "parent": "so",
+   "border": "#16A085",
+   "fill": "#D5F0EA"
+  },
+  {
+   "id": "caravel",
+   "label": "Caravel 整合：wrapper\n同一條流程再跑一次",
+   "layer": 2,
+   "parent": "chip",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "precheck",
+   "label": "ChipFoundry precheck\ncf-precheck 1.3.7：PASS",
+   "layer": 2,
+   "parent": "chip",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "tape",
+   "label": "下線（tapeout）\n本專案沒有做",
+   "layer": 2,
+   "parent": "chip",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "regress",
+   "label": "一鍵 regression（3 條）\n依序跑 RTL 驗證 → IR／precheck\n只認乾淨 worktree",
+   "layer": 1,
+   "parent": "root",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  }
+ ],
+ "links": [
+  {
+   "source": "rtl",
+   "target": "rtlv"
+  },
+  {
+   "source": "rtlv",
+   "target": "ll"
+  },
+  {
+   "source": "sram",
+   "target": "fp"
+  },
+  {
+   "source": "inp",
+   "target": "ll"
+  },
+  {
+   "source": "synth",
+   "target": "fp"
+  },
+  {
+   "source": "fp",
+   "target": "pl"
+  },
+  {
+   "source": "pl",
+   "target": "cts"
+  },
+  {
+   "source": "cts",
+   "target": "rt"
+  },
+  {
+   "source": "rt",
+   "target": "rcx"
+  },
+  {
+   "source": "rcx",
+   "target": "sta"
+  },
+  {
+   "source": "sta",
+   "target": "gds"
+  },
+  {
+   "source": "ll",
+   "target": "so"
+  },
+  {
+   "source": "chk",
+   "target": "eqy"
+  },
+  {
+   "source": "eqy",
+   "target": "gl"
+  },
+  {
+   "source": "gl",
+   "target": "ir"
+  },
+  {
+   "source": "so",
+   "target": "chip"
+  },
+  {
+   "source": "caravel",
+   "target": "precheck"
+  },
+  {
+   "source": "precheck",
+   "target": "tape"
+  }
+ ]
+}

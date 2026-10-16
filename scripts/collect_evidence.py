@@ -196,7 +196,7 @@ def main():
             st = "已收錄" if p in kept else f"未收錄（{size / 1e6:.0f} MB）" if size > 1e6 else "未收錄"
         else:
             n = sum(1 for k in kept if k.startswith(p + os.sep))
-            st = f"目錄：收錄其中 {n} 個檔" if n else f"目錄：未收錄（{size / 1e6:.0f} MB 的 run 中間產物）"
+            st = f"目錄：收錄其中 {n} 個檔" if n else f"目錄：未收錄（{size / 1e6:.0f} MB 的 run 中間檔案）"
         cite = subprocess.run(["git", "-C", repo, "grep", "-nF", r, "--", ".", ":!" + a.out],
                               capture_output=True, text=True).stdout.splitlines()
         where = sorted({":".join(c.split(":")[:2]) for c in cite})

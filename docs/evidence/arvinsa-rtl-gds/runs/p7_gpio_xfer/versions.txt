@@ -1,0 +1,14 @@
+iverilog: Icarus Verilog version 13.0 (stable) (v13_0)
+python3:  Python 3.14.6
+caravel-lite: def/chip_io.def git blob 9af4f4037af382bb01eb3ff256e4a251a585ce6a (tag 2024.09.12-1, commit 5593d992)
+sky130A: 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+env/versions.mk: SKY130_PDK_HASH = 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+sha256:
+03e9c93fa5561e97739009371af8d56a1863960baba5b3bf0e70e36a892029ea  caravel-lite/verilog/rtl/caravel_core.v
+7c3cfc0c9f46d22326a9f5cd42ac9d83da7d3e82443cb1267ca8bc41c951c5a8  caravel-lite/verilog/rtl/housekeeping.v
+98ac6a5fc70aaceed7cbe9d27c1fa8ab285aacce08eaf8b6649d166856b92598  caravel-lite/verilog/rtl/gpio_control_block.v
+6ed13aefc40493038abc3f2809c03be377cd3466d044f62486daf5106a707236  caravel-lite/verilog/rtl/gpio_defaults_block.v
+e4fd86163cd62c57790d53946ea5a561fd0f038a2df54f87cd04558e0598c9c5  caravel-lite/verilog/rtl/user_defines.v
+eddc297cf740487f72d5a1a620b38d9ef98637a11da81fb45fe2fe0cd4272659  caravel-lite/verilog/gl/housekeeping.v
+2f8d6fe12c935357b2f4fb6e6a5358e21225078890647356d0dcb7c0509ac64d  caravel-lite/verilog/gl/caravel_core.v
+0cee7d7d997e77b1aeb8300eca97e29e437a618013c20f99d7648cf5ac93e3d6  rtl/caravel/user_defines.v

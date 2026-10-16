@@ -1,7 +1,7 @@
 # Phase 0 環境建置
 
 狀態（2026-10-03）：**Phase 0 完成**。Nix、LibreLane 3.0.14、sky130A PDK 已安裝；`make env-check-flow` PASS；`librelane --smoke-test` PASS；`make ci-sram-ref`（LibreLane CI 的 SRAM 參考設計）PASS。
-工具與版本總表見 `toolchain.md`，釘版值見 `env/versions.mk`。
+工具與版本總表見 `toolchain.md`，固定版本的值見 `env/versions.mk`。
 
 ## 1. 已就緒（不需 Nix）
 
@@ -27,7 +27,7 @@ make nix-install             # 實際安裝，約 5 分鐘
 `make nix-install`（`env/install_nix.sh`）做的事：
 
 1. 已安裝 Nix 時直接結束；若 FOSSi binary cache 沒設定，會印出要加進 `/etc/nix/nix.conf` 的設定並 FAIL。
-2. 從 GitHub releases 直接下載釘版的 `nix-installer-aarch64-darwin`（版本與 sha256 見 `env/versions.mk`），快取在 `.tools/nix-installer/<版本>/`。下載可續傳、會自動重試，沒有速度門檻；中斷時重跑 `make nix-install` 會從斷點接續。
+2. 從 GitHub releases 直接下載固定版本的 `nix-installer-aarch64-darwin`（版本與 sha256 見 `env/versions.mk`），快取在 `.tools/nix-installer/<版本>/`。下載可續傳、會自動重試，沒有速度門檻；中斷時重跑 `make nix-install` 會從斷點接續。
 3. 驗證 sha256，不符就 FAIL 並刪除壞檔。
 4. 執行 `install --no-confirm`，同時寫入 FOSSi binary cache 與 flakes 設定。安裝程式會自己用 sudo 提權，並要求輸入密碼；Nix 本體已內含在安裝程式裡，安裝時不會再下載。
 5. 安裝後檢查 `nix` 執行檔與 cache 設定都存在，才印 PASS。
@@ -56,7 +56,7 @@ make ci-sram-ref             # Phase 0 golden：重跑 LibreLane CI 的 test_sra
 3. 進入 LibreLane 的 nix-shell，執行 `librelane --smoke-test`；log 在 `runs/flow_setup/smoke_test.log`。
 4. 把 nix-shell 內各工具版本寫到 `runs/flow_setup/versions.txt`（已抄進 `toolchain.md` §2）。
 
-`make env-check` 在 PDK 存在時會另外檢查：PDK 是 `SKY130_PDK_HASH` 那一版、SRAM macro 的 LEF 有 `FOREIGN`、PDK 內的 SRAM Verilog 模型與 `ip/sram/` 的釘版副本 sha256 相同。
+`make env-check` 在 PDK 存在時會另外檢查：PDK 是 `SKY130_PDK_HASH` 那一版、SRAM macro 的 LEF 有 `FOREIGN`、PDK 內的 SRAM Verilog 模型與 `ip/sram/` 裡固定版本的副本 sha256 相同。
 
 ## 4. Phase 0 golden：`make ci-sram-ref`
 

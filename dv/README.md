@@ -14,14 +14,14 @@
 | `monitors/x_check.v` | checker `x_check`（只在 Icarus 編譯）：reset 釋放 20 cycle 後 `trap`/`uart_tx`/`gpio_out`/`mem_valid` 出現 X/Z、讀取 handshake 時 `mem_rdata` 含 X/Z |
 | `monitors/sram_port_monitor.v` | checker `sram_port`（新增）：在上升緣看 `sram0` port 0 的腳位（與 SRAM model 取樣同一時間點）。CPU 路徑：每筆 SRAM 交易恰好一次存取、且在 T0；addr0/web0/wmask0/din0 與 CPU 交易一致；讀在 T2、寫在 T1 handshake；非 SRAM 交易或沒有交易時不得存取；**取樣到 resetn=0 的上升緣不得存取**（§4.9）。host 路徑：`csb0=~host_cs`，其餘腳位等於 host 訊號（§4.4） |
 | `monitors/irq_line_monitor.v` | checker `irq_line`（新增）：`u_cpu.irq[4]` 每個 cycle 都要等於 IRQ_TRIG[0]（由 CPU 匯流排上的寫入推算；寫入交易進行中兩個值都接受）|
-| `monitors/uart_div_monitor.v` | checker `uart_div`（新增）：simpleuart 實際用的除數（`u_uart.u_simpleuart.cfg_divider`）在 reset 釋放時必須是 18，之後必須等於 CPU 最後寫進 DIV 的值；每次 reset 後，CPU 在第一次存取 UART DATA、第一次在 Boot ROM 以外取指令、第一次寫 DONE 之前，必須已經寫過 DIV = 18（§6.5 step 1） |
+| `monitors/uart_div_monitor.v` | checker `uart_div`（新增）：simpleuart 實際用的除數（`u_uart.u_simpleuart.cfg_divider`）在 reset 釋放時必須是 18，之後必須等於 CPU 最後寫進 DIV 的值；每次 reset 後，CPU 在第一次存取 UART DATA、第一次在 Boot ROM 以外擷取指令、第一次寫 DONE 之前，必須已經寫過 DIV = 18（§6.5 step 1） |
 | `tb/dv.f`、`tb/timescale.v` | DV filelist；`timescale.v` 排在最前面，讓沒寫 `` `timescale `` 的檔案繼承 1ns/1ps |
-| `tb/sim_waivers.vlt` | Verilator 模擬 build 的 waiver：只豁免 `simpleuart.v`（第三方、不可修改）的兩種寬度 warning |
-| `tests.toml`、`bugs.toml` | 測試清單（§6.4 加上定向測試 `regs`、`unmapped`、`boot_uart_max`、`uart_burst`、`reset_store`）與 negative test 清單（§5 加上 testbench qualification 補的項目） |
+| `tb/sim_waivers.vlt` | Verilator 模擬 build 的 waiver：只放行 `simpleuart.v`（第三方、不可修改）的兩種寬度 warning |
+| `tests.toml`、`bugs.toml` | 測試清單（§6.4 加上 directed 測試 `regs`、`unmapped`、`boot_uart_max`、`uart_burst`、`reset_store`）與 negative test 清單（§5 加上 testbench qualification 補的項目） |
 | `log_whitelist.txt` | `log_scan` 白名單（目前沒有條目） |
 | `scripts/run_sim.py`、`regress.py`、`neg.py`、`dvlib.py` | §7.4 的三支 script 與共用函式庫 |
 
-`trap`、`timeout` 兩個 checker 寫在 `tb_soc.v` 裡；`signature`、`uart_golden`、`gpio_seq`、`coverage`、`log_scan`、`sim_error` 由 `run_sim.py` 判定。
+`trap`、`timeout` 兩個 checker 寫在 `tb_soc.v` 裡；`signature`、`uart_golden`、`gpio_seq`、`coverage`、`log_scan`、`sim_error` 由 `run_sim.py` 檢查。
 每個 checker 失敗時印一行 `[CHK:<name>] FAIL <訊息>`。
 
 ## 怎麼跑
@@ -30,12 +30,12 @@
 make sim TEST=hello SIM=icarus      # python3 dv/scripts/run_sim.py --test hello --sim icarus
 make regress-rtl                    # 全部正向測試，Icarus + Verilator
 make regress-rtl-smoke              # smoke 子集（hello、memtest、bootrom_march），Icarus
-make neg-rtl                        # bugs.toml 全部 33 項 bug injection，判定反轉
+make neg-rtl                        # bugs.toml 全部 33 項 bug injection，每項都要在預期的 checker FAIL 才算抓到
 make regress-rtl-caravel            # Hazard3 SoC 放在 Caravel user_project_wrapper 裡（Phase 7），全部正向測試
 make neg-rtl-caravel                # 同一個 build：Hazard3 的植入錯誤加上 wrapper 的 W01–W06
 ```
 
-**Caravel 版（Phase 7，ADR-0019）**：`dvlib.CPUS["caravel"]` 是放在 `user_project_wrapper` 裡的 Hazard3 SoC，韌體、`tests.toml`／`bugs.toml` 的條目與 `[test.hazard3]` 的覆寫都沿用 hazard3（`base_cpu()`），`bugs.toml` 裡 `cpus = ["caravel"]` 的條目只在這個 build 跑。testbench 定義 `CARAVEL_WRAPPER`：`uart_tx`／`uart_rx`／`trap`／`boot_mode` 走 `io_in`／`io_out`（GPIO 33–37），`gpio_out` 只在 LA 上（testbench 從 `soc_top` 的腳位讀，再拿 LA 和它比），`resetn` 接 `wb_rst_i`，host port 改由 Wishbone 經 `wb_host_bridge` 讀寫（reset 後 `host_en` = 1，testbench 用 Wishbone 寫 0 放開 CPU），其他 checker 照舊看 `dut.u_soc` 裡面。checker `caravel_pins`：reset 放開後每個 cycle，`io_oeb` 等於 ADR-0019 決定 10 的固定值、沒用到的 `io_out` 為 0、`la_data_out` 等於 SoC 腳位與 `host_en` 的鏡像、`user_irq` 為 0。
+**Caravel 版（Phase 7，ADR-0019）**：`dvlib.CPUS["caravel"]` 是放在 `user_project_wrapper` 裡的 Hazard3 SoC，韌體、`tests.toml`／`bugs.toml` 的條目與 `[test.hazard3]` 的覆寫都沿用 hazard3（`base_cpu()`），`bugs.toml` 裡 `cpus = ["caravel"]` 的條目只在這個 build 跑。testbench 定義 `CARAVEL_WRAPPER`：`uart_tx`／`uart_rx`／`trap`／`boot_mode` 走 `io_in`／`io_out`（GPIO 33–37），`gpio_out` 只在 LA 上（testbench 從 `soc_top` 的腳位讀，再拿 LA 和它比），`resetn` 接 `wb_rst_i`，host port 改由 Wishbone 經 `wb_host_bridge` 讀寫（reset 後 `host_en` = 1，testbench 用 Wishbone 寫 0 放開 CPU），其他 checker 照舊看 `dut.u_soc` 裡面。checker `caravel_pins`：reset 放開後每個 cycle，`io_oeb` 等於 ADR-0019 決定 10 的固定值、沒用到的 `io_out` 為 0、`la_data_out` 等於 SoC 腳位與 `host_en` 的鏡射、`user_irq` 為 0。
 
 `run_sim.py` 另有 `--bug <id>`、`--out <dir>`、`--trace`、`--vcd`、`--timeout <秒>`；`regress.py` 另有 `-j N`（預設 CPU 數 − 2）、`--tests a,b`；`neg.py` 另有 `--only R01,R04`、`-j N`。
 
@@ -52,9 +52,9 @@ make neg-rtl-caravel                # 同一個 build：Hazard3 的植入錯誤�
 加上各自解析後的實際路徑）。任何一項改變就重新編譯；所以升級 Verilator、Icarus 或 Xcode Command Line Tools 的 clang 後，
 不會沿用舊版工具編出的模擬執行檔。工具身分也寫在 `compile.log` 開頭（`# tool:` 行）與每個 `result.json` 的 `tools` 欄位。
 
-## 判定規則
+## PASS／FAIL 規則
 
-**只有明確 PASS 才算 PASS**（§7.4）：模擬器正常結束、`tb_result.txt` 完整、DONE 恰好寫一次且等於 PASS magic、沒有任何 checker FAIL、log 掃描乾淨。缺任何一項都判 FAIL，並在 `failing_checkers` 列出原因；找不到原因時一律記為 `sim_error`。
+**只有明確 PASS 才算 PASS**（§7.4）：模擬器正常結束、`tb_result.txt` 完整、DONE 恰好寫一次且等於 PASS magic、沒有任何 checker FAIL、log 掃描乾淨。缺任何一項就 FAIL，並在 `failing_checkers` 列出原因；找不到原因時一律記為 `sim_error`。
 
 `tb_result.txt` 完整的意思：`dvlib.TB_RESULT_KEYS` 的每個 key（`end_reason`、`done_count`、`done`、`done_cycle`、`sig`、`cycles`、
 `cpu_start_cycle`、`uart_bytes`、`unmapped`、`simulator`、`finished`）都在，每個 testbench checker 都有 `fail.<name>` 計數
@@ -65,20 +65,20 @@ make neg-rtl-caravel                # 同一個 build：Hazard3 的植入錯誤�
 - `signature`：`uart_crc32` 用解碼出的 UART bytes 算 CRC32（與 `zlib.crc32` 相同）和 SIG 比對；`const:0x...` 直接比對；`none` 不檢查。
   有寫 DONE 的 run，比對的是 **DONE strobe 那個 cycle 的 SIG**（`tb_result.txt` 的 `sig_at_done`）：§6.3 規定先寫 SIG 再寫 DONE，
   先寫 DONE、之後才補 SIG 的 firmware 會 FAIL（review m4）。沒有寫 DONE 的 run（timeout／trap）照舊比對最後的 SIG。
-- `coverage`（新增）：檢查測試真的做了 `tests.toml` 宣告的動作，防止測試被縮水卻仍印 PASS：
-  - `sram_cov`：testbench 在每次 CPU 匯流排 handshake 記錄每個 SRAM word 的資料讀取、取指令、寫入次數與出現過的 write strobe，
+- `coverage`（新增）：檢查測試真的做了 `tests.toml` 宣告的動作，防止測試內容被刪減卻仍印 PASS：
+  - `sram_cov`：testbench 在每次 CPU 匯流排 handshake 記錄每個 SRAM word 的資料讀取、指令擷取、寫入次數與出現過的 write strobe，
     寫到 `sram_cov.txt`；`run_sim.py` 依規則比對（例如 `memtest` 測試區每個 word 恰好 88 讀、22 寫，`bootrom_march` 512 個 word 每個恰好 6 讀 6 寫）。
     規則的 `from`／`to` 可以寫 ELF symbol（例如 `_free_start`），從該測試 image 的 `fw/build/<fw>.elf` 讀出。
-  - `min_uart_stalls`：至少要有這麼多次 UART DATA 寫入被「傳送中」的 stall 擋住。量法：一筆 UART DATA 寫入從 `mem_valid` 拉高到 handshake
+  - `min_uart_stalls`：至少要有這麼多次 UART DATA 寫入被「傳送中」的 stall 擋住。量測方式：一筆 UART DATA 寫入從 `mem_valid` 拉高到 handshake
     超過 2 個 cycle（§4.2 匯流排對周邊存取是下一個 cycle 回 `mem_ready`）就算被 stall；`tb_result.txt` 有 `uart_wr`、`uart_wr_stalled`、`uart_wr_stall_cycles`。
   - `reset_on_store`：testbench 必須恰好做了 1 次 mid-run reset（`mid_resets`）。
 - `gpio_seq`：`gpio_out` 變化序列（不含 reset 值 0）必須與 `expect_gpio` 完全相同。
 - `test_ctrl` 的 `min_cycles` 下限（`tests.toml` 擴充欄位）：DONE = PASS magic 必須在 `min_cycles` 之後才寫入（DONE 是 FAIL code 時本來就 FAIL，不另外檢查）。這是為了抓「測試主體被跳過或縮小」：
   例如 `muldiv` 的比對迴圈被拿掉，UART 仍印 `muldiv PASS\n`、SIG 仍是同一個 CRC，只有測試時間變短。目前設在
-  `memtest`、`muldiv`、`bootrom_march`，數值約為 Phase 1 RTL 實測 DONE cycle 的 90%；若刻意改了 RTL 時序讓測試變快，要重新量測後更新。
+  `memtest`、`muldiv`、`bootrom_march`，數值約為 Phase 1 RTL 模擬量到的 DONE cycle 的 90%；若刻意改了 RTL 時序讓測試變快，要重新量測後更新。
 - `bus_assert` 的 unmapped 規則：預設任何 unmapped 存取都 FAIL（§7.2）。只有在 `tests.toml` 寫了 `expect_unmapped = N` 的測試，
   `run_sim.py` 才會加 `+allow_unmapped`：此時 unmapped 的**資料**存取改成計數並印 `[TB] bus_assert: unmapped ...` 資訊行，
-  `run_sim.py` 要求計數恰好等於 N（不符記為 `bus_assert` FAIL）。從 unmapped 位址取指令一律 FAIL；解碼比對、1000 cycle 回應上限、
+  `run_sim.py` 要求計數恰好等於 N（不符記為 `bus_assert` FAIL）。從 unmapped 位址擷取指令一律 FAIL；解碼比對、1000 cycle 回應上限、
   unmapped 讀取必須回 0 這幾條規則在任何測試都照常檢查。目前只有 `unmapped` 測試使用（spec §4.2 要求 unmapped 必須回應，
   但 §7.2 不允許正向測試做 unmapped 存取，這是兩者之間的折衷，見下方「與 spec 的差異」）。
 - host port byte mask 檢查（`load = "host"`）：image 寫入並讀回之後，testbench 對最後一個 SRAM word（511，image 最多 448 word，用不到它）
@@ -100,10 +100,10 @@ make neg-rtl-caravel                # 同一個 build：Hazard3 的植入錯誤�
 | `reset_on_store` | byte 位址或 ELF symbol：CPU 第一次對它送出 store 的那個下降緣，testbench 把 `resetn` 拉低 16 個 cycle（`+reset_on_store`，§4.9）；必須恰好發生 1 次（`coverage`） |
 | `fw` | image 名稱（預設 = 測試名稱） |
 
-正向測試（`negative_only = false`）一定要寫 `expect_uart` 與 `expect_gpio`，且 `sig_rule` 不得為 `none`；否則 `load_tests()` 直接報錯，
-regression 判 FAIL。避免有人把測試條目改到「只要寫了 DONE 就 PASS」。
+正向測試（`negative_only = false`）一定要寫 `expect_uart` 與 `expect_gpio`，且 `sig_rule` 不得為 `none`；否則 `load_tests()` 直接回報錯誤，
+regression 就 FAIL。避免有人把測試條目改到「只要寫了 DONE 就 PASS」。
 
-## Negative test 判定（`neg.py`）
+## Negative test 的判斷方式（`neg.py`）
 
 每個 bug 必須同時滿足：run 結果是 FAIL；不是編譯失敗或模擬異常結束（`sim_error`）；`expect_checkers` 中至少一個 checker FAIL，且它的訊息符合 `expect_regex`。
 其他情況（PASS、編譯失敗、只在其他 checker FAIL、訊息不符）都算 escape（checker 沒抓到植入的錯誤），`neg.py` 回傳非 0。
@@ -139,7 +139,7 @@ regression 判 FAIL。避免有人把測試條目改到「只要寫了 DONE 就 
 | R17 | `BUG_R17`：UART DATA 寫入的 stall 被忽略，傳送中寫入的 byte 被丟掉（F14） | `uart_burst` | `coverage`（被 stall 的寫入次數不足） | §4.2 傳送中不得回 `mem_ready`（review M1） |
 | R18 | `BUG_R18`：`csb0` 沒有被 `ready_q` 擋住，回應那個 cycle 又存取一次 SRAM（F11） | `hello` | `sram_port` | §4.3 每筆交易 `csb0` 只能一次（review m3） |
 | R19 | `BUG_R19`：CPU 路徑 `csb0` 沒有用 `resetn` 擋，reset 邊緣上的 store 被寫入 | `reset_store` | `sram_port`（另有 firmware fail code `0x03`） | §4.9 RTL-RST-01（review m6） |
-| R20 | `BUG_R20`：IRQ_TRIG 清掉後 IRQ 線多拉 40 cycle（F19） | `irq` | `irq_line` | handler 仍進入剛好 2 次，firmware 看不到；只有逐 cycle 比對抓得到（review m1） |
+| R20 | `BUG_R20`：IRQ_TRIG 清掉後 IRQ 線多拉 40 cycle（F19） | `irq` | `irq_line` | handler 仍進入剛好 2 次，firmware 看不到；只有 cycle-by-cycle 比對抓得到（review m1） |
 | R21 | `BUG_R21`：UART 除數 reset 值 = 19（F02） | `hello` | `uart_div` | Boot ROM 先寫 DIV = 18 把它蓋掉，UART 輸出正常（review m2） |
 | R22 | `BUG_R22`：IRQ 線是寫入時的 1 cycle 脈衝，不是 IRQ_TRIG[0] 的位準（F20） | `irq` | `test_ctrl` `0xbad00020`（handler 只進 1 次） | §4.8 恰好 2 次（review m1） |
 | M01 | firmware 變體 `memtest__no_march`：刪掉 march C− 階段（F16b） | `memtest` | `coverage`（測試區每個 word 83 讀／17 寫，應為 88／22） | `min_cycles` 抓不到：image 變小、測試區變大，總時間反而變長（review M2） |
@@ -151,7 +151,7 @@ regression 判 FAIL。避免有人把測試條目改到「只要寫了 DONE 就 
 | W01 | `BUG_W01`（Caravel 版）：bridge 早一個上升緣取讀出資料 | `boot_host_hello` | `sim_error`（host 讀回不符） | Wishbone 讀取的等待 cycle 數（ADR-0019 決定 9） |
 | W02 | `BUG_W02`：bridge 忽略 `wbs_sel_i` | `boot_host_hello` | `sim_error`（partial-wmask） | Wishbone byte select 接到 `host_wmask` |
 | W03 | `BUG_W03`：GPIO 33（`boot_mode` pulldown）的 `io_oeb` 為 1 | `hello` | `caravel_pins`（exclusive） | precheck 的 OEB 檢查要求 pulldown 的 oeb 為 0 |
-| W04 | `BUG_W04`：`la_data_out` 的 `uart_tx`／`uart_rx` 對調 | `hello` | `caravel_pins`（exclusive） | LA 鏡像 |
+| W04 | `BUG_W04`：`la_data_out` 的 `uart_tx`／`uart_rx` 對調 | `hello` | `caravel_pins`（exclusive） | LA 鏡射 |
 | W05 | `BUG_W05`：`boot_mode` 兩支 GPIO 對調 | `bootrom_march` | `timeout`（mode 1 變成 UART 開機） | GPIO 對應 |
 | W06 | `BUG_W06`：bridge 的 `host_en` reset 值為 0 | `boot_host_hello` | `sim_error`（host 讀回不符） | reset 後 CPU 停住，直到管理用 CPU 放開 |
 
@@ -176,11 +176,11 @@ firmware／Boot ROM bug 變體機制（`bugs.toml` 的 `fw`／`bootrom`）。
   目前做法：只有宣告 `expect_unmapped` 的測試可以做 unmapped 資料存取，且次數必須完全相符。
 - host port 的錯誤沒有專屬 checker：§7.2 的 checker 都看不到 host port，所以 host 讀回不符與 byte mask 不符都以 `sim_error` 中止（R13 的
   `expect_checkers` 因此是 `sim_error`，並用 regex 限定訊息）。建議在 §7.2 加一個 `host_port` checker。
-- `test_ctrl` 多了 `min_cycles` 這一條判定；`tests.toml`／`bugs.toml` 多了上述擴充欄位；測試清單多了 §6.4 以外的定向測試。
+- `test_ctrl` 多了 `min_cycles` 這一條檢查；`tests.toml`／`bugs.toml` 多了上述擴充欄位；測試清單多了 §6.4 以外的 directed 測試。
 - §7.2 沒有的 checker：`sram_port`、`irq_line`、`uart_div`、`coverage`（見上）。`sram_port` 也檢查 host port 的腳位，
   所以 R13 現在也會在 `sram_port` FAIL（`bugs.toml` 仍以 `sim_error` 的訊息為準）。
 - `signature` 改用 DONE 那一刻的 SIG；`uart_div` 的 Boot ROM 規則是 §6.5 step 1 的解讀（DIV 必須在第一次 UART DATA 存取、
-  第一次離開 Boot ROM 取指令、第一次寫 DONE 之前寫好）。
+  第一次離開 Boot ROM 擷取指令、第一次寫 DONE 之前寫好）。
 
 ## 已知限制
 

@@ -26,7 +26,7 @@
 <g id="node2" class="node">
 <title>cause</title>
 <path fill="#fbe5d6" stroke="#e67e22" stroke-width="1.6" d="M477.16,-445.37C477.16,-445.37 316.84,-445.37 316.84,-445.37 310.84,-445.37 304.84,-439.37 304.84,-433.37 304.84,-433.37 304.84,-355.58 304.84,-355.58 304.84,-349.58 310.84,-343.58 316.84,-343.58 316.84,-343.58 477.16,-343.58 477.16,-343.58 483.16,-343.58 489.16,-349.58 489.16,-355.58 489.16,-355.58 489.16,-433.37 489.16,-433.37 489.16,-439.37 483.16,-445.37 477.16,-445.37" filter="url(#ds)"/>
-<text xml:space="preserve" text-anchor="middle" x="397" y="-416.75" font-family="PingFang TC" font-size="18.00" fill="#111111">2 &#160;找根因</text>
+<text xml:space="preserve" text-anchor="middle" x="397" y="-416.75" font-family="PingFang TC" font-size="18.00" fill="#111111">2 &#160;找出原因</text>
 <text xml:space="preserve" text-anchor="middle" x="397" y="-390.5" font-family="PingFang TC" font-size="18.00" fill="#111111">已驗證（實驗）或</text>
 <text xml:space="preserve" text-anchor="middle" x="397" y="-364.25" font-family="PingFang TC" font-size="18.00" fill="#111111">標明推測</text>
 </g>
@@ -42,7 +42,7 @@
 <path fill="#ededed" stroke="#7f8c8d" stroke-width="1.6" d="M899.28,-445.37C899.28,-445.37 694.72,-445.37 694.72,-445.37 688.72,-445.37 682.72,-439.37 682.72,-433.37 682.72,-433.37 682.72,-355.58 682.72,-355.58 682.72,-349.58 688.72,-343.58 694.72,-343.58 694.72,-343.58 899.28,-343.58 899.28,-343.58 905.28,-343.58 911.28,-349.58 911.28,-355.58 911.28,-355.58 911.28,-433.37 911.28,-433.37 911.28,-439.37 905.28,-445.37 899.28,-445.37" filter="url(#ds)"/>
 <text xml:space="preserve" text-anchor="middle" x="797" y="-416.75" font-family="PingFang TC" font-size="18.00" fill="#111111">3 &#160;skill 經驗紀錄</text>
 <text xml:space="preserve" text-anchor="middle" x="797" y="-390.5" font-family="PingFang TC" font-size="18.00" fill="#111111">日期、run、原文訊息、</text>
-<text xml:space="preserve" text-anchor="middle" x="797" y="-364.25" font-family="PingFang TC" font-size="18.00" fill="#111111">根因、處理、證據</text>
+<text xml:space="preserve" text-anchor="middle" x="797" y="-364.25" font-family="PingFang TC" font-size="18.00" fill="#111111">原因、處理、證據</text>
 </g>
 <!-- cause&#45;&gt;exp -->
 <g id="edge2" class="edge">
@@ -54,9 +54,9 @@
 <g id="node5" class="node">
 <title>guard</title>
 <path fill="#eadcf0" stroke="#8e44ad" stroke-width="1.6" d="M531.16,-284.58C531.16,-284.58 262.84,-284.58 262.84,-284.58 256.84,-284.58 250.84,-278.58 250.84,-272.58 250.84,-272.58 250.84,-194.79 250.84,-194.79 250.84,-188.79 256.84,-182.79 262.84,-182.79 262.84,-182.79 531.16,-182.79 531.16,-182.79 537.16,-182.79 543.16,-188.79 543.16,-194.79 543.16,-194.79 543.16,-272.58 543.16,-272.58 543.16,-278.58 537.16,-284.58 531.16,-284.58" filter="url(#ds)"/>
-<text xml:space="preserve" text-anchor="middle" x="397" y="-255.96" font-family="PingFang TC" font-size="18.00" fill="#111111">5 &#160;防護</text>
+<text xml:space="preserve" text-anchor="middle" x="397" y="-255.96" font-family="PingFang TC" font-size="18.00" fill="#111111">5 &#160;自動檢查</text>
 <text xml:space="preserve" text-anchor="middle" x="397" y="-229.71" font-family="PingFang TC" font-size="18.00" fill="#111111">checker＋negative test</text>
-<text xml:space="preserve" text-anchor="middle" x="397" y="-203.46" font-family="PingFang TC" font-size="18.00" fill="#111111">或寫明「沒有自動防護」與原因</text>
+<text xml:space="preserve" text-anchor="middle" x="397" y="-203.46" font-family="PingFang TC" font-size="18.00" fill="#111111">或寫明「沒有自動檢查」與原因</text>
 </g>
 <!-- cause&#45;&gt;guard -->
 <!-- rule -->

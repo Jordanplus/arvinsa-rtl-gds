@@ -1,6 +1,6 @@
 ---
 name: multicorner-sta
-description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner（`LIB`、`STA_CORNERS`、`DEFAULT_CORNER`、`RSZ_CORNERS`、`PNR_CORNERS`；設了 `LIB` 之後 LibreLane 不再自動產生 corner）與每個 corner 都會執行的 hook（`STA_EXTRA_CORNER_TCL_FILE`）、做時序 what-if（只重跑 STA：改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期、繞線前量 resizer 看不到的 corner（`STAMidPNR` 只看預設 corner，`PNR_CORNERS` 沒設就只有 nom_tt；`report_worst_slack -corner` 報 `STA-0562`；flow 中途 state 裡其他 corner 的 metrics 是 placement 前的舊值），或 corner 增加後 PnR 時間暴增時使用（新設計的 resizer 預設看全部 signoff corner，跑不完時先找根因）。PnR 不納入的 corner 為什麼不能只靠餘量補看 drv-timing-closure；corner 清單怎麼定看 signoff-criteria。Use when configuring multi-corner STA in LibreLane (adding PVT corners, per-corner hooks and reports), running STA what-if experiments, deriving the minimum clock period, or when more corners slow down PnR.
+description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner（`LIB`、`STA_CORNERS`、`DEFAULT_CORNER`、`RSZ_CORNERS`、`PNR_CORNERS`；設了 `LIB` 之後 LibreLane 不再自動產生 corner）與每個 corner 都會執行的 hook（`STA_EXTRA_CORNER_TCL_FILE`）、做時序 what-if（只重跑 STA：改週期、duty cycle、uncertainty、derate）、從 STA 結果推最小週期、繞線前量 resizer 看不到的 corner（`STAMidPNR` 只看預設 corner，`PNR_CORNERS` 沒設就只有 nom_tt；`report_worst_slack -corner` 報 `STA-0562`；flow 中途 state 裡其他 corner 的 metrics 是 placement 前的舊值），或 corner 增加後 PnR 時間暴增時使用（新設計的 resizer 預設看全部 signoff corner，跑不完時先找出原因）。PnR 不納入的 corner 為什麼不能只靠 margin 補看 drv-timing-closure；corner 清單怎麼定看 signoff-criteria。Use when configuring multi-corner STA in LibreLane (adding PVT corners, per-corner hooks and reports), running STA what-if experiments, deriving the minimum clock period, or when more corners slow down PnR.
 ---
 
 # 多 corner STA：設定、hook、what-if 與最小週期
@@ -10,35 +10,35 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner（`
 名詞：
 - **PVT corner**：製程（tt／ss／ff）、溫度、電壓的組合，對應一份 .lib，例如 `ss_n40C_1v60`。
 - **RC corner**：繞線寄生的 min／nom／max。LibreLane 的 corner 名稱是 `<RC>_<PVT>`，例如 `max_ss_100C_1v60`。
-- **what-if**：不重跑 PnR，只用同一份版圖重算 STA，看某個條件改變後 slack 怎麼變。
+- **what-if**：不重跑 PnR，只用同一份 layout 重算 STA，看某個條件改變後 slack 怎麼變。
 
 ## 規則（已驗證）
 
-1. **在 design config 設 `LIB` 會取代 LibreLane 對 sky130 的整組 STA 預設**（`librelane/config/pdk_compat.py`：只有沒設 `LIB` 時才產生 `LIB`、`STA_CORNERS`、`DEFAULT_CORNER`、`TIMING_VIOLATION_CORNERS`；讀原始碼得知，「只設 `LIB`、其他不設」的情況沒有實跑過）。所以加 corner 時三個要一起設，而且 5 個 PVT 全部列出。確認方式：`--only Verilator.Lint` 跑幾秒，看 `runs/<tag>/resolved.json`。新 corner 名稱要符合 `LAYERS_RC`（`*tt*`、`*ss*`、`*ff*`）與 RCX 規則（`nom_*`、`min_*`、`max_*`）的萬用字元。**防復發**：`signoff/scripts/check_signoff.py` 的 `[corners]` 要求 limits 檔的 corner 名單等於 metrics 裡出現的 corner，corner 少了或多了都 FAIL。
+1. **在 design config 設 `LIB` 會取代 LibreLane 對 sky130 的整組 STA 預設**（`librelane/config/pdk_compat.py`：只有沒設 `LIB` 時才產生 `LIB`、`STA_CORNERS`、`DEFAULT_CORNER`、`TIMING_VIOLATION_CORNERS`；讀原始碼得知，「只設 `LIB`、其他不設」的情況沒有實跑過）。所以加 corner 時三個要一起設，而且 5 個 PVT 全部列出。確認方式：`--only Verilator.Lint` 跑幾秒，看 `runs/<tag>/resolved.json`。新 corner 名稱要符合 `LAYERS_RC`（`*tt*`、`*ss*`、`*ff*`）與 RCX 規則（`nom_*`、`min_*`、`max_*`）的萬用字元。**怎麼防止再發生**：`signoff/scripts/check_signoff.py` 的 `[corners]` 要求 limits 檔的 corner 清單等於 metrics 裡出現的 corner，corner 少了或多了都 FAIL。
 2. **哪個 step 用哪組 corner**（`librelane/steps/openroad.py`）：resizer 類 step 用 `RSZ_CORNERS`（沒設就用 `STA_CORNERS`），CTS 用 `CTS_CORNERS`，其他 OpenROAD step 用 `PNR_CORNERS`，signoff STA 用 `STA_CORNERS`。只設 `PNR_CORNERS` 管不到 resizer。設定了用哪組 corner，也不代表演算法的每個決策都看了那些 corner：OpenROAD resizer 換尺寸時只用第一個讀進來的 .lib 評估（Phase 5 實驗 D），修違規要用對應 corner 的資料判斷，見 `drv-timing-closure` 規則 11。
    - **`PNR_CORNERS` 沒設時只用 `DEFAULT_CORNER` 一個**（353–355 行 `PNR_CORNERS or [DEFAULT_CORNER]`）。變數說明（212 行）寫「沒設就用 PDK 的 `STA_CORNERS`」，和程式不符；sky130 也沒有設它。所以 placement、global routing、`STAMidPNR` 等 step 只看 nom_tt（Phase 5：`STAMidPNR` 的 log 只讀 nom_tt 的 .lib）。寫 config 註解或判斷「哪一步看過哪個 corner」時以程式為準。
-3. **resizer 看的 corner 預設等於全部 signoff corner；corner 變多讓 PnR 變慢或修復停不下來時，先找根因，不要直接減少 corner**（`drv-timing-closure` 規則 15，ADR-0020 提早檢查 C3；現行設定 ADR-0013）
-   - corner 變多，多數 step 等比例變慢；如果某個修復步驟（例如 `OpenROAD.RepairDesignPostGRT`）從一分鐘變成幾十分鐘不結束，拿同一份輸入 state 單步重跑，一次只改 `RSZ_CORNERS`，比較時間與記憶體，再照 `drv-timing-closure` 規則 10 找弱 cell 或其他根因。
-   - 要讓 resizer 看新 corner，先跑弱 cell 檢查（`drv-timing-closure` 規則 10），它會列出那個 corner 要多排除的 cell。
-   - 真的要讓某個 corner 只在 signoff 判定：要有根因、what-if（繞線前用規則 8 量一次那個 corner）、ADR，並登記在放寬與補償登記表。用其他 corner 的餘量代替它，長路徑會漏掉（`drv-timing-closure` 規則 9）。
-   - 經過：Phase 4 soc_top 加溫度反轉 corner 後，resizer 看 15 個 corner 時 `RepairDesignPostGRT` 停不下來，沒找根因就讓 resizer 只看 9 個（`docs/phase_exit/phase4.md` 收斂過程第 1 次）；Phase 5 換 Hazard3 後 ss_n40C setup −4.16 ns，改成 resizer 也看 ss_n40C（ADR-0013），停不下來的根因是弱 cell（ADR-0012）。本 repo 現有的例外：wrapper 的 resizer 不看 ff_100C（ADR-0019 決定 17）。
+3. **resizer 看的 corner 預設等於全部 signoff corner；corner 變多讓 PnR 變慢或修復停不下來時，先找出原因，不要直接減少 corner**（`drv-timing-closure` 規則 15，ADR-0020 提早檢查 C3；現行設定 ADR-0013）
+   - corner 變多，多數 step 等比例變慢；如果某個修復步驟（例如 `OpenROAD.RepairDesignPostGRT`）從一分鐘變成幾十分鐘不結束，拿同一份輸入 state 把這一步單獨重跑，一次只改 `RSZ_CORNERS`，比較時間與記憶體，再照 `drv-timing-closure` 規則 10 找 drive 太弱的 cell（連最小的 buffer 都推不動、輸出 slew 會超過上限的 cell）或其他原因。
+   - 要讓 resizer 看新 corner，先做 `drv-timing-closure` 規則 10 的檢查，找出那個 corner 下 drive 太弱、要多排除的 cell。
+   - 真的要讓某個 corner 只在 signoff 檢查：要有原因、what-if（繞線前用規則 8 量一次那個 corner）、ADR，並記進放寬清單。用其他 corner 的 margin 代替它，長路徑會漏掉（`drv-timing-closure` 規則 9）。
+   - 經過：Phase 4 soc_top 加 temperature inversion（低電壓時 cell 在低溫反而比高溫慢）的 corner 後，resizer 看 15 個 corner 時 `RepairDesignPostGRT` 停不下來，沒找原因就讓 resizer 只看 9 個（`docs/phase_exit/phase4.md` 收斂過程第 1 次）；Phase 5 換 Hazard3 後 ss_n40C setup −4.16 ns，改成 resizer 也看 ss_n40C（ADR-0013），停不下來的根本原因是 drive 太弱的 cell（ADR-0012）。本 repo 現有的例外：wrapper 的 resizer 不看 ff_100C（ADR-0019 決定 17）。
 4. **每個 corner 的 hook**（`STA_EXTRA_CORNER_TCL_FILE`）：
    - LibreLane 的 STA step 在每個 corner 讀完 SDC 之後 source 它（`scripts/openroad/sta/corner.tcl` 59–61 行），變數 `$corner_name` 是 corner 名稱；resizer、CTS 看不到。
    - 適合放 instance derate（例如 macro 只有一份 .lib 時依 corner 加 derate；有每個 PVT 的 .lib 就不需要，ADR-0010）與 LibreLane 沒有輸出的報告。
    - 報告寫法：`puts "%OL_CREATE_REPORT <name>.rpt"`，接著 report 指令，最後 `puts "%OL_END_REPORT"`，LibreLane 會存成 `<step>/<corner>/<name>.rpt`。
-   - SDC 是在全域範圍執行的（`base.sdc` 自己就用 `::clock_port`），所以 SDC 裡設的變數 hook 讀得到，可用來把 SDC 的預算（例如 duty cycle）帶進 hook 的判定。
+   - SDC 是在全域範圍執行的（`base.sdc` 自己就用 `::clock_port`），所以 SDC 裡設的變數 hook 讀得到，可用來把 SDC 的預算（例如 duty cycle）帶進 hook 的檢查。
 5. **兩種 what-if**：
-   - 快速探索：寫一個單 corner 的 `sta` 腳本，讀 .lib、最終網表、SPEF、SDC，約 10 秒（`signoff-criteria` 規則 1：要用 LibreLane 的 `sta` binary）。
-   - 正式證據：用 `python3 -m librelane.steps run --id OpenROAD.STAPostPNR` 單步重跑全部 corner，只換 config 的 `SIGNOFF_SDC_FILE` 或 `STA_EXTRA_CORNER_TCL_FILE` 的複本（`neg_pnr.py` 的 `sta_rerun()`）。SDC 複本要把 `source` 的檔案展開（`flat_sdc()`），因為 `[info script]` 會指到複本所在的目錄。
+   - 快速試算：寫一個單 corner 的 `sta` 腳本，讀 .lib、最終 netlist、SPEF、SDC，約 10 秒（`signoff-criteria` 規則 1：要用 LibreLane 的 `sta` binary）。
+   - 正式證據：用 `python3 -m librelane.steps run --id OpenROAD.STAPostPNR` 單獨重跑這一步、跑全部 corner，只換 config 的 `SIGNOFF_SDC_FILE` 或 `STA_EXTRA_CORNER_TCL_FILE` 的複本（`neg_pnr.py` 的 `sta_rerun()`）。SDC 複本要把 `source` 的檔案展開（`flat_sdc()`），因為 `[info script]` 會指到複本所在的目錄。
 6. **最小週期要從關鍵路徑推，不能用 `report_clock_min_period`**（它排除半週期路徑，`signoff-criteria` 規則 8）：
    - 整週期路徑：slack 隨週期 1:1 變化。
-   - 半週期路徑（一個 edge 送、相反 edge 收）：可用時間是半個週期扣掉 duty cycle 偏差，slack 每 1 ns 週期只變 0.5 −（duty 偏差比例）ns。
+   - 半週期路徑（launch 與 capture 在相反的 edge）：可用時間是半個週期扣掉 duty cycle 偏差，slack 每 1 ns 週期只變 0.5 −（duty 偏差比例）ns。
    - T_min = T −（slack ÷ 斜率），取所有路徑類型中最大的。
 7. **PnR 中途的 STA（`STAMidPNR`）只分析 `PNR_CORNERS`，沒設就只有 `DEFAULT_CORNER`（規則 2）**。flow 中途 `state_out.json` 裡非 tt corner 的 timing／DRV metrics，是 placement 前的 `STAPrePNR` 寫的舊值，一路沿用到 `STAPostPNR` 才被覆蓋（Phase 5：第 38 步 state 的 nom_ss_n40C setup −15.5 ns 來自第 12 步；第 37 步之後實際是 −7.3 ns）。所以中途不要用 state 的 metrics 判斷非 tt corner；某一步自己量到什麼，看該步的 `or_metrics_out.json`（`librelane-run-debug` 規則 4）。決策要看 `STAPostPNR`；繞線前要看某個 corner，用規則 8。
-8. **繞線前量 resizer 看不到的 corner**（Phase 5 實作並用來比較兩個單步重跑）：
+8. **繞線前量 resizer 看不到的 corner**（Phase 5 實作，用來比較兩次單獨重跑的結果）：
    - 用 `librelane-run-debug` 規則 3 的 `eject` 匯出一個 resizer step（例如 `OpenROAD.ResizerTimingPostCTS`），config 複本的 `RSZ_CORNERS` 加上要看的 corner，匯出的環境就會讀那些 corner 的 .lib 與每個 corner 的 RC。
    - 把 `run.sh` 最後一行換成自己的 Tcl：`source $::env(SCRIPTS_DIR)/openroad/common/io.tcl` 之後設 `::env(CURRENT_ODB)` 為要量的 ODB（`_env.tcl` 會先設成這一步的輸入，要在 source 之後蓋掉），再 `read_current_odb`、`set_propagated_clock [all_clocks]`、`source .../common/set_rc.tcl`、`estimate_parasitics -placement`，每個 corner 用 `worst_slack -corner <c> -max/-min` 與 `total_negative_slack -corner <c> -max/-min`（LibreLane `sta/corner.tcl` 的寫法）。OpenROAD `dcf36133` 的 `report_worst_slack` 沒有 `-corner`（`STA-0562`）。
-   - 這是 placement 階段的估計，只用來比較「同一個量法下」兩份 ODB 的差別。Phase 5 的對照組：這個量法 ss_n40C −7.32 ns，繞線後 signoff −4.16 ns。
+   - 這是 placement 階段的估計，只用來比較「同一個量測方法下」兩份 ODB 的差別。Phase 5 的對照組：這個量測方法 ss_n40C −7.32 ns，繞線後 signoff −4.16 ns。
 
 ## 已知陷阱
 
@@ -51,11 +51,11 @@ description: 增減 STA corner（PVT 與 RC）、在 LibreLane 設定 corner（`
 
 ## 用完後 / 經驗紀錄
 
-| 日期 | 專案／run | 現象 | 根因（已驗證／推測） | 處理 | 證據 |
+| 日期 | 專案／run | 現象 | 原因（已驗證／推測） | 處理 | 證據 |
 |---|---|---|---|---|---|
-| 2026-10-04 | soc_top Phase 4 第 1 次 harden（15 corner） | `RepairDesignPostGRT` 35 分鐘以上沒結束；取樣看到每加一顆 buffer 就重做一次增量 global routing | 已驗證（單步重跑對照）：resizer 看 15 corner 時才發生；推測：溫度反轉 corner 的違規量讓修復走到很慢的路徑 | 當時：`RSZ_CORNERS` = 原本 9 個。Phase 5 起改為 resizer 也看 ss_n40C（ADR-0013），根因是弱 cell（ADR-0012）；規則 3 已改寫成「先找根因」 | `runs/p4_harden_soc_1_stopped/`（本機） |
-| 2026-10-06 | Phase 5 第 2 次 harden-soc（Hazard3，`2251c4a`，`../arvinsa-rtl-gds-p5h3`） | `Setup violations found in the following corners: max_ss_n40C_1v60, min_…, nom_…`（max −4.158 ns、81 條）；resizer 看得到的 ss_100C +0.955 | 已驗證：ss_n40C 不在 `RSZ_CORNERS`（規則 3 的做法），resizer 看不到；細節在 `drv-timing-closure` 經驗紀錄。單步重跑 `ResizerTimingPostCTS` 加 3 個 ss_n40C corner（規則 8 量）：ss_n40C setup −7.32 → +0.33 ns，但 ss_n40C hold 變 −0.26 ns（SRAM 讀出暫存器） | ADR-0013：`RSZ_CORNERS` 加 ss_n40C、setup 餘量 0.1 ns；第 3 次 harden ss_n40C setup −0.381 ns（9 條），週期改 44 ns（ADR-0004） | `runs/p5_h3_harden2.log`、`drv-timing-closure` 經驗紀錄 |
+| 2026-10-04 | soc_top Phase 4 第 1 次 harden（15 corner） | `RepairDesignPostGRT` 35 分鐘以上沒結束；取樣看到每加一顆 buffer 就重做一次 incremental global routing | 已驗證（單獨重跑這一步做對照）：resizer 看 15 corner 時才發生；推測：temperature inversion corner 的違規量讓修復走到很慢的路徑 | 當時：`RSZ_CORNERS` = 原本 9 個。Phase 5 起改為 resizer 也看 ss_n40C（ADR-0013），根本原因是 drive 太弱的 cell（ADR-0012）；規則 3 已改寫成「先找出原因」 | `runs/p4_harden_soc_1_stopped/`（本機） |
+| 2026-10-06 | Phase 5 第 2 次 harden-soc（Hazard3，`2251c4a`，`../arvinsa-rtl-gds-p5h3`） | `Setup violations found in the following corners: max_ss_n40C_1v60, min_…, nom_…`（max −4.158 ns、81 條）；resizer 看得到的 ss_100C +0.955 | 已驗證：ss_n40C 不在 `RSZ_CORNERS`（規則 3 的做法），resizer 看不到；細節在 `drv-timing-closure` 經驗紀錄。單獨重跑 `ResizerTimingPostCTS`、加 3 個 ss_n40C corner（規則 8 量）：ss_n40C setup −7.32 → +0.33 ns，但 ss_n40C hold 變 −0.26 ns（SRAM 讀出暫存器） | ADR-0013：`RSZ_CORNERS` 加 ss_n40C、setup margin 0.1 ns；第 3 次 harden ss_n40C setup −0.381 ns（9 條），週期改 44 ns（ADR-0004） | `runs/p5_h3_harden2.log`、`drv-timing-closure` 經驗紀錄 |
 | 2026-10-06 | 回頭看規則 7 的舊說法（Phase 3「`STAMidPNR` 在 ss 報 7761 個 slew 違規」） | — | 已驗證：`STAMidPNR` 只看 `DEFAULT_CORNER`（規則 2），所以那不是它量的；推測：是 `STAPrePNR` 留在 state 裡的值（Phase 3 的 run 已刪，無法確認） | 規則 7 改寫 | `librelane/steps/openroad.py` 353–355 行 |
-| 2026-10-04 | 單 corner `sta` 實驗（Phase 3 網表） | 半週期路徑套上 2.25 ns 的下降緣→上升緣 uncertainty 後，ss slack 0.83 ns；`report_check_types -min_pulse_width -min_period` 只列每種檢查最差的一個 pin | 已驗證 | 用於 `check_soc.py pulse_width` 的解析 | Phase 4 exit review |
-| 2026-10-08 | Phase 5 exit 的獨立審查 | 確認 uncertainty 是否套用，只找 SDC 印的那一行不夠：報表裡的 uncertainty 全刪掉仍 PASS | 已驗證 | `review_criteria.py uncertainty_applied` 解析每個 corner 的 `max.rpt`／`min.rpt`，逐條路徑比對 clock 邊緣（同緣或半週期）與 `clock uncertainty`／`inter-clock uncertainty` 那一列（Hazard3 15 個 corner 共 50,670 條）；P56 | `signoff/scripts/review_criteria.py` |
-| 2026-10-04 | Phase 4 設計 negative test P22–P24 時 | 想在 SDC 檔尾再 `create_clock` 同名 clock 來改波形 | 推測（依 SDC 語意，未實測）：可能改掉掛在原 clock 上的約束（`timing-constraints-sdc` 規則 10 另有已驗證的一點：重新定義後 inter-clock uncertainty 仍有效） | 改波形時直接編輯原本那一行（`neg_pnr.py` 的 `CREATE_CLOCK`）；2026-10-15 從「已知陷阱」移到這裡（ADR-0021 C1） | `pnr/soc_top/neg_pnr.py` |
+| 2026-10-04 | 單 corner `sta` 實驗（Phase 3 netlist） | 半週期路徑套上 2.25 ns 的下降緣→上升緣 uncertainty 後，ss slack 0.83 ns；`report_check_types -min_pulse_width -min_period` 只列每種檢查最差的一個 pin | 已驗證 | 用於 `check_soc.py pulse_width` 的解析 | Phase 4 exit review |
+| 2026-10-08 | Phase 5 exit 的獨立審查 | 確認 uncertainty 是否套用，只找 SDC 印的那一行不夠：報表裡的 uncertainty 全刪掉仍 PASS | 已驗證 | `review_criteria.py uncertainty_applied` 解析每個 corner 的 `max.rpt`／`min.rpt`，逐條路徑比對 clock 邊緣（整週期或半週期路徑）與 `clock uncertainty`／`inter-clock uncertainty` 那一列（Hazard3 15 個 corner 共 50,670 條）；P56 | `signoff/scripts/review_criteria.py` |
+| 2026-10-04 | Phase 4 設計 negative test P22–P24 時 | 想在 SDC 檔尾再 `create_clock` 同名 clock 來改波形 | 推測（依 SDC 語意，沒有實際試過）：可能改掉掛在原 clock 上的 constraint（`timing-constraints-sdc` 規則 10 另有已驗證的一點：重新定義後 inter-clock uncertainty 仍有效） | 改波形時直接編輯原本那一行（`neg_pnr.py` 的 `CREATE_CLOCK`）；2026-10-15 從「已知陷阱」移到這裡（ADR-0021 C1） | `pnr/soc_top/neg_pnr.py` |

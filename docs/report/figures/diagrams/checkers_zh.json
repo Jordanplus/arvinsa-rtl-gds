@@ -3,13 +3,13 @@
  "nodes": [
   {
    "id": "root",
-   "label": "signoff 判定與 checker qualification",
+   "label": "signoff 檢查與 checker qualification",
    "layer": 0,
    "parent": null
   },
   {
    "id": "run",
-   "label": "harden 的 run\nfinal/metrics.json、報表\nGDS、網表",
+   "label": "harden 的 run\nfinal/metrics.json、報表\nGDS、netlist",
    "layer": 1,
    "parent": "root",
    "border": "#27AE60",
@@ -17,7 +17,7 @@
   },
   {
    "id": "limits",
-   "label": "上限檔\nsignoff/limits/<design>.toml\n每個設計自己推導的上限",
+   "label": "limits 檔\nsignoff/limits/<design>.toml\n每個設計自己推導的門檻",
    "layer": 1,
    "parent": "root",
    "border": "#7F8C8D",
@@ -33,7 +33,7 @@
   },
   {
    "id": "cs",
-   "label": "check_signoff.py\n上限＋golden 比對",
+   "label": "check_signoff.py\nlimits 檔＋golden 比對",
    "layer": 1,
    "parent": "root",
    "border": "#2980B9",
@@ -41,7 +41,7 @@
   },
   {
    "id": "csoc",
-   "label": "check_soc.py\nslew、Magic DRC 對 SRAM 單獨檢查\n供電點、disconnected",
+   "label": "check_soc.py\nslew、Magic DRC 對 SRAM 單獨檢查\nIR 電壓源、disconnected",
    "layer": 1,
    "parent": "root",
    "border": "#2980B9",
@@ -57,7 +57,7 @@
   },
   {
    "id": "prov",
-   "label": "來源追溯／run guard\ncommit = HEAD、工作樹乾淨",
+   "label": "版本追溯／run guard\ncommit = HEAD、working tree 乾淨",
    "layer": 1,
    "parent": "root",
    "border": "#2980B9",

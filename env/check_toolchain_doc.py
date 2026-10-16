@@ -98,7 +98,7 @@ def main():
         for s in stale:
             print("  - " + s)
         return 1
-    print(f"toolchain.md 一致：{len(TOOLS)} 個本機工具、{len(pins)} 個釘版值")
+    print(f"toolchain.md 一致：{len(TOOLS)} 個本機工具、{len(pins)} 個固定版本的值")
     return 0
 
 

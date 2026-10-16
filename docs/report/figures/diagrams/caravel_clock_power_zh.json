@@ -1,0 +1,217 @@
+{
+ "_note": "Caravel = caravel-lite 2024.09.12-1 (5593d992). clock pad: verilog/rtl/caravel.v line 57 (CMOS core clock input, not a crystal), chip_io.v line 288; pad positions: def/chip_io.def COMPONENTS (clock_pad, resetb_pad on the bottom edge; user1_vccd_lvclamp_pad lines 17057-17058, user1_vssd_lvclamp_pad lines 16653-16654, right edge). clock_core -> caravel_clocking ext_clk and digital_pll osc: caravel_core.v lines 525, 546. Power-up: housekeeping.v lines 1040-1041 pll_ena <= 0, pll_bypass <= 1; pll_bypass = ext_clk_sel (caravel_core.v lines 524, 594); caravel_clocking.v lines 93-95 core_clk = ext_clk until use_pll_second, then pll_clk_divided (clock_div, lines 70-79; divider sel reset 3'b010 'divide-by-2', housekeeping.v line 1036). PLL registers 0x08/0x09/0x11/0x12: housekeeping.v lines 1097-1131. core_clk -> caravel_clk -> management SoC (caravel_core.v lines 281, 532) and mgmt_protect; user_clock = caravel_clk & mprj_logic1[1], user_clock2 = caravel_clk2 & mprj_logic1[2], user_reset = ~caravel_rstn & mprj_logic1[0] (mgmt_protect.v lines 232-234); mprj_logic1 = vccd1 logic high (mgmt_protect.v lines 122-128); wb_clk_i / wb_rst_i / user_clock2 of mprj: caravel_core.v lines 408-410, 443-444, 468. resetb: XRES pad with glitch filter, pull-up enabled (chip_io.v lines 301-304, 318); xres_buf 3.3 V -> 1.8 V (caravel_core.v lines 1390-1399, xres_buf.v lines 16-19); simple_por about 15 ms (simple_por.v lines 35-45); resetb_async = porb & resetb & !ext_reset (caravel_clocking.v line 51); 3-bit delay on negedge core_clk, resetb_sync high on the 3rd falling edge (lines 101-112); ext_reset = housekeeping reset register 0x0b (housekeeping.v lines 1043, 1107-1108). This design: CLOCK_PORT wb_clk_i, CLOCK_PERIOD 44 (pnr/user_project_wrapper/config.json lines 53-55); soc_top clk = wb_clk_i, resetn = ~wb_rst_i, vccd1 / vssd1 (rtl/caravel/user_project_wrapper.v lines 125-129); user_clock2 unused (line 175). Supply: vccd1 / vssd1 one pad each, right edge, about 2.2 mm apart; Caravel's 5 um met4 ring; met3 bridges of manual_power_connections.lef on the left and right sides of the wrapper ring only, 54 left / 53 right per net (.claude/skills/caravel-user-project-integration/SKILL.md rule 3 line 27; pnr/user_project_wrapper/caravel_pwr/README.md lines 13, 20; ADR-0019 line 82). IR from the pads 19.56 mV, limit 20 mV (README.md line 56).",
+ "nodes": [
+  {
+   "id": "root",
+   "label": "Caravel 的 clock、reset 與 user area 供電：從 pad 到本設計\\l藍：clock；橘：reset；紫：兩者都經過；紅：vccd1／vssd1 電源；灰：其他 Caravel 電路；綠：本設計\\l",
+   "layer": 0,
+   "parent": null
+  },
+  {
+   "id": "pads",
+   "label": "padframe（晶片邊緣的 pad）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "mgmt",
+   "label": "                              Caravel management area（固定）",
+   "layer": 1,
+   "parent": "root",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "pnet",
+   "label": "Caravel 在 wrapper 外圍的供電網路",
+   "layer": 1,
+   "parent": "root",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "wrap",
+   "label": "                                        user_project_wrapper",
+   "layer": 1,
+   "parent": "root",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "clk_pad",
+   "label": "clock pad（下側）\n外部 CMOS 時脈輸入",
+   "layer": 2,
+   "parent": "pads",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "rst_pad",
+   "label": "resetb pad（下側）\n低電位有效、3.3 V XRES pad\n內建 glitch filter 與上拉",
+   "layer": 2,
+   "parent": "pads",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "pwr_pad",
+   "label": "vccd1／vssd1 pad\n右側各只有一顆\n（相距約 2.2 mm）",
+   "layer": 2,
+   "parent": "pads",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "pll",
+   "label": "PLL（digital_pll）\n參考時脈 = clock pad",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#2980B9",
+   "fill": "#DEEBF7"
+  },
+  {
+   "id": "hk",
+   "label": "housekeeping 暫存器\n開機：PLL 關、bypass\n韌體寫暫存器啟用 PLL\nreset 暫存器：ext_reset",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "xres",
+   "label": "xres_buf\n3.3 V → 1.8 V",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "por",
+   "label": "simple_por\n上電重置 POR（約 15 ms）→ porb",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#E67E22",
+   "fill": "#FBE5D6"
+  },
+  {
+   "id": "clocking",
+   "label": "caravel_clocking\ncaravel_clk：開機時 = ext_clk；\nPLL 啟用後 = PLL 經 clock_div 除頻\nresetb_async = porb & resetb & !ext_reset\ncaravel_rstn：放開時對齊第 3 個下降緣",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "cpu",
+   "label": "management SoC（VexRiscv CPU）\n用同一組 caravel_clk 與 caravel_rstn",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#7F8C8D",
+   "fill": "#EDEDED"
+  },
+  {
+   "id": "prot",
+   "label": "mgmt_protect：AND 上 vccd1 區的 1\nwb_clk_i = caravel_clk\nwb_rst_i = ~caravel_rstn（高電位有效）\nuser_clock2 = caravel_clk2（本設計未用）",
+   "layer": 2,
+   "parent": "mgmt",
+   "border": "#8E44AD",
+   "fill": "#EADCF0"
+  },
+  {
+   "id": "ring",
+   "label": "Caravel 的 met4 ring\n5 µm 寬，繞在 wrapper 外圍",
+   "layer": 2,
+   "parent": "pnet",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "bridge",
+   "label": "met3 電源連接線\n只在 wrapper 左右兩側\n每個 net 左 54、右 53 條",
+   "layer": 2,
+   "parent": "pnet",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  },
+  {
+   "id": "soc",
+   "label": "soc_top（本設計）\nclk = wb_clk_i，週期 44 ns\nresetn = ~wb_rst_i\nIR 從 pad 起算 19.56 mV（上限 20 mV）",
+   "layer": 2,
+   "parent": "wrap",
+   "border": "#27AE60",
+   "fill": "#E2F0D9"
+  },
+  {
+   "id": "wring",
+   "label": "wrapper core ring\nvccd1／vssd1",
+   "layer": 2,
+   "parent": "wrap",
+   "border": "#C0392B",
+   "fill": "#F8D7D3"
+  }
+ ],
+ "links": [
+  {
+   "source": "clk_pad",
+   "target": "pll"
+  },
+  {
+   "source": "clk_pad",
+   "target": "clocking"
+  },
+  {
+   "source": "pll",
+   "target": "clocking"
+  },
+  {
+   "source": "hk",
+   "target": "pll"
+  },
+  {
+   "source": "hk",
+   "target": "clocking"
+  },
+  {
+   "source": "rst_pad",
+   "target": "xres"
+  },
+  {
+   "source": "xres",
+   "target": "clocking"
+  },
+  {
+   "source": "por",
+   "target": "clocking"
+  },
+  {
+   "source": "clocking",
+   "target": "cpu"
+  },
+  {
+   "source": "clocking",
+   "target": "prot"
+  },
+  {
+   "source": "prot",
+   "target": "soc"
+  },
+  {
+   "source": "pwr_pad",
+   "target": "ring"
+  },
+  {
+   "source": "ring",
+   "target": "bridge"
+  },
+  {
+   "source": "bridge",
+   "target": "wring"
+  },
+  {
+   "source": "wring",
+   "target": "soc"
+  }
+ ]
+}

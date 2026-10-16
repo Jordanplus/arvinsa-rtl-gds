@@ -1,6 +1,6 @@
 # picorv32_core golden：PicoRV32 單獨 harden 的 metrics
 
-`make harden-core` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：325 個 metrics 的 key 必須完全一樣，多一個或少一個都算 FAIL。值必須相同，只有 `signoff/limits/picorv32_core.toml` 的 `[golden_tolerance]` 列出的族群可以有很小的誤差（原因見下一節）。另外還要通過同一個檔案裡的 signoff 門檻，這些門檻用的是這次 run 自己的值，不受誤差規則影響。
+`make harden-core` 最後一步用 `signoff/scripts/check_signoff.py` 把這次 run 的 metrics 與 `metrics.json` 逐項比對：325 個 metrics 的 key 必須完全一樣，多一個或少一個都算 FAIL。值必須相同，只有 `signoff/limits/picorv32_core.toml` 的 `[golden_tolerance]` 列出的那幾類 metric 可以有很小的誤差（原因見下一節）。另外還要通過同一個檔案裡的 signoff 門檻，這些門檻用的是這次 run 自己的值，不受誤差規則影響。
 
 ## 出處
 
@@ -14,24 +14,24 @@
 | flow 設定 | `pnr/picorv32_core/config.json`：產生本檔時的 sha256 `c60c3b4d2109876b4c37e1690e446fe72b21bbab5d8de427515a09b36c70829a`；之後只改了 `"//"` 說明文字，現行版 sha256 `d66099e1102e0209796bb457a0f602810c5993fe0c11f11c48f6f943cc64a610`，用它跑的第 4 次 run 與本檔 325 個 metrics 完全相同 |
 | 本檔 sha256 | `29e89a6f7fc070a3a0452cf5b57840f41cd191a7180844b37a7e6b9dac75d464` |
 
-以上版本都釘在 `env/versions.mk`。
+以上版本都固定在 `env/versions.mk`。
 
 ## 可重現性（同一台機器重跑，結果是否每次一樣）
 
 | run | 設定 | 與本檔比較 |
 |---|---|---|
-| 試跑 #9 | 比定案設定多一項 `CTS_MAX_CAP 0.15`（沒有作用：CTS 後的 DEF 逐 byte 相同） | 325 個 metrics 完全相同 |
+| 試跑 #9 | 比定案設定多一項 `CTS_MAX_CAP 0.15`（沒有作用：CTS 後的 DEF 完全相同，byte-identical） | 325 個 metrics 完全相同 |
 | 正式 run 第 1 次 | 定案設定 | 本檔來源 |
-| 正式 run 第 2 次（`make phase2`） | 定案設定 | 254 個相同，71 個有極小差異（見下）。當時規則是全部逐項相同，所以這次 `make phase2` 在 harden-core 的 golden 比對 FAIL，後面的步驟沒有執行；加入誤差規則後重新判定為 PASS |
+| 正式 run 第 2 次（`make phase2`） | 定案設定 | 254 個相同，71 個有極小差異（見下）。當時規則是全部逐項相同，所以這次 `make phase2` 在 harden-core 的 golden 比對 FAIL，後面的步驟沒有執行；加入誤差規則後重新比對是 PASS |
 | 正式 run 第 3 次（`make harden-core`） | 定案設定 | 325 個 metrics 完全相同 |
 | 正式 run 第 4 次（最後一次 `make phase2`） | 定案設定（說明文字更新後） | 325 個 metrics 完全相同 |
 | Phase 4 `make regress` 第 1 次（乾淨 checkout，`72e5433`） | 定案設定 | 254 個相同，71 個在誤差內 |
 | Phase 4 `make regress` 第 4 次（乾淨 checkout，`b7860b7`） | 定案設定 | 325 個 metrics 完全相同 |
-| Phase 5 結案的乾淨 `make regress-picorv32`（commit `71b1454`） | 定案設定（Phase 2 起沒改） | 325 個 metrics 完全相同。之前兩次 Phase 5 的 run（`941e1cb` 預跑、`7348fab` regress）是 254 個相同、71 個在誤差內 |
+| Phase 5 結案的乾淨 `make regress-picorv32`（commit `71b1454`） | 定案設定（Phase 2 起沒改） | 325 個 metrics 完全相同。之前兩次 Phase 5 的 run（`941e1cb` 試跑、`7348fab` regress）是 254 個相同、71 個在誤差內 |
 
-**detailed routing 不是每次都一樣。** 上表 5 次 run（試跑 #9 多一項沒有作用的設定，其餘設定完全相同）中，只有第 2 次不同。第 2 次與第 3 次（`resolved.json` 完全相同）逐步比對中間產出的 DEF：從 floorplan 到 global routing、post-GRT repair（第 13–41 步）全部逐 byte 相同，第一個不同的是 `OpenROAD.DetailedRouting`（第 45 步，多執行緒）。第 2 次與試跑 #9 比對的結果也一樣。之後算出來的 metrics 因此有極小差異（第 1 次 vs 第 2 次）：
+**detailed routing 不是每次都一樣。** 上表 5 次 run（試跑 #9 多一項沒有作用的設定，其餘設定完全相同）中，只有第 2 次不同。第 2 次與第 3 次（`resolved.json` 完全相同）逐步比對中間產出的 DEF：從 floorplan 到 global routing、post-GRT repair（第 13–41 步）全部完全相同（byte-identical），第一個不同的是 `OpenROAD.DetailedRouting`（第 45 步，多執行緒）。第 2 次與試跑 #9 比對的結果也一樣。之後算出來的 metrics 因此有極小差異（第 1 次 vs 第 2 次）：
 
-| 族群 | 第 1 次 vs 第 2 次 | 允許的誤差 |
+| 類別 | 第 1 次 vs 第 2 次 | 允許的誤差 |
 |---|---|---|
 | setup／hold slack（含 reg-to-reg） | ≤ 0.0003 ns | ±0.01 ns |
 | clock skew | ≤ 0.0002 ns | ±0.01 ns |
@@ -39,9 +39,9 @@
 | via 數 | 134168 vs 134172 | ±0.1% |
 | 功耗、IR drop | 相對差 ≤ 0.004% | ±0.1% |
 
-允許的誤差約是實測差異的 30–200 倍。設定、工具或 PDK 的變更，幾乎都會連帶改變 cell 數、面積這類必須完全相同的 metrics，所以仍然會被抓到。其他所有 metrics，包括 cell 數、面積、hold buffer 數、各種違規數、DRC、LVS，都必須完全相同。detailed routing 各 iteration 的 DRC 數（`route__drc_errors__iter:*`）原本也要求完全相同；Phase 4 `make regress` 第 2 次的 soc_top 在這裡出現差異（antenna 修補後最後一次重繞，第 2 輪剩 14 個、golden 是 11 個；最終 DRC 兩次都是 0），所以兩個設計都改成 ±100（高於看過的所有值，本設計最大 90）。這組是繞線器中間過程的數字，不是 signoff 數字；最終的 `route__drc_errors` 仍要完全相同且 = 0（`pnr/soc_top/neg_pnr.py` P31）。這個比對規則做過 negative test：13 種超出誤差、不在允許族群內、key 缺少或誤差設定寫錯的情況全部 FAIL，誤差範圍內的正向對照 PASS（`docs/phase_exit/phase2.md`）。
+允許的誤差約是實際跑出來的差異的 30–200 倍。設定、工具或 PDK 的變更，幾乎都會連帶改變 cell 數、面積這類必須完全相同的 metrics，所以仍然會被抓到。其他所有 metrics，包括 cell 數、面積、hold buffer 數、各種違規數、DRC、LVS，都必須完全相同。detailed routing 各 iteration 的 DRC 數（`route__drc_errors__iter:*`）原本也要求完全相同；Phase 4 `make regress` 第 2 次的 soc_top 在這裡出現差異（antenna 修補後最後一次重繞，第 2 輪剩 14 個、golden 是 11 個；最終 DRC 兩次都是 0），所以兩個設計都改成 ±100（高於看過的所有值，本設計最大 90）。這組是繞線器中間過程的數字，不是 signoff 數字；最終的 `route__drc_errors` 仍要完全相同且 = 0（`pnr/soc_top/neg_pnr.py` P31）。這個比對規則做過 negative test：13 種超出誤差、不在允許誤差的類別裡、key 缺少或誤差設定寫錯的情況全部 FAIL，誤差範圍內的 positive test 則 PASS（`docs/phase_exit/phase2.md`）。
 
-改成單執行緒 detailed routing 或許能消除差異，但這一步用多執行緒就要 7–8.5 分鐘，單執行緒會慢好幾倍（推測，沒有實測），regression 會太慢，所以沒有採用。
+改成單執行緒 detailed routing 或許能消除差異，但這一步用多執行緒就要 7–8.5 分鐘，單執行緒會慢好幾倍（推測，沒有實際試過），regression 會太慢，所以沒有採用。
 
 ## 重點數值
 

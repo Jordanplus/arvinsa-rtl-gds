@@ -9,7 +9,7 @@
   },
   {
    "id": "spec",
-   "label": "1  規格與計畫\n操作範圍、corner\n平台試算表\npad／block／pin 規劃（核准）",
+   "label": "1  規格與計畫\n操作條件、corner\n下線規定對照表\npad／block／pin 規劃（核准）",
    "layer": 1,
    "parent": "root",
    "border": "#7F8C8D",
@@ -25,7 +25,7 @@
   },
   {
    "id": "macro",
-   "label": "3  SRAM macro\nOpenRAM 產生＋patch\nngspice 特性化 → .lib\nview QA、macro DRC",
+   "label": "3  SRAM macro\nOpenRAM 產生＋patch\nngspice characterization → .lib\nview QA、macro DRC",
    "layer": 1,
    "parent": "root",
    "border": "#E67E22",
@@ -33,7 +33,7 @@
   },
   {
    "id": "cons",
-   "label": "4  約束與 signoff 條件\nSDC、15 個 signoff corner\n每個設計自己推導的上限\n（signoff/limits/*.toml）",
+   "label": "4  constraint 與 signoff 條件\nSDC、15 個 signoff corner\n每個設計自己推導的門檻\n（signoff/limits/*.toml）",
    "layer": 1,
    "parent": "root",
    "border": "#7F8C8D",
@@ -57,7 +57,7 @@
   },
   {
    "id": "netlist",
-   "label": "7  網表驗證\nEQY 等價證明\ngate-level lockstep 模擬\n（含電源接腳網表）",
+   "label": "7  netlist 驗證\nEQY 等價證明\ngate-level lockstep 模擬\n（也跑 PG netlist）",
    "layer": 1,
    "parent": "root",
    "border": "#2980B9",
@@ -65,7 +65,7 @@
   },
   {
    "id": "regress",
-   "label": "8  一鍵 regression\nmake regress／-picorv32／-caravel\nrun guard＋來源追溯\n只認乾淨 worktree",
+   "label": "8  一鍵 regression\nmake regress／-picorv32／-caravel\nrun guard＋版本追溯\n只認乾淨 worktree",
    "layer": 1,
    "parent": "root",
    "border": "#8E44AD",
@@ -73,7 +73,7 @@
   },
   {
    "id": "precheck",
-   "label": "9  下線預檢\nChipFoundry cf-precheck 1.3.7\n官方 image 跑在 lima VM\nmake precheck-caravel",
+   "label": "9  下線前檢查\nChipFoundry cf-precheck 1.3.7\n官方 image 跑在 lima VM\nmake precheck-caravel",
    "layer": 1,
    "parent": "root",
    "border": "#C0392B",

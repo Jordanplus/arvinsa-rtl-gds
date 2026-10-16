@@ -18,7 +18,7 @@
 <g id="clust2" class="cluster">
 <title>cluster_mgmt</title>
 <path fill="#ededed" stroke="#7f8c8d" stroke-width="2" d="M121,-544.62C121,-544.62 534,-544.62 534,-544.62 540,-544.62 546,-550.62 546,-556.62 546,-556.62 546,-670.41 546,-670.41 546,-676.41 540,-682.41 534,-682.41 534,-682.41 121,-682.41 121,-682.41 115,-682.41 109,-676.41 109,-670.41 109,-670.41 109,-556.62 109,-556.62 109,-550.62 115,-544.62 121,-544.62" filter="url(#ds)"/>
-<text xml:space="preserve" text-anchor="middle" x="233.25" y="-661.31" font-family='-apple-system, "Helvetica Neue", "PingFang TC", Arial, sans-serif' font-size="18.00">Caravel 管理用 SoC（固定）</text>
+<text xml:space="preserve" text-anchor="middle" x="257.62" y="-661.31" font-family='-apple-system, "Helvetica Neue", "PingFang TC", Arial, sans-serif' font-size="18.00">Caravel management SoC（固定）</text>
 </g>
 <g id="clust3" class="cluster">
 <title>cluster_wrap</title>
@@ -28,7 +28,7 @@
 <g id="clust4" class="cluster">
 <title>cluster_soc</title>
 <path fill="#e2f0d9" stroke="#27ae60" stroke-width="2" d="M34,-22C34,-22 1142,-22 1142,-22 1148,-22 1154,-28 1154,-34 1154,-34 1154,-314.58 1154,-314.58 1154,-320.58 1148,-326.58 1142,-326.58 1142,-326.58 34,-326.58 34,-326.58 28,-326.58 22,-320.58 22,-314.58 22,-314.58 22,-34 22,-34 22,-28 28,-22 34,-22" filter="url(#ds)"/>
-<text xml:space="preserve" text-anchor="middle" x="212.25" y="-305.48" font-family='-apple-system, "Helvetica Neue", "PingFang TC", Arial, sans-serif' font-size="18.00">soc_top（u_soc），扁平放在 wrapper 左下角</text>
+<text xml:space="preserve" text-anchor="middle" x="238.88" y="-305.48" font-family='-apple-system, "Helvetica Neue", "PingFang TC", Arial, sans-serif' font-size="18.00">soc_top（u_soc），以 flat 方式放在 wrapper 左下角</text>
 </g>
 <!-- wb -->
 <g id="node1" class="node">
@@ -43,7 +43,7 @@
 <path fill="#deebf7" stroke="#2980b9" stroke-width="1.6" d="M586.41,-469.37C586.41,-469.37 295.59,-469.37 295.59,-469.37 289.59,-469.37 283.59,-463.37 283.59,-457.37 283.59,-457.37 283.59,-379.58 283.59,-379.58 283.59,-373.58 289.59,-367.58 295.59,-367.58 295.59,-367.58 586.41,-367.58 586.41,-367.58 592.41,-367.58 598.41,-373.58 598.41,-379.58 598.41,-379.58 598.41,-457.37 598.41,-457.37 598.41,-463.37 592.41,-469.37 586.41,-469.37" filter="url(#ds)"/>
 <text xml:space="preserve" text-anchor="middle" x="441" y="-440.75" font-family="PingFang TC" font-size="18.00" fill="#111111">wb_host_bridge</text>
 <text xml:space="preserve" text-anchor="middle" x="441" y="-414.5" font-family="PingFang TC" font-size="18.00" fill="#111111">0x3000_0000 host_en（reset 1）</text>
-<text xml:space="preserve" text-anchor="middle" x="441" y="-388.25" font-family="PingFang TC" font-size="18.00" fill="#111111">0x3000_1000 SRAM 視窗</text>
+<text xml:space="preserve" text-anchor="middle" x="441" y="-388.25" font-family="PingFang TC" font-size="18.00" fill="#111111">0x3000_1000 SRAM 位址區</text>
 </g>
 <!-- wb&#45;&gt;bridge -->
 <!-- wb&#45;&gt;bridge -->
@@ -73,7 +73,7 @@
 <title>adapter</title>
 <path fill="#e2f0d9" stroke="#27ae60" stroke-width="1.6" d="M524.91,-278.33C524.91,-278.33 357.09,-278.33 357.09,-278.33 351.09,-278.33 345.09,-272.33 345.09,-266.33 345.09,-266.33 345.09,-214.79 345.09,-214.79 345.09,-208.79 351.09,-202.79 357.09,-202.79 357.09,-202.79 524.91,-202.79 524.91,-202.79 530.91,-202.79 536.91,-208.79 536.91,-214.79 536.91,-214.79 536.91,-266.33 536.91,-266.33 536.91,-272.33 530.91,-278.33 524.91,-278.33" filter="url(#ds)"/>
 <text xml:space="preserve" text-anchor="middle" x="441" y="-249.71" font-family="PingFang TC" font-size="18.00" fill="#111111">AHB 轉 native bus</text>
-<text xml:space="preserve" text-anchor="middle" x="441" y="-223.46" font-family="PingFang TC" font-size="18.00" fill="#111111">轉接器</text>
+<text xml:space="preserve" text-anchor="middle" x="441" y="-223.46" font-family="PingFang TC" font-size="18.00" fill="#111111">bridge</text>
 </g>
 <!-- bridge&#45;&gt;adapter -->
 <!-- sram -->

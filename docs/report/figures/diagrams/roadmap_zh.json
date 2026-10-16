@@ -33,7 +33,7 @@
   },
   {
    "id": "p3",
-   "label": "Phase 3（10-04）\nSoC 整合預建 2 KB SRAM\n1000 × 800 µm、40 ns\nEQY 與 gate-level 模擬",
+   "label": "Phase 3（10-04）\nSoC 整合 PDK 附的 2 KB SRAM\n1000 × 800 µm、40 ns\nEQY 與 gate-level 模擬",
    "layer": 1,
    "parent": "root",
    "border": "#27AE60",
@@ -49,7 +49,7 @@
   },
   {
    "id": "p35",
-   "label": "Phase 3.5（10-05）\nSRAM 時序改用 SPICE 實測\n43 ns\n發現 ss 低溫讀取失敗",
+   "label": "Phase 3.5（10-05）\nSRAM 時序改用 SPICE 模擬\n43 ns\n發現 ss 低溫讀取失敗",
    "layer": 1,
    "parent": "root",
    "border": "#E67E22",
@@ -65,7 +65,7 @@
   },
   {
    "id": "p6",
-   "label": "Phase 6（10-11）\nOpenRAM 自產 SRAM\n修好讀取失敗\n7 個 PVT 讀寫正確",
+   "label": "Phase 6（10-11）\n用 OpenRAM 產生 SRAM\n修好讀取失敗\n7 個 PVT 讀寫正確",
    "layer": 1,
    "parent": "root",
    "border": "#8E44AD",

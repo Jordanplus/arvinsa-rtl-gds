@@ -49,3 +49,8 @@ GDS、DEF、網表、SPICE 輸出、波形，以及整個 LibreLane run 目錄�
 3. 提交之後才刪。
 
 腳本在 `runs/` 已經不在時拒絕執行，避免清理後重跑把所有引用都列成不存在。
+
+## 清理之後另外收的
+
+下列目錄是 2026-10-15 清理之後才做的實驗，直接寫在這裡，不是 `make collect-evidence` 收的，也不在 `references.md` 裡。路徑改寫照上面的慣例。
+- `arvinsa-rtl-gds/runs/p7_gpio_xfer/`（2026-10-16）：GPIO 設定傳送對 GPIO 33–37 的 scratch 模擬與 gate-level netlist 讀取，內含重現指令（該目錄的 `README.md`；`docs/notes/caravel_gpio_xfer.md`；Phase 7 已知限制 22）。

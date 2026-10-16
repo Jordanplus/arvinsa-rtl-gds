@@ -22,7 +22,9 @@
 
 module wb_host_bridge (
     input  wire        clk,
-    input  wire        rst,          // wb_rst_i, active high, synchronous to clk
+    input  wire        rst,          // wb_rst_i, active high. Caravel asserts it asynchronously and
+                                     // releases it on a falling edge of wb_clk_i (caravel_clocking.v
+                                     // 101-112); used here as a synchronous reset (ADR-0019 decision 8)
     input  wire        wbs_stb_i,
     input  wire        wbs_cyc_i,
     input  wire        wbs_we_i,

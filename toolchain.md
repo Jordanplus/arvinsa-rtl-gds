@@ -1,14 +1,14 @@
 # 工具與版本清單（toolchain）
 
-最後更新：2026-10-05　維護者：專案主控（Claude 與使用者）
+最後更新：2026-10-16（依 `make env-check` 核對：§1 本機工具的版本與本機偵測到的相同，`env/versions.mk` 的每個值都出現在本文件；其他內容沒有逐項重新核對）　維護者：專案主控（Claude 與使用者）
 
-這份清單記錄本專案用到的每個工具、版本與來源。**釘版的唯一來源是 `env/versions.mk`**，本文件是給人看的說明。
+這份清單記錄本專案用到的每個工具、版本與來源。**固定版本的唯一來源是 `env/versions.mk`**，本文件是給人看的說明。
 
 ## 維護規則
 
-- 升級、新增或移除工具時，**同時**更新 `env/versions.mk`（若有釘版）與本文件，並在 `docs/decisions/` 補 ADR（影響結果的變更）。
+- 升級、新增或移除工具時，**同時**更新 `env/versions.mk`（若有固定版本）與本文件，並在 `docs/decisions/` 補 ADR（影響結果的變更）。
 - `make env-check` 會自動比對：`env/versions.mk` 的每個值、以及本機實際偵測到的工具版本，都必須出現在本文件中；不一致就 FAIL 並指出哪一項過期。
-- 不在本清單上的工具，不得成為任何 make target 的必要依賴。
+- 不在本清單上的工具，不得成為任何 make target 必要的相依工具。
 
 ## 1. 本機工具（Phase 1 使用，已安裝）
 
@@ -21,7 +21,7 @@
 | riscv64-elf-binutils | 組譯、連結、objcopy、objdump | 2.46.1 | — | Homebrew `riscv64-elf-binutils` |
 | C++ 編譯器（Apple clang） | Verilator `--binary` 把產生的 C++ 編譯成模擬執行檔（`make regress-rtl` 的 Verilator 部分需要） | 21.0.0 | — | Xcode Command Line Tools（`/usr/bin/c++`，CLTools 27.0） |
 | Python | regression script、checker（只用標準函式庫，設定檔用 `tomllib`） | 3.14.6 | 3.11 | Homebrew `python@3.14` |
-| ngspice | SRAM macro 的 SPICE 特性化（Phase 3.5，ADR-0010）；sky130 模型的設定用 PDK 的 `libs.tech/ngspice/spinit` | 47 | 47 | Homebrew `ngspice`（含 KLU） |
+| ngspice | SRAM macro 的 SPICE characterization（Phase 3.5，ADR-0010）；sky130 模型的設定用 PDK 的 `libs.tech/ngspice/spinit` | 47 | 47 | Homebrew `ngspice`（含 KLU） |
 | GNU make | 統一入口 | 3.81 | — | macOS 內建 `/usr/bin/make` |
 | bash | script 執行 | 3.2.57 | — | macOS 內建 `/bin/bash` |
 | git | 版本控制、submodule | 2.54.0 | — | macOS 內建（Apple Git-157） |
@@ -36,11 +36,11 @@
 | 工具 | 用途 | 版本 | 安裝 | 驗證 |
 |---|---|---|---|---|
 | xPack riscv-none-elf-gcc | 含 newlib 的 RISC-V 工具鏈：Hazard3 上游測試（riscv-tests、sw_testcases）需要 libc（Phase 5，ADR-0011）；multilib 含 rv32imc／ilp32 | `XPACK_RISCV_VERSION = 15.2.0-1`（GCC 15.2.0），darwin-arm64 壓縮檔 `XPACK_RISCV_SIZE = 401163559` bytes，`XPACK_RISCV_SHA256 = 6588e8351455fad8aca37551f0e5a5543f3346bfa9a837cf03cbd3bdd4989f8f`（與官方 `.sha` 檔、GitHub asset digest 相同） | `make xpack-fetch`（`env/fetch_xpack.sh`：8 段平行、可續傳、比對大小與 sha256 後解壓到 `.tools/xpack-riscv-none-elf-gcc-15.2.0-1/`，約 1.5 GB；下載快取用完即刪） | 2026-10-05：`-march=rv32imc -mabi=ilp32 -specs=nano.specs -specs=nosys.specs` 編譯含 `snprintf` 的程式成功 |
-| ChipFoundry precheck 的 KLayout deck | precheck 判定的比對基準與 negative test（`make precheck-sram-ref`、`make neg-precheck`；Phase 7，ADR-0019 決定 5）。deck 是 GPLv3，不放進 repo；正式判定只認官方 image | `CF_PRECHECK_VERSION = 1.3.7`，wheel `CF_PRECHECK_WHEEL_SHA256 = bc847eb97fdb2213b71d09da1304eee4c159b5dc9b7a2e031cabaf4961d77f0f`（2026-10-14 從 PyPI 算），`drc_scripts/sky130A_mr.drc` 的 `CF_PRECHECK_DECK_SHA256 = aeba6ab5137923f2258714ab5d91ce99ca6a6f932bea55dedfe6f79aca697ba1`（與 image 裡 cf-precheck 1.3.7 的相同，release `2026.03.30_01.00`） | `make precheck-deck`（`env/fetch_precheck_deck.sh`：`pip download` 固定版本、核對 wheel 與 deck 的 sha256 後放到 `.tools/cf-precheck-1.3.7/`） | 2026-10-14：兩顆 SRAM 單獨檢查與 `make neg-precheck` |
+| ChipFoundry precheck 的 KLayout deck | 檢查 precheck 結果用的比對基準與 negative test（`make precheck-sram-ref`、`make neg-precheck`；Phase 7，ADR-0019 決定 5）。deck 是 GPLv3，不放進 repo；正式結果只認官方 image | `CF_PRECHECK_VERSION = 1.3.7`，wheel `CF_PRECHECK_WHEEL_SHA256 = bc847eb97fdb2213b71d09da1304eee4c159b5dc9b7a2e031cabaf4961d77f0f`（2026-10-14 從 PyPI 算），`drc_scripts/sky130A_mr.drc` 的 `CF_PRECHECK_DECK_SHA256 = aeba6ab5137923f2258714ab5d91ce99ca6a6f932bea55dedfe6f79aca697ba1`（與 image 裡 cf-precheck 1.3.7 的相同，release `2026.03.30_01.00`） | `make precheck-deck`（`env/fetch_precheck_deck.sh`：`pip download` 固定版本、核對 wheel 與 deck 的 sha256 後放到 `.tools/cf-precheck-1.3.7/`） | 2026-10-14：兩顆 SRAM 單獨檢查與 `make neg-precheck` |
 
 ## 2. RTL-to-GDS flow（Phase 0，2026-10-03 已安裝；`librelane --smoke-test` PASS）
 
-工具都在 LibreLane 的 nix-shell 裡（`cd .tools/librelane && nix-shell`），版本由 LibreLane 3.0.14 的 `flake.lock` 決定，不另外釘版。soc_top 的 config 用 repo 的 LibreLane plugin 換掉 CTS step（`pnr/librelane_plugin_arvinsa/`，ADR-0016）：手動執行完整 flow 時 `PYTHONPATH` 要含 `pnr/`（`pnr/librelane_flow.sh` 已設好）。
+工具都在 LibreLane 的 nix-shell 裡（`cd .tools/librelane && nix-shell`），版本由 LibreLane 3.0.14 的 `flake.lock` 決定，不另外固定版本。soc_top 的 config 用 repo 的 LibreLane plugin 換掉 CTS step（`pnr/librelane_plugin_arvinsa/`，ADR-0016）：手動執行完整 flow 時 `PYTHONPATH` 要含 `pnr/`（`pnr/librelane_flow.sh` 已設好）。
 `make flow-setup` 會把實際版本寫到 `runs/flow_setup/versions.txt`；下表就是 2026-10-03 那次的結果。
 
 | 工具 | 用途 | 版本 | 來源 | 狀態 |
@@ -54,7 +54,7 @@
 | KLayout | DRC、GDS 輸出、XOR | 0.30.7 | LibreLane nix-shell | 已安裝 |
 | Netgen | LVS | 1.5.316 | LibreLane nix-shell | 已安裝 |
 | Verilator（flow 用） | `Verilator.Lint` step | 5.044 | LibreLane nix-shell | 已安裝 |
-| EQY、SBY（YosysHQ） | formal equivalence（`make eqy-core`／`eqy-soc`，Phase 3）；`eqy.formal_pdk_proc` 把 sky130 cell 模型轉成 formal 可用的形式 | 隨 Yosys 0.62（nix 套件 `yosys-eqy-0.62`、`yosys-sby-0.62`） | LibreLane nix-shell | 已安裝。EQY 的切分步驟要 `ulimit -s 65520`（64 MB stack），8 MB 預設會 SIGSEGV；SBY 的 PDR 反例轉換需要的 `yices` 不在 nix-shell 內（只影響失敗時的波形，不影響 PASS／FAIL 判定），見 `signoff/eqy/README.md` |
+| EQY、SBY（YosysHQ） | formal equivalence（`make eqy-core`／`eqy-soc`，Phase 3）；`eqy.formal_pdk_proc` 把 sky130 cell 模型轉成 formal 可用的形式 | 隨 Yosys 0.62（nix 套件 `yosys-eqy-0.62`、`yosys-sby-0.62`） | LibreLane nix-shell | 已安裝。EQY 切 partition 的步驟要 `ulimit -s 65520`（64 MB stack），8 MB 預設會 SIGSEGV；SBY 的 PDR 反例轉換需要的 `yices` 不在 nix-shell 內（只影響失敗時的波形，不影響 PASS／FAIL），見 `signoff/eqy/README.md` |
 
 注意：flow 用的 Yosys（0.62）、Verilator（5.044）比 §1 的本機版本（0.69、5.050）舊。正式流程一律用 nix-shell 內的版本；§1 的版本只用在 Phase 1 的本機模擬與 sanity check。
 
@@ -67,10 +67,10 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 | PDK | sky130A | 已安裝（2026-10-03） |
 | 標準元件庫 | sky130_fd_sc_hd | 已安裝 |
 | open_pdks commit（LibreLane 3.0.14 綁定，`librelane/pdk_hashes.yaml`） | `8afc8346a57fe1ab7934ba5a6056ea8b43078e71` | 已安裝 |
-| 安裝方式 | `make pdk-fetch`（`env/fetch_pdk.sh`）：7 個壓縮檔平行下載、可續傳，快取在 `.tools/pdk-cache/`；sha256 釘在 `env/sky130_pdk_assets.sha256`（取自 GitHub release 的 digest）；再由 ciel 從本機 mirror 安裝 | — |
+| 安裝方式 | `make pdk-fetch`（`env/fetch_pdk.sh`）：7 個壓縮檔平行下載、可續傳，快取在 `.tools/pdk-cache/`；sha256 記在 `env/sky130_pdk_assets.sha256`（取自 GitHub release 的 digest）；再由 ciel 從本機 mirror 安裝 | — |
 | 安裝位置與內容 | `~/.ciel`（2.1 GB）：ciel 的 sky130 預設函式庫 sky130_fd_io、sky130_fd_pr、sky130_fd_sc_hd、sky130_fd_sc_hvl、sky130_ml_xx_hd、sky130_sram_macros | — |
-| PDK 內容（Phase 4） | flow 讀的 6 個目錄（`libs.tech/{klayout,magic,netgen,openlane}`、`libs.ref/sky130_fd_sc_hd`、`libs.ref/sky130_sram_macros`，2109 個檔）的 sha256 摘要釘在 `env/pdk_content.sha256`，由 `provenance.py --make-pdk-content --from-tarballs .tools/pdk-cache/sky130-<hash>` 從上面的壓縮檔算出；每次 harden 由 `provenance.py` 比對安裝好的 PDK（改過任何一個檔就 FAIL）。升級 PDK 時要重新產生 | — |
-| SRAM macro 檢查（`make env-check`） | PDK 內 `sky130_sram_2kbyte_1rw1r_32x512_8` 的 LEF 有 `FOREIGN`、尺寸 683.1 × 416.54 µm；Verilog 模型與 §4 釘版副本 sha256 相同 | PASS |
+| PDK 內容（Phase 4） | flow 讀的 6 個目錄（`libs.tech/{klayout,magic,netgen,openlane}`、`libs.ref/sky130_fd_sc_hd`、`libs.ref/sky130_sram_macros`，2109 個檔）的 sha256 摘要記在 `env/pdk_content.sha256`，由 `provenance.py --make-pdk-content --from-tarballs .tools/pdk-cache/sky130-<hash>` 從上面的壓縮檔算出；每次 harden 由 `provenance.py` 比對安裝好的 PDK（改過任何一個檔就 FAIL）。升級 PDK 時要重新產生 | — |
+| SRAM macro 檢查（`make env-check`） | PDK 內 `sky130_sram_2kbyte_1rw1r_32x512_8` 的 LEF 有 `FOREIGN`、尺寸 683.1 × 416.54 µm；Verilog 模型與 §4 固定版本的副本 sha256 相同 | PASS |
 
 為什麼不用 LibreLane 自己下載 PDK：ciel 只用一條連線、不能續傳。2026-10-03 本機到 GitHub 單一連線只有 45–175 KB/s，中斷就要從頭重下約 340 MB；平行下載約 360 KB/s。
 
@@ -80,7 +80,7 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 |---|---|
 | open_pdks commit（OpenRAM Makefile 的 `SKY130_CIEL`，2022.07.29） | `e8294524e5f67c533c5d0c3afa0bcc5b2a5fa066` |
 | 用到的壓縮檔（ciel-releases `sky130-<hash>`） | `common.tar.zst` sha256 `a37160e9a00e39e540e5e7746c064537c7331d6542ebd7a3b05b5801ef7cf044`；`sky130_fd_pr.tar.zst` sha256 `9795dee2b08e0ca794e39a041f661b72168cba1dd4140474bde94320d75bcb46`（2026-10-08 由下載檔算出；release 沒有 digest，大小與 GitHub API 相符） |
-| 安裝位置 | `.tools/openram-pdk-e8294524/`（`make openram-setup`），只用來產生 macro 與跑 OpenRAM 的 DRC／LVS；SoC flow 與 SPICE 特性化仍用上表的 `8afc834` |
+| 安裝位置 | `.tools/openram-pdk-e8294524/`（`make openram-setup`），只用來產生 macro 與跑 OpenRAM 的 DRC／LVS；SoC flow 與 SPICE characterization 仍用上表的 `8afc834` |
 | 為什麼不用 `8afc834` | 兩版之間 bitcell PMOS 從 `special_pfet_pass` 改名 `special_pfet_latch`、`w<0.42` 的 NMOS 改萃取成 `special_nfet_01v8`，sky130_fd_bd_sram 的 cell 在 `8afc834` 下 LVS 不過（`docs/notes/openram_phase6_bringup.md`） |
 
 ## 4. IP
@@ -95,11 +95,11 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 
 | 工具／IP | 階段 | 用途 | 備註 |
 |---|---|---|---|
-| Hazard3 | Phase 5 | 第二顆 RISC-V core | Apache-2.0 |
-| OpenRAM | Phase 6 | SRAM macro 產生（特性化仍用 `ip/sram/char/` 的 ngspice 流程） | https://github.com/VLSIDA/OpenRAM dev `3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8`；cell 庫 https://github.com/VLSIDA/sky130_fd_bd_sram `fc63b12883b4bf458ee8c756ba64c37063e1ffb9`；`make openram-setup` 裝到 `.tools/`。官方環境（`nix develop`）只宣告 x86_64-linux，但 OpenRAM 是純 Python，`use_nix=False` 時用 PATH 上的工具；本機 macOS 原生執行（2026-10-08 實測可行），Colab 只當對照（ADR-0018） |
-| CVC | 可選 | 含 SDF 的 gate-level 模擬 | x86_64 Linux |
+| Hazard3 | Phase 5 | 第二顆 RISC-V core | Apache-2.0（實際：Phase 5 已加入，`third_party/hazard3` submodule，tag `v1.1.1`，commit `8af992930f71a69b0e06c38734c1094f41a05ca0`，ADR-0011） |
+| OpenRAM | Phase 6 | SRAM macro 產生（characterization 仍用 `ip/sram/char/` 的 ngspice 流程） | https://github.com/VLSIDA/OpenRAM dev `3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8`；cell library https://github.com/VLSIDA/sky130_fd_bd_sram `fc63b12883b4bf458ee8c756ba64c37063e1ffb9`；`make openram-setup` 裝到 `.tools/`。官方環境（`nix develop`）只宣告 x86_64-linux，但 OpenRAM 是純 Python，`use_nix=False` 時用 PATH 上的工具；本機 macOS 原生執行（2026-10-08 實際試過可行），Colab 只當對照（ADR-0018） |
+| CVC | 選用 | 含 SDF 的 gate-level 模擬 | x86_64 Linux |
 
-## 6. 釘版值對照（由 `make env-check` 檢查）
+## 6. 固定版本的值對照（由 `make env-check` 檢查）
 
 以下各值必須與 `env/versions.mk` 一致：
 `PDK = sky130A`、`STD_CELL_LIBRARY = sky130_fd_sc_hd`、`SRAM_MACRO = sky130_sram_2kbyte_1rw1r_32x512_8`、`RISCV_PREFIX = riscv64-elf-`、
@@ -110,9 +110,9 @@ xPack 工具鏈與 precheck deck 的值見 §1.1。乾淨 worktree 的 precheck 
 
 這一節記錄「哪一組版本下，哪支 regression test 實際 PASS」，方便升級工具後回頭比對。工具版本以 §1 為準；這裡只補 §1 沒寫出來的子元件與 make 命令列 override。
 
-### 7.1 L1a core-stock（`make core-stock`，`scripts/core_stock.sh`；2026-10-03 實測）
+### 7.1 L1a core-stock（`make core-stock`，`scripts/core_stock.sh`；2026-10-03 實際跑過）
 
-| 子元件 | 用在哪裡 | 版本（實測） | 對應 §1 的列 |
+| 子元件 | 用在哪裡 | 版本（實際用到的） | 對應 §1 的列 |
 |---|---|---|---|
 | `iverilog` | 編譯上游 `testbench.v`、`testbench_wb.v`、`testbench_ez.v`、`testbench_synth` | 13.0 | Icarus Verilog |
 | `vvp` | 執行上述編譯結果（Icarus 的模擬執行器，隨 Icarus 安裝） | 13.0 | Icarus Verilog |
@@ -129,6 +129,6 @@ make 命令列 override（上游 Makefile 一律不改）：
 | `TOOLCHAIN_PREFIX=riscv64-elf-` | 上游預設指向 `/opt/riscv32i/bin/riscv32-unknown-elf-`，本機沒有；改用 §1 的 `riscv64-elf-gcc` |
 | （無其他） | GCC 16.1 下上游 `GCC_WARNS` 的 `-Werror` 沒有觸發；`-march=rv32imc` 不需要加 `_zicsr` |
 
-結果（上述組合）：`test`、`test_ez`、`test_wb`、`test_synth` 全部 PASS；`test_rvf` 為 N/A，原因是它需要 riscv-formal（YosysHQ/riscv-formal）產生的 `rvfimon.v`，該 repo 不在本專案內、也不在本清單上（依「不在清單上的工具不得成為必要依賴」的規則排除）。細節見 `docs/notes/core_stock.md`。
+結果（上述組合）：`test`、`test_ez`、`test_wb`、`test_synth` 全部 PASS；`test_rvf` 為 N/A，原因是它需要 riscv-formal（YosysHQ/riscv-formal）產生的 `rvfimon.v`，該 repo 不在本專案內、也不在本清單上（依「不在清單上的工具不得成為必要的相依工具」的規則排除）。細節見 `docs/notes/core_stock.md`。
 
 升級 §1 的 iverilog／Yosys／riscv64-elf-gcc／binutils 任何一項後，要重跑 `make core-stock`，並回來更新本節的版本與結果。

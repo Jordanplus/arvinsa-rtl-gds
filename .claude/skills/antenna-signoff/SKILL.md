@@ -9,9 +9,9 @@ description: antenna 違規（OpenROAD `check_antennas`、`antenna__violating__n
 
 ## 規則（已驗證）
 
-1. **macro 沒有 `ANTENNAGATEAREA` 時**，antenna 檢查看不到接到 macro 輸入的線（LibreLane `Odb.CheckMacroAntennaProperties` 會警告）。做法：從 macro 自己的 SPICE 算閘極面積（攤平階層、加總閘極接在該 pin 上的電晶體 W×L），產生補上資料的 LEF。2 KB SRAM：57 個 pin 是 0.6 µm²（OpenRAM DFF 的 D），`clk0/1` 是 0.168 µm²。
+1. **macro 沒有 `ANTENNAGATEAREA` 時**，antenna 檢查看不到接到 macro 輸入的線（LibreLane `Odb.CheckMacroAntennaProperties` 會警告）。做法：從 macro 自己的 SPICE 算閘極面積（把階層 flatten、加總閘極接在該 pin 上的電晶體 W×L），產生補上資料的 LEF。2 KB SRAM：57 個 pin 是 0.6 µm²（OpenRAM DFF 的 D），`clk0/1` 是 0.168 µm²。
 2. **估算允許長度**（sky130 tech LEF，無 diode 時側面積比 400）：0.6 µm² 閘極時 met1／met2（厚 0.35 µm）約 340 µm，met3／met4（厚 0.8 µm）約 150 µm。單用「線總長」判斷不正確。
-3. **不要用 `RUN_HEURISTIC_DIODE_INSERTION`**：它對全設計所有超過 90 µm 的線加 diode（soc_top 插了 10231 顆），之後 global routing 反覆壅塞迭代不收斂。
+3. **不要用 `RUN_HEURISTIC_DIODE_INSERTION`**：它對全設計所有超過 90 µm 的線加 diode（soc_top 插了 10231 顆），之後 global routing 一直反覆嘗試消除壅塞（overflow），無法收斂。
 4. **副作用**：antenna repair 在 resizer 修完之後才加 diode，diode 的 pin 也算 fanout；單一長線可能被插 10–11 顆（soc_explore2）。對策：長線修復讓線變短（diode 224 → 61 顆），PnR 的 fanout 目標收緊到 8（ADR-0009）。
 5. **ODB 快取 LEF**：要用不同 LEF 驗證時，直接 `openroad` 讀 tech LEF、cell LEF、macro LEF 加最終 DEF，再跑 `check_antennas`。
 6. **報告的 Required 欄不一定是 400**：節點透過下層連到 driver 的擴散區時，上限依 diff PWL 提高（soc_top post-GRT 報告有 3 列在 met5，Required 2956.40）。
@@ -19,17 +19,17 @@ description: antenna 違規（OpenROAD `check_antennas`、`antenna__violating__n
 8. **OpenROAD 不讀 `ANTENNAPARTIALMETAL*AREA`**：macro 階層之間的 antenna 只能靠 port diode（`DIODE_ON_PORTS`）或在上層插 diode。
 9. **Magic 的 antenna 參數和 tech LEF 不完全一樣**：via1 在 Magic 是 3＋18×A，tech LEF 與 SkyWater via.1 是 6＋36×A（`sky130A.tech` 第 5087 行對照 `nom.tlef` 第 140 行），而且 Magic 不模擬 diode。拿 PDK 的 `check_antenna.py`（Magic）當第二意見時要知道這兩點。
 10. **LibreLane 的 antenna checker 與修補設定**（LibreLane 3.0.14）：
-    - Classic flow 沒有 antenna 的 Checker（`Checker.KLayoutAntenna` 只在 Chip flow，`librelane/flows/chip.py` 第 45–46 行）。本 repo 的 antenna 判定在 `signoff/limits/*.toml`：`antenna__violating__nets`、`antenna__violating__pins`、`route__antenna_violation__count` 都必須是 0（`check_signoff.py`）。
+    - Classic flow 沒有 antenna 的 Checker（`Checker.KLayoutAntenna` 只在 Chip flow，`librelane/flows/chip.py` 第 45–46 行）。本 repo 的 antenna PASS 條件在 `signoff/limits/*.toml`：`antenna__violating__nets`、`antenna__violating__pins`、`route__antenna_violation__count` 都必須是 0（`check_signoff.py`）。
     - **`DRT_ANTENNA_REPAIR_MARGIN` 設了也沒有作用**（工具缺陷，讀原始碼確認，經驗紀錄 2026-10-03）：
       - 症狀：config 改了 `DRT_ANTENNA_REPAIR_MARGIN`，detailed routing 之後的 antenna 修補照舊，沒有任何警告或錯誤。
       - 原因：變數在 `librelane/steps/openroad.py`（第 1961 行）宣告，但 `librelane/scripts/openroad/drt.tcl` 第 105 行傳給 `repair_antennas` 的是 `-ratio_margin $::env(GRT_ANTENNA_REPAIR_MARGIN)`。
       - 怎麼發現：DetailedRouting step 的 log 會印出實際執行的指令 `+ repair_antennas sky130_fd_sc_hd__diode_2 -ratio_margin <N>`，N 是 `GRT_ANTENNA_REPAIR_MARGIN` 的值；和同一個 step 目錄 `config.json` 裡的 `DRT_ANTENNA_REPAIR_MARGIN` 對照，不同就是踩到了。
-      - 怎麼繞過：要改 detailed routing 之後的修補餘量，改設 `GRT_ANTENNA_REPAIR_MARGIN`；它同時用在 global routing 之後的修補（`antenna_repair.tcl` 第 22 行），兩處沒辦法分開設。本 repo 兩個都沒設，用預設 10%。
-      - 防復發：沒有自動防護。原因：本 repo 沒有用到這個變數，踩不到；照 ADR-0020 決定 2，下一個專案開始時在 `check_inputs.py` 的 config 檢查加一列（config 設了 `DRT_ANTENNA_REPAIR_MARGIN` 就 FAIL，要求改設 `GRT_ANTENNA_REPAIR_MARGIN`），並加植入錯誤。LibreLane 升版時，重看 `drt.tcl` 是否已改用 DRT 的變數。
+      - 怎麼繞過：要改 detailed routing 之後修補用的 margin，改設 `GRT_ANTENNA_REPAIR_MARGIN`；它同時用在 global routing 之後的修補（`antenna_repair.tcl` 第 22 行），兩處沒辦法分開設。本 repo 兩個都沒設，用預設 10%。
+      - 怎麼防止再發生：沒有自動檢查。原因：本 repo 沒有用到這個變數，踩不到；照 ADR-0020 決定 2，下一個專案開始時在 `check_inputs.py` 的 config 檢查加一列（config 設了 `DRT_ANTENNA_REPAIR_MARGIN` 就 FAIL，要求改設 `GRT_ANTENNA_REPAIR_MARGIN`），並加植入錯誤。LibreLane 升版時，重看 `drt.tcl` 是否已改用 DRT 的變數。
 11. **`[WARNING GRT-0243] Unable to repair antennas on net with diodes.` 不代表有違規**（Phase 3.5、5、6、7 都出現：`docs/phase_exit/phase3_5.md` 已知限制 10、`phase5.md` 第 178 行、`phase6.md` 第 118 行、`phase7.md` 第 151 行）：
     - 意思：某一輪 antenna 修補（例如 DetailedRouting step 裡的 `repair_antennas`）有一條 net 插 diode 修不掉；之後的重繞與下一輪修補可能修好。
-    - 判定看最終的 antenna 指標（規則 10 的三個 metric 必須是 0），不看這個警告。上面四次最終都是 0。
-    - golden 比對：這個警告跟著繞線時有時無（detailed routing 不可重現），所以 `flow__warnings__count:GRT-0243` 放在上限檔的 `[golden_optional]`（ADR-0015 決定 1；`signoff/limits/soc_top.toml`、`soc_top_hazard3.toml`、`user_project_wrapper.toml`），只出現在一邊不判 FAIL。
+    - PASS／FAIL 看最終的 antenna 指標（規則 10 的三個 metric 必須是 0），不看這個警告。上面四次最終都是 0。
+    - golden 比對：這個警告跟著繞線時有時無（detailed routing 不可重現），所以 `flow__warnings__count:GRT-0243` 放在 limits 檔的 `[golden_optional]`（ADR-0015 決定 1；`signoff/limits/soc_top.toml`、`soc_top_hazard3.toml`、`user_project_wrapper.toml`），只出現在一邊不會 FAIL。
     - 最終 antenna 指標不是 0 時，才回頭查那條 net：用規則 2 估允許長度，用規則 4 的長線修復縮短。
 
 ## negative test
@@ -42,7 +42,7 @@ P06：SRAM LEF 的閘極面積除以 1000 → `check_antennas` 違規從 0 變 5
 
 ## 經驗紀錄
 
-| 日期 | 專案／run | 現象 | 根因（已驗證／推測） | 處理 | 證據 |
+| 日期 | 專案／run | 現象 | 原因（已驗證／推測） | 處理 | 證據 |
 |---|---|---|---|---|---|
 | 2026-10-03 | soc_explore1 | `Inserted 10231 diodes.`，GRT 不收斂 | 已驗證：heuristic 對全設計長線加 diode | 不用 heuristic，改 antenna LEF | ADR-0008 |
 | 2026-10-03 | soc_explore2 | 7 個 max fanout 違規 | 已驗證：每條線 10–11 顆 diode | 長線修復 200 µm | `pnr/soc_top/README.md` |

@@ -10,14 +10,14 @@
 | `make -C fw all` | 全部測試 image ＋ Boot ROM image ＋ `build/size_report.txt` |
 | `make -C fw <test>` | `build/<test>.elf .bin .hex .lst`（另有 `.map`、`.size`） |
 | `make -C fw bootrom_march` | 只建 Boot ROM image（這個測試不載入 SRAM） |
-| `make -C fw bootrom` | 重產 `rtl/bootrom/bootrom.v`（產生物，需 commit） |
-| `make -C fw check-bootrom` | 重產到 `build/bootrom_check.v` 並與 `rtl/bootrom/bootrom.v` 比對，不同即 FAIL |
+| `make -C fw bootrom` | 重新產生 `rtl/bootrom/bootrom.v`（產生的檔案，需 commit） |
+| `make -C fw check-bootrom` | 重新產生到 `build/bootrom_check.v` 並與 `rtl/bootrom/bootrom.v` 比對，不同即 FAIL |
 | `make -C fw variants` | negative test 用的 bug 變體（見下方「negative test 用的 bug 變體」）；`all` 會一起建 |
 | `make -C fw clean` | 刪除 `build/` |
 
 - `.hex`：`$readmemh` 格式，每行一個 32-bit word，第一行是 SRAM word 0，little-endian 組字；行數 = image word 數（不補滿 512）。
 - `build/build_flags.txt`：記錄編譯旗標、toolchain 版本與每個測試的 size 上限。每次 `make` 都會重新產生，但內容不變時不覆寫；
-  所有 object、linker script、ELF 與 size checker 都依賴它和 `Makefile` 本身，所以改了旗標（包括命令列覆寫）或 Makefile，
+  所有 object、linker script、ELF 與 size checker 都把它和 `Makefile` 本身列為相依檔，所以改了旗標（包括命令列覆寫）或 Makefile，
   增量 build 會整批重建，結果與 clean build 一致。注意 make 3.81 的檔案時間只到秒：同一秒內改旗標又 build 可能不會觸發，實際操作不會遇到。
 - `boot_uart_hello`、`boot_host_hello` 與 `hello` 同一份原始碼，image 內容相同，只是檔名不同。
 - size checker（`scripts/size_check.py`）：`_free_start > 0x700` 時 build FAIL；`memtest` 另外要求 `_free_start ≤ 0x400`。
@@ -51,7 +51,7 @@
 | `neg_fw_illegal` | `illegal\n` | 執行非法指令（negative test，預期 trap checker FAIL）；若沒有 trap 則寫 `0x01` |
 | `regs` | `regs PASS\n` | `0x0200 \| mask`：bit 0 GPIO_OUT、1 GPIO_IN、2 SIG、3 IRQ_TRIG、4 UART DIV、5 UART DATA（全部檢查完才回報，一次列出所有壞掉的暫存器）；`0x0240` DONE 讀回不是 PASS magic（第二次寫 DONE）；`0x03wr` cross-talk（見表下說明） |
 | `unmapped` | `unmapped PASS\n` | `0x0100 \| i` 第 i 個空洞位址讀到非 0；`0x0180 \| i` 寫入後再讀非 0；`0x01` canary（SRAM）被改、`0x02` SIG、`0x03` IRQ_TRIG、`0x04` GPIO_OUT、`0x05` UART DIV 被改 |
-| `uart_burst` | `uart_burst 0123456789 ABC…XYZ abc…xyz PASS\n`（81 byte） | 無（firmware 看不到 TX 線；由 testbench 的 `uart_golden`、`signature`、`coverage` 判定） |
+| `uart_burst` | `uart_burst 0123456789 ABC…XYZ abc…xyz PASS\n`（81 byte） | 無（firmware 看不到 TX 線；由 testbench 的 `uart_golden`、`signature`、`coverage` 檢查） |
 | `reset_store` | `reset_store PASS\n` | `0x01` 寫 `rst_victim` 之後沒有被 reset、`0x02` `rst_stage` 值不對、`0x03` reset 邊緣上的 store 被寫進去了 |
 
 任何測試的 `main()` 若返回，`start.S` 寫 fail code `0xFF`。Boot ROM 的 fail code：march `0x0E10`、loader `0x0B00`。
@@ -67,7 +67,7 @@ IRQ_TRIG 3、UART DIV 4、UART DATA 5、DONE 6；w = 5 是送完 UART 文字後�
 4. mode 2：UART loader，封包為 N（2 byte LE，1–448）＋ N×4 byte image ＋ 1 byte checksum（image byte 總和 mod 256）。
    正確：GPIO_OUT `0xB8` 後跳到 `0x0`；N 不合法或 checksum 錯：GPIO_OUT `0xEE`、DONE `0xBAD0_0B00`。
 
-## 給 testbench 的時序資訊（RTL 模擬實測，Icarus，CPU 放開後起算）
+## 給 testbench 的時序資訊（RTL 模擬量到的值，Icarus，CPU 放開後起算）
 
 | 項目 | 數值 | 對 testbench 的意義 |
 |---|---|---|
@@ -77,12 +77,12 @@ IRQ_TRIG 3、UART DIV 4、UART DATA 5、DONE 6；w = 5 是送完 UART 文字後�
 | `bootrom_march` 完成 | 約 112k cycle | 建議 `max_cycles` ≥ 200k |
 | `boot_uart_hello` 完成（`uart_in_delay`=400） | 約 63k cycle | 建議 `max_cycles` ≥ 150k |
 
-- `irq`：PicoRV32 的 IRQ 是 latched，IRQ_TRIG 在 handler 清掉之前已再次被鎖存，所以每寫一次 IRQ_TRIG，handler 會進入兩次
+- `irq`：PicoRV32 的 IRQ 是 latched，IRQ_TRIG 在 handler 清掉之前已再次被 latch 住，所以每寫一次 IRQ_TRIG，handler 會進入兩次
   （兩次記錄的 pending mask 都是 `1<<4`）。測試先等「計數 ≠ 0」，再讓 `irq[4]` 保持開放約 3000 cycle，關閉後要求計數**恰好 2 次**（spec §4.8）。
   1 次代表 IRQ 線不是位準（例如只有 1 cycle 的脈衝）；3 次以上代表 IRQ 線在 IRQ_TRIG 清掉後沒有放掉。
-  IRQ 線晚 40 cycle 才放掉仍然是 2 次，firmware 看不到，由 testbench 的 `irq_line` checker 逐 cycle 比對抓。
+  IRQ 線晚 40 cycle 才放掉仍然是 2 次，firmware 看不到，由 testbench 的 `irq_line` checker 做 cycle-by-cycle 比對抓到。
 
-## 定向測試（spec §6.4 以外，testbench qualification 補的）
+## directed 測試（spec §6.4 以外，testbench qualification 補的）
 
 - `regs`（boot_mode 3）：Boot ROM 對保留模式寫 GPIO_OUT = `0xB3` 後跳到 SRAM。測試讀回 `0xB3`，再對 GPIO_OUT 依序寫
   `0x01 … 0x80`（walking ones）、`0xFF`、`0x00`、`0xB3`（寫入值的 bit 31:8 全為 1，必須被忽略），每次讀回比對低 8 bit；
@@ -99,7 +99,7 @@ IRQ_TRIG 3、UART DIV 4、UART DATA 5、DONE 6；w = 5 是送完 UART 文字後�
   GPIO_OUT 因此多了 `0x3C`、`0xC3`、`0xB3` 三個值（`dv/tests.toml` 的 `expect_gpio` 已同步）。
 - `uart_burst`（review M1）：`uart_putc()` 每送一個 byte 前要先算 CRC，花的時間比一個 UART frame（200 cycle）長，
   所以其他測試從來不會在傳送中寫 UART DATA，§4.2 的 stall 從沒被用到。這個測試用 `uart_puts_burst()` 連續寫入整行（CRC 事後再算），
-  81 次寫入全部被 stall 擋住（Phase 1 RTL 實測共 13558 個 stall cycle）。
+  81 次寫入全部被 stall 擋住（Phase 1 RTL 模擬量到共 13558 個 stall cycle）。
 - `reset_store`（review m6，§4.9 RTL-RST-01）：`rst_stage`、`rst_victim` 放在 `.data`（backdoor 載入時初始化一次，`start.S` 不清），
   所以第二次開機看得到第一次留下的值。第一次開機寫 `rst_stage`，再寫 `rst_victim = 0xDEADBEEF`；testbench（`dv/tests.toml`
   `reset_on_store = "rst_victim"`）在這個 store 出現的下降緣把 `resetn` 拉低，CPU 從 Boot ROM 重新開機；第二次開機檢查 `rst_victim`
