@@ -15,7 +15,7 @@
 
 - `cf-cli` `chipfoundry_cli/main.py`：沒有 `docker` 就停止（第 4887 行）；image `chipfoundry/mpw_precheck:latest`（第 4893 行）；`docker pull`／`docker run` 都帶 `--platform linux/amd64`（第 4916、4947 行）。容器裡每次先 `pip3 install --upgrade cf-precheck`，所以實際版本是 PyPI 上最新的，執行時要有網路。
 - Docker Hub（2026-10-12 查 `hub.docker.com/v2/repositories/chipfoundry/mpw_precheck/tags/latest`）：只有 `linux amd64`，壓縮後 1,802,793,544 bytes，更新於 2026-09-15。macOS arm64 只能用模擬（Rosetta 或 QEMU）。
-- image 釘的版本（`dependencies/Dockerfile`）：Magic 8.3.471、KLayout 0.29.12、Netgen 1.5.272、CVC v1.1.7；PDK open_pdks `3e0e31dc`（ChipFoundry 的 fork：上游 2024-08 的 `0fe599b2` 加 3 個 decap cell commit）。本 repo：Magic 8.3.623、KLayout 0.30.7、Netgen 1.5.316、PDK `8afc834`（`toolchain.md`）。
+- image 釘的版本（`dependencies/Dockerfile`）：Magic 8.3.471、KLayout 0.29.12、Netgen 1.5.272、CVC v1.1.7。image 裡沒有 PDK：precheck 用的 open_pdks `3e0e31dc`（ChipFoundry 的 fork：上游 2024-08 的 `0fe599b2` 再加上 3 個和 decap cell 有關的 commit）由 cf-cli 的 `versions.json`（`open_pdks_commits`）與 caravel_user_project 的 Makefile（`OPEN_PDKS_COMMIT`）指定，執行時掛進容器（2026-10-17 更正：原本寫成 Dockerfile 固定，ADR-0022 決定 13）。本 repo：Magic 8.3.623、KLayout 0.30.7、Netgen 1.5.316、PDK `8afc834`（`toolchain.md`）。
 - 也有 `cf precheck --remote`，交給 ChipFoundry 平台跑（要帳號、`cf link`、GDS 在 GitHub 的 commit 裡）；費用與條件原始碼看不出來。
 
 ## 2. 檢查項目（`src/cf_precheck/check_manager.py` 第 46–63 行，`build_sequence()` 第 66–93 行）

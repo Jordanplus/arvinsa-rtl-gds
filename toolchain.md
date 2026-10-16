@@ -1,6 +1,6 @@
 # 工具與版本清單（toolchain）
 
-最後更新：2026-10-16（依 `make env-check` 核對：§1 本機工具的版本與本機偵測到的相同，`env/versions.mk` 的每個值都出現在本文件；其他內容沒有逐項重新核對）　維護者：專案主控（Claude 與使用者）
+最後更新：2026-10-16（補上 Phase 5–7 加入、之前沒列的工具與 IP：§1 的 zstd、§1.2 precheck 的 VM 與容器、§3.2 precheck 用的 PDK、§4 的 OpenRAM 產生的 SRAM、caravel_user_project 與 Caravel；Hazard3 與 OpenRAM 從 §5 分別移到 §4、§1.1，ADR-0022 決定 13。依 `make env-check` 核對：§1 本機工具除了 zstd 以外，版本都和本機偵測到的相同，`env/versions.mk` 的每個值都出現在本文件。zstd 用 `zstd --version` 核對，§1.2、§3.2 用本機指令與 Phase 7 的紀錄核對；`make env-check` 都不檢查這三處的版本，§1.2、§3.2 只檢查 VM 記憶體、image 與 PDK 目錄在不在，見 §1.2）　維護者：專案主控（Claude 與使用者）
 
 這份清單記錄本專案用到的每個工具、版本與來源。**固定版本的唯一來源是 `env/versions.mk`**，本文件是給人看的說明。
 
@@ -10,7 +10,7 @@
 - `make env-check` 會自動比對：`env/versions.mk` 的每個值、以及本機實際偵測到的工具版本，都必須出現在本文件中；不一致就 FAIL 並指出哪一項過期。
 - 不在本清單上的工具，不得成為任何 make target 必要的相依工具。
 
-## 1. 本機工具（Phase 1 使用，已安裝）
+## 1. 本機工具（已安裝）
 
 | 工具 | 用途 | 目前版本 | 最低版本 | 安裝來源 |
 |---|---|---|---|---|
@@ -19,9 +19,10 @@
 | Yosys | 本機合成 sanity check、上游 picorv32 `test_synth` | 0.69 | 0.69 | Homebrew `yosys`（git `143eb14f`） |
 | riscv64-elf-gcc | firmware 編譯（rv32 multilib：rv32i／rv32im／rv32iac／rv32imac／rv32imafc，ABI ilp32；無 newlib） | 16.1.0 | 16.1 | Homebrew `riscv64-elf-gcc` |
 | riscv64-elf-binutils | 組譯、連結、objcopy、objdump | 2.46.1 | — | Homebrew `riscv64-elf-binutils` |
-| C++ 編譯器（Apple clang） | Verilator `--binary` 把產生的 C++ 編譯成模擬執行檔（`make regress-rtl` 的 Verilator 部分需要） | 21.0.0 | — | Xcode Command Line Tools（`/usr/bin/c++`，CLTools 27.0） |
-| Python | regression script、checker（只用標準函式庫，設定檔用 `tomllib`） | 3.14.6 | 3.11 | Homebrew `python@3.14` |
+| C++ 編譯器（Apple clang） | Verilator `--binary` 把產生的 C++ 編譯成模擬執行檔（`make regress-rtl` 的 Verilator 部分需要）；`make core-hazard3` 用 `g++`（同一套 Apple clang）編 Hazard3 上游的 Verilator testbench 與 rvcpp | 21.0.0 | — | Xcode Command Line Tools（`/usr/bin/c++`，CLTools 27.0） |
+| Python | regression script、checker（只用標準函式庫，設定檔用 `tomllib`。例外：OpenRAM 用自己的 venv，見 §1.1；`make skill-check` 有裝 PyYAML 時會用它解析 `SKILL.md` 開頭的 YAML，沒裝也不會 FAIL） | 3.14.6 | 3.11 | Homebrew `python@3.14` |
 | ngspice | SRAM macro 的 SPICE characterization（Phase 3.5，ADR-0010）；sky130 模型的設定用 PDK 的 `libs.tech/ngspice/spinit` | 47 | 47 | Homebrew `ngspice`（含 KLU） |
+| zstd | 解開 OpenRAM 用的 PDK 壓縮檔（`.tar.zst`，`make openram-setup`，Phase 6）。macOS 內建的 `tar` 沒有 zstd，會改呼叫外部的 `zstd` | 1.5.7 | — | Homebrew `zstd` |
 | GNU make | 統一入口 | 3.81 | — | macOS 內建 `/usr/bin/make` |
 | bash | script 執行 | 3.2.57 | — | macOS 內建 `/bin/bash` |
 | git | 版本控制、submodule | 2.54.0 | — | macOS 內建（Apple Git-157） |
@@ -36,7 +37,22 @@
 | 工具 | 用途 | 版本 | 安裝 | 驗證 |
 |---|---|---|---|---|
 | xPack riscv-none-elf-gcc | 含 newlib 的 RISC-V 工具鏈：Hazard3 上游測試（riscv-tests、sw_testcases）需要 libc（Phase 5，ADR-0011）；multilib 含 rv32imc／ilp32 | `XPACK_RISCV_VERSION = 15.2.0-1`（GCC 15.2.0），darwin-arm64 壓縮檔 `XPACK_RISCV_SIZE = 401163559` bytes，`XPACK_RISCV_SHA256 = 6588e8351455fad8aca37551f0e5a5543f3346bfa9a837cf03cbd3bdd4989f8f`（與官方 `.sha` 檔、GitHub asset digest 相同） | `make xpack-fetch`（`env/fetch_xpack.sh`：8 段平行、可續傳、比對大小與 sha256 後解壓到 `.tools/xpack-riscv-none-elf-gcc-15.2.0-1/`，約 1.5 GB；下載快取用完即刪） | 2026-10-05：`-march=rv32imc -mabi=ilp32 -specs=nano.specs -specs=nosys.specs` 編譯含 `snprintf` 的程式成功 |
-| ChipFoundry precheck 的 KLayout deck | 檢查 precheck 結果用的比對基準與 negative test（`make precheck-sram-ref`、`make neg-precheck`；Phase 7，ADR-0019 決定 5）。deck 是 GPLv3，不放進 repo；正式結果只認官方 image | `CF_PRECHECK_VERSION = 1.3.7`，wheel `CF_PRECHECK_WHEEL_SHA256 = bc847eb97fdb2213b71d09da1304eee4c159b5dc9b7a2e031cabaf4961d77f0f`（2026-10-14 從 PyPI 算），`drc_scripts/sky130A_mr.drc` 的 `CF_PRECHECK_DECK_SHA256 = aeba6ab5137923f2258714ab5d91ce99ca6a6f932bea55dedfe6f79aca697ba1`（與 image 裡 cf-precheck 1.3.7 的相同，release `2026.03.30_01.00`） | `make precheck-deck`（`env/fetch_precheck_deck.sh`：`pip download` 固定版本、核對 wheel 與 deck 的 sha256 後放到 `.tools/cf-precheck-1.3.7/`） | 2026-10-14：兩顆 SRAM 單獨檢查與 `make neg-precheck` |
+| ChipFoundry precheck 的 KLayout deck | 檢查 precheck 結果用的比對基準與 negative test（`make precheck-sram-ref`、`make neg-precheck`；Phase 7，ADR-0019 決定 5）。deck 是 GPLv3，不放進 repo；正式結果只認官方 image（§1.2） | `CF_PRECHECK_VERSION = 1.3.7`，wheel `CF_PRECHECK_WHEEL_SHA256 = bc847eb97fdb2213b71d09da1304eee4c159b5dc9b7a2e031cabaf4961d77f0f`（2026-10-14 從 PyPI 算），`drc_scripts/sky130A_mr.drc` 的 `CF_PRECHECK_DECK_SHA256 = aeba6ab5137923f2258714ab5d91ce99ca6a6f932bea55dedfe6f79aca697ba1`（與 image 裡 cf-precheck 1.3.7 的相同，release `2026.03.30_01.00`） | `make precheck-deck`（`env/fetch_precheck_deck.sh`：`pip download` 固定版本、核對 wheel 與 deck 的 sha256 後放到 `.tools/cf-precheck-1.3.7/`） | 2026-10-14：兩顆 SRAM 單獨檢查與 `make neg-precheck` |
+| OpenRAM 與 sky130_fd_bd_sram | 產生 SRAM macro、跑 OpenRAM 自己的 DRC／LVS（Phase 6，ADR-0018）；characterization 仍用 `ip/sram/char/` 的 ngspice 流程 | OpenRAM https://github.com/VLSIDA/OpenRAM dev `3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8`，加上 repo 的 4 個 patch（`ip/sram/openram/patches/0001`–`0004`）；cell library https://github.com/VLSIDA/sky130_fd_bd_sram `fc63b12883b4bf458ee8c756ba64c37063e1ffb9`；Python 套件 numpy 2.5.3、scipy 1.18.1、scikit-learn 1.9.1（`ip/sram/openram/requirements.txt`，裝在 `.tools/openram-venv`） | `make openram-setup`（`ip/sram/openram/setup.sh`）：clone 到固定的 commit、套 patch，裝 §3.1 的 PDK 與 venv；解壓要 §1 的 zstd。Magic、Netgen、KLayout 用 LibreLane 的 nix-shell。官方環境（`nix develop`）只宣告 x86_64-linux，但 OpenRAM 是純 Python，`use_nix=False` 時用 PATH 上的工具；本機 macOS 原生執行（2026-10-08 實際試過可行），Colab 只當對照（ADR-0018） | 每次產生 macro 都把 OpenRAM 的 commit、每個 patch 的 sha256 與 PDK 記進 `summary.json`（例如 `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/openram/summary.json`）；`make neg-openram` |
+
+### 1.2 precheck 的 VM 與容器（Phase 7，`make precheck-caravel`）
+
+ChipFoundry 的官方 precheck 只能在它的 docker image 裡跑，image 只有 linux/amd64（`docs/notes/caravel_precheck_phase7.md` 第 1、8 節）。本機用 lima 建一個 VM，在 VM 裡跑 Docker Engine，amd64 的程式由 Rosetta 轉譯。
+
+`make env-check-flow CPU=caravel`（`make regress-caravel` 的第一步）對 precheck 的 VM 與容器只檢查三件事：VM 的記憶體 ≥ 15 GB、image 在不在、precheck 用的 PDK 目錄在不在（`env/check_env.sh` 第 115–125 行）。**下表的版本沒有自動檢查**。2026-10-16 用本機指令核對過：docker CLI、lima、colima、VM 設定與 image digest 和 Phase 7 的紀錄（ADR-0019 第 19 行、筆記第 8 節）相同，image 裡固定的工具版本見筆記第 1 節；Rosetta 與 VM 裡 Docker Engine 的版本 Phase 7 沒有記錄，是 2026-10-16 本機偵測到的值。
+
+| 項目 | 用途 | 版本 | 安裝與注意事項 |
+|---|---|---|---|
+| docker CLI | 呼叫 VM 裡的 Docker Engine（`signoff/precheck/run_precheck.sh`、`env/check_env.sh`） | 29.9.0 | Homebrew `docker`（2026-10-12，ADR-0019 第 19 行）。`run_precheck.sh` 用目前選定的 docker context，`env/check_env.sh` 檢查的是 `lima-cf-precheck`，兩者要一致：先 `docker context use lima-cf-precheck`（2026-10-16 用 `docker context show` 核對過，本機選定的 context 已經是 `lima-cf-precheck`） |
+| lima（`limactl`） | 建立與啟動 VM | 2.2.0 | Homebrew `lima`。colima 0.10.3 也裝了，但沒有用：它要從 GitHub release 下載自己的 VM image，本機到 GitHub release 太慢（ADR-0019 第 19 行） |
+| VM `cf-precheck` | 跑官方 image。只掛 precheck 的工作目錄（`PRECHECK_WORK`，預設 `../arvinsa-rtl-gds-p7precheck`，在 repo 外），VM 看不到其他檔案 | lima `template:docker`，base image ubuntu 26.04 `release-20260720` arm64；vz、Rosetta、6 CPU、記憶體 16 GiB、磁碟 60 GiB；VM 裡的 Docker Engine 29.9.0 | `limactl create --name=cf-precheck --vm-type=vz --rosetta --cpus=6 --memory=16 --disk=60 --mount-type=virtiofs --mount-only <工作目錄>:w template:docker`，之後 `limactl start cf-precheck`。記憶體原本設 10 GiB，wrapper 的 KLayout BEOL 與 Magic 萃取各用到約 9.2 GB、被 OOM killer 砍掉，2026-10-14 改成 16 GiB（筆記第 8、10 節） |
+| Rosetta 2 | 在 arm64 的 VM 裡跑 amd64 的 image | 本機（macOS 26.7.1）另外安裝的版本（`pkgutil --pkg-info com.apple.pkg.RosettaUpdateAuto`：1.0.0.0.1790299417） | Apple Silicon 預設沒裝，要另外安裝（`softwareupdate --install-rosetta`） |
+| 官方 image `chipfoundry/mpw_precheck` | ChipFoundry 的 precheck（`cf-precheck` 1.3.7，見 §1.1）。image 的 `dependencies/Dockerfile` 固定 Magic 8.3.471、KLayout 0.29.12、Netgen 1.5.272、CVC v1.1.7（precheck 的 LVS 與 oeb 檢查用的電路檢查工具，不是 §5 的模擬器）。XOR 檢查比對用的 caravel-lite（`/opt/caravel`）沒有固定版本：Dockerfile 用 `git clone --depth=1`，沒有指定 tag，clone 的是建 image 當時的 `main`。這個 digest 的 image 裡是 tag `2024.09.12-1`（commit `5593d992bbeb5608b7524bc279d91237371612f1`，`docs/report/figures/SOURCES.md` 第 219–220 行），重新拉過 image 後可能不同。image 裡沒有 PDK，PDK 見 §3.2 | `:latest`，digest `sha256:f1523bcb7c959c80f2d7d6dded0c4bcf3483d84b6ff2437f49754e4ec53eac84`（2026-09-15 建立，amd64） | `docker pull`，解開約 6.9 GB。腳本用 `:latest`、沒有固定 digest：本機的 image 重新拉過就會換版本，所以每次執行都把當時的 digest 記進 `precheck_run.txt`。容器每次先 `pip install --upgrade cf-precheck`：連得上 PyPI 時，用的是當下 PyPI 上最新的版本（2026-10-12 仍是 1.3.7，筆記第 8 節）；連不上時，pip 的錯誤會被丟掉、接著照樣執行（`run_precheck.sh` 第 21 行把錯誤輸出導到 `/dev/null`，用 `;` 接下一個指令），改用建 image 時裝進去的 cf-precheck。當次實際執行的版本和 digest 一起記進 `precheck_run.txt`；PyPI 出新版時，`make precheck-caravel` 最後一步的 checker（`signoff/precheck/check_precheck.py` 第 229–231 行；`make precheck-check` 跑的也是這支）會因為版本不是 `CF_PRECHECK_VERSION` 而 FAIL（negative test 是 `make neg-precheck` 的 `other_version`），這時要先讀新版的 deck 與檢查項，再更新 `env/versions.mk` |
 
 ## 2. RTL-to-GDS flow（Phase 0，2026-10-03 已安裝；`librelane --smoke-test` PASS）
 
@@ -56,7 +72,7 @@
 | Verilator（flow 用） | `Verilator.Lint` step | 5.044 | LibreLane nix-shell | 已安裝 |
 | EQY、SBY（YosysHQ） | formal equivalence（`make eqy-core`／`eqy-soc`，Phase 3）；`eqy.formal_pdk_proc` 把 sky130 cell 模型轉成 formal 可用的形式 | 隨 Yosys 0.62（nix 套件 `yosys-eqy-0.62`、`yosys-sby-0.62`） | LibreLane nix-shell | 已安裝。EQY 切 partition 的步驟要 `ulimit -s 65520`（64 MB stack），8 MB 預設會 SIGSEGV；SBY 的 PDR 反例轉換需要的 `yices` 不在 nix-shell 內（只影響失敗時的波形，不影響 PASS／FAIL），見 `signoff/eqy/README.md` |
 
-注意：flow 用的 Yosys（0.62）、Verilator（5.044）比 §1 的本機版本（0.69、5.050）舊。正式流程一律用 nix-shell 內的版本；§1 的版本只用在 Phase 1 的本機模擬與 sanity check。
+注意：flow 用的 Yosys（0.62）、Verilator（5.044）比 §1 的本機版本（0.69、5.050）舊。正式流程一律用 nix-shell 內的版本；§1 的版本只用在本機的 lint、合成 sanity check、RTL 與 gate-level 模擬（各 Phase 的 `make lint`、`make synth-check`、`make regress-rtl`、`make core-hazard3`、`make gl-soc` 等），不用在 harden 與 EQY。
 
 LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs commit `9b3bebe834ccd972a5b4f10d82c32354f9a6a1ca`，也就是 LibreLane 3.0.14 自己的 `test/designs` submodule 指向的 commit（官方 CI 跑的就是這份）。
 
@@ -83,21 +99,33 @@ LibreLane CI 參考設計（`test_sram_macro` golden）：librelane-ci-designs c
 | 安裝位置 | `.tools/openram-pdk-e8294524/`（`make openram-setup`），只用來產生 macro 與跑 OpenRAM 的 DRC／LVS；SoC flow 與 SPICE characterization 仍用上表的 `8afc834` |
 | 為什麼不用 `8afc834` | 兩版之間 bitcell PMOS 從 `special_pfet_pass` 改名 `special_pfet_latch`、`w<0.42` 的 NMOS 改萃取成 `special_nfet_01v8`，sky130_fd_bd_sram 的 cell 在 `8afc834` 下 LVS 不過（`docs/notes/openram_phase6_bringup.md`） |
 
+### 3.2 precheck 用的 PDK（Phase 7，ADR-0019 決定 4）
+
+| 項目 | 值 |
+|---|---|
+| open_pdks commit | `3e0e31dcce8519a7dbb82590346db16d91b7244f`：ChipFoundry 的 fork，上游 2024-08 的 `0fe599b2` 再加上 3 個和 decap cell 有關的 commit。指定這一版的是 cf-cli `88025a8f` 的 `versions.json`（`open_pdks_commits.sky130A`）與 caravel_user_project `b510613c` 的 Makefile（`OPEN_PDKS_COMMIT`）。precheck image 裡沒有 PDK（`dependencies/Dockerfile` 只固定 Magic、KLayout、Netgen、CVC），執行時由 `signoff/precheck/run_precheck.sh` 掛進容器 |
+| 安裝 | 沒有 make target。2026-10-12 照 cf-cli 的做法手動用 ciel 3.0.1 安裝（另建的 Python venv，不是 §2 nix-shell 裡的 2.4.0）：`--data-source static-web:https://chipfoundry.github.io/ciel-releases`、`--pdk-root <PRECHECK_WORK>/pdks`、`-l sky130_fd_sc_hd -l sky130_sram_macros`。不碰 `~/.ciel`：`ciel enable` 會改 PDK root 裡 `sky130A` 的連結，flow 用的是 `~/.ciel`（筆記第 8 節） |
+| 用在哪裡 | `make precheck-caravel` 把它掛進容器，同一個容器接著做的 SRAM 單獨檢查（`check_precheck.py` 用的比對基準 `<project>/sram_ref/`）也用它裡面的 `sky130_sram_macros`。本機的 `make precheck-sram-ref` 不用這份 PDK：它讀 `${PDK_ROOT:-~/.ciel}`，預設就是 flow 的 PDK（§3 的 `8afc834`）。`make env-check-flow CPU=caravel` 檢查 `<PRECHECK_WORK>/pdks/sky130A/libs.ref/sky130_sram_macros` 存在 |
+
 ## 4. IP
 
 | IP | 用途 | 版本 | 授權 | 位置 |
 |---|---|---|---|---|
 | PicoRV32 | RISC-V CPU（Phase 1–4） | commit `ef203c2b0a3fb793280f5114941416c425c5b461` | ISC | `third_party/picorv32`（submodule） |
 | simpleuart | UART（取自 PicoRV32 的 picosoc） | 同上 | ISC | `third_party/picorv32/picosoc/simpleuart.v` |
-| sky130_sram_2kbyte_1rw1r_32x512_8 | 2 KB SRAM macro | fossi-foundation/sky130_sram_macros commit `5ad1c96053ee8223fe7e956e314646adfce605dd`；行為模型 sha256 `2712357fbc3d1ee3343c4bcb7d630de92ca87d869fb5d50d1d3cea967f288208` | Apache-2.0 | `ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/`（repo：https://github.com/fossi-foundation/sky130_sram_macros） |
+| Hazard3 | RISC-V CPU（Phase 5 起；soc_top_hazard3 與 user_project_wrapper） | tag `v1.1.1`，commit `8af992930f71a69b0e06c38734c1094f41a05ca0`，由 submodule 指標固定；`env/versions.mk` 沒有這個值，`make env-check` 也不檢查（PicoRV32 有檢查）。`make core-hazard3` 第一次執行時用 `git submodule update --init` 抓三個巢狀 submodule，要能連 GitHub：Wren6991/fpgascripts `1e768865928782ec6b0c34e7a30c06857a02155c`、Wren6991/riscv-tests `49a24d7f41e7b422cebeffdc3ba31c8daaf5aa5c`、它底下的 riscv/riscv-test-env `6de71edb142be36319e380ce782c3d1830c65d68` | Apache-2.0 | `third_party/hazard3`（submodule，ADR-0011） |
+| arv_sram_2kbyte_1rw1r_32x512_8 | 2 KB SRAM macro（Phase 6 起三個現行設計都用它） | 本 repo 用 §1.1 的 OpenRAM 產生；GDS sha256 `7154d9238d8ed48a0a1fe675aeeaef1f9a2702f4979b2d5df3f327b0400cdf41`，產生時的 commit、patch 與 PDK 記在該目錄的 `openram/summary.json` | 本 repo 產生；bitcell 等 cell 來自 sky130_fd_bd_sram（Apache-2.0） | `ip/sram/arv_sram_2kbyte_1rw1r_32x512_8/`（ADR-0018） |
+| sky130_sram_2kbyte_1rw1r_32x512_8 | 2 KB SRAM macro（PDK 附的）。Phase 1–5 的設計用它；Phase 6 起不再放進設計，但下列地方仍會讀它：`make env-check` 的模型比對、Phase 3.5 的 characterization（`make sram-*`）、OpenRAM 產生的 .lib 範本借用它 TT .lib 的 internal_power 值（`make openram-macro`、`make openram-lib-template` 產生範本時讀；soc_top、soc_top_hazard3、user_project_wrapper 每次 harden 前的輸入檢查 `pnr/soc_top/check_inputs.py` 的 `lib_template` 也讀它，讀不到就 FAIL）、precheck 的比對基準（`make precheck-sram-ref`） | fossi-foundation/sky130_sram_macros commit `5ad1c96053ee8223fe7e956e314646adfce605dd`；行為模型 sha256 `2712357fbc3d1ee3343c4bcb7d630de92ca87d869fb5d50d1d3cea967f288208` | Apache-2.0 | `ip/sram/sky130_sram_2kbyte_1rw1r_32x512_8/`（repo：https://github.com/fossi-foundation/sky130_sram_macros） |
+| ChipFoundry caravel_user_project | Caravel 版的範本：`rtl/caravel/user_project_wrapper.v`、`rtl/caravel/user_defines.v`、`pnr/user_project_wrapper/fixed_dont_change/user_project_wrapper.def`；IO constraint 的數值（`pnr/user_project_wrapper/caravel_io.sdc`，取自它的 `openlane/user_project_wrapper/signoff.sdc`） | commit `b510613cec36`（2026-04-23） | Apache-2.0 | 檔案已複製進 repo，執行時不抓（https://github.com/chipfoundry/caravel_user_project） |
+| ChipFoundry Caravel | wrapper 外面那一段 vccd1／vssd1 供電網路的資料（`make ir-caravel`，ADR-0019 決定 18、19） | tag `CC2509` = `a0b50ad14f144510dcd529accaf3af54fdec1608`（caravel_user_project `b510613c` 的 `MPW_TAG`） | Apache-2.0 | 抽出的資料已進版控：`pnr/user_project_wrapper/caravel_pwr/`（來源檔的 git blob hash 在該目錄的 README） |
 
-## 5. 後續階段才會加入
+## 5. 計畫中選用、沒有做的
+
+Hazard3（Phase 5）與 OpenRAM（Phase 6）原本列在這一節，已加入，分別移到 §4 與 §1.1。
 
 | 工具／IP | 階段 | 用途 | 備註 |
 |---|---|---|---|
-| Hazard3 | Phase 5 | 第二顆 RISC-V core | Apache-2.0（實際：Phase 5 已加入，`third_party/hazard3` submodule，tag `v1.1.1`，commit `8af992930f71a69b0e06c38734c1094f41a05ca0`，ADR-0011） |
-| OpenRAM | Phase 6 | SRAM macro 產生（characterization 仍用 `ip/sram/char/` 的 ngspice 流程） | https://github.com/VLSIDA/OpenRAM dev `3608704cab61c8fdb1f7a0c727ef2fb47bfb15b8`；cell library https://github.com/VLSIDA/sky130_fd_bd_sram `fc63b12883b4bf458ee8c756ba64c37063e1ffb9`；`make openram-setup` 裝到 `.tools/`。官方環境（`nix develop`）只宣告 x86_64-linux，但 OpenRAM 是純 Python，`use_nix=False` 時用 PATH 上的工具；本機 macOS 原生執行（2026-10-08 實際試過可行），Colab 只當對照（ADR-0018） |
-| CVC | 選用 | 含 SDF 的 gate-level 模擬 | x86_64 Linux |
+| CVC（Verilog 模擬器） | 選用 | 含 SDF 的 gate-level 模擬（project-plan §7.5 的 `make sim-sdf`） | x86_64 Linux。沒有做：`make sim-sdf` 沒有建立。和 §1.2 precheck image 裡的 CVC（電路檢查工具）是不同的工具 |
 
 ## 6. 固定版本的值對照（由 `make env-check` 檢查）
 

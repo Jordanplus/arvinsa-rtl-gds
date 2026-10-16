@@ -17,7 +17,7 @@ make openram-macro OPENRAM_CONFIG=<cfg> OPENRAM_DRC_MAX=<n>
 
 ## 版本與環境
 
-- 版本釘在 `env/versions.mk`（`OPENRAM_*`、`SKY130_FD_BD_SRAM_*`），說明在 `toolchain.md` §3.1、§5。
+- 版本釘在 `env/versions.mk`（`OPENRAM_*`、`SKY130_FD_BD_SRAM_*`），說明在 `toolchain.md` §1.1、§3.1。
 - **macro 用 OpenRAM 自己釘的 2022 PDK（`e8294524`）產生與驗證**；SoC flow 與 SPICE characterization 仍用 `8afc834`（ADR-0018 決定 5）。
 - Magic、Netgen、KLayout 由 LibreLane 的 nix-shell 提供；OpenRAM 設 `use_nix = False`（由 `gen_macro.py` 附加到設定檔）。
 - `PYTHONHASHSEED=0`：不固定的話，同一份設定兩次產生的繞線不同。

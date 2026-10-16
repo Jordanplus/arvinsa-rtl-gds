@@ -1,7 +1,11 @@
 # Open EDA RTL-to-GDS 專案規劃
 
-版本：v0.3（2026-10-03）　狀態：Phase 0–7 與 Phase 3.5 已完成（2026-10-15；Phase 7 只做到 ChipFoundry precheck PASS，不下線），進度見 README「專案狀態」與 `docs/phase_exit/`
+版本：v0.4（2026-10-16）　狀態：Phase 0–7 與 Phase 3.5 已完成（2026-10-15；Phase 7 只做到 ChipFoundry precheck PASS，不下線），進度見 README「專案狀態」與 `docs/phase_exit/`
 修訂紀錄：
+- v0.4：補記 v0.3 之後的改動。這段期間計畫本身改過幾次，版本號卻一直沒升，這次一起補上（ADR-0022 決定 13）。
+  - 改了計畫內容的：Phase 3.5 改成用 ngspice 直接量 PDK 附的 macro（`d60550f`，ADR-0010）；Phase 6 整列、風險 R7、OpenRAM 的執行環境重寫（`1a28c50`，ADR-0018）；§7.4、§7.5 註明原計畫的 `make golden-update`、`make report` 沒有建立，golden 改成手動更新並經 review，PASS／FAIL 表與 JUnit 改由 `make regress` 產生（同一個 commit）；§5 的 SRAM port 1 改成 `clk1` 接系統時脈（`221822a`，ADR-0018 決定 9）；Phase 7 改用 Hazard3、只做到 precheck、不下線（`f316425`，ADR-0019）；§7.2 加「criteria 有沒有被執行」一列與每次 harden 後的檢查（`0b67b76`）。
+  - §7.3 陸續補上後來實作的 negative test。
+  - 狀態改成現況、用詞改成台灣 IC 業界說法，各節加「（實際：…）」註記（`acba90e`，ADR-0022 決定 5、11）；§7.1 L2 與 §7.2 的檢查方式加註實際做法（ADR-0022 決定 13）。
 - v0.3：§5.5 改寫為白話說明（Phase 7 chip-level）；更正 v0.2 中「TinyTapeout 格子太小、放不下 SRAM」的錯誤說法。
 - v0.2：納入獨立審查意見（SRAM .lib 可信度、多 corner 設定、DRC／LVS 驗收寫法、firmware 容量、negative test 設計）。
 
@@ -298,7 +302,7 @@ SRAM LEF 無 `ANTENNA` 屬性，antenna checker 看不到接到 SRAM 輸入的 n
 | L0 Lint | `Verilator.Lint`（LibreLane nix 內版本）+ `Checker.LintErrors/LintWarnings` | 0 error；warning 白名單外為 0 |
 | L1a Core ISA regression | 上游 picorv32 `make test`、`make test_rvf`（rvfi monitor 即時檢查 ISA 語意）、`make test_synth` | 上游 testbench PASS |
 | L1b SoC RTL sim | 自己寫的 firmware：hello、memtest（march C−、address-in-address、byte-lane、涵蓋全部位址）、irq、uart、front-door load | 見下列 sim checker 全 PASS |
-| L2 Synth + GL sim | Yosys netlist；`Checker.YosysUnmappedCells`、`YosysSynthChecks`（無 latch）、`NetlistAssignStatements`；GL sim 以 `sky130_fd_sc_hd` Verilog model（`-DFUNCTIONAL -DUNIT_DELAY=#1`）+ SRAM 行為模型 | checker 全 PASS；**RTL vs GL bus transaction trace 每個 cycle 都一致**（主 checker）；cell count／FF 數在 golden ±10% |
+| L2 Synth + GL sim | Yosys netlist；`Checker.YosysUnmappedCells`、`YosysSynthChecks`（無 latch）、`NetlistAssignStatements`；GL sim 以 `sky130_fd_sc_hd` Verilog model（`-DFUNCTIONAL -DUNIT_DELAY=#1`）+ SRAM 行為模型 | checker 全 PASS；**RTL vs GL bus transaction trace 每個 cycle 都一致**（主 checker）；cell count／FF 數在 golden ±10%（實際：合成這一層只印出 cell 統計，沒有和 golden 比對（`rtl/scripts/synth_check.sh`）；`rtl/scripts/synth_check.ys` 在優化前後都要求剛好一顆 SRAM。cell 數與 FF 數改由 harden 後的 golden 比對鎖住，見 §7.2） |
 | L3 PnR signoff | LibreLane Classic 全流程 + §7.2 metrics 比對 | §7.2 全 PASS |
 | L4 Equivalence | `Yosys.EQY`（RTL vs 最終 netlist） | PASS |
 | L5 Post-layout GL sim | powered netlist（`-DUSE_POWER_PINS`，TB 驅 VPWR/VGND）；SDF 只作參考 | firmware PASS；SDF annotation 警告數 = baseline |
@@ -326,12 +330,12 @@ Verilator 是 2-state 看不到 X：X 敏感的 GL smoke 用 Icarus；長測試�
 
 | 類別 | metric 與門檻 |
 |---|---|
-| timing | `timing__setup__ws__corner:*` ≥ 0（9 corner 全部；實際：Phase 4 起 soc_top 與之後的設計是 15 個 corner，多了 temperature inversion 的 `ss_n40C_1v60`、`ff_100C_1v95`，picorv32_core 維持 9 個，見 `signoff/limits/<design>.toml` 的 `[corners]`）；nom_tt setup WS ≥ 10% 週期（實際：使用者 2026-10-04 決定拿掉，只印出來參考，見 `signoff/limits/soc_top.toml`）；`timing__hold__ws__corner:*` ≥ 0；max slew／cap／fanout violation = 0 |
-| STA 完整性 | `timing__unannotated_net__count` = 0；無 unconstrained endpoint |
-| 防止邏輯被整個優化掉 | `design__instance__count` 在 golden ±10%；FF 數在預期範圍；SRAM instance 數 = 1 |
-| 實體 | `route__drc_errors` = 0；antenna violating nets/pins = 0（LibreLane 只報告不判 FAIL，自己寫 checker）；IR drop ≤ 5% VDD（自己寫 checker）（實際：VDD 與 VSS 兩端 IR drop 的合計 ≤ 20 mV，使用者 2026-10-04 決定，`signoff/limits/soc_top.toml` 的 `[max_sum]`、`docs/phase_exit/phase4.md`；Phase 7 起在 slow corner 檢查，並加上用 max power pattern 電流的檢查，ADR-0019 決定 19、20、25）；`route__wirelength__max` ≤ 門檻 |
+| timing | `timing__setup__ws__corner:*` ≥ 0（9 corner 全部；實際：Phase 4 起 soc_top 與之後的設計是 15 個 corner，多了 temperature inversion 的 `ss_n40C_1v60`、`ff_100C_1v95`，picorv32_core 維持 9 個，見 `signoff/limits/<design>.toml` 的 `[corners]`）；nom_tt setup WS ≥ 10% 週期（實際：使用者 2026-10-04 決定拿掉，只印出來參考，見 `signoff/limits/soc_top.toml`）；`timing__hold__ws__corner:*` ≥ 0；max slew／cap／fanout violation = 0（實際：user_project_wrapper 的 max slew violation 數不要求 0。Caravel 給 `la_oenb`、`wbs_adr_i`、`la_data_in`、`wbs_dat_i` 的 input transition 是 0.84–0.97 ns，超過 0.75 ns 的上限，wrapper 裡面修不掉；這些 input port 直接驅動的 net 改由 `pnr/soc_top/check_soc.py` 的 `max_slew` 檢查 slew ≤ 外部給的 transition + 0.05 ns，其他 net 仍是 0.75 ns。violation 數照樣由 golden 比對鎖住。ADR-0019 決定 16，放寬清單 T10） |
+| STA 完整性 | `timing__unannotated_net__count` = 0；無 unconstrained endpoint（實際：`timing__unannotated_net__count` 不是 0，而是每顆設計鎖一個固定值，數字不同就 FAIL：picorv32_core 114、soc_top 144、soc_top_hazard3 152、user_project_wrapper 667。這些數字算的是沒有萃取到寄生參數的 driver（metric 名稱寫 net，實際算的是 driver）：它們都沒有驅動任何繞線，例如 CTS 的 dummy load、沒用到的 tie cell 輸出與 SRAM `dout1`、沒用到的輸入 port，本來就萃取不到；組成寫在各 `signoff/limits/<design>.toml` 的註解。dummy load 的數量跟著 CTS 變，改 CTS 或 placement 要重新推導。LibreLane 過濾後的 `timing__unannotated_net_filtered__count` = 0。unconstrained endpoint 由 `check_soc.py` 的 `sta_setup` 讀每個 corner 的 OpenSTA `check_setup` 結果：soc_top 與 soc_top_hazard3 不准有任何警告；wrapper 只准有一種警告：Caravel 範本的 29 個 `analog_io` 是 unconstrained endpoint（它們沒有接任何電路），名單必須剛好是這 29 支；picorv32_core 沒有檢查這一項） |
+| 防止邏輯被整個優化掉 | `design__instance__count` 在 golden ±10%；FF 數在預期範圍；SRAM instance 數 = 1（實際：沒有 ±10%，全部走 golden 比對，比計畫嚴。golden 比對要求每個 metric 都和 golden 相同，例外寫在三張表：`[golden_tolerance]` 讓 slack、clock skew、繞線長度、via 數、功耗、IR drop 這類連續量，以及繞線中途每一輪的 DRC 數，可以有一個誤差（見「實體」列），`check_signoff.py` 不准這張表放寬名稱含 count 或 area 的 metric；`[golden_layout_tolerance]` 讓跟著繞線變動的 cell 數、面積與 utilization 可以差在一個絕對值以內，大小約是同樣設定重跑幾次、實際跑出來的最大差異的 5 倍（ADR-0015），picorv32_core 沒有這張表；`[golden_optional]` 列出的 key 可以只出現在其中一邊。這一列的 instance 數與 cell 數只用到 `[golden_layout_tolerance]`。instance 數：picorv32_core、soc_top 要完全相同，soc_top_hazard3 與 wrapper ±30 顆。stdcell 數：picorv32_core 完全相同、soc_top ±5、soc_top_hazard3 ±70，wrapper 沿用 soc_top_hazard3 的誤差（放寬清單 G05）。FF 數（sequential cell）四顆都要完全相同。SRAM 數在 `[equal]` 鎖死：有 SRAM 的三顆 = 1，picorv32_core = 0；`check_soc.py` 另外確認最終 netlist 裡剛好一顆，而且名字是 `sram0`（wrapper 在合成時 flatten，SRAM 的名字變成 `u_soc.sram0`）） |
+| 實體 | `route__drc_errors` = 0；antenna violating nets/pins = 0（LibreLane 只報告不判 FAIL，自己寫 checker）；IR drop ≤ 5% VDD（自己寫 checker）（實際：VDD 與 VSS 兩端 IR drop 的合計 ≤ 20 mV，使用者 2026-10-04 決定，`signoff/limits/soc_top.toml` 的 `[max_sum]`、`docs/phase_exit/phase4.md`；Phase 7 起在 slow corner 檢查，並加上用 max power pattern 電流的檢查，ADR-0019 決定 19、20、25）；`route__wirelength__max` ≤ 門檻（實際：沒有另訂上限，由 golden 比對鎖住：picorv32_core、soc_top 要完全相同，soc_top_hazard3 與 wrapper 容許 1.5%，寫在 `[golden_tolerance]`） |
 | placement | 從 DEF 抓 `sram0` 的 (x, y, orient) 與 config 比對，不可漂移 |
-| signoff | `magic__drc_error__count` = 0（abstract）；full-GDS DRC 依 §6.3 baseline；`design__lvs_error__count` = 0；XOR = baseline |
+| signoff | `magic__drc_error__count` = 0（abstract）；full-GDS DRC 依 §6.3 baseline；`design__lvs_error__count` = 0；XOR = baseline（實際：四顆都用 full GDS 跑 Magic DRC（LibreLane 預設），沒有照計畫用 abstract：soc_top 在 Phase 3 試過 abstract 模式，每條 standard cell row 都報 `nwell.4`（共 416 個；abstract view 沒有 tap）。有 SRAM 的三顆把 `ERROR_ON_MAGIC_DRC` 設成 false，它們的 `magic__drc_error__count` 約 477 萬到 557 萬，全在 SRAM 範圍內（SRAM 的 bitcell 照 SRAM 專用的設計規則畫，用標準 DRC 規則檢查就會出現違規）；limits 只把它印出來，golden 比對仍要求完全相同。PASS／FAIL 由 `check_soc.py` 判斷：SRAM 範圍外 0 個，範圍內每一個都要落在 SRAM 單獨檢查時同一條規則的位置上，SRAM 單獨檢查的各規則數量要等於審過的 baseline。picorv32_core 沒有 SRAM，full GDS 的 Magic DRC = 0。XOR 四顆都要求差異 = 0） |
 | 來源追溯 | 每次 run 記錄 git sha、LibreLane 版本、PDK hash；signoff run 時工作目錄有未提交修改即 FAIL |
 | criteria 有沒有被執行（2026-10-07 起） | `signoff/scripts/review_criteria.py`：config 的每個設定都進了 `resolved.json` 與各 step、`clock_uncertainty.sdc` 的值出現在每個時序 step 與 signoff corner、signoff corner = `STA_CORNERS`、上面各 checker 都留下結果行。LibreLane FAIL 時 checker 照跑，harden PASS 也要它 PASS |
 

@@ -1,6 +1,6 @@
 # ADR-0022：2026-10-16 文件查證後的更正與決定：Caravel 的 reset 與管理端時脈、GPIO 33–37 的韌體限制、文件用詞
 
-- 狀態：已採用（2026-10-16）。決定 1–3、5–9 由使用者在同一天選擇，全部採建議；決定 4 是事實更正，照查證建議的選項做，沒有另外問。
+- 狀態：已採用（2026-10-16）。決定 1–3、5–9 由使用者在同一天選擇，全部採建議；決定 4 是事實更正，照查證建議的選項做，沒有另外問。決定 13 處理「後果」裡留下、向使用者說明過的事項，也是使用者同一天決定的，2026-10-17 再補兩個決定（gold manifest 維持不做、技術報告更正）；沒說明到的三項仍留著（見「後果」）。
 - 範圍：
   - 本 repo：ADR-0019 的更正註記；`rtl/caravel/wb_host_bridge.v`、`pnr/user_project_wrapper/caravel_io.sdc` 的註解；技術報告與 PDF；`docs/phase_exit/phase7.md`（只在末尾加已知限制 22）；skill、README、流程文件、`docs/spec/soc_spec.md`；持續維護的文件的用詞。
   - 另外兩個 repo：arvinsa-company（voice guide，決定 7）、arvinsa-skill-set（`arvinsa-md-to-pdf`，決定 8）。
@@ -215,14 +215,94 @@
 
 12. **推送**：使用者 2026-10-16 多選「arvinsa-rtl-gds → GitHub＋gitlab」「arvinsa-company → GitHub」「skill-set 分支推上去並發 PR」。兩個 repo 各一個 commit（決定 9）；arvinsa-skill-set 的 `md-to-pdf-toc-title` 分支推上去，對 wellytung/arvinsa-skill-set 開 PR（決定 8）。
 
+13. **「後果」留下的事項：做三項文件修正，說明過的另外三項不做**。
+   - 使用者 2026-10-16 看了各項的時間估計：「前三項單純的文件修正 要做，後面幾項我看不懂」。用白話重新說明後：「後面這幾項都不需要」。
+     - 前三項：決定 11 沒修的放寬清單、toolchain.md、project-plan。
+     - 後面幾項（說明時列的三項）：gold manifest 整份重新產生（決定 10）、arvinsa-rtl-gds 起草報告時讀 voice guide（決定 7 的選項 F）、GPIO 設定的 regression test 與全晶片模擬（決定 3 的選項 B、C）。
+   - 查證：一個 workflow 查三件事：
+     - toolchain.md 缺了哪些 make target 需要的工具；
+     - project-plan §7.2 各列實際怎麼檢查；
+     - project-plan 在 v0.3 之後的修改歷史。
+
+     每一項都由另一個 agent 打開引用的檔案逐行核對。核對抓到 4 處小錯，更正如下：
+     - `signoff/precheck/make_project.py` 裡指定 SRAM 名稱的 `MACRO` 在第 32 行，不是第 34 行；
+     - OpenRAM 產生的 SRAM 是本 repo 自己產生的，不算外部 IP；
+     - picorv32_core 的 run.sh 也跑 `cpu_params.py`；
+     - 416 個 `nwell.4` 是總數，不是每條 row 各 416 個。
+
+     toolchain.md §4 新加的各列，授權（license）欄填的值都用本機的 LICENSE 檔與 GitHub API 確認過。
+
+     改完之後，再由另一組 agent 對照出處反向核對、檢查用詞，共兩輪，找到的都照核對後的版本修正：
+     - 第一輪：放寬清單只有第 19 行一處說法會被讀成兩種意思；其他檔案找到 1 處事實錯誤（本決定原本寫流程文件也建議下一個要下線的專案再做 GPIO 設定的 regression test 與全晶片模擬，流程文件其實沒寫），其餘是說法不精確與用詞問題。
+     - 第二輪找到 7 處事實錯誤。toolchain.md 有 3 處：precheck 用的 PDK 寫成由 image 固定（image 裡其實沒有 PDK；這句照 precheck 筆記第 18 行抄來，筆記一起更正）、caravel-lite 寫成有固定版本（其實沒有）、寫成執行時一定要連 PyPI（連不上會改用 image 裡裝好的版本）。本決定有 4 處：gold manifest 那一段的前提與結論（見下面「不做的」）、對第一輪結果的描述，以及 zstd 寫在 toolchain.md 的哪裡。
+   - 做的：
+     - **放寬清單**：
+       - 「出處的寫法」那段（在第 19 行；「後果」一節原本誤寫成第 20 行）不再把 phase7.md 寫成草稿：放寬清單在 `2b04451` 建立時 phase7.md 還沒提交，`0d47a3d` 才提交。同一段說明「carryover」的那句（Phase 7 exit review 草稿的已知限制對照表 `runs/p7_exit_draft/carryover.md`）補上：`runs/` 不進版控，這份檔案收在 `docs/evidence/arvinsa-rtl-gds/runs/p7_exit_draft/carryover.md`（ADR-0021 決定 7）。
+       - S07 引用的草稿第 105 行換成現在 phase7.md 的第 113、214 行，O02 引用的草稿第 109 行換成第 117、221 行。第 113、117 行在「帶進本階段的項目」一節，第 214、221 行在「已知限制（帶到後續階段）」一節。
+     - **toolchain.md**：補上 make target 需要、卻沒列的工具與 IP，原本違反它自己第 11 行的規則：
+       - §1.2：docker CLI、lima、VM `cf-precheck`、Rosetta 2、官方 image 與它固定的工具；
+       - §3.2：precheck 用的 PDK `3e0e31dc`，用 ciel 3.0.1 手動安裝；
+       - §1：zstd；
+       - §4：OpenRAM 產生的 SRAM、caravel_user_project、Caravel `CC2509`。
+
+       其他改動：
+       - Hazard3 從 §5 移到 §4，補上三個巢狀 submodule，並寫明 `make env-check` 不檢查它的 commit；
+       - OpenRAM 從 §5 移到 §1.1，補上 Python 套件與 patch；
+       - §4 PDK 附的 SRAM 那一列，用途欄補上現在的用法（Phase 1–5 的設計用它，Phase 6 起只當參考）；
+       - §5 只留沒做的 CVC，註明和 precheck image 裡的 CVC 是不同的工具；
+       - Python、C++ 兩列補上例外與用途；
+       - `ip/sram/openram/README.md` 第 20 行的章節引用跟著改。
+
+       §1.2、§3.2 的版本，除了 Rosetta 與 VM 裡的 Docker Engine，都寫 Phase 7 紀錄裡的版本，和 2026-10-16 本機偵測到的相同；這兩項 Phase 7 沒有記錄，寫的是 2026-10-16 本機偵測到的值。這兩節的版本與 §1 的 zstd，`make env-check` 都不檢查；這兩節它只看 VM 的記憶體夠不夠（≥ 15 GB）、image 與 precheck 用的 PDK 目錄在不在，而且只有 `make env-check-flow CPU=caravel` 會因此 FAIL。文件裡寫明了。
+     - **precheck 筆記**（`docs/notes/caravel_precheck_phase7.md` 第 18 行）：原本把 PDK `3e0e31dc` 列成 image 的 `dependencies/Dockerfile` 固定的版本。Dockerfile 只固定 Magic、KLayout、Netgen、CVC；指定這版 PDK 的是 cf-cli `88025a8f` 的 `versions.json` 與 caravel_user_project `b510613c` 的 Makefile（用 GitHub API 核對），執行時掛進容器。加註更正。
+     - **技術報告與 skill 的同一個錯誤**：中文版第 1037、1768 行、英文版第 1146、2026 行，以及 skill `tapeout-precheck-caravel` 第 20 行，也寫 PDK `3e0e31dc` 在 image 裡。使用者 2026-10-17：「報告與 skill 都改，重產 PDF (建議)」；其他選項是「只改 skill，報告不動」「都不改，只記進 ADR」。五處都改成「cf-cli 指定、執行時掛進容器」，PDK 版本與結論不變；skill 只改這一句的事實，規則與適用範圍沒變，不必同步 README 與 `description`。兩份 PDF 用同一套方式重建（封面日期 2026-10-17，版本照舊 v1.0；中文 169 頁、英文 205 頁，和上一版相同），中文版 `lint_voice` 沒有 hard 命中，`make skill-check` PASS。
+     - **project-plan**：
+       - 版本 v0.3 → v0.4，修訂紀錄補記 v0.3 之後改了計畫內容的 5 個 commit。
+       - §7.2 有五列和實際檢查不同，各加「（實際：…）」註記，原文不改：
+         - timing：wrapper 的 slew 例外；
+         - STA 完整性：unannotated 是每顆設計鎖一個固定值，unconstrained endpoint 由 `check_soc.py` 檢查；
+         - 防止邏輯被整個優化掉：沒有 ±10%，走 golden 比對與誤差；
+         - 實體：最長繞線沒有另訂上限；
+         - signoff：四顆都用 full GDS 跑 Magic DRC，XOR = 0。
+       - §7.1 L2 的「golden ±10%」同樣加註。
+   - 不做的，就是使用者說「後面這幾項都不需要」的那三項：
+     - GPIO 設定的 regression test 與全晶片模擬（決定 3 的選項 B、C）：skill `caravel-user-project-integration`（規則 8、經驗紀錄）與技術報告（§9.1 第 8 項、§9.4）建議下一個要下線的專案再做，這是寫給之後的專案看的，保留不改；流程文件 §4.2 只寫目前沒有自動檢查。
+     - rtl-gds 起草報告時讀 voice guide（決定 7 的選項 F）：不另外改；rtl-gds 沒有規則管技術報告怎麼寫，這個缺口記在決定 7 的「限制」。
+     - gold manifest 的落差（arvinsa-company）不處理。
+       - 分組只看段落內容的 sha1（`tools/voice/build_gold_manifest.py`），內容沒改的段落，分組不會變。
+       - 2026-10-17 用同一套規則對現在的範文重算（不寫檔）：train 88、eval 24。和 manifest 不同的有 5 段，都是內容改過的段落：4 段改完仍是 train；`investor-report-zh.md` 第 56 段（manifest 的 block 欄）從 eval 換到 train。
+       - 沒有段落從 train 換到 eval，所以現在整份重新產生，不會讓訓練用過的段落進評估集。範文之後再改時，被改的段落可能換組，重新產生前要先用同樣的規則比對。
+
+       另外查了範文段落實際有沒有拿去訓練，查到三點：
+       - 8/14 訓練過一個 LoRA，用了 1,773 組訓練資料，報告寫「大量訓練資料來自 wikinews」（arvinsa-company `docs/evals/2026-08-14_stage4-lora-acceptance.html`）；
+       - 8/13 試跑（pilot）最後留下 33 對訓練資料，其中 14 對的原文取自範文當時分在 train 的段落；報告記錄這些段落和當時的評估集沒有重疊（`docs/evals/2026-08-13_writing-lab-milestone.html` §5）；
+       - 正式訓練有沒有用到這 14 段，repo 裡查不到：寫作實驗的目錄在 repo 外，這台機器上也沒有。
+
+       用白話說明時，這一項寫的是「我剛查到，8/14 真的用舊分組訓練過一個模型（`docs/evals/2026-08-14_stage4-lora-acceptance.html`，用了練習組 14 段）。重新洗牌後，部分練它用過的段落會跑進考試組，之後評估那個模型就不準。」並以此建議先不要整份重新產生。兩句都不對：
+       - 第一句說得比查到的事實肯定，那份報告沒有寫用了哪些範文段落；
+       - 第二句和上面重算的結果相反。
+
+       使用者是看了這段說明做的決定。第一句在決定之後就向使用者更正了；第二句是第二輪核對才發現的，2026-10-17 向使用者更正，並請使用者確認要不要維持「不做」。
+
+       使用者 2026-10-17：「維持不做 (建議)」。其他選項是「現在重新產生」。理由改成：manifest 只有寫作模型的實驗用得到，現在重新產生沒有實際用處；之後實驗要繼續時再重新產生，照上面的比對，目前重新產生不會讓訓練用過的段落進評估集。提問時寫「8/14 那個模型之後就凍結了」，也說得比事實肯定：8/14 的驗收報告建議凍結，「是否接受」列為待決定（`docs/evals/2026-08-14_stage4-lora-acceptance.html` 第 243、312 行）；之後 arvinsa-company 沒有寫作實驗的新紀錄（`tools/voice`、`docs/evals` 在 8/14 之後只有 2026-09-08 的 lint 修正 `cd31db8`，與本 ADR 2026-10-16 的 `79ed7dd`）。
+   - 查到、但屬於程式碼或設定檔的，超出文件修正，沒有改：
+     - `signoff/precheck/run_precheck.sh` 沒有指定 docker context；
+     - `env/versions.mk` 與 `make env-check` 沒有 Hazard3 的固定 commit；
+     - precheck image 用 `:latest`，沒有固定 digest；
+     - `env/check_toolchain_doc.py` 只比對寫死的 11 個本機工具，§1 新增的 zstd 不在裡面；
+     - `signoff/limits/picorv32_core.toml` 第 4 行的註解仍寫 Phase 2 的「abstract DRC = 0」。
+
+     其中 docker context、Hazard3 的 commit、precheck image 的 digest、zstd 這四個問題，toolchain.md 已經照實寫出來（開頭的「最後更新」說明、§1.2、§4）。
+
 ## 後果
 
 - 不改 RTL 邏輯、SDC 指令、golden 與 limits 檔，不重新 harden，不重跑 regress。signoff 的結論與 Phase 7 的使用限制（管理端時脈 ≤ 22.7 MHz）不變。
 - 決定 1、2 這次改的檔案驗證：`make lint` PASS（57 個 variant，含 `caravel`、`caravel+USE_POWER_PINS` 與 6 個 Caravel 版的植入錯誤；0 個 warning）、`make pin-plan` PASS（2026-10-16）。`scripts/check_pin_plan.py` 讀 ADR-0019 的核准原話，加更正註記後仍 PASS，核准那一行（第 67 行）沒有動。
-- 留給之後的：
+- 原本留給之後的事項，決定 13 處理了說明過的部分：
+  - 決定 11 沒修的三項（放寬清單、toolchain.md、project-plan）已修；
+  - gold manifest 的落差、rtl-gds 起草報告時讀 voice guide、GPIO 設定的 regression test 與全晶片模擬，使用者決定不做。
+- 仍然留著的，決定 13 的說明沒有列到，沒有另外問：
   - `dv-directed-tests` 經驗紀錄第 28 行的證據欄（決定 4 的選項 D）；
   - DLL 模式的 jitter 怎麼解讀（決定 2，放寬清單 T07）；
-  - arvinsa-rtl-gds 起草技術報告時沒有讀 voice guide 的缺口（決定 7 的選項 F）；
-  - 決定 11 沒修的：放寬清單第 20 行仍寫「phase7.md 是還在寫的草稿」（第 64、114 行引用的草稿行號要先和現在的 phase7.md 對過）；toolchain.md 沒列 docker 與 lima，和它自己的維護規則衝突，§4 的 IP 表也沒有 Hazard3；project-plan §7.2 的 unannotated 數目與 golden 誤差兩列和實際的 limits 不同、版本行沒更新；
-  - 決定 10 沒處理的：gold manifest 和範文的既有落差（範文在 `b17f99b` 之後被改過）；
-  - GPIO 設定的 regression test 與全晶片模擬（決定 3 的選項 B、C），以及在 wrapper 內對 `wb_rst_i` 加同步器（決定 1 的選項 E），都留給下一個要下線的專案。
+  - 在 wrapper 內對 `wb_rst_i` 加同步器（決定 1 的選項 E），留給下一個要下線的專案。
+- 決定 13 的驗證（2026-10-17）：`env/check_toolchain_doc.py` PASS、`make env-check` PASS、`make skill-check` PASS；改動的中文跑 `lint_voice` 沒有 hard 命中。改動由獨立 agent 對照出處反向核對兩輪，找到的問題修正後重跑上面各項；技術報告的兩份 PDF 重建。

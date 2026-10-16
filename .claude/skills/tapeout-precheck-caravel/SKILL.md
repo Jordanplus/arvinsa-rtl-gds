@@ -17,7 +17,7 @@ description: 跑 ChipFoundry 收件前的自動檢查（precheck、`cf precheck`
 1. **precheck 只有官方 image 的結果算正式結果，並記下實際版本**。
    - `cf precheck` 沒有 Docker 就停止；image 是 `chipfoundry/mpw_precheck:latest`，只有 linux/amd64（cf-cli `main.py` 第 4887、4893、4916 行；Docker Hub 2026-10-12）。Apple Silicon 要用模擬：本 repo 用 lima 直接建 vz＋Rosetta 的 VM，docker context `lima-cf-precheck`（`env/check_env.sh`、`signoff/precheck/run_precheck.sh`）；colima 是包在 lima 外面的同一套，但要從 GitHub 下載 VM image（ADR-0019 決定 4）。
    - 容器每次先 `pip install --upgrade cf-precheck`，同一個 image 不同天跑，版本可能不同。每次記下 image digest 與 cf-precheck 版本。
-   - image 的工具版本（Magic 8.3.471、KLayout 0.29.12、Netgen 1.5.272、PDK open_pdks `3e0e31dc`）和 flow 的不同；本機用 flow 的工具跑出來的結果只能加快修 bug，不能當正式結果。
+   - image 的工具版本（Magic 8.3.471、KLayout 0.29.12、Netgen 1.5.272）與 precheck 用的 PDK（open_pdks `3e0e31dc`，cf-cli 指定、執行時掛進容器，image 裡沒有）和 flow 的不同；本機用 flow 的工具跑出來的結果只能加快修 bug，不能當正式結果。
    - **VM 的記憶體要夠**（已驗證，2026-10-14，三次 OOM kill）：
      - 症狀：`klayout_beol failed (stat=-9)`，沒有報表；`lvs` 的 `Error: extraction did not complete successfully`，`logs/ext.log` 停在 `Extracting <top> into <top>.ext`，沒有 `exttospice finished.`；`OEB FAILED (stat=5)`。
      - 怎麼發現：在 VM 裡 `sudo dmesg | grep 'Killed process'`，會看到 `klayout`、`magicdnull` 與它們的 `anon-rss`。
